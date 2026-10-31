@@ -55,6 +55,10 @@
   --color-info-soft: var(--info-soft);
   --color-brand: var(--brand);
   --color-brand-soft: var(--brand-soft);
+  --color-link: var(--link);
+  --color-navy-tone: var(--navy-tone);
+  --color-field: var(--field);
+  --color-hover: var(--hover);
   --color-income: var(--income);
   --color-expense: var(--expense);
   --shadow-card: var(--shadow-card);
@@ -94,7 +98,11 @@
   --ring: #3F7A1E;
   --brand: #3F7A1E;
   --brand-soft: #EDF7E1;
-  --success: #16A34A;
+  --link: #2F6116;
+  --navy-tone: #1F2B4B;
+  --field: #FFFFFF;
+  --hover: #F0F0F0;
+  --success: #3F7A1E;
   --success-soft: #EDF7E1;
   --warning: #A06A00;
   --warning-soft: #FEF3D6;
@@ -143,6 +151,10 @@
   --ring: #9EDB4E;
   --brand: #9EDB4E;
   --brand-soft: #24331C;
+  --link: #B5E57A;
+  --navy-tone: #C9D3EA;
+  --field: #1F1F1F;
+  --hover: #333333;
   --success: #9EDB4E;
   --success-soft: #24331C;
   --warning: #F7B928;

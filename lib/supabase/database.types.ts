@@ -495,14 +495,14 @@ isOneToOne: false
                   ]
                 },"expenses": {
                   Row: {
-                    "book_id": string,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"updated_at": string,"valor": number
+                    "book_id": string,"cat_src": string | null,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"updated_at"?: string,"valor"?: number
+                    "book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "book_id"?: string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"updated_at"?: string,"valor"?: number
+                    "book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -1057,14 +1057,14 @@ isOneToOne: false
                   ]
                 },"loans": {
                   Row: {
-                    "book_id": string,"cerrado_at": string | null,"concepto": string,"contact_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"entity_id": string | null,"extra": number,"frec": string,"id": string,"inicio": string,"kind": string,"monto": number,"nota": string,"plazo": number,"prenda": Json | null,"sistema": string,"tasa": number,"updated_at": string
+                    "book_id": string,"cerrado_at": string | null,"concepto": string,"contact_id": string | null,"created_at": string,"created_by": string | null,"cuota_fija": number | null,"currency": string,"deleted_at": string | null,"entity_id": string | null,"extra": number,"frec": string,"id": string,"inicio": string,"kind": string,"monto": number,"nota": string,"plazo": number,"prenda": Json | null,"sistema": string,"tasa": number,"tasa_ea": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"frec"?: string,"id"?: string,"inicio"?: string,"kind": string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"sistema"?: string,"tasa"?: number,"updated_at"?: string
+                    "book_id": string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"cuota_fija"?: number | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"frec"?: string,"id"?: string,"inicio"?: string,"kind": string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"sistema"?: string,"tasa"?: number,"tasa_ea"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "book_id"?: string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"frec"?: string,"id"?: string,"inicio"?: string,"kind"?: string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"sistema"?: string,"tasa"?: number,"updated_at"?: string
+                    "book_id"?: string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"cuota_fija"?: number | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"frec"?: string,"id"?: string,"inicio"?: string,"kind"?: string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"sistema"?: string,"tasa"?: number,"tasa_ea"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1273,14 +1273,28 @@ isOneToOne: false
                   ]
                 },"ref_renta_calendar": {
                   Row: {
-                    "digitos": string,"fecha": string,"year": number
+                    "digitos": string,"fecha": string,"regimen": string,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "digitos": string,"fecha": string,"year": number
+                    "digitos": string,"fecha": string,"regimen"?: string,"year": number
                   }
                   Update: {
-                    "digitos"?: string,"fecha"?: string,"year"?: number
+                    "digitos"?: string,"fecha"?: string,"regimen"?: string,"year"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ref_renta_regimenes": {
+                  Row: {
+                    "descripcion": string,"key": string,"nombre": string,"norma": string,"seccionales": (string)[]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "descripcion": string,"key": string,"nombre": string,"norma": string,"seccionales"?: (string)[]
+                  }
+                  Update: {
+                    "descripcion"?: string,"key"?: string,"nombre"?: string,"norma"?: string,"seccionales"?: (string)[]
                   }
                   Relationships: [
                     
@@ -1603,6 +1617,9 @@ isOneToOne: false
                            },
 "try_uuid":
 { Args: { "t": string }; Returns: string
+                           },
+"use_emergency_fund":
+{ Args: { "p_expense": string,"p_valor": number }; Returns: number
                            }
           }
           Enums: {

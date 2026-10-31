@@ -23,7 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <NuqsAdapter>
           <TooltipProvider delayDuration={250}>
             {children}
-            <Toaster position="top-right" richColors closeButton visibleToasts={4} />
+            <Toaster position="top-right" richColors closeButton visibleToasts={4} offset={{ top: 64, right: 16 }} mobileOffset={{ top: 12 }} />
           </TooltipProvider>
         </NuqsAdapter>
       </QueryClientProvider>

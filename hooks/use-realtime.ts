@@ -44,13 +44,14 @@ export function useBookRealtime(bookId: string, me: Omit<PresenceUser, "at" | "p
       setOnline(Object.values(state).map((v) => v[0]).filter(Boolean))
     })
     ch.subscribe((s) => {
+      if (channel.current !== ch) return // aviso de un canal ya descartado (p. ej. doble montaje en desarrollo)
       if (s === "SUBSCRIBED") setStatus("en-vivo")
       else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") setStatus("sin-conexion")
     })
     channel.current = ch
     return () => {
-      sb.removeChannel(ch)
       channel.current = null
+      sb.removeChannel(ch)
     }
   }, [bookId, me.id, qc])
 
