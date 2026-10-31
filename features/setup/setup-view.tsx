@@ -15,6 +15,7 @@ import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { useSetupProgress, type SetupState } from "./use-setup"
+import { SampleButton } from "./sample-button"
 
 export function SetupView() {
   const { user, book } = useApp()
@@ -111,7 +112,8 @@ export function SetupView() {
       </ol>
 
       <Card className="flex-col items-start gap-3 p-5 shadow-card ring-0 sm:flex-row sm:items-center">
-        <p className="flex-1 text-sm text-muted-foreground">¿Quieres ocultar esta guía? Puedes volver a ella desde el menú de tu perfil.</p>
+        <p className="flex-1 text-sm text-muted-foreground">¿Quieres ver primero cómo se ve un libro lleno? Cargamos un ejemplo en un libro aparte, sin tocar tus datos.</p>
+        <SampleButton />
         <Button variant="outline" onClick={async () => { await saveSetup({ ...setup, dismissed: true }, "Puedes volver a la guía desde el menú de tu perfil"); router.push("/inicio") }}>Ocultar esta guía</Button>
       </Card>
     </div>
