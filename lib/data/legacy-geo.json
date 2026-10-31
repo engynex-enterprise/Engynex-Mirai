@@ -1,0 +1,1217 @@
+[
+ {
+  "c": "Acacías",
+  "d": "Meta",
+  "v": "Acacías"
+ },
+ {
+  "c": "Agua de Dios",
+  "d": "Cundinamarca",
+  "v": "Agua de Dios"
+ },
+ {
+  "c": "Aguachica",
+  "d": "Cesar",
+  "v": "Aguachica"
+ },
+ {
+  "c": "Aguazul",
+  "d": "Casanare",
+  "v": "Aguazul"
+ },
+ {
+  "c": "Agustín Codazzi",
+  "d": "Cesar",
+  "v": "Agustín Codazzi"
+ },
+ {
+  "c": "Amagá",
+  "d": "Antioquia",
+  "v": "Amagá"
+ },
+ {
+  "c": "Anapoima",
+  "d": "Cundinamarca",
+  "v": "Anapoima"
+ },
+ {
+  "c": "Andes",
+  "d": "Antioquia",
+  "v": "Andes"
+ },
+ {
+  "c": "Anserma",
+  "d": "Caldas",
+  "v": "Anserma"
+ },
+ {
+  "c": "Apartadó",
+  "d": "Antioquia",
+  "v": "Apartadó"
+ },
+ {
+  "c": "Apulo",
+  "d": "Cundinamarca",
+  "v": "Apulo"
+ },
+ {
+  "c": "Arauca",
+  "d": "Arauca",
+  "v": "Arauca"
+ },
+ {
+  "c": "Arauquita",
+  "d": "Arauca",
+  "v": "Arauquita"
+ },
+ {
+  "c": "Arbeláez",
+  "d": "Cundinamarca",
+  "v": "Arbeláez"
+ },
+ {
+  "c": "Arjona",
+  "d": "Bolívar",
+  "v": "Arjona"
+ },
+ {
+  "c": "Armenia",
+  "d": "Quindío",
+  "v": "Armenia"
+ },
+ {
+  "c": "Bahía Solano",
+  "d": "Chocó",
+  "v": "Bahía Solano"
+ },
+ {
+  "c": "Baranoa",
+  "d": "Atlántico",
+  "v": "Baranoa"
+ },
+ {
+  "c": "Barbosa",
+  "d": "Antioquia",
+  "v": "Barbosa"
+ },
+ {
+  "c": "Barbosa",
+  "d": "Santander",
+  "v": "Barbosa, Santander"
+ },
+ {
+  "c": "Barichara",
+  "d": "Santander",
+  "v": "Barichara"
+ },
+ {
+  "c": "Barrancabermeja",
+  "d": "Santander",
+  "v": "Barrancabermeja"
+ },
+ {
+  "c": "Barranquilla",
+  "d": "Atlántico",
+  "v": "Barranquilla"
+ },
+ {
+  "c": "Bello",
+  "d": "Antioquia",
+  "v": "Bello"
+ },
+ {
+  "c": "Bogotá",
+  "d": "Bogotá D.C.",
+  "v": "Bogotá"
+ },
+ {
+  "c": "Bosconia",
+  "d": "Cesar",
+  "v": "Bosconia"
+ },
+ {
+  "c": "Bucaramanga",
+  "d": "Santander",
+  "v": "Bucaramanga"
+ },
+ {
+  "c": "Buenaventura",
+  "d": "Valle del Cauca",
+  "v": "Buenaventura"
+ },
+ {
+  "c": "Buga",
+  "d": "Valle del Cauca",
+  "v": "Buga"
+ },
+ {
+  "c": "Cajicá",
+  "d": "Cundinamarca",
+  "v": "Cajicá"
+ },
+ {
+  "c": "Calarcá",
+  "d": "Quindío",
+  "v": "Calarcá"
+ },
+ {
+  "c": "Caldas",
+  "d": "Antioquia",
+  "v": "Caldas"
+ },
+ {
+  "c": "Cali",
+  "d": "Valle del Cauca",
+  "v": "Cali"
+ },
+ {
+  "c": "Campoalegre",
+  "d": "Huila",
+  "v": "Campoalegre"
+ },
+ {
+  "c": "Candelaria",
+  "d": "Valle del Cauca",
+  "v": "Candelaria"
+ },
+ {
+  "c": "Carepa",
+  "d": "Antioquia",
+  "v": "Carepa"
+ },
+ {
+  "c": "Cartagena",
+  "d": "Bolívar",
+  "v": "Cartagena"
+ },
+ {
+  "c": "Cartago",
+  "d": "Valle del Cauca",
+  "v": "Cartago"
+ },
+ {
+  "c": "Caucasia",
+  "d": "Antioquia",
+  "v": "Caucasia"
+ },
+ {
+  "c": "Cereté",
+  "d": "Córdoba",
+  "v": "Cereté"
+ },
+ {
+  "c": "Chaparral",
+  "d": "Tolima",
+  "v": "Chaparral"
+ },
+ {
+  "c": "Chía",
+  "d": "Cundinamarca",
+  "v": "Chía"
+ },
+ {
+  "c": "Chigorodó",
+  "d": "Antioquia",
+  "v": "Chigorodó"
+ },
+ {
+  "c": "Chinchiná",
+  "d": "Caldas",
+  "v": "Chinchiná"
+ },
+ {
+  "c": "Chiquinquirá",
+  "d": "Boyacá",
+  "v": "Chiquinquirá"
+ },
+ {
+  "c": "Choachí",
+  "d": "Cundinamarca",
+  "v": "Choachí"
+ },
+ {
+  "c": "Chocontá",
+  "d": "Cundinamarca",
+  "v": "Chocontá"
+ },
+ {
+  "c": "Ciénaga",
+  "d": "Magdalena",
+  "v": "Ciénaga"
+ },
+ {
+  "c": "Circasia",
+  "d": "Quindío",
+  "v": "Circasia"
+ },
+ {
+  "c": "Cogua",
+  "d": "Cundinamarca",
+  "v": "Cogua"
+ },
+ {
+  "c": "Copacabana",
+  "d": "Antioquia",
+  "v": "Copacabana"
+ },
+ {
+  "c": "Corozal",
+  "d": "Sucre",
+  "v": "Corozal"
+ },
+ {
+  "c": "Cota",
+  "d": "Cundinamarca",
+  "v": "Cota"
+ },
+ {
+  "c": "Coveñas",
+  "d": "Sucre",
+  "v": "Coveñas"
+ },
+ {
+  "c": "Cúcuta",
+  "d": "Norte de Santander",
+  "v": "Cúcuta"
+ },
+ {
+  "c": "Cumaral",
+  "d": "Meta",
+  "v": "Cumaral"
+ },
+ {
+  "c": "Curumaní",
+  "d": "Cesar",
+  "v": "Curumaní"
+ },
+ {
+  "c": "Dagua",
+  "d": "Valle del Cauca",
+  "v": "Dagua"
+ },
+ {
+  "c": "Dosquebradas",
+  "d": "Risaralda",
+  "v": "Dosquebradas"
+ },
+ {
+  "c": "Duitama",
+  "d": "Boyacá",
+  "v": "Duitama"
+ },
+ {
+  "c": "El Banco",
+  "d": "Magdalena",
+  "v": "El Banco"
+ },
+ {
+  "c": "El Carmen de Bolívar",
+  "d": "Bolívar",
+  "v": "El Carmen de Bolívar"
+ },
+ {
+  "c": "El Carmen de Viboral",
+  "d": "Antioquia",
+  "v": "El Carmen de Viboral"
+ },
+ {
+  "c": "El Cerrito",
+  "d": "Valle del Cauca",
+  "v": "El Cerrito"
+ },
+ {
+  "c": "El Retiro",
+  "d": "Antioquia",
+  "v": "El Retiro"
+ },
+ {
+  "c": "El Rosal",
+  "d": "Cundinamarca",
+  "v": "El Rosal"
+ },
+ {
+  "c": "El Zulia",
+  "d": "Norte de Santander",
+  "v": "El Zulia"
+ },
+ {
+  "c": "Envigado",
+  "d": "Antioquia",
+  "v": "Envigado"
+ },
+ {
+  "c": "Espinal",
+  "d": "Tolima",
+  "v": "Espinal"
+ },
+ {
+  "c": "Facatativá",
+  "d": "Cundinamarca",
+  "v": "Facatativá"
+ },
+ {
+  "c": "Filandia",
+  "d": "Quindío",
+  "v": "Filandia"
+ },
+ {
+  "c": "Flandes",
+  "d": "Tolima",
+  "v": "Flandes"
+ },
+ {
+  "c": "Florencia",
+  "d": "Caquetá",
+  "v": "Florencia"
+ },
+ {
+  "c": "Florida",
+  "d": "Valle del Cauca",
+  "v": "Florida"
+ },
+ {
+  "c": "Floridablanca",
+  "d": "Santander",
+  "v": "Floridablanca"
+ },
+ {
+  "c": "Fómeque",
+  "d": "Cundinamarca",
+  "v": "Fómeque"
+ },
+ {
+  "c": "Fonseca",
+  "d": "La Guajira",
+  "v": "Fonseca"
+ },
+ {
+  "c": "Fredonia",
+  "d": "Antioquia",
+  "v": "Fredonia"
+ },
+ {
+  "c": "Fundación",
+  "d": "Magdalena",
+  "v": "Fundación"
+ },
+ {
+  "c": "Funza",
+  "d": "Cundinamarca",
+  "v": "Funza"
+ },
+ {
+  "c": "Fusagasugá",
+  "d": "Cundinamarca",
+  "v": "Fusagasugá"
+ },
+ {
+  "c": "Gachancipá",
+  "d": "Cundinamarca",
+  "v": "Gachancipá"
+ },
+ {
+  "c": "Gachetá",
+  "d": "Cundinamarca",
+  "v": "Gachetá"
+ },
+ {
+  "c": "Galapa",
+  "d": "Atlántico",
+  "v": "Galapa"
+ },
+ {
+  "c": "Garagoa",
+  "d": "Boyacá",
+  "v": "Garagoa"
+ },
+ {
+  "c": "Garzón",
+  "d": "Huila",
+  "v": "Garzón"
+ },
+ {
+  "c": "Girardot",
+  "d": "Cundinamarca",
+  "v": "Girardot"
+ },
+ {
+  "c": "Girardota",
+  "d": "Antioquia",
+  "v": "Girardota"
+ },
+ {
+  "c": "Girón",
+  "d": "Santander",
+  "v": "Girón"
+ },
+ {
+  "c": "Granada",
+  "d": "Meta",
+  "v": "Granada"
+ },
+ {
+  "c": "Guaduas",
+  "d": "Cundinamarca",
+  "v": "Guaduas"
+ },
+ {
+  "c": "Guarne",
+  "d": "Antioquia",
+  "v": "Guarne"
+ },
+ {
+  "c": "Guatapé",
+  "d": "Antioquia",
+  "v": "Guatapé"
+ },
+ {
+  "c": "Guatavita",
+  "d": "Cundinamarca",
+  "v": "Guatavita"
+ },
+ {
+  "c": "Honda",
+  "d": "Tolima",
+  "v": "Honda"
+ },
+ {
+  "c": "Ibagué",
+  "d": "Tolima",
+  "v": "Ibagué"
+ },
+ {
+  "c": "Inírida",
+  "d": "Guainía",
+  "v": "Inírida"
+ },
+ {
+  "c": "Ipiales",
+  "d": "Nariño",
+  "v": "Ipiales"
+ },
+ {
+  "c": "Istmina",
+  "d": "Chocó",
+  "v": "Istmina"
+ },
+ {
+  "c": "Itagüí",
+  "d": "Antioquia",
+  "v": "Itagüí"
+ },
+ {
+  "c": "Jamundí",
+  "d": "Valle del Cauca",
+  "v": "Jamundí"
+ },
+ {
+  "c": "Jardín",
+  "d": "Antioquia",
+  "v": "Jardín"
+ },
+ {
+  "c": "La Calera",
+  "d": "Cundinamarca",
+  "v": "La Calera"
+ },
+ {
+  "c": "La Ceja",
+  "d": "Antioquia",
+  "v": "La Ceja"
+ },
+ {
+  "c": "La Dorada",
+  "d": "Caldas",
+  "v": "La Dorada"
+ },
+ {
+  "c": "La Estrella",
+  "d": "Antioquia",
+  "v": "La Estrella"
+ },
+ {
+  "c": "La Jagua de Ibirico",
+  "d": "Cesar",
+  "v": "La Jagua de Ibirico"
+ },
+ {
+  "c": "La Mesa",
+  "d": "Cundinamarca",
+  "v": "La Mesa"
+ },
+ {
+  "c": "La Plata",
+  "d": "Huila",
+  "v": "La Plata"
+ },
+ {
+  "c": "La Tebaida",
+  "d": "Quindío",
+  "v": "La Tebaida"
+ },
+ {
+  "c": "La Unión",
+  "d": "Nariño",
+  "v": "La Unión, Nariño"
+ },
+ {
+  "c": "La Unión",
+  "d": "Valle del Cauca",
+  "v": "La Unión"
+ },
+ {
+  "c": "La Virginia",
+  "d": "Risaralda",
+  "v": "La Virginia"
+ },
+ {
+  "c": "Lebrija",
+  "d": "Santander",
+  "v": "Lebrija"
+ },
+ {
+  "c": "Leticia",
+  "d": "Amazonas",
+  "v": "Leticia"
+ },
+ {
+  "c": "Líbano",
+  "d": "Tolima",
+  "v": "Líbano"
+ },
+ {
+  "c": "Lorica",
+  "d": "Córdoba",
+  "v": "Lorica"
+ },
+ {
+  "c": "Los Patios",
+  "d": "Norte de Santander",
+  "v": "Los Patios"
+ },
+ {
+  "c": "Madrid",
+  "d": "Cundinamarca",
+  "v": "Madrid"
+ },
+ {
+  "c": "Magangué",
+  "d": "Bolívar",
+  "v": "Magangué"
+ },
+ {
+  "c": "Maicao",
+  "d": "La Guajira",
+  "v": "Maicao"
+ },
+ {
+  "c": "Málaga",
+  "d": "Santander",
+  "v": "Málaga"
+ },
+ {
+  "c": "Malambo",
+  "d": "Atlántico",
+  "v": "Malambo"
+ },
+ {
+  "c": "Manizales",
+  "d": "Caldas",
+  "v": "Manizales"
+ },
+ {
+  "c": "Marinilla",
+  "d": "Antioquia",
+  "v": "Marinilla"
+ },
+ {
+  "c": "Mariquita",
+  "d": "Tolima",
+  "v": "Mariquita"
+ },
+ {
+  "c": "Medellín",
+  "d": "Antioquia",
+  "v": "Medellín"
+ },
+ {
+  "c": "Medina",
+  "d": "Cundinamarca",
+  "v": "Medina"
+ },
+ {
+  "c": "Melgar",
+  "d": "Tolima",
+  "v": "Melgar"
+ },
+ {
+  "c": "Mitú",
+  "d": "Vaupés",
+  "v": "Mitú"
+ },
+ {
+  "c": "Mocoa",
+  "d": "Putumayo",
+  "v": "Mocoa"
+ },
+ {
+  "c": "Mompox",
+  "d": "Bolívar",
+  "v": "Mompox"
+ },
+ {
+  "c": "Moniquirá",
+  "d": "Boyacá",
+  "v": "Moniquirá"
+ },
+ {
+  "c": "Montelíbano",
+  "d": "Córdoba",
+  "v": "Montelíbano"
+ },
+ {
+  "c": "Montenegro",
+  "d": "Quindío",
+  "v": "Montenegro"
+ },
+ {
+  "c": "Montería",
+  "d": "Córdoba",
+  "v": "Montería"
+ },
+ {
+  "c": "Mosquera",
+  "d": "Cundinamarca",
+  "v": "Mosquera"
+ },
+ {
+  "c": "Necoclí",
+  "d": "Antioquia",
+  "v": "Necoclí"
+ },
+ {
+  "c": "Neiva",
+  "d": "Huila",
+  "v": "Neiva"
+ },
+ {
+  "c": "Nemocón",
+  "d": "Cundinamarca",
+  "v": "Nemocón"
+ },
+ {
+  "c": "Nobsa",
+  "d": "Boyacá",
+  "v": "Nobsa"
+ },
+ {
+  "c": "Nuquí",
+  "d": "Chocó",
+  "v": "Nuquí"
+ },
+ {
+  "c": "Ocaña",
+  "d": "Norte de Santander",
+  "v": "Ocaña"
+ },
+ {
+  "c": "Orito",
+  "d": "Putumayo",
+  "v": "Orito"
+ },
+ {
+  "c": "Pacho",
+  "d": "Cundinamarca",
+  "v": "Pacho"
+ },
+ {
+  "c": "Paipa",
+  "d": "Boyacá",
+  "v": "Paipa"
+ },
+ {
+  "c": "Palmira",
+  "d": "Valle del Cauca",
+  "v": "Palmira"
+ },
+ {
+  "c": "Pamplona",
+  "d": "Norte de Santander",
+  "v": "Pamplona"
+ },
+ {
+  "c": "Pasto",
+  "d": "Nariño",
+  "v": "Pasto"
+ },
+ {
+  "c": "Patía",
+  "d": "Cauca",
+  "v": "Patía"
+ },
+ {
+  "c": "Paz de Ariporo",
+  "d": "Casanare",
+  "v": "Paz de Ariporo"
+ },
+ {
+  "c": "Pereira",
+  "d": "Risaralda",
+  "v": "Pereira"
+ },
+ {
+  "c": "Piedecuesta",
+  "d": "Santander",
+  "v": "Piedecuesta"
+ },
+ {
+  "c": "Piendamó",
+  "d": "Cauca",
+  "v": "Piendamó"
+ },
+ {
+  "c": "Pitalito",
+  "d": "Huila",
+  "v": "Pitalito"
+ },
+ {
+  "c": "Planeta Rica",
+  "d": "Córdoba",
+  "v": "Planeta Rica"
+ },
+ {
+  "c": "Plato",
+  "d": "Magdalena",
+  "v": "Plato"
+ },
+ {
+  "c": "Popayán",
+  "d": "Cauca",
+  "v": "Popayán"
+ },
+ {
+  "c": "Pradera",
+  "d": "Valle del Cauca",
+  "v": "Pradera"
+ },
+ {
+  "c": "Providencia",
+  "d": "San Andrés y Providencia",
+  "v": "Providencia"
+ },
+ {
+  "c": "Puerto Asís",
+  "d": "Putumayo",
+  "v": "Puerto Asís"
+ },
+ {
+  "c": "Puerto Berrío",
+  "d": "Antioquia",
+  "v": "Puerto Berrío"
+ },
+ {
+  "c": "Puerto Boyacá",
+  "d": "Boyacá",
+  "v": "Puerto Boyacá"
+ },
+ {
+  "c": "Puerto Carreño",
+  "d": "Vichada",
+  "v": "Puerto Carreño"
+ },
+ {
+  "c": "Puerto Colombia",
+  "d": "Atlántico",
+  "v": "Puerto Colombia"
+ },
+ {
+  "c": "Puerto Gaitán",
+  "d": "Meta",
+  "v": "Puerto Gaitán"
+ },
+ {
+  "c": "Puerto López",
+  "d": "Meta",
+  "v": "Puerto López"
+ },
+ {
+  "c": "Puerto Nariño",
+  "d": "Amazonas",
+  "v": "Puerto Nariño"
+ },
+ {
+  "c": "Puerto Tejada",
+  "d": "Cauca",
+  "v": "Puerto Tejada"
+ },
+ {
+  "c": "Quibdó",
+  "d": "Chocó",
+  "v": "Quibdó"
+ },
+ {
+  "c": "Quimbaya",
+  "d": "Quindío",
+  "v": "Quimbaya"
+ },
+ {
+  "c": "Restrepo",
+  "d": "Meta",
+  "v": "Restrepo"
+ },
+ {
+  "c": "Ricaurte",
+  "d": "Cundinamarca",
+  "v": "Ricaurte"
+ },
+ {
+  "c": "Riohacha",
+  "d": "La Guajira",
+  "v": "Riohacha"
+ },
+ {
+  "c": "Rionegro",
+  "d": "Antioquia",
+  "v": "Rionegro"
+ },
+ {
+  "c": "Riosucio",
+  "d": "Caldas",
+  "v": "Riosucio"
+ },
+ {
+  "c": "Roldanillo",
+  "d": "Valle del Cauca",
+  "v": "Roldanillo"
+ },
+ {
+  "c": "Sabanalarga",
+  "d": "Atlántico",
+  "v": "Sabanalarga"
+ },
+ {
+  "c": "Sabaneta",
+  "d": "Antioquia",
+  "v": "Sabaneta"
+ },
+ {
+  "c": "Sahagún",
+  "d": "Córdoba",
+  "v": "Sahagún"
+ },
+ {
+  "c": "Salento",
+  "d": "Quindío",
+  "v": "Salento"
+ },
+ {
+  "c": "Sampués",
+  "d": "Sucre",
+  "v": "Sampués"
+ },
+ {
+  "c": "San Agustín",
+  "d": "Huila",
+  "v": "San Agustín"
+ },
+ {
+  "c": "San Andrés",
+  "d": "San Andrés y Providencia",
+  "v": "San Andrés"
+ },
+ {
+  "c": "San Gil",
+  "d": "Santander",
+  "v": "San Gil"
+ },
+ {
+  "c": "San Jerónimo",
+  "d": "Antioquia",
+  "v": "San Jerónimo"
+ },
+ {
+  "c": "San José del Guaviare",
+  "d": "Guaviare",
+  "v": "San José del Guaviare"
+ },
+ {
+  "c": "San Juan del Cesar",
+  "d": "La Guajira",
+  "v": "San Juan del Cesar"
+ },
+ {
+  "c": "San Vicente del Caguán",
+  "d": "Caquetá",
+  "v": "San Vicente del Caguán"
+ },
+ {
+  "c": "Santa Fe de Antioquia",
+  "d": "Antioquia",
+  "v": "Santa Fe de Antioquia"
+ },
+ {
+  "c": "Santa Marta",
+  "d": "Magdalena",
+  "v": "Santa Marta"
+ },
+ {
+  "c": "Santa Rosa de Cabal",
+  "d": "Risaralda",
+  "v": "Santa Rosa de Cabal"
+ },
+ {
+  "c": "Santa Rosa de Osos",
+  "d": "Antioquia",
+  "v": "Santa Rosa de Osos"
+ },
+ {
+  "c": "Santander de Quilichao",
+  "d": "Cauca",
+  "v": "Santander de Quilichao"
+ },
+ {
+  "c": "Saravena",
+  "d": "Arauca",
+  "v": "Saravena"
+ },
+ {
+  "c": "Segovia",
+  "d": "Antioquia",
+  "v": "Segovia"
+ },
+ {
+  "c": "Sesquilé",
+  "d": "Cundinamarca",
+  "v": "Sesquilé"
+ },
+ {
+  "c": "Sevilla",
+  "d": "Valle del Cauca",
+  "v": "Sevilla"
+ },
+ {
+  "c": "Sibaté",
+  "d": "Cundinamarca",
+  "v": "Sibaté"
+ },
+ {
+  "c": "Sibundoy",
+  "d": "Putumayo",
+  "v": "Sibundoy"
+ },
+ {
+  "c": "Silvania",
+  "d": "Cundinamarca",
+  "v": "Silvania"
+ },
+ {
+  "c": "Sincelejo",
+  "d": "Sucre",
+  "v": "Sincelejo"
+ },
+ {
+  "c": "Soacha",
+  "d": "Cundinamarca",
+  "v": "Soacha"
+ },
+ {
+  "c": "Socorro",
+  "d": "Santander",
+  "v": "Socorro"
+ },
+ {
+  "c": "Sogamoso",
+  "d": "Boyacá",
+  "v": "Sogamoso"
+ },
+ {
+  "c": "Soledad",
+  "d": "Atlántico",
+  "v": "Soledad"
+ },
+ {
+  "c": "Sonsón",
+  "d": "Antioquia",
+  "v": "Sonsón"
+ },
+ {
+  "c": "Sopó",
+  "d": "Cundinamarca",
+  "v": "Sopó"
+ },
+ {
+  "c": "Subachoque",
+  "d": "Cundinamarca",
+  "v": "Subachoque"
+ },
+ {
+  "c": "Suesca",
+  "d": "Cundinamarca",
+  "v": "Suesca"
+ },
+ {
+  "c": "Tabio",
+  "d": "Cundinamarca",
+  "v": "Tabio"
+ },
+ {
+  "c": "Tame",
+  "d": "Arauca",
+  "v": "Tame"
+ },
+ {
+  "c": "Tauramena",
+  "d": "Casanare",
+  "v": "Tauramena"
+ },
+ {
+  "c": "Tenjo",
+  "d": "Cundinamarca",
+  "v": "Tenjo"
+ },
+ {
+  "c": "Tibú",
+  "d": "Norte de Santander",
+  "v": "Tibú"
+ },
+ {
+  "c": "Tierralta",
+  "d": "Córdoba",
+  "v": "Tierralta"
+ },
+ {
+  "c": "Tocaima",
+  "d": "Cundinamarca",
+  "v": "Tocaima"
+ },
+ {
+  "c": "Tocancipá",
+  "d": "Cundinamarca",
+  "v": "Tocancipá"
+ },
+ {
+  "c": "Tolú",
+  "d": "Sucre",
+  "v": "Tolú"
+ },
+ {
+  "c": "Tuluá",
+  "d": "Valle del Cauca",
+  "v": "Tuluá"
+ },
+ {
+  "c": "Tumaco",
+  "d": "Nariño",
+  "v": "Tumaco"
+ },
+ {
+  "c": "Tunja",
+  "d": "Boyacá",
+  "v": "Tunja"
+ },
+ {
+  "c": "Túquerres",
+  "d": "Nariño",
+  "v": "Túquerres"
+ },
+ {
+  "c": "Turbaco",
+  "d": "Bolívar",
+  "v": "Turbaco"
+ },
+ {
+  "c": "Turbo",
+  "d": "Antioquia",
+  "v": "Turbo"
+ },
+ {
+  "c": "Ubaté",
+  "d": "Cundinamarca",
+  "v": "Ubaté"
+ },
+ {
+  "c": "Uribia",
+  "d": "La Guajira",
+  "v": "Uribia"
+ },
+ {
+  "c": "Urrao",
+  "d": "Antioquia",
+  "v": "Urrao"
+ },
+ {
+  "c": "Valle del Guamuez",
+  "d": "Putumayo",
+  "v": "Valle del Guamuez"
+ },
+ {
+  "c": "Valledupar",
+  "d": "Cesar",
+  "v": "Valledupar"
+ },
+ {
+  "c": "Villa de Leyva",
+  "d": "Boyacá",
+  "v": "Villa de Leyva"
+ },
+ {
+  "c": "Villa del Rosario",
+  "d": "Norte de Santander",
+  "v": "Villa del Rosario"
+ },
+ {
+  "c": "Villamaría",
+  "d": "Caldas",
+  "v": "Villamaría"
+ },
+ {
+  "c": "Villanueva",
+  "d": "Casanare",
+  "v": "Villanueva"
+ },
+ {
+  "c": "Villapinzón",
+  "d": "Cundinamarca",
+  "v": "Villapinzón"
+ },
+ {
+  "c": "Villavicencio",
+  "d": "Meta",
+  "v": "Villavicencio"
+ },
+ {
+  "c": "Villeta",
+  "d": "Cundinamarca",
+  "v": "Villeta"
+ },
+ {
+  "c": "Yarumal",
+  "d": "Antioquia",
+  "v": "Yarumal"
+ },
+ {
+  "c": "Yopal",
+  "d": "Casanare",
+  "v": "Yopal"
+ },
+ {
+  "c": "Yumbo",
+  "d": "Valle del Cauca",
+  "v": "Yumbo"
+ },
+ {
+  "c": "Zarzal",
+  "d": "Valle del Cauca",
+  "v": "Zarzal"
+ },
+ {
+  "c": "Zipaquirá",
+  "d": "Cundinamarca",
+  "v": "Zipaquirá"
+ },
+ {
+  "c": "Zona Bananera",
+  "d": "Magdalena",
+  "v": "Zona Bananera"
+ }
+]

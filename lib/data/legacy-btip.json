@@ -1,0 +1,42 @@
+[
+ [
+  "inmueble",
+  "Casa, apartamento o lote",
+  "house"
+ ],
+ [
+  "vehiculo",
+  "Carro o moto",
+  "car"
+ ],
+ [
+  "cuenta",
+  "Cuenta bancaria o efectivo",
+  "landmark"
+ ],
+ [
+  "inversion",
+  "CDT, fondo o acciones",
+  "trending-up"
+ ],
+ [
+  "cripto",
+  "Criptomonedas",
+  "bitcoin"
+ ],
+ [
+  "exterior",
+  "Bien o cuenta en el exterior",
+  "globe"
+ ],
+ [
+  "cobrar",
+  "Plata que te deben",
+  "hand-coins"
+ ],
+ [
+  "otro",
+  "Otro bien",
+  "tag"
+ ]
+]

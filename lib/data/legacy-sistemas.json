@@ -1,0 +1,32 @@
+{
+ "frances": {
+  "n": "Cuota fija",
+  "t": "Sistema francés",
+  "icon": "equal",
+  "d": "Pagas el mismo valor en cada cuota. Es el que usan los bancos en Colombia para créditos de consumo, libranza y vehículo."
+ },
+ "aleman": {
+  "n": "Cuota que va bajando",
+  "t": "Abono fijo a capital (sistema alemán)",
+  "icon": "trending-down",
+  "d": "Cada cuota abona lo mismo a la deuda y los intereses se calculan sobre lo que falta, así que la cuota empieza alta y baja. Pagas menos intereses en total."
+ },
+ "simple": {
+  "n": "Interés sobre lo prestado",
+  "t": "Interés simple",
+  "icon": "percent",
+  "d": "Muy común entre conocidos (\"te presto al 2%\"): el interés de cada cuota se calcula sobre el valor prestado y la cuota es fija."
+ },
+ "americano": {
+  "n": "Solo intereses y al final el capital",
+  "t": "Sistema americano",
+  "icon": "hourglass",
+  "d": "Cada periodo se pagan solo los intereses y el valor prestado se devuelve completo en la última cuota."
+ },
+ "sin": {
+  "n": "Sin intereses",
+  "t": "Partes iguales",
+  "icon": "hand-coins",
+  "d": "Se divide el valor en cuotas iguales, sin cobrar intereses."
+ }
+}

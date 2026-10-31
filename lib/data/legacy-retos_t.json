@@ -1,0 +1,46 @@
+[
+ {
+  "k": "domis",
+  "tipo": "sin_cat",
+  "cat": "Domicilios",
+  "dias": 30,
+  "n": "30 días sin domicilios",
+  "icon": "bike",
+  "d": "Cocina en casa o recoge tú mismo. Ahorro típico: $ 150.000 al mes."
+ },
+ {
+  "k": "hormiga",
+  "tipo": "sin_hormiga",
+  "dias": 7,
+  "n": "Una semana sin gastos hormiga",
+  "icon": "coffee",
+  "d": "Nada de tintos, snacks ni antojos durante 7 días."
+ },
+ {
+  "k": "rest",
+  "tipo": "sin_cat",
+  "cat": "Restaurantes",
+  "dias": 30,
+  "n": "Un mes sin restaurantes",
+  "icon": "utensils",
+  "d": "Lleva almuerzo y prepara comidas especiales en casa."
+ },
+ {
+  "k": "52",
+  "tipo": "semanas",
+  "dias": 364,
+  "base": 5000,
+  "n": "Reto de las 52 semanas",
+  "icon": "piggy-bank",
+  "d": "Semana 1 ahorras $ 5.000, semana 2 $ 10.000… Al final tendrás $ 6.890.000."
+ },
+ {
+  "k": "diario",
+  "tipo": "diario",
+  "dias": 30,
+  "base": 10000,
+  "n": "Ahorra $ 10.000 diarios por un mes",
+  "icon": "coins",
+  "d": "Al final del mes tendrás $ 300.000."
+ }
+]

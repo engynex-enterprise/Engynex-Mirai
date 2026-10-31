@@ -1,0 +1,114 @@
+[
+ [
+  "general",
+  "General",
+  "settings",
+  "Cuenta",
+  "Pantalla de inicio, ayudas y tour"
+ ],
+ [
+  "apariencia",
+  "Apariencia",
+  "palette",
+  "Cuenta",
+  "Tema, tamaño de letra y densidad"
+ ],
+ [
+  "privacidad",
+  "Privacidad",
+  "eye-off",
+  "Cuenta",
+  "Ocultar montos y datos en mensajes"
+ ],
+ [
+  "seguridad",
+  "Seguridad",
+  "shield-check",
+  "Cuenta",
+  "Contraseña, dos pasos y bloqueo"
+ ],
+ [
+  "ia",
+  "Inteligencia artificial",
+  "sparkles",
+  "Inteligencia",
+  "Activar, proveedor (Claude, OpenAI, Gemini) y funciones"
+ ],
+ [
+  "alertas",
+  "Alertas y notificaciones",
+  "bell",
+  "Avisos",
+  "App, correo y WhatsApp"
+ ],
+ [
+  "finanzas",
+  "Finanzas",
+  "calculator",
+  "Finanzas",
+  "Quincenas, 50/30/20, fondo y tasas"
+ ],
+ [
+  "defs",
+  "Valores por defecto",
+  "sliders-horizontal",
+  "Finanzas",
+  "Lo que aparece ya puesto en los formularios"
+ ],
+ [
+  "cats",
+  "Categorías de gastos",
+  "tag",
+  "Finanzas",
+  "Nombres, íconos y topes"
+ ],
+ [
+  "ings",
+  "Tipos de ingreso",
+  "arrow-down-to-line",
+  "Finanzas",
+  "Salario, honorarios, arriendos…"
+ ],
+ [
+  "ents",
+  "Bancos y entidades",
+  "landmark",
+  "Finanzas",
+  "Bancos, cooperativas, casas de empeño"
+ ],
+ [
+  "medios",
+  "Medios de pago",
+  "credit-card",
+  "Finanzas",
+  "Efectivo, tarjetas, Nequi…"
+ ],
+ [
+  "rels",
+  "Relaciones",
+  "users",
+  "Finanzas",
+  "Tipos de contacto"
+ ],
+ [
+  "reglas",
+  "Reglas de importación",
+  "file-up",
+  "Finanzas",
+  "Categorías automáticas por palabra"
+ ],
+ [
+  "servidor",
+  "Servidor y conexiones",
+  "server",
+  "Conexiones",
+  "Correo, WhatsApp e IA con tu propio servidor"
+ ],
+ [
+  "respaldo",
+  "Datos y cuenta",
+  "database",
+  "Datos",
+  "Respaldo, formatear y eliminar"
+ ]
+]

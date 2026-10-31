@@ -1,0 +1,262 @@
+[
+ {
+  "sec": "General"
+ },
+ {
+  "id": "puesta",
+  "l": "Puesta en marcha",
+  "icon": "rocket",
+  "bg": "b-grad"
+ },
+ {
+  "id": "inicio",
+  "l": "Inicio",
+  "icon": "house",
+  "bg": "b-blue"
+ },
+ {
+  "id": "consejero",
+  "l": "Consejero IA",
+  "icon": "sparkles",
+  "bg": "b-grad"
+ },
+ {
+  "sec": "Finanzas"
+ },
+ {
+  "g": "dinero",
+  "l": "Mi dinero",
+  "icon": "wallet",
+  "bg": "b-green",
+  "items": [
+   [
+    "balance",
+    "Balance y quincenas",
+    "scale"
+   ],
+   [
+    "ingresos",
+    "Ingresos",
+    "arrow-down-to-line"
+   ],
+   [
+    "gastos",
+    "Gastos y hormiga",
+    "receipt"
+   ],
+   [
+    "fijos",
+    "Gastos fijos",
+    "house"
+   ],
+   [
+    "tarjetas",
+    "Tarjetas de crédito",
+    "credit-card"
+   ],
+   [
+    "suscripciones",
+    "Suscripciones",
+    "repeat"
+   ],
+   [
+    "correo",
+    "Correo del banco",
+    "mail"
+   ],
+   [
+    "importar",
+    "Importar extractos",
+    "file-up"
+   ]
+  ]
+ },
+ {
+  "g": "prestamos",
+  "l": "Préstamos y deudas",
+  "icon": "handshake",
+  "bg": "b-amber",
+  "items": [
+   [
+    "me-deben",
+    "Me deben",
+    "hand-coins"
+   ],
+   [
+    "le-debo",
+    "Le debo",
+    "landmark"
+   ],
+   [
+    "contactos",
+    "Contactos",
+    "users"
+   ],
+   [
+    "estrategia",
+    "Salir de deudas",
+    "trending-down"
+   ]
+  ]
+ },
+ {
+  "g": "plan",
+  "l": "Planeación",
+  "icon": "target",
+  "bg": "b-violet",
+  "items": [
+   [
+    "presupuesto",
+    "Presupuesto 50/30/20",
+    "chart-pie"
+   ],
+   [
+    "flujo",
+    "Flujo de caja",
+    "chart-line"
+   ],
+   [
+    "metas",
+    "Metas y emergencia",
+    "piggy-bank"
+   ],
+   [
+    "retos",
+    "Retos de ahorro",
+    "trophy"
+   ],
+   [
+    "logros",
+    "Logros y nivel",
+    "medal"
+   ],
+   [
+    "primas",
+    "Primas y cesantías",
+    "gift"
+   ],
+   [
+    "familia",
+    "Por miembro",
+    "users"
+   ],
+   [
+    "mesadas",
+    "Mesada de los hijos",
+    "baby"
+   ],
+   [
+    "compartidos",
+    "Gastos compartidos",
+    "split"
+   ]
+  ]
+ },
+ {
+  "id": "inversiones",
+  "l": "Inversiones",
+  "icon": "trending-up",
+  "bg": "b-teal"
+ },
+ {
+  "sec": "Impuestos"
+ },
+ {
+  "g": "dian",
+  "l": "DIAN",
+  "icon": "landmark",
+  "bg": "b-red",
+  "items": [
+   [
+    "renta",
+    "Declaración de renta",
+    "file-check"
+   ],
+   [
+    "calendario",
+    "Calendario fiscal y laboral",
+    "calendar"
+   ],
+   [
+    "contador",
+    "Acceso de tu contador",
+    "user-round-check"
+   ]
+  ]
+ },
+ {
+  "sec": "Seguimiento"
+ },
+ {
+  "g": "agenda",
+  "l": "Agenda",
+  "icon": "calendar-days",
+  "bg": "b-red",
+  "items": [
+   [
+    "recordatorios",
+    "Próximos pagos",
+    "bell"
+   ]
+  ]
+ },
+ {
+  "g": "informes",
+  "l": "Informes",
+  "icon": "chart-column",
+  "bg": "b-pink",
+  "items": [
+   [
+    "indicadores",
+    "Salud financiera",
+    "gauge"
+   ],
+   [
+    "reportes",
+    "Reportes y resumen IA",
+    "file-text"
+   ]
+  ]
+ },
+ {
+  "sec": "Soporte"
+ },
+ {
+  "g": "ayuda",
+  "l": "Ayuda",
+  "icon": "life-buoy",
+  "bg": "b-blue",
+  "items": [
+   [
+    "novedades",
+    "Novedades",
+    "megaphone"
+   ],
+   [
+    "faq",
+    "Preguntas frecuentes",
+    "circle-help"
+   ],
+   [
+    "manual",
+    "Manual e instructivos",
+    "book-open"
+   ]
+  ]
+ },
+ {
+  "sec": "Configuración"
+ },
+ {
+  "id": "perfil",
+  "l": "Perfil",
+  "icon": "user",
+  "bg": "b-gray"
+ },
+ {
+  "id": "ajustes",
+  "l": "Ajustes",
+  "icon": "settings",
+  "bg": "b-gray"
+ }
+]

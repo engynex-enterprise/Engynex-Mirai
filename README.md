@@ -2,20 +2,21 @@
 
 Plataforma de finanzas personales y familiares para Colombia: ingresos, gastos, gastos fijos, préstamos, metas, inversiones, calendario de pagos, DIAN (renta) y más, explicada para personas sin conocimientos financieros.
 
+**v5 (en migración):** Next.js 16 + React 19 + Tailwind 4 + shadcn + Supabase (Postgres con RLS, Auth, Realtime, Storage), desplegada en Vercel. La v4 (HTML único) está en `legacy/`.
+
 ## Empezar
 ```bash
-npm run setup     # dependencias + Chromium para pruebas
-npm run build     # genera dist/mirai.html y server/public/index.html
-npm test          # pruebas E2E
-npm run dev       # servidor local en http://localhost:8080 (copia server/.env.example a server/.env)
+npm install
+cp .env.example .env.local   # completa las variables (Supabase, Google, ENCRYPTION_KEY…)
+npm run db:migrate           # crea las tablas en Supabase
+npm run dev                  # http://localhost:3000
 ```
 
-## Estructura
-- `src/` frontend (módulos concatenados por `build.py`) · `iso/` isotipos · `vendor/` íconos Lucide
-- `server/` API (Vercel + Supabase o Express) — ver `server/README.md`
-- `tests/` pruebas Playwright · `docs/` backlog e historial · `assets/brand/` logo
+## Comandos
+`npm run build` · `npm run typecheck` · `npm run lint` · `npm run test` · `npm run test:e2e` · `npm run db:types`
 
-## Para agentes de IA
-Lee `CLAUDE.md` (Claude Code) o `AGENTS.md` (otros). Reglas en `.agents/rules/`, flujos en `.agents/workflows/`, comandos y subagentes en `.claude/`.
+## Despliegue
+Vercel detecta Next.js en la raíz. Carga las variables de `.env.example` en *Settings › Environment Variables*. En Supabase configura *Auth › URL Configuration* (Site URL y Redirect URLs `/auth/callback` y `/auth/confirm`) y el proveedor Google.
 
-Versión 4.0 · ver `CHANGELOG.md`.
+## Documentación
+`CLAUDE.md` / `AGENTS.md` (para agentes) · `docs/superpowers/specs/` (diseño) · `docs/migracion/` (inventario funcional de la v4) · `.agents/rules/` (reglas de dominio y UX).

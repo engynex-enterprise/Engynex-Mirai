@@ -1,0 +1,18 @@
+{
+  "name": "mirai",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Mirai (未来, 'futuro'): plataforma de finanzas personales y familiares para Colombia. Frontend single-file + servidor Node (Vercel + Supabase).",
+  "scripts": {
+    "build": "python3 build.py && node --check dist/app.check.js",
+    "test": "npm run build && node tests/run-all.js",
+    "test:one": "node tests/run-all.js",
+    "dev": "npm run build && cd server && node index.js",
+    "setup": "npm install && cd server && npm install && npx playwright install chromium"
+  },
+  "devDependencies": {
+    "lucide-static": "^1.40.0",
+    "playwright": "^1.49.0"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,27 @@
+[
+ [
+  "1105",
+  "Efectivo",
+  "banknote"
+ ],
+ [
+  "1110",
+  "Cuenta bancaria",
+  "landmark"
+ ],
+ [
+  "1516",
+  "Inmueble (casa, lote)",
+  "house"
+ ],
+ [
+  "1540",
+  "Vehículo",
+  "car"
+ ],
+ [
+  "1995",
+  "Otro bien",
+  "tag"
+ ]
+]

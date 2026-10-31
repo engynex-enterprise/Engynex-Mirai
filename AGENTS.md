@@ -1,25 +1,18 @@
 # AGENTS.md — Mirai
 
-Guía para agentes de código (Codex, Cursor, Copilot, Gemini, Claude…). **Lee `CLAUDE.md` para el contexto completo**; aquí está lo esencial.
+Guía corta para agentes de código. **Lee `CLAUDE.md` para el contexto completo.**
 
 ## Proyecto
-Mirai: finanzas personales y familiares para Colombia, en español, para personas sin conocimientos financieros. Frontend single-file (HTML + JS sin bundler) generado por `build.py` desde `src/`, y servidor Node 20 en `server/` (Vercel + Supabase o Express).
+Mirai: finanzas personales y familiares para Colombia, en español, para personas sin conocimientos financieros. **v5 en migración:** Next.js 16 (App Router, `cacheComponents`) + React 19 + Tailwind 4 + shadcn + Supabase (Postgres con RLS, Auth, Realtime, Storage), desplegado en Vercel. La v4 (HTML único) vive en `legacy/` como referencia.
 
 ## Comandos
-- Instalar: `npm run setup`
-- Construir: `npm run build` (obligatorio tras tocar `src/` o `iso/`)
-- Probar: `npm test` (19 pruebas Playwright; cada una debe terminar en `[]`)
-- Servidor local: `npm run dev` → http://localhost:8080
+`npm run dev` · `npm run build` · `npm run typecheck` · `npm run lint` · `npm run test` (Vitest) · `npm run test:e2e` (Playwright 1366 px y 400 px) · `npm run db:migrate` · `npm run db:types`
 
 ## Reglas no negociables
-1. UI y textos en español de Colombia, tuteo, lenguaje simple. Toda funcionalidad nueva lleva ayuda: `HELP`, `MDESC`, `tip` en campos, entrada en `RELEASES`.
-2. No conviertas a `const` las funciones que otros módulos envuelven (render, renderNav, commit, notifs, ajNotif, ajIA, ajServidor, sendEmailDigest, openWa, downloadFile, V.*). El orden de `build.py` importa.
-3. Estado en `S`; persiste solo con `commit()`. Vistas = `V.x = () => html`. Modales = `M.x`. Acciones = `EXTRA_ACT.x`. Formularios = `EXTRA_FORM.x`.
-4. Sin dependencias nuevas en el frontend. Íconos con `ic('lucide-name')`; isotipos con `isoIcon()`.
-5. Secretos solo en el servidor (cifrados). Nada de claves en el repo.
-6. Valores tributarios/laborales de Colombia: verificarlos con fuentes oficiales; presentarlos como estimados.
-7. Sin logos de marcas de terceros.
-8. Cada cambio: build → pruebas → revisar capturas (`tests/.out/`) si tocaste UI. Agrega una prueba E2E por funcionalidad.
-
-## Dónde está cada cosa
-Ver tabla de módulos en `CLAUDE.md §3`. Reglas: `.agents/rules/`. Flujos: `.agents/workflows/`. Pendientes: `docs/BACKLOG.md`.
+1. UI y textos en español de Colombia, tuteo, lenguaje simple. Cada sección: `PageHeader` + `HELP`; cada modal: descripción (`MDESC`); cada campo: ayuda (`fieldHelp`).
+2. Todo lo que lee sesión/cookies va dentro de `<Suspense>` con skeleton.
+3. Datos: TanStack Query (`useList`, `useSave`, `useSoftDelete`), borrado lógico con "Deshacer", Realtime por libro.
+4. Seguridad: RLS en cada tabla nueva; secretos solo en servidor y cifrados; nunca `SUPABASE_SECRET_KEY` en el cliente.
+5. Valores tributarios/laborales de Colombia en tablas `ref_*` con fuente oficial; se muestran como estimados.
+6. Sin logos de marcas de terceros. Responsive móvil primero, sin scroll horizontal a 400 px.
+7. Cada cambio: build → pruebas → capturas. Nada de la v4 se omite (ver `docs/migracion/`).

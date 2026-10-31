@@ -1,0 +1,9 @@
+{
+ "mensual": "Cada mes",
+ "quincenal": "Cada quincena",
+ "bimestral": "Cada dos meses",
+ "trimestral": "Cada tres meses",
+ "semestral": "Cada seis meses",
+ "anual": "Una vez al año",
+ "unico": "Una sola vez"
+}

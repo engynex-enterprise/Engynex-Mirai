@@ -1,0 +1,47 @@
+[
+ [
+  "cir",
+  "Certificado de ingresos y retenciones (formulario 220)",
+  "Te lo da tu empleador entre febrero y marzo."
+ ],
+ [
+  "banc",
+  "Certificados bancarios con saldos al 31 de diciembre",
+  "Cada banco lo genera en su app o página."
+ ],
+ [
+  "cdt",
+  "Certificados de rendimientos financieros y retención (CDT, fondos)",
+  "De cada entidad donde tengas inversiones."
+ ],
+ [
+  "cred",
+  "Certificados de deudas al 31 de diciembre",
+  "Créditos, tarjetas e hipoteca."
+ ],
+ [
+  "hip",
+  "Certificado de intereses pagados por crédito de vivienda",
+  "Son deducibles: pueden bajar tu impuesto."
+ ],
+ [
+  "pens",
+  "Certificados de aportes voluntarios a pensión o cuentas AFC",
+  "Pueden ser rentas exentas."
+ ],
+ [
+  "salud",
+  "Certificado de medicina prepagada o pólizas de salud",
+  "Deducción hasta un tope mensual."
+ ],
+ [
+  "dep",
+  "Datos de tus dependientes económicos",
+  "Hijos o personas a cargo: dan derecho a una deducción."
+ ],
+ [
+  "bienes",
+  "Valor de tus bienes (avalúo catastral, vehículo)",
+  "Del impuesto predial y vehicular."
+ ]
+]

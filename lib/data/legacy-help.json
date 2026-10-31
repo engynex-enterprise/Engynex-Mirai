@@ -1,0 +1,365 @@
+{
+ "puesta": {
+  "t": "Puesta en marcha",
+  "i": "La guía para configurar tu libro la primera vez.",
+  "p": [
+   "Sigue los pasos en orden: cada uno abre el formulario que necesitas.",
+   "Los pasos opcionales los puedes omitir si no aplican.",
+   "Cuando termines, la guía se oculta sola. Puedes volver desde el menú de tu perfil."
+  ]
+ },
+ "inicio": {
+  "t": "Inicio",
+  "i": "Tu resumen del día: cuánto tienes, cuánto te queda en la quincena y qué pagos se acercan.",
+  "p": [
+   "Escribe en la caja de arriba lo que gastaste, en palabras (\"gasté 15 mil en almuerzo\") y la IA lo registra.",
+   "Las tarjetas de números muestran tu patrimonio, lo que te queda en la quincena, tus cuotas y los gastos hormiga.",
+   "En \"Próximos 15 días\" puedes pagar o cobrar directamente con los botones de cada fila."
+  ],
+  "tips": [
+   "Registra tus gastos cada día: toma segundos y es lo que hace que todo funcione."
+  ]
+ },
+ "consejero": {
+  "t": "Consejero antes de gastar",
+  "i": "Tu asesor financiero: antes de comprar, endeudarte, sacar una tarjeta o prestar, te dice si te conviene con tus números reales.",
+  "p": [
+   "Escribe con tus palabras lo que piensas hacer (por ejemplo: \"me ofrecen una tarjeta con cupo de 5 millones\").",
+   "Toca Continuar: la IA entiende el caso y llena un formulario corto. Revisa los datos marcados con IA y ajusta.",
+   "Toca \"Analizar si me conviene\" y lee la respuesta en \"Explicación sencilla\" o en \"Vista financiera\".",
+   "¿Dudas? Toca la burbuja flotante para conversar con el asesor."
+  ],
+  "tips": [
+   "La burbuja se puede arrastrar a cualquier lugar de la pantalla.",
+   "En el chat puedes elegir el tono Sencillo o Financiero."
+  ]
+ },
+ "balance": {
+  "t": "Balance y quincenas",
+  "i": "La Cuenta T muestra lo que tienes (activos) frente a lo que debes (pasivos). Las pestañas de quincena muestran cuánto entra y sale en cada mitad del mes.",
+  "p": [
+   "En \"Lo que tengo y lo que debo\" agrega tus cuentas bancarias, efectivo, casa o carro, y deudas sin cuotas.",
+   "Los préstamos, inversiones y tarjetas se suman solos desde sus módulos.",
+   "En las pestañas de quincena navega entre meses con las flechas."
+  ],
+  "tips": [
+   "El arriendo o el mercado no van aquí: son gastos. Regístralos en Gastos fijos o Gastos."
+  ]
+ },
+ "ingresos": {
+  "t": "Ingresos",
+  "i": "Todo el dinero que recibes con regularidad.",
+  "p": [
+   "Toca \"Agregar ingreso\" y escribe el concepto y el valor.",
+   "Si te pagan por quincena, escribe lo de una quincena y elige \"Cada quincena\".",
+   "Asigna a quién pertenece el ingreso para ver el aporte de cada integrante."
+  ],
+  "tips": [
+   "Para ingresos de una sola vez (una venta, un bono) escribe en Inicio: \"me pagaron 200 mil por…\"."
+  ]
+ },
+ "gastos": {
+  "t": "Gastos y hormiga",
+  "i": "Todo lo que gastas, organizado por día. La IA detecta los gastos hormiga: pequeños, frecuentes y evitables.",
+  "p": [
+   "Toca \"Registrar gasto\", escribe en qué gastaste: la categoría se pone sola.",
+   "También puedes tomarle foto a la factura y la IA llena los datos.",
+   "Toca la taza junto a un gasto para marcarlo o desmarcarlo como hormiga.",
+   "El botón \"Revisar hormiga con IA\" revisa todo el mes de una vez."
+  ],
+  "tips": [
+   "Un tinto diario de $ 5.000 son $ 1.800.000 al año."
+  ]
+ },
+ "fijos": {
+  "t": "Gastos fijos",
+  "i": "Pagos que se repiten: arriendo, servicios, colegio, administración.",
+  "p": [
+   "Agrega cada gasto con su día de pago y frecuencia.",
+   "Te avisamos unos días antes (lo configuras en Ajustes › Alertas).",
+   "Al tocar \"Pagar\" queda registrado también en tus gastos del mes."
+  ],
+  "tips": [
+   "Para servicios que cambian cada mes, activa \"El valor cambia\" y escribe el valor real al pagar."
+  ]
+ },
+ "suscripciones": {
+  "t": "Suscripciones",
+  "i": "Servicios que se cobran solos cada mes o cada año.",
+  "p": [
+   "Agrega tus suscripciones con su valor y fecha de cobro.",
+   "Revisa las \"sugeridas\": son cobros que se repiten en tus gastos.",
+   "Elimina las que ya no usas para ver cuánto te ahorras al año."
+  ]
+ },
+ "importar": {
+  "t": "Importar extractos",
+  "i": "Sube el archivo CSV de tu banca en línea y conviértelo en gastos.",
+  "p": [
+   "Descarga los movimientos de tu banco en formato CSV.",
+   "Súbelo o pega su contenido y toca \"Leer movimientos\".",
+   "Revisa la categoría y si es hormiga; luego importa los seleccionados."
+  ]
+ },
+ "correo": {
+  "t": "Correo del banco",
+  "i": "Lee las notificaciones de compra que tu banco te envía al Gmail.",
+  "p": [
+   "Toca \"Buscar compras en mi correo\".",
+   "La IA saca comercio, valor y fecha de cada correo.",
+   "Marca los que quieres registrar y confirma. Los correos ya importados no se repiten."
+  ]
+ },
+ "tarjetas": {
+  "t": "Tarjetas de crédito",
+  "i": "Controla cupo, fechas y el costo real de diferir compras.",
+  "p": [
+   "Agrega tu tarjeta con su cupo, día de corte, día de pago e interés mensual.",
+   "Registra cada compra con el número de cuotas.",
+   "Usa la calculadora antes de comprar para ver cuánto pagas en intereses según las cuotas."
+  ],
+  "tips": [
+   "Diferir a 1 cuota y pagar el total cada mes evita los intereses."
+  ]
+ },
+ "me-deben": {
+  "t": "Me deben",
+  "i": "Personas o clientes a quienes les prestaste dinero.",
+  "p": [
+   "Toca \"Nuevo préstamo\", elige o crea el contacto y escribe el valor y las cuotas.",
+   "Si no sabes la tasa, escribe cuánto es cada cuota y calculamos el interés.",
+   "Cuando te paguen, toca \"Registrar pago recibido\": cuota completa o abono.",
+   "Usa \"Enviar recordatorio\" para cobrar por WhatsApp o correo, y \"Acuerdo de pago\" para generar el documento en PDF."
+  ]
+ },
+ "le-debo": {
+  "t": "Le debo",
+  "i": "Tus créditos con bancos y deudas con personas.",
+  "p": [
+   "Registra la deuda con el banco o la persona, el valor, las cuotas y la tasa.",
+   "Agrega los seguros que te cobran en cada cuota para que el valor coincida con tu extracto.",
+   "Registra cada pago o abono para saber cuánto te falta."
+  ],
+  "tips": [
+   "Un abono para \"terminar antes\" casi siempre ahorra más intereses que bajar la cuota."
+  ]
+ },
+ "contactos": {
+  "t": "Contactos",
+  "i": "Las personas y empresas con quienes tienes préstamos.",
+  "p": [
+   "Guarda nombre, documento, celular, correo y dirección una sola vez.",
+   "Al registrar un préstamo, solo eliges el contacto.",
+   "En cada tarjeta ves cuánto te debe y cuánto le debes."
+  ]
+ },
+ "estrategia": {
+  "t": "Salir de deudas",
+  "i": "Compara dos métodos para pagar tus deudas más rápido con un pago extra.",
+  "p": [
+   "Escribe cuánto más puedes pagar cada mes.",
+   "Mira cuántos meses y cuánto interés ahorras con cada método.",
+   "Simula un abono a un crédito y elige entre terminar antes o bajar la cuota."
+  ]
+ },
+ "presupuesto": {
+  "t": "Presupuesto 50/30/20",
+  "i": "La regla más usada: 50% necesidades, 30% gustos, 20% ahorro.",
+  "p": [
+   "Escribe el tope mensual de cada categoría.",
+   "El semáforo te muestra si vas bien, cerca del tope o te pasaste.",
+   "Cambia los porcentajes en Ajustes › Finanzas."
+  ]
+ },
+ "flujo": {
+  "t": "Flujo de caja",
+  "i": "Proyección de los próximos 12 meses: cuánto entra, cuánto sale y con cuánto quedas.",
+  "p": [
+   "Revisa los meses en rojo: ahí te faltaría plata.",
+   "Para que sea preciso, mantén al día ingresos, gastos fijos, deudas y presupuesto.",
+   "Escribe el valor de primas y cesantías en el calendario para que se sumen en su mes."
+  ]
+ },
+ "metas": {
+  "t": "Metas y emergencia",
+  "i": "Ponle nombre y fecha a lo que quieres lograr.",
+  "p": [
+   "Crea una meta con el valor y la fecha.",
+   "Te decimos cuánto guardar al mes.",
+   "Registra cada abono para ver tu avance."
+  ],
+  "tips": [
+   "Primero arma tu fondo de emergencia: de 3 a 6 meses de gastos básicos."
+  ]
+ },
+ "familia": {
+  "t": "Por miembro",
+  "i": "Cupo y gastos de cada integrante de la familia.",
+  "p": [
+   "Agrega los integrantes en tu perfil.",
+   "Escribe el cupo mensual de cada uno.",
+   "Al registrar gastos elige quién gastó para ver el avance."
+  ]
+ },
+ "retos": {
+  "t": "Retos de ahorro",
+  "i": "Desafíos para cambiar hábitos.",
+  "p": [
+   "Elige un reto de la lista.",
+   "Los retos \"sin\" se revisan solos con tus gastos.",
+   "En los retos de ahorro, marca cada día o semana cuando guardes el dinero."
+  ]
+ },
+ "primas": {
+  "t": "Primas y cesantías",
+  "i": "Planea en qué usar tus primas y cesantías antes de recibirlas.",
+  "p": [
+   "Revisa tu salario (lo tomamos de tus ingresos).",
+   "Mueve los porcentajes para repartir la prima.",
+   "Pídele un plan a la IA o pon los valores en el calendario."
+  ]
+ },
+ "compartidos": {
+  "t": "Gastos compartidos",
+  "i": "Divide cuentas de viajes, la casa o regalos entre varias personas.",
+  "p": [
+   "Crea un grupo con los nombres de los participantes.",
+   "Anota cada gasto: quién pagó y entre quiénes se divide.",
+   "Mira \"Para quedar a paz y salvo\": quién le paga a quién."
+  ]
+ },
+ "mesadas": {
+  "t": "Mesada de los hijos",
+  "i": "Una cuenta sencilla para enseñarles a manejar el dinero.",
+  "p": [
+   "Agrega a tus hijos como integrantes en tu perfil.",
+   "Define la mesada y entrégala con un toque.",
+   "Anoten juntos sus gastos y su meta de ahorro."
+  ]
+ },
+ "inversiones": {
+  "t": "Inversiones",
+  "i": "Mira cuánto crece tu dinero, explicado sin palabras raras.",
+  "p": [
+   "Toca \"Agregar inversión\" y elige dónde pusiste el dinero.",
+   "Para CDT y cuentas que rinden, escribe la tasa E.A.: calculamos lo que ganas.",
+   "Para fondos o acciones, actualiza el valor cuando revises tu extracto."
+  ]
+ },
+ "recordatorios": {
+  "t": "Próximos pagos",
+  "i": "Tu calendario de dinero, como Google Calendar.",
+  "p": [
+   "Cambia entre Agenda, Semana y Mes con los botones de arriba.",
+   "Usa Hoy y las flechas para moverte; toca un día del calendario pequeño para ir a esa fecha.",
+   "Toca un evento para ver el detalle y pagarlo o registrar el cobro.",
+   "En \"Mis calendarios\" muestra u oculta cada tipo de evento.",
+   "Exporta tus pagos a Google Calendar o a un archivo .ics."
+  ]
+ },
+ "calendario": {
+  "t": "Calendario fiscal y laboral",
+  "i": "Las fechas de Colombia que se repiten cada año.",
+  "p": [
+   "Agrega fechas desde las plantillas: primas, cesantías, dotación, renta, predial, vehicular, SOAT, matrículas…",
+   "Escribe los 2 últimos dígitos de tu cédula para saber tu fecha de renta.",
+   "Ponle un valor estimado a cada fecha para que entre en tu flujo de caja.",
+   "Usa \"Recordar\" para que te avisemos como un pago más."
+  ]
+ },
+ "indicadores": {
+  "t": "Salud financiera",
+  "i": "Seis preguntas para saber si tus finanzas están sanas.",
+  "p": [
+   "Cada indicador muestra un semáforo y su meta.",
+   "Si faltan datos, te dice cuáles y te lleva a completarlos.",
+   "El puntaje general aparece con al menos 4 indicadores."
+  ]
+ },
+ "reportes": {
+  "t": "Reportes",
+  "i": "Balance y resultado del mes para revisar en familia.",
+  "p": [
+   "Elige el mes.",
+   "Genera el resumen con IA para entender en qué se fue la plata.",
+   "Descarga el PDF o los movimientos en CSV para Excel."
+  ]
+ },
+ "renta": {
+  "t": "Declaración de renta",
+  "i": "Todo para declarar renta ante la DIAN.",
+  "p": [
+   "Revisa en \"¿Debo declarar?\" si superas algún tope.",
+   "Confirma ingresos y retenciones con el certificado 220 de tu empleador.",
+   "Registra tus bienes (casa, carro, cuentas) y tus dependientes (hijos).",
+   "Agrega deducciones: intereses de vivienda, prepagada, 4×1000.",
+   "Mira el borrador del impuesto y compártelo con tu contador."
+  ]
+ },
+ "perfil": {
+  "t": "Perfil",
+  "i": "Tus datos y los de tu familia.",
+  "p": [
+   "Completa tu nombre, ciudad y documento (se usan en los acuerdos de pago).",
+   "Agrega a los integrantes de la familia y su cupo."
+  ]
+ },
+ "ajustes": {
+  "t": "Ajustes",
+  "i": "Personaliza el libro.",
+  "p": [
+   "General: tema, privacidad, IA y pantalla de inicio.",
+   "Alertas: qué te avisamos y con cuánta anticipación.",
+   "Finanzas: quincenas, porcentajes, monedas y usura.",
+   "Listas: categorías, bancos, medios de pago, relaciones y reglas.",
+   "Datos y cuenta: respaldos, formatear y eliminar."
+  ]
+ },
+ "novedades": {
+  "t": "Novedades",
+  "i": "Las notas de versión: qué hay de nuevo en cada actualización.",
+  "p": [
+   "Cada tarjeta es una versión, de la más nueva a la más antigua.",
+   "Las etiquetas indican si es algo nuevo, una mejora o una corrección.",
+   "Cuando haya novedades sin ver, aparece un punto en el menú."
+  ]
+ },
+ "faq": {
+  "t": "Preguntas frecuentes",
+  "i": "Respuestas cortas a las dudas más comunes.",
+  "p": [
+   "Escribe en el buscador una palabra de tu duda.",
+   "Filtra por tema con los botones.",
+   "Toca una pregunta para ver la respuesta y \"Ir a la sección\" para hacerlo."
+  ]
+ },
+ "manual": {
+  "t": "Manual e instructivos",
+  "i": "Guías paso a paso y el manual de cada sección.",
+  "p": [
+   "En \"Instructivos paso a paso\" encuentras las tareas más comunes.",
+   "En \"Manual por sección\" está la explicación de cada parte de Mirai.",
+   "Usa el buscador para encontrar un tema rápido."
+  ]
+ },
+ "logros": {
+  "t": "Logros y nivel",
+  "i": "Puntos, niveles, rachas, insignias y misiones semanales.",
+  "p": [
+   "Ganas puntos solo con usar Mirai: registrar gastos, pagar a tiempo, ahorrar y cumplir retos.",
+   "Cada semana tienes 3 misiones nuevas; al cumplirlas suman puntos automáticamente.",
+   "La racha cuenta los días seguidos que entras a Mirai.",
+   "Si no te gusta, apágalo con el interruptor \"Mostrar logros\"."
+  ]
+ },
+ "contador": {
+  "t": "Acceso de tu contador",
+  "i": "Enlace seguro de solo lectura para tu contador.",
+  "p": [
+   "Crea un acceso con el nombre de tu contador y hasta cuándo puede entrar.",
+   "Envíale el enlace: lo abre sin crear cuenta.",
+   "Tu contador ve la declaración, descarga Excel o PDF y te deja notas.",
+   "Quita el acceso cuando termine."
+  ]
+ }
+}

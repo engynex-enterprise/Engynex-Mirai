@@ -9,3 +9,16 @@ dist/app.check.js
 *.log
 .vercel/
 iso/png/
+
+# Next.js
+.next/
+next-env.d.ts
+.env*.local
+.env
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+legacy/dist/app.check.js
+legacy/server/public/
+.claude/settings.local.json

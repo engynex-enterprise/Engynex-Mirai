@@ -1,0 +1,142 @@
+[
+ {
+  "id": "g1",
+  "t": "Registrar tu primer gasto",
+  "icon": "receipt",
+  "go": "gastos",
+  "min": 1,
+  "s": [
+   "Toca el botón + arriba o \"Registrar gasto\".",
+   "Escribe en qué gastaste; la categoría se elige sola.",
+   "Escribe el valor; el formato de pesos se pone solo.",
+   "Revisa quién gastó y cómo pagaste, y toca Guardar gasto."
+  ],
+  "tip": "También puedes escribir en Inicio: \"gasté 15 mil en almuerzo ayer\"."
+ },
+ {
+  "id": "g2",
+  "t": "Registrar una deuda que ya venías pagando",
+  "icon": "landmark",
+  "go": "le-debo",
+  "min": 3,
+  "s": [
+   "Ve a Le debo › Nueva deuda.",
+   "Elige el banco (o créalo desde la lista).",
+   "Escribe cuánto te prestaron, la fecha en que empezó y el número de cuotas.",
+   "Escribe la tasa o el valor de la cuota.",
+   "En \"¿Ya has pagado algo?\" elige \"Sé cuánto se debe hoy\" y escribe el saldo del extracto.",
+   "Revisa el resumen y guarda."
+  ],
+  "tip": "Con el botón \"Leer con foto\" la IA llena todo desde el extracto."
+ },
+ {
+  "id": "g3",
+  "t": "Registrar un pago recibido o hecho",
+  "icon": "circle-dollar-sign",
+  "go": "me-deben",
+  "min": 1,
+  "s": [
+   "Abre el préstamo en Me deben o Le debo.",
+   "Toca \"Registrar pago\".",
+   "Elige \"Pagó la cuota completa\" o \"Hizo un abono\".",
+   "Pon la fecha y guarda."
+  ],
+  "tip": "Sube el comprobante con \"Leer comprobante\" y se llena solo."
+ },
+ {
+  "id": "g4",
+  "t": "Registrar un empeño",
+  "icon": "gem",
+  "go": "le-debo",
+  "min": 2,
+  "s": [
+   "Ve a Le debo › Registrar empeño.",
+   "Elige o crea la casa de empeño.",
+   "Escribe el valor prestado, el interés mensual y los meses.",
+   "Escribe qué empeñaste, cuánto vale, la fecha límite y el número de boleta.",
+   "Guarda: te avisaremos 15 días antes de la fecha límite."
+  ]
+ },
+ {
+  "id": "g5",
+  "t": "Agregar los servicios públicos",
+  "icon": "zap",
+  "go": "fijos",
+  "min": 2,
+  "s": [
+   "Ve a Gastos fijos › Agregar gasto fijo.",
+   "Escribe el nombre (agua, luz, gas, internet): se marca \"Cambia cada mes\".",
+   "Escribe cuánto pagas en un mes bajo y en uno alto.",
+   "Elige cada cuánto se paga y la fecha del próximo pago.",
+   "Si ya pagaste el último, márcalo con su fecha."
+  ]
+ },
+ {
+  "id": "g6",
+  "t": "Crear tu fondo de emergencia",
+  "icon": "umbrella",
+  "go": "metas",
+  "min": 1,
+  "s": [
+   "Ve a Planeación › Metas y emergencia.",
+   "En Fondo de emergencia toca \"Guardar dinero\" para registrar lo que ya tienes.",
+   "Toca \"Programar un aporte fijo\" y elige cuánto guardar cada quincena o mes.",
+   "Cada vez que te llegue el recordatorio, toca \"Ya aporté\".",
+   "Cuando pase algo, usa \"Usar para un imprevisto\"."
+  ]
+ },
+ {
+  "id": "g7",
+  "t": "Agregar una suscripción de streaming",
+  "icon": "repeat",
+  "go": "suscripciones",
+  "min": 1,
+  "s": [
+   "Ve a Mi dinero › Suscripciones › Agregar.",
+   "Toca el servicio o escribe otro.",
+   "Escribe el valor, si es mensual o anual y el próximo cobro.",
+   "Si compartes el plan, indica entre cuántos."
+  ]
+ },
+ {
+  "id": "g8",
+  "t": "Proteger tu cuenta con verificación en dos pasos",
+  "icon": "shield-check",
+  "go": "ajustes",
+  "tab": "seguridad",
+  "min": 3,
+  "s": [
+   "Ve a Ajustes › Seguridad.",
+   "Activa la verificación en dos pasos.",
+   "Escanea el código QR con Google o Microsoft Authenticator.",
+   "Escribe el código de 6 dígitos.",
+   "Descarga y guarda tus códigos de respaldo."
+  ]
+ },
+ {
+  "id": "g9",
+  "t": "Dividir gastos con amigos o familia",
+  "icon": "split",
+  "go": "compartidos",
+  "min": 2,
+  "s": [
+   "Ve a Planeación › Gastos compartidos.",
+   "Crea un grupo y agrega a los participantes.",
+   "Anota cada gasto y quién lo pagó.",
+   "Mira el resumen de quién le debe a quién."
+  ]
+ },
+ {
+  "id": "g10",
+  "t": "Preguntarle al consejero antes de gastar",
+  "icon": "sparkles",
+  "go": "consejero",
+  "min": 1,
+  "s": [
+   "Abre Consejero IA.",
+   "Elige si vas a comprar, prestar o endeudarte.",
+   "Escribe el valor y, si es a cuotas, cuántas.",
+   "Toca \"Analizar con IA\" y lee el veredicto."
+  ]
+ }
+]

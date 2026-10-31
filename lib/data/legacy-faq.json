@@ -1,0 +1,231 @@
+[
+ {
+  "c": "DIAN",
+  "q": "¿Cómo le doy acceso a mi contador?",
+  "a": "Ve a <b>DIAN › Acceso de tu contador</b>, escribe su nombre, elige qué puede ver y hasta cuándo, y envíale el enlace. Solo puede ver, descargar y dejarte notas. Requiere tener Mirai en tu servidor (Vercel + Supabase).",
+  "go": "contador"
+ },
+ {
+  "c": "DIAN",
+  "q": "¿Mis hijos me ayudan a pagar menos renta?",
+  "a": "Sí, si son tus dependientes: menores de 18 años, de 18 a 23 si estudian, o con discapacidad. Márcalos en <b>DIAN › Declaración de renta › Dependientes</b>.",
+  "go": "renta"
+ },
+ {
+  "c": "DIAN",
+  "q": "¿Para qué registro mis bienes?",
+  "a": "Tu casa, carro y cuentas forman tu patrimonio, que se declara cada año y define si estás obligado a declarar. También sirven para estimar el predial y el impuesto vehicular.",
+  "go": "renta"
+ },
+ {
+  "c": "Logros",
+  "q": "¿Cómo gano puntos y subo de nivel?",
+  "a": "Solo con usar Mirai: registrar gastos (5 puntos), ingresos (20), pagar cuotas a tiempo (25), marcar gastos fijos pagados (10), cumplir metas, retos y misiones semanales, y ganar insignias. Míralo en <b>Planeación › Logros y nivel</b>.",
+  "go": "logros"
+ },
+ {
+  "c": "Logros",
+  "q": "¿Puedo quitar los logros?",
+  "a": "Sí. En <b>Logros y nivel</b> apaga el interruptor \"Mostrar logros\" y desaparecen de Inicio y del menú.",
+  "go": "logros"
+ },
+ {
+  "c": "Notificaciones",
+  "q": "¿Qué servicio de correo uso: Gmail, SendGrid, Resend o SMTP?",
+  "a": "<b>Gmail</b> si quieres algo rápido con tu cuenta (necesitas una contraseña de aplicación). <b>Resend</b> es el más fácil con Vercel. <b>SendGrid</b> si ya lo usas. <b>SMTP</b> si tienes el correo de tu hosting (Hostinger, Zoho…). Elígelo en Ajustes › Alertas y notificaciones.",
+  "go": "ajustes"
+ },
+ {
+  "c": "Notificaciones",
+  "q": "¿Dónde quedan guardadas mis claves?",
+  "a": "En tu servidor (por ejemplo Vercel + Supabase), cifradas con AES-256. El navegador solo ve los últimos 4 caracteres.",
+  "go": "ajustes"
+ },
+ {
+  "c": "Primeros pasos",
+  "q": "¿Por dónde empiezo?",
+  "a": "Abre <b>Puesta en marcha</b> en el menú. Te lleva paso a paso: tu ingreso, tus gastos fijos, tus cuentas y tus deudas. Con eso Mirai ya puede avisarte y aconsejarte.",
+  "go": "puesta"
+ },
+ {
+  "c": "Primeros pasos",
+  "q": "Ya tenía deudas y préstamos pagados en parte, ¿debo registrar cada pago?",
+  "a": "No. Al registrar el préstamo, en \"¿Ya has pagado algo?\" elige <b>Va al día</b>, <b>Ya se pagaron algunas cuotas</b> o <b>Sé cuánto se debe hoy</b>. Pon la fecha real en que empezó el préstamo.",
+  "go": "le-debo"
+ },
+ {
+  "c": "Primeros pasos",
+  "q": "¿Puedo usar Mirai en el celular?",
+  "a": "Sí. La plataforma se adapta a la pantalla del celular. El menú se abre con el botón de tres rayas arriba a la izquierda."
+ },
+ {
+  "c": "Primeros pasos",
+  "q": "¿Escribo mi salario completo o lo que me llega?",
+  "a": "Puedes escribir cualquiera. Si escribes el salario o el valor del contrato, elige <b>\"No, es el salario o valor del contrato\"</b> y Mirai calcula salud, pensión, fondo de solidaridad, retención y tus otros descuentos (libranzas, cooperativa…). Si eres independiente, calcula la seguridad social sobre el 40%. Todo es configurable porque no a todos les descuentan lo mismo.",
+  "go": "ingresos"
+ },
+ {
+  "c": "Inteligencia artificial",
+  "q": "¿Puedo apagar la IA o usar ChatGPT o Gemini?",
+  "a": "Sí. En <b>Ajustes › Inteligencia artificial</b> puedes apagarla, apagar funciones una por una o elegir proveedor. Para OpenAI, Gemini o tu propia cuenta de Claude se usa una clave de API (las suscripciones personales no se pueden vincular). Dentro de claude.ai la conexión a otros proveedores puede estar bloqueada; en ese caso Mirai usa Claude incluido.",
+  "go": "ajustes",
+  "tab": "ia"
+ },
+ {
+  "c": "Cuenta y seguridad",
+  "q": "¿Me pueden llegar los avisos por correo o WhatsApp?",
+  "a": "Sí. En <b>Ajustes › Alertas y notificaciones</b> activa el correo (resumen diario o semanal desde tu Gmail conectado) y WhatsApp (te dejamos el mensaje listo para enviarlo a tu número con un toque). Elige qué avisos van por cada canal.",
+  "go": "ajustes",
+  "tab": "alertas"
+ },
+ {
+  "c": "Inteligencia artificial",
+  "q": "¿Cómo uso el asesor financiero?",
+  "a": "Toca la <b>burbuja</b> flotante (puedes arrastrarla a donde quieras) y escribe tu pregunta. Si vas a decidir una compra, crédito, tarjeta o préstamo, te lleva al <b>Consejo antes de gastar</b> para analizarlo con tus números. Elige el tono <b>Sencillo</b> o <b>Financiero</b>. Tus conversaciones quedan en el historial.",
+  "go": "consejero"
+ },
+ {
+  "c": "Gastos",
+  "q": "¿Cuál es la diferencia entre gasto, gasto fijo y deuda?",
+  "a": "<b>Gasto</b>: algo que pagaste una vez (mercado, un almuerzo). <b>Gasto fijo</b>: se repite y no se acaba (arriendo, servicios, colegio). <b>Deuda</b>: tiene un total que se termina de pagar en cuotas (crédito, compra a cuotas como un televisor con Celya)."
+ },
+ {
+  "c": "Gastos",
+  "q": "¿Qué es un gasto hormiga?",
+  "a": "Gastos pequeños y frecuentes (cafés, snacks, domicilios) que al mes suman mucho. La IA los detecta sola; puedes ponerles un límite mensual en Ajustes.",
+  "go": "gastos"
+ },
+ {
+  "c": "Gastos",
+  "q": "Los servicios no cuestan lo mismo cada mes, ¿cómo los registro?",
+  "a": "En Gastos fijos elige <b>\"Cambia cada mes (rango)\"</b> y escribe cuánto pagas en un mes bajo y en uno alto. Se usa el promedio y el rango se ajusta con tus pagos reales.",
+  "go": "fijos"
+ },
+ {
+  "c": "Gastos",
+  "q": "Mi recibo del agua aparece vencido pero este mes no tocaba pagar",
+  "a": "Abre el gasto fijo, toca <b>Pagar › \"No tocaba pagar · cambiar fecha\"</b> y pon la fecha del próximo pago. Desde esa fecha se cuentan los periodos.",
+  "go": "fijos"
+ },
+ {
+  "c": "Gastos",
+  "q": "¿Cómo registro un imprevisto?",
+  "a": "Registra el gasto normalmente; si escribes algo como \"se dañó la nevera\" la categoría <b>Imprevistos</b> se pone sola y te ofrece pagarlo con tu fondo de emergencia. También puedes hacerlo desde Metas › Fondo de emergencia › \"Usar para un imprevisto\".",
+  "go": "metas"
+ },
+ {
+  "c": "Gastos",
+  "q": "No encuentro mi categoría",
+  "a": "Al final de la lista de categorías toca <b>\"Crear categoría\"</b> o <b>\"Que la IA la cree\"</b>. Queda guardada y seleccionada."
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "No entiendo la tabla de cuotas",
+  "a": "Cada fila es un pago. <b>Valor de la cuota = Abono a la deuda + Interés</b> (+ seguros si hay). El abono es lo que baja la deuda; el interés es el costo del préstamo (o tu ganancia si prestaste). \"Queda debiendo\" es lo que falta después de esa cuota.",
+  "go": "me-deben"
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "¿Qué significa \"1% mensual\" y \"E.A.\"?",
+  "a": "El <b>interés mensual</b> es lo que se cobra cada mes sobre lo que se debe. La <b>tasa E.A. (efectiva anual)</b> es lo que cuesta en un año completo; es la que muestran los bancos. Si solo tienes la E.A., escríbela y Mirai calcula la mensual."
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "¿Qué sistema de cuota elijo?",
+  "a": "Si no sabes, deja <b>Cuota fija</b>: es el que usan los bancos en Colombia. \"Cuota que va bajando\" paga menos intereses en total. \"Interés sobre lo prestado\" es común entre conocidos. \"Solo intereses\" es típico en empeños."
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "¿Cómo registro algo que empeñé?",
+  "a": "En <b>Le debo › Registrar empeño</b>. Pon la casa de empeño, el valor que te prestaron, el interés, qué empeñaste y la fecha límite para recuperarlo. Te avisamos 15 días antes.",
+  "go": "le-debo"
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "Me pagaron un valor diferente a la cuota, ¿qué hago?",
+  "a": "En Registrar pago elige <b>\"Hizo un abono\"</b> y escribe el valor. Puedes decidir si el abono acorta el plazo o baja la cuota."
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "¿Puedo registrar préstamos que se cobran todos los días?",
+  "a": "Sí. En \"¿Cada cuánto se paga?\" elige <b>Diario</b> o <b>Diario (lunes a sábado)</b>."
+ },
+ {
+  "c": "Préstamos y deudas",
+  "q": "El banco no está en la lista",
+  "a": "En la lista de bancos toca <b>\"Crear banco o entidad\"</b> o <b>\"Que la IA la identifique\"</b> escribiendo el nombre o el NIT. Confirma el NIT con tu extracto."
+ },
+ {
+  "c": "Ahorro",
+  "q": "¿Qué es el fondo de emergencia y cuánto debo tener?",
+  "a": "Es dinero guardado aparte solo para imprevistos (perder el trabajo, una enfermedad, un daño). Lo recomendado es entre 3 y 6 meses de tus gastos básicos. Puedes cambiar los meses en Ajustes.",
+  "go": "metas"
+ },
+ {
+  "c": "Ahorro",
+  "q": "¿Cómo hago para no olvidar ahorrar cada quincena?",
+  "a": "En Metas y emergencia toca <b>\"Programar un aporte fijo\"</b> en el fondo de emergencia o en cualquier meta. Elige cuánto y cada cuánto: queda en tus gastos fijos, te recordamos el día en que te pagan y al tocar <b>\"Ya aporté\"</b> se suma solo.",
+  "go": "metas"
+ },
+ {
+  "c": "Ahorro",
+  "q": "¿Cómo registro mis suscripciones de streaming?",
+  "a": "En <b>Mi dinero › Suscripciones › Agregar</b>. Toca el servicio, escribe el valor y la fecha del próximo cobro. Si compartes el plan, indica entre cuántos y solo se cuenta tu parte.",
+  "go": "suscripciones"
+ },
+ {
+  "c": "Inteligencia artificial",
+  "q": "¿Qué hace la IA en Mirai?",
+  "a": "Categoriza gastos, detecta gastos hormiga, lee facturas, extractos y comprobantes con foto, identifica bancos por NIT, crea categorías, detecta la ciudad de una dirección y te aconseja antes de gastar o prestar."
+ },
+ {
+  "c": "Inteligencia artificial",
+  "q": "¿Puedo confiar en lo que llena la IA?",
+  "a": "La IA ayuda, pero puede equivocarse. Siempre revisa los datos antes de guardar, sobre todo valores, fechas y NIT."
+ },
+ {
+  "c": "Inteligencia artificial",
+  "q": "La lectura con foto no funciona",
+  "a": "Funciona dentro de claude.ai. Usa una foto nítida, con buena luz y el documento completo. Si no lee bien, escribe los datos a mano."
+ },
+ {
+  "c": "Cuenta y seguridad",
+  "q": "¿Cómo protejo mi información?",
+  "a": "Crea tu cuenta con contraseña y activa la <b>verificación en dos pasos</b> en Ajustes › Seguridad. Guarda tus códigos de respaldo en un lugar seguro.",
+  "go": "ajustes",
+  "tab": "seguridad"
+ },
+ {
+  "c": "Cuenta y seguridad",
+  "q": "Perdí el celular con la app de autenticación",
+  "a": "En la pantalla de verificación toca <b>\"¿No tienes tu celular? Usa un código de respaldo\"</b>. Si tampoco los tienes, toca <b>\"¿Olvidaste tu contraseña?\"</b> para recuperar la cuenta con un código que te enviamos al correo."
+ },
+ {
+  "c": "Cuenta y seguridad",
+  "q": "¿Dónde se guardan mis datos?",
+  "a": "Si en la parte de abajo del menú dice <b>\"Guardado en la nube\"</b>, tus datos se guardan en la nube de tu cuenta. Si dice <b>\"Solo en este navegador\"</b>, quedan en este equipo: haz respaldos en Ajustes › Respaldo."
+ },
+ {
+  "c": "Cuenta y seguridad",
+  "q": "¿Cómo borro todo o elimino mi cuenta?",
+  "a": "En Ajustes › Respaldo puedes descargar un respaldo, formatear los datos o eliminar la cuenta. Ambas acciones son definitivas.",
+  "go": "ajustes"
+ },
+ {
+  "c": "Otros",
+  "q": "¿Puedo llevar las finanzas de mi negocio aparte?",
+  "a": "Sí. Toca el nombre del libro arriba en el menú y crea un libro nuevo. Cada libro tiene sus propios datos."
+ },
+ {
+  "c": "Otros",
+  "q": "¿Cómo comparto gastos con otras personas?",
+  "a": "En Planeación › Gastos compartidos crea un grupo (un viaje, la casa) y anota quién pagó; Mirai calcula quién le debe a quién.",
+  "go": "compartidos"
+ },
+ {
+  "c": "Otros",
+  "q": "¿Cómo vuelvo a ver el tour?",
+  "a": "Usa el botón <b>\"Ver el tour\"</b> en Manual e instructivos, o el botón \"Hacer el tour\" en Ajustes.",
+  "go": "manual"
+ }
+]

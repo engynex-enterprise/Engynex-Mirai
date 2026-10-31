@@ -1,0 +1,38 @@
+{
+ "cdt": {
+  "l": "CDT",
+  "icon": "landmark",
+  "ib": "t-blue",
+  "d": "Le prestas tu dinero al banco por un tiempo fijo y te devuelve más. Seguro y sabes desde el inicio cuánto ganas."
+ },
+ "ahorro": {
+  "l": "Cuenta o bolsillo que rinde",
+  "icon": "piggy-bank",
+  "ib": "t-green",
+  "d": "Tu plata gana intereses cada día y la puedes sacar cuando quieras (Nu, Lulo, bolsillos, cuentas de alto rendimiento)."
+ },
+ "fondo": {
+  "l": "Fondo de inversión",
+  "icon": "layers",
+  "ib": "t-violet",
+  "d": "Juntas tu dinero con el de otras personas y expertos lo invierten. Puede subir o bajar."
+ },
+ "acciones": {
+  "l": "Acciones o ETF",
+  "icon": "chart-line",
+  "ib": "t-amber",
+  "d": "Compras una parte de empresas. A largo plazo suelen crecer, pero su valor cambia todos los días."
+ },
+ "cripto": {
+  "l": "Criptomonedas",
+  "icon": "coins",
+  "ib": "t-red",
+  "d": "Muy riesgosas: su valor puede subir o caer mucho en poco tiempo."
+ },
+ "otro": {
+  "l": "Otra inversión",
+  "icon": "briefcase",
+  "ib": "t-gray",
+  "d": "Un negocio, un lote, ganado u otra inversión que quieras seguir."
+ }
+}

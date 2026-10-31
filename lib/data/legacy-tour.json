@@ -1,0 +1,57 @@
+[
+ {
+  "sel": "#side",
+  "t": "El menú",
+  "d": "Aquí están todas las secciones, agrupadas. Toca un grupo para ver sus opciones. Lo puedes contraer con Ctrl+B."
+ },
+ {
+  "sel": ".sb-brand",
+  "t": "Tus libros",
+  "d": "Cambia entre tus libros (por ejemplo, el hogar y tu negocio) o crea uno nuevo."
+ },
+ {
+  "sel": ".sb-search",
+  "t": "Buscador",
+  "d": "Encuentra secciones, contactos, préstamos o gastos fijos escribiendo su nombre. Atajo: Ctrl+K."
+ },
+ {
+  "sel": "#crumbs",
+  "t": "Dónde estás",
+  "d": "Esta ruta te muestra en qué libro y sección te encuentras."
+ },
+ {
+  "sel": ".composer",
+  "t": "Registra en palabras",
+  "d": "En Inicio escribe lo que gastaste o recibiste, como lo dirías: la IA lo entiende y lo registra."
+ },
+ {
+  "sel": ".sb-create",
+  "t": "Agregar",
+  "d": "Registra rápidamente un gasto, ingreso, préstamo, deuda, contacto, inversión o meta."
+ },
+ {
+  "sel": "#bell",
+  "t": "Notificaciones",
+  "d": "Te avisamos de pagos por vencer, cobros atrasados, gastos hormiga y más."
+ },
+ {
+  "sel": ".sb-tog",
+  "t": "Contraer el menú",
+  "d": "Hazlo más angosto para ganar espacio (Ctrl+B). Ocultar montos y el tema oscuro están en tu menú de usuario, abajo."
+ },
+ {
+  "sel": "#asFab",
+  "t": "Chat con Mirai",
+  "d": "Este globo abre el chat: pregunta lo que quieras sobre tu plata. Lo puedes arrastrar a donde te estorbe menos."
+ },
+ {
+  "sel": ".sb-user",
+  "t": "Tu menú",
+  "d": "Perfil, ajustes, tema oscuro, respaldo y la puesta en marcha."
+ },
+ {
+  "sel": ".page-h .help-btn",
+  "t": "Cómo funciona",
+  "d": "En cada sección encontrarás este botón con el paso a paso para usarla."
+ }
+]
