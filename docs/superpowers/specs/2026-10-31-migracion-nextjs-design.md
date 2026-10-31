@@ -86,7 +86,7 @@ Registro único en código (`lib/integrations/registry.ts`): `id`, categoría, a
 |---|---|
 | Datos financieros | TRM e históricos + tasa de usura (datos.gov.co, sin clave) → alerta "este préstamo cobra más de lo legal"; festivos Colombia (Nager.Date) → correr pagos al siguiente día hábil; tasas de cambio (open.er-api.com) → varias monedas (USD/EUR→COP); cripto (CoinGecko); acciones/ETF (Alpha Vantage o Twelve Data) |
 | Avisos | Correo: Resend, Brevo, SendGrid, Gmail, SMTP · Telegram Bot (canal gratis principal) · Web Push (VAPID) + PWA instalable · WhatsApp Cloud API (opcional, de pago por mensaje) |
-| IA | Gemini (gratis, por defecto: chat, consejero, OCR) · Groq y OpenRouter (respaldo gratis) · Claude y OpenAI (clave propia) · orden de respaldo configurable |
+| IA | **Vercel AI Gateway** (una clave `AI_GATEWAY_API_KEY` para Claude, OpenAI, Gemini, Kimi…; requiere tarjeta en Vercel para los créditos gratis) · Gemini (gratis: chat, consejero, OCR) · Groq y OpenRouter (respaldo gratis) · Claude y OpenAI (clave propia) · orden de respaldo configurable |
 | Google | Login, Gmail (correo del banco, solo lectura), Calendar |
 | Infraestructura | pg_cron + pg_net (avisos cada hora, mantiene vivo el plan gratis) · Cloudflare Turnstile (captcha registro/login) · Sentry · Vercel Analytics y Speed Insights · Upstash Redis (límite de peticiones a la IA) |
 
