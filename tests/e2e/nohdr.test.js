@@ -1,0 +1,17 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1366,height:820}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+let html=fs.readFileSync(APP,'utf8');html=html.replace(/<script src="https:[^"]+"><\/script>/g,'');
+fs.writeFileSync(OUT+'/app.html','<!doctype html><html><head><meta charset=utf8></head><body>'+html+'</body></html>');
+await p.goto('file://'+OUT+'/app.html');await p.waitForTimeout(400);
+await p.evaluate(()=>{localStorage.setItem('lmf-tour','1');authHide();S=sample();S.sample=false;S.setup.dismissed=true;location.hash='me-deben';render();document.getElementById('toasts').innerHTML=''});await p.waitForTimeout(400);
+console.log('hdr',await p.evaluate(()=>[!!document.querySelector('.inset-h'),!!document.querySelector('.sb-apps'),document.getElementById('crumbs').textContent]));
+await p.screenshot({path:OUT+'/n1.png'});
+await p.click('.sb-tog');await p.waitForTimeout(200);await p.screenshot({path:OUT+'/n2.png'});
+console.log('col',await p.evaluate(()=>document.body.classList.contains('sb-col')));
+await p.click('.sb-tog');await p.waitForTimeout(100);
+await p.keyboard.press('n');await p.waitForTimeout(150);console.log('pop after N',await p.evaluate(()=>!!MODAL||!document.getElementById('pop')?.hidden));
+await p.evaluate(()=>{closePop();closeModal()});
+await p.hover('#asFab');await p.waitForTimeout(250);await p.screenshot({path:OUT+'/n3.png',clip:{x:1066,y:620,width:300,height:200}});
+await p.setViewportSize({width:400,height:820});await p.evaluate(()=>{location.hash='inicio';render()});await p.waitForTimeout(200);console.log('w',await p.evaluate(()=>document.documentElement.scrollWidth));await p.screenshot({path:OUT+'/n4.png'});
+await p.click('.mob-nav');await p.waitForTimeout(250);await p.screenshot({path:OUT+'/n5.png'});
+console.log(errs);await b.close()})();

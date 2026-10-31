@@ -1,0 +1,13 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1360,height:1000}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+fs.writeFileSync(OUT+'/pg.html','<!doctype html><body><script>localStorage.setItem("lmf-tour","1");window.claude={use:async()=>null}</script>'+fs.readFileSync(APP,'utf8')+'</body>');
+await p.route('**/*',r=>r.request().url().startsWith('http')?r.abort():r.continue());
+await p.goto('file://'+OUT+'/pg.html');await p.waitForTimeout(500);
+await p.evaluate(()=>{authHide();S=sample();S.sample=false;S.setup.dismissed=true;commit();location.hash='metas';render()});await p.waitForTimeout(200);
+await p.click('[data-modal=fondo][data-tipo=guardar]');await p.waitForTimeout(200);await p.fill('#modal [name=valor]','2000000');await p.fill('#modal [name=nota]','Bolsillo Nequi');await p.click('#modal .dlg-f .btn.pri');await p.waitForTimeout(300);
+await p.evaluate(()=>openModal('gasto'));await p.waitForTimeout(200);await p.fill('#modal [name=desc]','Se dañó la nevera, reparación');await p.fill('#modal [name=valor]','350000');await p.waitForTimeout(1200);
+console.log('cat',await p.inputValue('#modal [name=cat]'),'box visible',await p.isVisible('#modal .imp-box'));await p.screenshot({path:OUT+'/i1.png'});
+await p.click('#modal .dlg-f .btn.pri');await p.waitForTimeout(300);
+console.log(await p.evaluate(()=>[S.fondo.saldo,S.fondo.mov.length,S.gastos.at(-1).cat,S.gastos.at(-1).fondo]));
+await p.evaluate(()=>{location.hash='metas';render();window.scrollTo(0,250)});await p.waitForTimeout(300);await p.screenshot({path:OUT+'/i2.png'});
+console.log(errs);await b.close()})();

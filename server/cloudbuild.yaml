@@ -1,0 +1,23 @@
+# Cloud Build: construye la imagen y despliega en Cloud Run.
+# Uso: gcloud builds submit --config cloudbuild.yaml --substitutions=_REGION=us-central1,_SERVICE=mirai
+substitutions:
+  _REGION: us-central1
+  _SERVICE: mirai
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/mirai/$_SERVICE:$BUILD_ID', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/mirai/$_SERVICE:$BUILD_ID']
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE
+      - --image=$_REGION-docker.pkg.dev/$PROJECT_ID/mirai/$_SERVICE:$BUILD_ID
+      - --region=$_REGION
+      - --allow-unauthenticated
+      - --set-env-vars=ALERTS_STORE=firestore,EMAIL_PROVIDER=resend,WHATSAPP_TEMPLATE_LANG=es
+      - --set-secrets=MIRAI_TOKEN=mirai-token:latest,CRON_SECRET=mirai-cron:latest,RESEND_API_KEY=resend-key:latest,EMAIL_FROM=mirai-email-from:latest,WHATSAPP_TOKEN=wa-token:latest,WHATSAPP_PHONE_NUMBER_ID=wa-phone-id:latest,WHATSAPP_TEMPLATE=wa-template:latest,ANTHROPIC_API_KEY=anthropic-key:latest
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/mirai/$_SERVICE:$BUILD_ID'

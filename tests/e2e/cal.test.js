@@ -1,0 +1,15 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1440,height:1000}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+fs.writeFileSync(OUT+'/pg.html','<!doctype html><body><script>localStorage.setItem("lmf-tour","1");window.claude={use:async()=>null}</script>'+fs.readFileSync(APP,'utf8')+'</body>');
+await p.route('**/*',r=>r.request().url().startsWith('http')?r.abort():r.continue());
+await p.goto('file://'+OUT+'/pg.html');await p.waitForTimeout(500);
+await p.evaluate(()=>{authHide();S=sample();S.sample=false;S.setup.dismissed=true;commit();location.hash='inversiones';render();openModal('inversion')});await p.waitForTimeout(300);
+await p.fill('#modal [name=nombre]','CDT prueba');await p.fill('#modal [name=capital]','10000000');await p.fill('#modal [name=tasa]','9,5');
+await p.click('[data-plazo="18|meses"]');await p.waitForTimeout(200);console.log('hint',await p.textContent('#plazoHint'));
+await p.click('#modal [data-date-btn]');await p.waitForTimeout(150);await p.screenshot({path:OUT+'/k1.png'});
+await p.click('#pop [data-calmode=y]');await p.waitForTimeout(100);await p.screenshot({path:OUT+'/k2.png'});
+await p.click('#pop [data-caly="2030"]');await p.click('#pop [data-calm="2"]');await p.click('#pop [data-day="2030-03-15"]');await p.waitForTimeout(100);
+console.log('inicio',await p.inputValue('#modal [name=inicio]'));
+await p.click('#modal [data-date-btn]');await p.fill('#calTyped','20/07/2031');await p.keyboard.press('Enter');await p.waitForTimeout(100);console.log('typed',await p.inputValue('#modal [name=inicio]'));
+await p.click('#modal .dlg-f .btn.pri');await p.waitForTimeout(300);console.log(await p.evaluate(()=>{const x=S.inversiones.at(-1);return[x.nombre,x.dias,x.inicio]}));
+console.log(errs);await b.close()})();

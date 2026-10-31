@@ -1,0 +1,15 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1360,height:960}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+fs.writeFileSync(OUT+'/pg.html','<!doctype html><body><script>localStorage.setItem("lmf-tour","1");window.claude={use:async n=>n==="sample"?Object.assign(async()=>({text:""}),{json:async(pr)=>/Identifica una entidad/.test(pr)?{nombre:"Celya",razon_social:"Celya S.A.S.",nit:"901234567",tipo:"Fintech",confianza:"media",nota:"Plataforma de crédito para compras en almacenes"}:{items:[]}}):null}</script>'+fs.readFileSync(APP,'utf8')+'</body>');
+await p.route('**/*',r=>r.request().url().startsWith('http')?r.abort():r.continue());
+await p.goto('file://'+OUT+'/pg.html');await p.waitForTimeout(500);
+await p.evaluate(()=>{authHide();S=sample();S.sample=false;S.setup.dismissed=true;commit();location.hash='fijos';render()});await p.waitForTimeout(300);
+await p.evaluate(()=>openModal('fijo'));await p.waitForTimeout(150);await p.fill('#modal [name=nombre]','Celya cuota televisor');await p.waitForTimeout(200);
+console.log('debtHint',await p.locator('#debtHint').count());await p.click('[data-debt]');await p.waitForTimeout(300);
+console.log('modal:',await p.textContent('#modal .dlg-h h2'));
+const w=await p.$('#modal [name=entidadId]');console.log('ent sel?',!!w);
+await p.evaluate(()=>{const w=document.querySelector('#modal [name=entidadId]').closest('[data-sel]');openSel(w)});await p.fill('#popq','celya');await p.waitForTimeout(150);await p.screenshot({path:OUT+'/e1.png'});
+await p.click('#pop [data-entai]');await p.waitForTimeout(400);await p.screenshot({path:OUT+'/e2.png'});
+await p.click('#modal2 .dlg-f .btn.pri');await p.waitForTimeout(200);
+console.log(await p.evaluate(()=>{const v=document.querySelector('#modal [name=entidadId]').value;return S.cfg.entidades.find(e=>e.id===v)}),await p.inputValue('#modal [name=concepto]').catch(()=>'-'));
+console.log(errs);await b.close()})();

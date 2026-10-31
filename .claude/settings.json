@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)", "Bash(npm test)", "Bash(npm run test:one:*)", "Bash(npm run dev)", "Bash(npm install)", "Bash(npm run setup)",
+      "Bash(python3 build.py)", "Bash(node --check:*)", "Bash(node tests/run-all.js:*)", "Bash(node scripts/changelog.js)",
+      "Bash(git status)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git add:*)", "Bash(git commit:*)",
+      "Read(**)", "Edit(src/**)", "Edit(server/**)", "Edit(tests/**)", "Edit(iso/**)", "Edit(docs/**)", "Edit(*.md)"
+    ],
+    "deny": [
+      "Read(server/.env)", "Read(**/.env)", "Edit(dist/**)", "Bash(git push --force:*)", "Bash(rm -rf:*)"
+    ]
+  },
+  "env": { "MIRAI_LANG": "es-CO" }
+}

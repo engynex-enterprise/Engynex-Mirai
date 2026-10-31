@@ -1,0 +1,11 @@
+node_modules/
+server/node_modules/
+server/.env
+.env
+server/data/
+tests/.out/
+dist/app.check.js
+.DS_Store
+*.log
+.vercel/
+iso/png/

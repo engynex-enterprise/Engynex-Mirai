@@ -1,0 +1,11 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1440,height:1000}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+fs.writeFileSync(OUT+'/pg.html','<!doctype html><body><script>localStorage.setItem("lmf-tour","1");window.claude={use:async()=>null}</script>'+fs.readFileSync(APP,'utf8')+'</body>');
+await p.route('**/*',r=>r.request().url().startsWith('http')?r.abort():r.continue());
+await p.goto('file://'+OUT+'/pg.html');await p.waitForTimeout(500);
+await p.evaluate(()=>{authHide();S=sample();S.sample=false;S.setup.dismissed=true;commit();location.hash='perfil';render()});await p.waitForTimeout(300);
+await p.click('#famCard .ph [data-modal=miembro]');await p.waitForTimeout(200);await p.fill('#modal [name=nombre]','Sofía');
+await p.evaluate(()=>{const w=document.querySelector('#modal [name=rol]').closest('[data-sel]');openSel(w)});await p.fill('#popq','hij');await p.waitForTimeout(100);await p.click('#pop .opt >> nth=1');
+await p.click('#modal [data-pick=tieneCupo][data-v=si]');await p.fill('#modal [name=cupo]','200000');await p.screenshot({path:OUT+'/f2.png'});
+await p.click('#modal .dlg-f .btn.pri');await p.waitForTimeout(600);console.log(await p.evaluate(()=>S.perfil.miembros.at(-1)));await p.screenshot({path:OUT+'/f3.png'});
+console.log(errs);await b.close()})();

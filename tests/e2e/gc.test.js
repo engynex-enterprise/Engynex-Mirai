@@ -1,0 +1,14 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1440,height:1000}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+fs.writeFileSync(OUT+'/pg.html','<!doctype html><body><script>localStorage.setItem("lmf-tour","1");window.claude={use:async()=>null}</script>'+fs.readFileSync(APP,'utf8')+'</body>');
+await p.route('**/*',r=>r.request().url().startsWith('http')?r.abort():r.continue());
+await p.goto('file://'+OUT+'/pg.html');await p.waitForTimeout(500);
+await p.evaluate(()=>{authHide();S=sample();S.sample=false;S.setup.dismissed=true;commit();location.hash='recordatorios';render()});await p.waitForTimeout(400);await p.screenshot({path:OUT+'/g1.png'});
+await p.click('.ev >> nth=2');await p.waitForTimeout(200);await p.screenshot({path:OUT+'/g2.png'});await p.keyboard.press('Escape');
+await p.click('[data-calview=semana]');await p.waitForTimeout(300);await p.screenshot({path:OUT+'/g3.png'});
+await p.click('[data-calview=agenda]');await p.waitForTimeout(300);await p.screenshot({path:OUT+'/g4.png'});
+console.log('rentas',await p.evaluate(()=>['01','02','07','30','65','66','67','80','00','99'].map(d=>d+':'+rentaFecha(d)).join(' ')));
+await p.evaluate(()=>{location.hash='calendario';render()});await p.waitForTimeout(300);await p.fill('#rentaDig','37');await p.waitForTimeout(300);await p.screenshot({path:OUT+'/g5.png'});
+await p.click('[data-modal=fplant]');await p.waitForTimeout(200);await p.screenshot({path:OUT+'/g6.png'});await p.check('[name=p_dot1]');await p.check('[name=p_pred_bog]');await p.click('#modal .dlg-f .btn.pri');await p.waitForTimeout(300);
+console.log('cal n',await p.evaluate(()=>S.calendario.length));
+console.log(errs);await b.close()})();

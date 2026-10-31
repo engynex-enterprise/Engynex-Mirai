@@ -1,0 +1,10 @@
+const {chromium}=require('playwright');const {OUT,APP}=require('../helpers.js');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1360,height:1000}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
+fs.writeFileSync(OUT+'/pg.html','<!doctype html><body><script>localStorage.setItem("lmf-tour","1");window.claude={use:async()=>null}</script>'+fs.readFileSync(APP,'utf8')+'</body>');
+await p.route('**/*',r=>r.request().url().startsWith('http')?r.abort():r.continue());
+await p.goto('file://'+OUT+'/pg.html');await p.waitForTimeout(500);
+await p.evaluate(()=>{authHide();S=sample();S.sample=false;S.setup.dismissed=true;commit();location.hash='novedades';render()});await p.waitForTimeout(300);await p.screenshot({path:OUT+'/a1.png'});
+await p.evaluate(()=>{location.hash='faq';render()});await p.waitForTimeout(200);await p.fill('#ayQ','empeño');await p.waitForTimeout(500);console.log('faq results',await p.evaluate(()=>document.querySelectorAll('.faq-i').length));await p.screenshot({path:OUT+'/a2.png'});
+await p.evaluate(()=>{location.hash='manual';render()});await p.waitForTimeout(200);await p.click('.guide summary >> nth=1');await p.waitForTimeout(100);await p.screenshot({path:OUT+'/a3.png'});
+await p.click('[data-act=mant][data-t=modulos]');await p.waitForTimeout(200);console.log('mods',await p.evaluate(()=>document.querySelectorAll('.mod').length));
+console.log(errs);await b.close()})();
