@@ -12,6 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { FormSkeleton } from "@/components/skeletons/form-skeleton"
+import { useCatalogsReady } from "@/features/catalogs/hooks"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { FormField } from "@/components/mirai/field"
 import { MoneyInput } from "@/components/mirai/money-input"
@@ -27,7 +29,8 @@ import {
   categoryOptions, memberOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings,
 } from "@/features/catalogs/hooks"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
-import { isHormiga, localHormiga, ruleCategory } from "./logic"
+import { isHormiga, localCat, localHormiga } from "./logic"
+import { useList } from "@/hooks/use-book-data"
 
 const schema = z.object({
   descripcion: z.string().trim().min(1, "Escribe en qué gastaste"),
@@ -52,7 +55,7 @@ export function ExpenseForm(props: Props) {
       title={props.expense ? "Editar gasto" : "Registrar gasto"}
       footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}
     >
-      <ExpenseFormBody {...props} formId={formId} />
+      <ReadyGate><ExpenseFormBody {...props} formId={formId} /></ReadyGate>
     </ResponsiveDialog>
   )
 }
@@ -69,6 +72,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
   const [fondo, setFondo] = useState<{ activo: boolean; saldo: number } | null>(null)
   const [newCat, setNewCat] = useState<string | null>(null)
   const [catManual, setCatManual] = useState(false)
+  const [catSrc, setCatSrc] = useState<"regla" | "historial" | "palabras" | null>(null)
+  const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const defaults = (cfg?.defaults ?? {}) as { cat?: string; medio?: string; quien?: string }
 
   const form = useForm<Values>({
@@ -92,11 +97,11 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
     createClient().from("emergency_funds").select("activo,saldo").eq("book_id", bookId).maybeSingle().then(({ data }) => setFondo(data ? { activo: data.activo, saldo: Number(data.saldo) } : null))
   }, [open, expense, bookId])
 
-  // Categoría automática por reglas mientras escribe (si el usuario no la eligió a mano)
+  // Categoría automática mientras escribe: regla → historial → palabras clave (si no la eligió a mano)
   const onDesc = (v: string) => {
     if (catManual) return
-    const id = ruleCategory(v, rules)
-    if (id) form.setValue("category_id", id, { shouldValidate: true })
+    const hit = localCat(v, { rules, expenses: history, categories: cats })
+    if (hit) { form.setValue("category_id", hit.category_id, { shouldValidate: true }); setCatSrc(hit.src) }
   }
 
   const umbral = Number(cfg?.umbral ?? 25000)
@@ -111,7 +116,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
       member_id: v.quien === "familia" ? null : v.quien, payment_method_id: v.payment_method_id || defaults.medio || methods[0]?.id || null,
       hormiga: v.hormigaMode === "auto" ? false : v.hormigaMode === "si",
       hormiga_src: v.hormigaMode === "auto" ? null : ("manual" as const),
-      cat_src: catManual ? ("manual" as const) : ("regla" as const),
+      cat_src: catManual ? ("manual" as const) : catSrc,
     }
     const { data, error } = await sb.from("expenses").upsert(row).select().single()
     if (error) return toast.error("No se pudo guardar el gasto", { description: error.message })
@@ -142,7 +147,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
                 <Controller control={form.control} name="valor" render={({ field }) => <MoneyInput id="g-valor" value={field.value} onChange={field.onChange} invalid={!!errors.valor} />} />
               </FormField>
             </div>
-            <FormField label="Categoría" htmlFor="g-cat" error={errors.category_id?.message} required hint={!catManual && w.category_id && w.descripcion ? "Se puso sola según lo que escribiste. Puedes cambiarla." : undefined}>
+            <FormField label="Categoría" htmlFor="g-cat" error={errors.category_id?.message} required hint={!catManual && catSrc && w.descripcion ? { regla: "Se puso sola por una de tus reglas.", historial: "Se puso sola: así la registraste antes.", palabras: "Se puso sola según lo que escribiste." }[catSrc] + " Puedes cambiarla." : undefined}>
               <Controller control={form.control} name="category_id" render={({ field }) => (
                 <Combobox id="g-cat" value={field.value} onChange={(v) => { setCatManual(true); field.onChange(v) }} options={categoryOptions(cats)} invalid={!!errors.category_id}
                   placeholder="Elige una categoría" createLabel="Crear" onCreate={(t) => setNewCat(t || " ")} />
@@ -179,4 +184,9 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
         onCreated={(id) => { setCatManual(true); form.setValue("category_id", id, { shouldValidate: true }) }} />
     </>
   )
+}
+
+/** Monta el formulario cuando los catálogos ya cargaron (skeleton mientras tanto). */
+function ReadyGate({ children }: { children: React.ReactNode }) {
+  return useCatalogsReady() ? <>{children}</> : <FormSkeleton />
 }

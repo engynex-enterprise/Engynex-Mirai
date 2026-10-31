@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Inter, Geist_Mono } from "next/font/google"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Providers } from "./providers"
 import { IsoDefs } from "@/components/mirai/iso-icon"
 import "./globals.css"
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <IsoDefs />
         <Providers>{children}</Providers>
+        <SpeedInsights />
       </body>
     </html>
   )

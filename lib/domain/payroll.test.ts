@@ -1,0 +1,60 @@
+import { describe, expect, it } from "vitest"
+import { expectClose, legacyCall, scenario } from "./__tests__/adapt"
+import { dedCalc, fspPct, retEmpleado, smmlvFor, uvtFor, type Deducciones } from "./payroll"
+
+const HOY = "2026-10-31"
+const sc = scenario(HOY)
+const ref = { smmlv: smmlvFor(2026, sc.book.settings.smmlv), uvt: uvtFor(2026, sc.book.settings.uvt) }
+
+// Salarios de 1 a 30 SMMLV para recorrer todos los tramos del FSP y de la tabla del art. 383.
+const SALARIOS = [1750905, 2500000, 4750000, 7003620, 8000000, 12000000, 20000000, 28014480, 29765385, 31516290, 33267195, 35018100, 45000000, 52527150, 80000000]
+
+describe("SMMLV y UVT = v4", () => {
+  it("valores por defecto y sobrescritos", () => {
+    expect(ref.smmlv).toBe(sc.ev("smmlv()"))
+    expect(ref.uvt).toBe(sc.ev("uvtHoy()"))
+    const s2 = scenario(HOY).mutate("S.cfg.smmlv={2026:1800000};S.cfg.uvt[2026]=53000;")
+    expect(smmlvFor(2026, s2.book.settings.smmlv)).toBe(s2.ev("smmlv()"))
+    expect(uvtFor(2026, s2.book.settings.uvt)).toBe(s2.ev("uvtHoy()"))
+    expect(uvtFor(2025, {})).toBe(49799)
+  })
+})
+
+describe("fspPct y retEmpleado = v4", () => {
+  it.each(SALARIOS)("salario %d", (s) => {
+    expect(fspPct(s, ref.smmlv)).toBe(sc.ev(`fspPct(${s})`))
+    const aportes = s * 0.08 + (s * fspPct(s, ref.smmlv)) / 100
+    expect(retEmpleado(s, aportes, ref.uvt)).toBe(sc.ev(`retEmpleado(${s},${aportes})`))
+  })
+  it("sin retención para salarios bajos", () => expect(retEmpleado(4750000, 380000, ref.uvt)).toBe(0))
+})
+
+const CONFIGS: Record<string, Deducciones> = {
+  "empleado por defecto": { tipo: "empleado" },
+  "empleado sin FSP ni retención": { tipo: "empleado", fsp: false, ret: false },
+  "empleado retención manual": { tipo: "empleado", retModo: "manual", retV: 150000 },
+  "empleado retención %": { tipo: "empleado", retModo: "pct", retV: 3.5 },
+  "empleado salud 0 (cae al 4 %)": { tipo: "empleado", saludP: 0, pensionP: 0 },
+  "independiente riesgo I": { tipo: "independiente" },
+  "independiente riesgo V, IBC 60 %, retención 10 %": { tipo: "independiente", arlN: "5", ibcP: 60, retV: 10 },
+  "independiente retención manual": { tipo: "independiente", retModo: "manual", retV: 200000, arl: false },
+  pensionado: { tipo: "pensionado" },
+  "pensionado salud 4 %": { tipo: "pensionado", saludP: 4 },
+  "otro con descuentos propios": { tipo: "otro", otros: [{ n: "Libranza", v: 350000 }, { n: "Cooperativa", v: 2, pct: true }, { n: "", v: 1 }, {}] },
+  "empleado + otros": { tipo: "empleado", otros: [{ n: "Medicina prepagada", v: 280000 }] },
+}
+
+describe("dedCalc = v4", () => {
+  for (const [nombre, D] of Object.entries(CONFIGS))
+    for (const frec of ["mensual", "quincenal", "semanal", "anual"])
+      it(`${nombre} · ${frec}`, () => {
+        for (const s of SALARIOS) {
+          const bruto = frec === "quincenal" ? s / 2 : frec === "semanal" ? (s * 12) / 52 : frec === "anual" ? s * 12 : s
+          expectClose(dedCalc(bruto, frec, D, ref), legacyCall(sc.L, "dedCalc", bruto, frec, D))
+        }
+      })
+  it("sin configuración o sin valor devuelve el bruto", () => {
+    expect(dedCalc(1000, "mensual", null, ref)).toEqual({ neto: 1000, items: [], total: 0 })
+    expect(dedCalc(0, "mensual", { tipo: "empleado" }, ref)).toEqual({ neto: 0, items: [], total: 0 })
+  })
+})

@@ -10,6 +10,8 @@ import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Spinner } from "@/components/ui/spinner"
+import { FormSkeleton } from "@/components/skeletons/form-skeleton"
+import { useCatalogsReady } from "@/features/catalogs/hooks"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { FormField } from "@/components/mirai/field"
 import { Combobox } from "@/components/mirai/combobox"
@@ -53,7 +55,7 @@ export function ContactForm(props: Props) {
   return (
     <ResponsiveDialog open={props.open} onOpenChange={props.onOpenChange} mdesc="contacto" title={props.contact ? "Editar contacto" : "Nuevo contacto"}
       footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}>
-      <ContactFormBody {...props} formId={formId} />
+      <ReadyGate><ContactFormBody {...props} formId={formId} /></ReadyGate>
     </ResponsiveDialog>
   )
 }
@@ -121,4 +123,9 @@ function ContactFormBody({ onOpenChange, contact, onSaved, formId }: Props & { f
       </FieldGroup>
     </form>
   )
+}
+
+/** Monta el formulario cuando los catálogos ya cargaron (skeleton mientras tanto). */
+function ReadyGate({ children }: { children: React.ReactNode }) {
+  return useCatalogsReady() ? <>{children}</> : <FormSkeleton />
 }

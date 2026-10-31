@@ -66,3 +66,9 @@ export const entityOptions = (e: Row<"entities">[] = []): Option[] =>
   e.map((x) => ({ value: x.id, label: x.nombre, icon: "landmark", hint: [x.tipo, x.nit && `NIT ${x.nit}`].filter(Boolean).join(" · ") }))
 
 export const memberName = (id: string | null | undefined, m: Row<"family_members">[] = []) => (id ? (m.find((x) => x.id === id)?.nombre ?? "—") : "Familia")
+
+/** true cuando los catálogos que usan los formularios ya cargaron (para montar el formulario con sus valores por defecto). */
+export function useCatalogsReady() {
+  const a = useCategories(), b = usePaymentMethods(), c = useMembers(), d = useSettings(), e = useIncomeCategories()
+  return [a, b, c, d, e].every((q) => !q.isPending)
+}
