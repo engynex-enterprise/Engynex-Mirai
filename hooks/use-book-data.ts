@@ -4,7 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { createClient } from "@/utils/supabase/client"
 import { useBookId } from "@/components/app/app-context"
-import { qk, type BookTable, type Insert, type Row, type Update } from "@/lib/supabase/tables"
+import { DERIVED_KEYS, qk, type BookTable, type Insert, type Row, type Update } from "@/lib/supabase/tables"
+import type { QueryClient } from "@tanstack/react-query"
+
+/** Refresca una tabla del libro y las consultas derivadas. */
+export function invalidateBook(qc: QueryClient, bookId: string, table: string) {
+  qc.invalidateQueries({ queryKey: qk(bookId, table) })
+  for (const k of DERIVED_KEYS) qc.invalidateQueries({ queryKey: qk(bookId, k) })
+}
 
 type ListOpts<T extends BookTable> = {
   order?: { column: keyof Row<T> & string; ascending?: boolean }
@@ -61,7 +68,7 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
       const msg = (v as { id?: string }).id ? messages?.updated : messages?.created
       if (msg) toast.success(msg)
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: qk(bookId, table) }),
+    onSettled: () => invalidateBook(qc, bookId, table),
   })
 }
 
@@ -101,6 +108,6 @@ export function useSoftDelete<T extends BookTable>(table: T, label = "Registro e
         duration: 8000,
       })
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: qk(bookId, table) }),
+    onSettled: () => invalidateBook(qc, bookId, table),
   })
 }

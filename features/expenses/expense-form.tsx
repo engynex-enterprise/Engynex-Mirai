@@ -80,8 +80,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
           fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, usarFondo: false,
         }
       : {
-          descripcion: "", valor: 0, category_id: defaults.cat ?? "", hormigaMode: "auto", fecha: todayISO(),
-          quien: defaults.quien ?? "familia", payment_method_id: defaults.medio ?? methods[0]?.id ?? null, usarFondo: true,
+          descripcion: "", valor: 0, category_id: defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
+          quien: defaults.quien || "familia", payment_method_id: defaults.medio || methods[0]?.id || null, usarFondo: true,
         },
   })
   const { errors, isSubmitting } = form.formState
@@ -108,7 +108,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
     const row = {
       ...(expense ? { id: expense.id } : {}),
       book_id: bookId, descripcion: v.descripcion.trim(), valor: v.valor, category_id: v.category_id, fecha: v.fecha || todayISO(),
-      member_id: v.quien === "familia" ? null : v.quien, payment_method_id: v.payment_method_id ?? defaults.medio ?? methods[0]?.id ?? null,
+      member_id: v.quien === "familia" ? null : v.quien, payment_method_id: v.payment_method_id || defaults.medio || methods[0]?.id || null,
       hormiga: v.hormigaMode === "auto" ? false : v.hormigaMode === "si",
       hormiga_src: v.hormigaMode === "auto" ? null : ("manual" as const),
       cat_src: catManual ? ("manual" as const) : ("regla" as const),

@@ -29,7 +29,7 @@ import { switchBook } from "./actions"
 
 export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "?"
 
-export function AppSidebar({ live, online, badges, unread }: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; unread: number }) {
+export function AppSidebar({ live, online, badges, hidden = [], unread }: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; hidden?: string[]; unread: number }) {
   const path = usePathname()
   const current = path.split("/")[1] || "inicio"
   const { state, isMobile, setOpenMobile } = useSidebar()
@@ -79,7 +79,7 @@ export function AppSidebar({ live, online, badges, unread }: { live: LiveStatus;
           <SidebarGroup key={s.sec} className="py-1">
             <SidebarGroupLabel>{s.sec}</SidebarGroupLabel>
             <SidebarMenu>
-              {s.entries.map((e) =>
+              {s.entries.filter((e) => isGroup(e) || !hidden.includes(e.id)).map((e) =>
                 isGroup(e) ? (
                   <Collapsible key={e.g} asChild open={!collapsed && openGroup === e.g} onOpenChange={(o) => setOpenGroup(o ? e.g : null)}>
                     <SidebarMenuItem>

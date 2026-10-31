@@ -40,13 +40,13 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const { status, online } = useBookRealtime(ctx.book.id, me, path)
   const { data: notifs } = useNotifications()
   const unread = notifs?.filter((n) => !n.read_at).length ?? 0
-  const badges = useNavBadges()
+  const { badges, hidden } = useNavBadges()
   useShortcuts()
   useEffect(applyPrivacy, [])
 
   return (
     <>
-      <AppSidebar live={status} online={online} badges={badges} unread={unread} />
+      <AppSidebar live={status} online={online} badges={badges} hidden={hidden} unread={unread} />
       <SidebarInset className="min-w-0 bg-background">
         <Crumbs />
         <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pt-2 pb-28 sm:px-6 md:pb-16 lg:px-8">{children}</main>

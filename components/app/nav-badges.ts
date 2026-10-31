@@ -1,24 +1,16 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
-import { createClient } from "@/utils/supabase/client"
-import { useBookId } from "./app-context"
+import { useSetupProgress } from "@/features/setup/use-setup"
 
 /**
- * Insignias del menú (v4): "puesta" = pasos pendientes, "recordatorios" = pagos vencidos,
- * "gastos" = "!" si la hormiga superó el límite. Los cálculos completos llegan con cada módulo.
+ * Insignias del menú (v4): "puesta" = pasos hechos/total mientras la guía no esté terminada.
+ * "recordatorios" (vencidos) y "gastos" (hormiga sobre el límite) se suman con sus módulos.
  */
-export function useNavBadges(): Record<string, number | string> {
-  const bookId = useBookId()
-  const { data } = useQuery({
-    queryKey: ["b", bookId, "book_settings", "badges"],
-    queryFn: async () => {
-      const { data } = await createClient().from("book_settings").select("setup").eq("book_id", bookId).maybeSingle()
-      return data
-    },
-  })
-  const out: Record<string, number | string> = {}
-  const setup = data?.setup as { dismissed?: boolean } | undefined
-  if (setup && !setup.dismissed) out.puesta = "Nuevo"
-  return out
+export function useNavBadges(): { badges: Record<string, number | string>; hidden: string[] } {
+  const { data } = useSetupProgress()
+  const badges: Record<string, number | string> = {}
+  const hidden: string[] = []
+  if (data && !data.finished) badges.puesta = `${data.done}/${data.total}`
+  if (data?.finished) hidden.push("puesta")
+  return { badges, hidden }
 }

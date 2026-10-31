@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/client"
+import { invalidateBook } from "./use-book-data"
 
 /** Tablas sincronizadas en vivo (deben estar en la publicación supabase_realtime). */
 const LIVE_TABLES = [
@@ -32,9 +33,7 @@ export function useBookRealtime(bookId: string, me: Omit<PresenceUser, "at" | "p
     const sb = createClient()
     const ch = sb.channel(`book:${bookId}`, { config: { presence: { key: me.id } } })
     for (const table of LIVE_TABLES) {
-      ch.on("postgres_changes", { event: "*", schema: "public", table, filter: `book_id=eq.${bookId}` }, () => {
-        qc.invalidateQueries({ queryKey: ["b", bookId, table] })
-      })
+      ch.on("postgres_changes", { event: "*", schema: "public", table, filter: `book_id=eq.${bookId}` }, () => invalidateBook(qc, bookId, table))
     }
     ch.on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () =>
       qc.invalidateQueries({ queryKey: ["notifications"] }),
