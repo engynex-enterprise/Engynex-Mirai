@@ -12,13 +12,13 @@ export type RowAction = { label: string; icon: string; onClick: () => void; dest
  * Fila de lista (rowi de la v4): ícono, título + subtítulos, valor y acciones.
  * En celular el valor baja bajo el título y las acciones pasan a un menú "⋯".
  */
-export function ListRow({ icon, iconClassName, title, badges, subtitle, extra, value, actions = [], onClick, className }: {
-  icon: string; iconClassName?: string; title: React.ReactNode; badges?: React.ReactNode; subtitle?: React.ReactNode; extra?: React.ReactNode
+export function ListRow({ icon, media, iconClassName, title, badges, subtitle, extra, value, actions = [], onClick, className }: {
+  icon: string; media?: React.ReactNode; iconClassName?: string; title: React.ReactNode; badges?: React.ReactNode; subtitle?: React.ReactNode; extra?: React.ReactNode
   value?: React.ReactNode; actions?: RowAction[]; onClick?: () => void; className?: string
 }) {
   return (
     <li className={cn("flex items-start gap-3 rounded-md px-2 py-3 hover:bg-hover sm:items-center", className)}>
-      <span className={cn("grid size-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground", iconClassName)}><Icon name={icon} className="size-5" /></span>
+      {media ?? <span className={cn("grid size-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground", iconClassName)}><Icon name={icon} className="size-5" /></span>}
       <button type="button" disabled={!onClick} onClick={onClick} className="grid min-w-0 flex-1 gap-0.5 text-left disabled:cursor-default">
         <span className="flex flex-wrap items-center gap-1.5 font-semibold"><span className="min-w-0 break-words">{title}</span>{badges}</span>
         {subtitle && <span className="text-[13px] text-muted-foreground">{subtitle}</span>}

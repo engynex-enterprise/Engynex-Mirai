@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <IsoDefs />
         <Providers>{children}</Providers>
-        <SpeedInsights />
+        {process.env.VERCEL && <SpeedInsights />}
       </body>
     </html>
   )

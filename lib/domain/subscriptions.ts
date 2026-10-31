@@ -24,3 +24,42 @@ export function subOcc(s: Pick<SubscriptionIn, "proximo" | "ciclo">, a: Date, b:
   }
   return out
 }
+
+export interface DetectedSub {
+  desc: string
+  /** Valor mediano de los cobros. */
+  valor: number
+  /** Meses distintos en que aparece. */
+  meses: number
+  category_id: string | null
+}
+
+/**
+ * Cobros que se repiten en tus gastos y parecen suscripciones (detectSubs de la v4):
+ * misma descripción en 3+ meses distintos, valores dentro de ±15 % de la mediana, no más de
+ * 1,5 cobros por mes, y que no coincidan con una suscripción ya registrada.
+ */
+export function detectSubs(
+  expenses: { descripcion: string; valor: number; fecha: string; fixed_expense_id?: string | null; category_id?: string | null }[],
+  subs: Pick<SubscriptionIn, "nombre">[],
+): DetectedSub[] {
+  const by = new Map<string, typeof expenses>()
+  for (const g of expenses) {
+    if (g.fixed_expense_id) continue
+    const k = g.descripcion.toLowerCase().trim()
+    by.set(k, [...(by.get(k) ?? []), g])
+  }
+  const names = subs.map((s) => s.nombre.toLowerCase())
+  const out: DetectedSub[] = []
+  for (const [k, l] of by) {
+    const ms = new Set(l.map((g) => g.fecha.slice(0, 7)))
+    if (ms.size < 3) continue
+    const vals = l.map((g) => +g.valor).sort((a, b) => a - b)
+    const med = vals[Math.floor(vals.length / 2)]
+    if (vals.some((v) => Math.abs(v - med) > med * 0.15)) continue
+    if (l.length > ms.size * 1.5) continue
+    if (names.some((n) => k.includes(n) || n.includes(k))) continue
+    out.push({ desc: l[0].descripcion, valor: med, meses: ms.size, category_id: l[0].category_id ?? null })
+  }
+  return out
+}
