@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { Camera } from "lucide-react"
+import { readReceipt } from "@/features/ai/actions"
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -38,6 +40,27 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
   const [fecha, setFecha] = useState(today)
   const [modo, setModo] = useState<"plazo" | "cuota">(loan.sistema === "americano" ? "cuota" : "plazo")
   const [busy, setBusy] = useState(false)
+  const [ocr, setOcr] = useState<{ busy: boolean; msg: string | null }>({ busy: false, msg: null })
+  const fotoRef = useRef<HTMLInputElement>(null)
+  /** Lee el comprobante (ocrPago de la v4): si coincide con cuotas completas, las marca; si no, abono. */
+  const onFoto = async (f?: File) => {
+    if (!f) return
+    setOcr({ busy: true, msg: "Leyendo el comprobante…" })
+    const fd = new FormData(); fd.append("file", f)
+    const r = await readReceipt(fd).catch((e) => ({ ok: false as const, msg: (e as Error).message }))
+    if (!r.ok) return setOcr({ busy: false, msg: r.msg })
+    if (!r.valor) return setOcr({ busy: false, msg: "No encontramos el valor en el comprobante." })
+    if (r.fecha) setFecha(r.fecha)
+    const cuota = e0.next?.valor ?? 0
+    const k = cuota ? Math.round(r.valor / cuota) : 0
+    if (k >= 1 && Math.abs(r.valor - k * cuota) <= Math.max(1000, cuota * 0.01)) {
+      setTipo("cuota"); setN(String(Math.min(k, e0.plan.length)))
+      setOcr({ busy: false, msg: `Pago de ${fmtMoney(r.valor)}${r.fecha ? ` del ${fmtDate(r.fecha)}` : ""}: coincide con ${k} cuota${k === 1 ? "" : "s"} completa${k === 1 ? "" : "s"}.` })
+    } else {
+      setTipo("abono"); setValor(r.valor)
+      setOcr({ busy: false, msg: `Pago de ${fmtMoney(r.valor)}${r.fecha ? ` del ${fmtDate(r.fecha)}` : ""}. No coincide con la cuota (${fmtMoney(cuota)}), así que lo registramos como abono. Puedes cambiarlo.` })
+    }
+  }
   const maxN = Math.min(3, e0.plan.length)
   const n = Math.max(1, Math.min(+ncuotas || 1, e0.plan.length))
 
@@ -64,6 +87,12 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
   if (e0.done) return <p className="py-4 text-muted-foreground">Este préstamo ya está saldado.</p>
   return (
     <FieldGroup className="pb-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
+        <p className="flex-1 text-sm">¿Tienes el comprobante? La IA lee el valor y la fecha.</p>
+        <Button type="button" size="sm" variant="soft" disabled={ocr.busy} onClick={() => fotoRef.current?.click()}>{ocr.busy ? <Spinner /> : <Camera />} Leer comprobante</Button>
+        <input ref={fotoRef} type="file" hidden accept="image/*,application/pdf" capture="environment" onChange={(e) => { onFoto(e.target.files?.[0]); e.target.value = "" }} />
+        {ocr.msg && <p className="w-full text-sm">{ocr.msg}</p>}
+      </div>
       <p className="rounded-lg bg-muted p-3 text-sm">{isC ? "Te debe" : "Debes"} <b><Money value={e0.saldo} /></b>{e0.next && <> · próxima cuota <b><Money value={e0.next.valor} /></b> el {fmtDate(e0.next.fecha)}</>}</p>
       <ChoiceCards value={tipo} onChange={(v) => setTipo(v as typeof tipo)} items={[
         { value: "cuota", label: "Cuota completa", desc: "El valor de la cuota del plan", icon: "calendar-check" },

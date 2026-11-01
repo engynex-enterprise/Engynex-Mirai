@@ -1,5 +1,8 @@
 "use client"
 
+import { Sparkles } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
+import { improveCobro } from "@/features/ai/actions"
 import { useState } from "react"
 import { Copy, Mail, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -32,6 +35,7 @@ export function ReminderDialog({ open, onOpenChange, engine, concepto, contact }
   const { user } = useApp()
   const [tono, setTono] = useState<Tono>(engine.mora > 0 ? "firme" : "amable")
   const [msg, setMsg] = useState(() => cobroMsg(engine, concepto, contact?.nombre ?? "", user.nombre, engine.mora > 0 ? "firme" : "amable"))
+  const [improving, setImproving] = useState(false)
   const tel = (contact?.telefono ?? "").replace(/\D/g, "")
   const wa = tel ? `https://wa.me/${tel.length === 10 ? "57" + tel : tel}?text=${encodeURIComponent(msg)}` : null
   return (
@@ -42,6 +46,7 @@ export function ReminderDialog({ open, onOpenChange, engine, concepto, contact }
           items={[{ value: "amable", label: "Amable" }, { value: "directo", label: "Directo" }, { value: "firme", label: "Firme" }]} />
         <Textarea rows={6} value={msg} onChange={(e) => setMsg(e.target.value)} aria-label="Mensaje" />
         <div className="flex flex-wrap gap-2">
+          <Button variant="soft" disabled={improving} onClick={async () => { setImproving(true); const r = await improveCobro(msg, tono); setImproving(false); if (r.ok) setMsg(r.text); else toast.error(r.text) }}>{improving ? <Spinner /> : <Sparkles />} Mejorar con IA</Button>
           <Button variant="outline" onClick={() => navigator.clipboard.writeText(msg).then(() => toast("Copiado"))}><Copy /> Copiar</Button>
           {contact?.email && <Button variant="outline" asChild><a href={`mailto:${contact.email}?subject=${encodeURIComponent("Recordatorio de pago")}&body=${encodeURIComponent(msg)}`}><Mail /> Enviar por correo</a></Button>}
           {wa ? <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5a]"><a href={wa} target="_blank" rel="noreferrer"><MessageCircle /> Abrir WhatsApp</a></Button>

@@ -148,7 +148,12 @@ export function rentaAuto(R: RentaInput, mid: string, today: DateInput) {
 }
 
 /** Depuración de la cédula general y el impuesto estimado (calcRenta de la v4). */
-export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInput) {
+/**
+ * `deps`: "2023" (por defecto) aplica el Decreto 2231/2023 (art. 1.2.1.20.3 DUR 1625): el mismo dependiente sirve
+ * para el 10 % (dentro del límite) y para los 72 UVT (fuera del límite). "v4" reproduce la v4, que elegía entre
+ * "10 % con uno y 72 UVT con los demás" o "72 UVT por cada uno" (solo para las pruebas de paridad).
+ */
+export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInput, opts: { deps?: "2023" | "v4" } = {}) {
   const U = uvtY(y, R.uvtOverrides, today), A = rentaAuto(R, mid, today), T = R.tax ?? { ing: {}, ded: {}, docs: {}, consig: 0, consumos: 0 }
   const g = (k: RikKey) => { const v = T.ing?.[k]; return v !== undefined && v !== "" && v !== null ? +v : (A[k] || 0) }
   const dd = (k: RdkKey) => +(T.ded?.[k] ?? 0) || 0
@@ -162,8 +167,10 @@ export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInpu
   const nD = depsDe(R.members, mid, today).length
   const d10 = nD ? Math.min(0.1 * (lab + hon), 384 * U) : 0
   const opA = d10 + Math.min(Math.max(nD - 1, 0), 4) * 72 * U, opB = Math.min(nD, 4) * 72 * U
-  const useA = !!nD && opA >= opB
-  const dep10 = useA ? d10 : 0, dep72 = nD ? (useA ? Math.min(nD - 1, 4) : Math.min(nD, 4)) * 72 * U : 0
+  const v4 = opts.deps === "v4"
+  const useA = v4 ? !!nD && opA >= opB : !!nD
+  const dep10 = useA ? d10 : 0
+  const dep72 = nD ? (v4 ? (useA ? Math.min(nD - 1, 4) : Math.min(nD, 4)) : Math.min(nD, 4)) * 72 * U : 0
   const intViv = Math.min(dd("intViv"), 1200 * U), prep = Math.min(dd("prep"), 192 * U), gmf = dd("gmf") * 0.5, icetex = Math.min(dd("icetex"), 100 * U)
   const fe = Math.min(dd("fe") * 0.01, 240 * U)
   const base25 = Math.max(0, trabajo - aportes - (dep10 + intViv + prep + gmf + icetex) - cesEx - vol)
@@ -195,7 +202,7 @@ export function patrimonio(R: RentaInput, mid: string, today: DateInput) {
 
 /** ¿Debo declarar? Topes del año (topes de la v4). */
 export function topes(R: RentaInput, y: number, mid: string, today: DateInput) {
-  const U = uvtY(y, R.uvtOverrides, today), C = calcRenta(R, y, mid, today), P = patrimonio(R, mid, today), yr = String(y)
+  const U = uvtY(y, R.uvtOverrides, today), C = calcRenta(R, y, mid, today, { deps: "v4" }), P = patrimonio(R, mid, today), yr = String(y)
   const es = mid === titularId(R.members)
   const gas = es ? R.book.expenses.filter((g) => g.fecha.startsWith(yr)).reduce((a, g) => a + +g.valor, 0) : 0
   const tc = es ? R.book.creditCards.reduce((a, t) => a + (t.purchases || []).filter((c) => c.fecha.startsWith(yr)).reduce((b, c) => b + +c.valor, 0), 0) : 0

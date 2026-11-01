@@ -1,5 +1,8 @@
 "use client"
 
+import { loadRentaData, rentaInput } from "@/features/renta/data"
+import { calcRenta, titularId } from "@/lib/domain"
+import { qk } from "@/lib/supabase/tables"
 import Link from "next/link"
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
@@ -175,8 +178,17 @@ export function FiscalCalendar() {
   const smmlv = smmlvFor(+today.slice(0, 4), cfg?.smmlv as Record<string, number>)
 
   const rows = events.map((e) => ({ e, nx: nextOcc(e, today), cat: fcatOf(e) })).sort((a, b) => a.nx.localeCompare(b.nx))
+  // Renta: estimado con el borrador de la Declaración del año anterior a la fecha (calEst de la v4).
+  const isRenta = (e: Row<"calendar_events">) => e.template_key === "renta" || /declaraci[oó]n de renta/i.test(e.titulo)
+  const { data: renta } = useQuery({ queryKey: qk(bookId, "renta"), enabled: events.some(isRenta), queryFn: () => loadRentaData(createClient(), bookId) })
+  const rentaEst = (nx: string) => {
+    if (!renta) return null
+    const y = +nx.slice(0, 4) - 1, mid = titularId(renta.members)
+    const C = calcRenta(rentaInput(renta, y, mid), y, mid, today)
+    return C.saldo > 0 ? { v: C.saldo, how: `Estimado con el borrador del año ${y}: impuesto ${fmtMoney(C.imp)} − retenciones ${fmtMoney(C.ret)}.` } : { v: 0, how: `Con tus datos del año ${y} quedaría saldo a favor de ${fmtMoney(-C.saldo)}.` }
+  }
   if (isPending || !book) return <PageSkeleton kpis={3} />
-  const est = (e: Row<"calendar_events">) => calEst(e, book, assets.map((a) => ({ ...a, avaluo: Number(a.avaluo), predial: a.predial == null ? null : Number(a.predial), imp_veh: a.imp_veh == null ? null : Number(a.imp_veh), soat: a.soat == null ? null : Number(a.soat), pct: Number(a.pct) })), smmlv, incCats)
+  const est = (e: Row<"calendar_events">) => (isRenta(e) ? rentaEst(nextOcc(e, today)) : null) ?? calEst(e, book, assets.map((a) => ({ ...a, avaluo: Number(a.avaluo), predial: a.predial == null ? null : Number(a.predial), imp_veh: a.imp_veh == null ? null : Number(a.imp_veh), soat: a.soat == null ? null : Number(a.soat), pct: Number(a.pct) })), smmlv, incCats)
   const val = (e: Row<"calendar_events">) => Number(e.monto) || est(e)?.v || 0
   const in365 = rows.filter((r) => r.nx <= new Date(new Date(today).getTime() + 365 * 864e5).toISOString().slice(0, 10))
   const prox = rows.find((r) => r.nx >= today)

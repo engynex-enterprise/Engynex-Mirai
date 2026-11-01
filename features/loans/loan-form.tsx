@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { FieldGroup, FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { Camera } from "lucide-react"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { FormField } from "@/components/mirai/field"
 import { MoneyInput } from "@/components/mirai/money-input"
@@ -21,10 +22,13 @@ import { FormSkeleton } from "@/components/skeletons/form-skeleton"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
-import { FRECS, SISTEMAS, histPlan, loanEngine, previewLoan, rateFromCuota, type HistMode, type Sistema } from "@/lib/domain"
+import { FRECS, SISTEMAS, histPlan, loanEngine, norm, previewLoan, rateFromCuota, type HistMode, type Sistema } from "@/lib/domain"
 import { fmtDate, fmtMoney, fmtPct, todayISO } from "@/lib/format"
 import { contactOptions, entityOptions, useCatalogsReady, useContacts, useEntities, useSettings } from "@/features/catalogs/hooks"
 import { DOC_TIPOS } from "@/features/contacts/contact-form"
+import { EntityDialog } from "@/features/catalogs/entity-dialog"
+import { readLoanDoc } from "@/features/ai/actions"
+import { useSave } from "@/hooks/use-book-data"
 
 export type LoanKind = "cobrar" | "pagar"
 type Props = { kind: LoanKind; open: boolean; onOpenChange: (o: boolean) => void; contactId?: string | null; empeno?: boolean; onSaved?: (id: string) => void }
@@ -76,6 +80,42 @@ function Body({ kind, onOpenChange, contactId, empeno, onSaved }: Props) {
   const [saldoHoy, setSaldoHoy] = useState(0)
   const [fult, setFult] = useState(today)
   const [busy, setBusy] = useState(false)
+  const [newEnt, setNewEnt] = useState<string | null>(null)
+  const [ocr, setOcr] = useState<{ busy: boolean; msg: string | null }>({ busy: false, msg: null })
+  const fotoRef = useRef<HTMLInputElement>(null)
+  const sbSave = useSave("entities")
+
+  /** Lee extracto, pagaré o factura con IA y llena el formulario (ocrLoan de la v4). */
+  const onFoto = async (f?: File) => {
+    if (!f) return
+    setOcr({ busy: true, msg: "Leyendo el documento…" })
+    const fd = new FormData(); fd.append("file", f)
+    const r = await readLoanDoc(fd, kind).catch((e) => ({ ok: false as const, msg: (e as Error).message }))
+    if (!r.ok) return setOcr({ busy: false, msg: r.msg })
+    const d = r.d, got: string[] = []
+    if (!isC && d.acreedor && !d.acreedor_es_persona) {
+      const nit = (d.acreedor_nit ?? "").replace(/\D/g, "")
+      let e = entities.find((x) => (nit && x.nit === nit) || norm(x.nombre) === norm(d.acreedor!) || (x.nombre.length > 4 && norm(d.acreedor!).includes(norm(x.nombre))))
+      if (!e) { const row = await sbSave.mutateAsync({ nombre: d.acreedor.slice(0, 60), nit, tipo: "Banco" } as never); e = row as never; got.push(`creamos la entidad “${d.acreedor}”`) }
+      setQuien("ent"); setEntity(e!.id); got.push(e!.nombre)
+    } else {
+      const who = isC ? d.deudor : d.acreedor
+      const c = who ? contacts.find((x) => norm(x.nombre) === norm(who)) : null
+      if (c) { setQuien("ex"); setContact(c.id); got.push(c.nombre) }
+      else if (who) { setQuien("new"); setNc((x) => ({ ...x, nombre: who, doc: (isC ? d.deudor_documento : d.acreedor_nit) ?? "" })); got.push(who) }
+    }
+    if (d.monto) { setMonto(Math.round(d.monto)); got.push(`valor ${fmtMoney(d.monto)}`) }
+    if (d.concepto) setConcepto(d.concepto.slice(0, 80))
+    if (d.fecha_inicio && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha_inicio)) setInicio(d.fecha_inicio)
+    if (d.frecuencia && FRECS[d.frecuencia]) setFrec(d.frecuencia)
+    if (d.plazo_cuotas) { setPlazo(String(Math.round(d.plazo_cuotas))); got.push(`${d.plazo_cuotas} cuotas`) }
+    if (d.seguros_por_cuota && !isC) setExtra(Math.round(d.seguros_por_cuota))
+    if (d.tasa_mensual || d.tasa_ea) { setModoInt("tasa"); if (d.tasa_mensual) { setTasa(String(d.tasa_mensual).replace(".", ",")); setEa("") } else setEa(String(d.tasa_ea).replace(".", ",")); got.push("tasa") }
+    else if (d.valor_cuota) { setModoInt("cuota"); setCuotaV(Math.round(d.valor_cuota)); got.push("cuota") }
+    if (d.saldo_actual && d.monto && d.saldo_actual < d.monto) { setHist("saldo"); setSaldoHoy(Math.round(d.saldo_actual)); if (d.fecha_ultimo_pago && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha_ultimo_pago)) setFult(d.fecha_ultimo_pago) }
+    else if (d.cuotas_pagadas) { setHist("cuotas"); setNcuotas(String(Math.round(d.cuotas_pagadas))) }
+    setOcr({ busy: false, msg: got.length ? `Leímos: ${got.join(", ")}. Revisa los datos antes de guardar.${d.tipo_documento === "recibo_pago" ? " Parece un comprobante de pago: después de guardar, regístralo en “Registrar pago”." : ""}` : "No encontramos datos del crédito en el documento. Escríbelos a mano." })
+  }
 
   const diario = frec === "diario" || frec === "diariohab"
   /** loanParams de la v4 */
@@ -132,12 +172,19 @@ function Body({ kind, onOpenChange, contactId, empeno, onSaved }: Props) {
 
   return (
     <FieldGroup className="pb-2">
+      <div className="grid gap-2 rounded-lg border border-dashed p-3">
+        <p className="text-sm font-medium">¿Tienes el extracto, pagaré o factura del crédito?</p>
+        <p className="text-xs text-muted-foreground">Tómale una foto o súbela y la IA llena los datos: {isC ? "a quién" : "la entidad"}, valor, cuotas, tasa y lo que ya se ha pagado.</p>
+        <Button type="button" variant="soft" size="sm" className="w-fit" disabled={ocr.busy} onClick={() => fotoRef.current?.click()}>{ocr.busy ? <Spinner /> : <Camera />} Leer con foto</Button>
+        <input ref={fotoRef} type="file" hidden accept="image/*,application/pdf" capture="environment" onChange={(e) => { onFoto(e.target.files?.[0]); e.target.value = "" }} />
+        {ocr.msg && <p className="text-sm">{ocr.msg}</p>}
+      </div>
       <FieldSeparator>{isC ? "¿A quién le prestaste?" : "¿Quién te prestó?"}</FieldSeparator>
       <Segmented value={quien} onChange={(v) => setQuien(v as typeof quien)} items={[
         ...(!isC ? [{ value: "ent", label: "Banco o entidad", icon: "landmark" }] : []),
         { value: "ex", label: "Un contacto guardado", icon: "user-round" }, { value: "new", label: "Alguien nuevo", icon: "user-plus" },
       ]} />
-      {quien === "ent" && <FormField label="Banco o entidad" htmlFor="l-ent"><Combobox id="l-ent" value={entity} onChange={setEntity} options={entityOptions(entities)} /></FormField>}
+      {quien === "ent" && <FormField label="Banco o entidad" htmlFor="l-ent"><Combobox id="l-ent" value={entity} onChange={setEntity} options={entityOptions(entities)} createLabel="Crear banco o entidad" onCreate={(t) => setNewEnt(t || " ")} onCreateAI={(t) => setNewEnt(t || " ")} /></FormField>}
       {quien === "ex" && <FormField label="Contacto" htmlFor="l-ct"><Combobox id="l-ct" value={contact} onChange={setContact} options={contactOptions(contacts)} emptyText="No tienes contactos. Elige “Alguien nuevo”." /></FormField>}
       {quien === "new" && (
         <div className="grid gap-5 sm:grid-cols-2">
@@ -238,6 +285,7 @@ function Body({ kind, onOpenChange, contactId, empeno, onSaved }: Props) {
         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
         <Button onClick={submit} disabled={busy}>{busy && <Spinner />} {isC ? "Registrar préstamo" : "Registrar deuda"}</Button>
       </div>
+      <EntityDialog open={newEnt !== null} onOpenChange={(o) => !o && setNewEnt(null)} initial={newEnt?.trim() ?? ""} onCreated={(id) => { setQuien("ent"); setEntity(id) }} />
     </FieldGroup>
   )
 }

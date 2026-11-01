@@ -52,10 +52,13 @@ sandbox de `node:vm` con "hoy" fijo y los datos de ejemplo `sample()` (familia N
    obligatorios y el 25 % exento (tope 790 UVT/año). No considera dependientes (10 %, máx. 32 UVT/mes),
    intereses de vivienda, medicina prepagada, aportes voluntarios ni el límite del art. 336.
    *Propuesta:* `retEmpleado(mensual, aportes, uvt, { dependiente, intVivienda, prepagada, voluntarios })` con
-   `rentasExentasYDeducciones = min(Σ, 40 % × (ingreso − aportes), 1.340/12 UVT)`; validar con el agente
-   `finanzas-colombia` y fuentes DIAN antes de cambiarlo. Sigue siendo un estimado.
-3. **IBC de independientes sin tope de 25 SMMLV** (`dedCalc`, tipo independiente): `max(SMMLV, 40 % × M)`.
-   *Propuesta:* `min(max(SMMLV, 40 % × M), 25 × SMMLV)`.
+   `rentasExentasYDeducciones = min(Σ, 40 % × (ingreso − aportes), 1.340/12 UVT)`. **Verificado** (31-oct-2026):
+   el orden es aportes → deducciones → otras exentas → 25 % (sobre lo que queda) → límite 40 %; el tope de 1.340 UVT
+   en la retención mensual es discutido (Decreto 2231/2023 vs. Concepto DIAN 3028/2024). Como la app hoy solo
+   recibe aportes, el 25 % nunca alcanza el 40 % y el resultado no cambia; aplicar la fórmula completa cuando el
+   formulario de nómina pida deducciones.
+3. ~~IBC de independientes sin tope de 25 SMMLV~~ **Corregido** (verificado por `finanzas-colombia`, 31-oct-2026):
+   `min(max(SMMLV, 40 % × M), 25 × SMMLV)`. La prueba de paridad omite los casos por encima del tope.
 4. **Porcentajes en 0 caen al valor por defecto** (`+D.saludP || 4`): escribir 0 % de salud o pensión vuelve
    al 4 % (o 12,5 % / 16 % / 12 %). Para quitar un descuento hay que apagar su interruptor (`salud:false`).
    *Propuesta:* usar `??` y validar en el formulario.
@@ -78,15 +81,15 @@ sandbox de `node:vm` con "hoy" fijo y los datos de ejemplo `sample()` (familia N
 
 - `loans.sistema` acepta `'diario'`, que **no existe** en el motor (la v4 tampoco lo tenía): se calcula como
   francés. Probablemente se quiso decir la frecuencia. *Propuesta:* quitar `'diario'` del `check` de `sistema`.
-- `loans.frec` **no acepta `'diariohab'`** (diario de lunes a sábado), que sí existe en la v4 y en el motor.
-  *Propuesta:* agregarlo al `check` de `frec` en una migración.
+- `loans.frec` acepta `'diariohab'` (diario de lunes a sábado) desde la migración `20261031000400_fixes_f1.sql`.
 
-## Lo que NO está aquí (sigue en las vistas/servidor o pendiente)
+## Módulos agregados después de la primera migración
 
-`analizar()` del consejero, `detectSubs()` (suscripciones sugeridas), presupuesto 50/30/20 por grupo,
-presupuesto por miembro, `reportData()`, gamificación, DIAN/renta (`s_dian.js`), OCR y reglas de IA,
-`loanParams()` del formulario (E.A. → mensual), y las mutaciones de estado (`aporteApply`, `aporteRevert`,
-pagos de fijos), que en la v5 deben ser RPC/transacciones de Postgres.
+- `advisor.ts` (consejero: `analizar`, `asAnalyze`, `localInterp`, `moneyIn`, `finCtx`), `report.ts` (`reportData`),
+  `renta.ts` (`rentaAuto`, `calcRenta`, `patrimonio`, `topes`, `depInfo`, `tarifa241`) y `gami.ts` (puntos,
+  niveles, rachas, insignias, misiones): todos con pruebas contra la v4.
+- Siguen fuera de `lib/domain`: OCR y prompts de IA (`features/ai/actions.ts`), `loanParams()` del formulario y las
+  mutaciones de estado (aportes, pagos de fijos), que en la v5 son RPC/transacciones de Postgres.
 
 ## Consejero (`advisor.ts`)
 
@@ -94,3 +97,9 @@ pagos de fijos), que en la v5 deben ser RPC/transacciones de Postgres.
   "arriendo de 2.300.000" no daban monto en la interpretación sin IA. En la v5 se usa `norm()` (conserva
   el punto) y "2.300.000" se lee como 2.300.000. Es la única diferencia intencional; el resto de
   `localInterp` y `asAnalyze` (veredicto, razones, métricas y extras) se prueba contra la v4.
+
+## Renta: dependientes (Decreto 2231/2023)
+
+`calcRenta` aplica por defecto la regla vigente: el mismo dependiente sirve para el 10 % (dentro del límite del 40 %)
+y para los 72 UVT (fuera del límite, hasta 4). La v4 elegía entre "10 % con uno y 72 con los demás" o "72 por cada
+uno" (Concepto DIAN 0624/2023, cuyo aparte suspendió el Consejo de Estado). La paridad se prueba con `{ deps: "v4" }`.

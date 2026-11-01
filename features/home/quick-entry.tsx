@@ -14,6 +14,7 @@ import { createClient } from "@/utils/supabase/client"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtMoney } from "@/lib/format"
 import { parseEntry } from "./parse-entry"
+import { parseNL } from "@/features/ai/actions"
 import { useCategories, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
 
 /** Compositor de Inicio: escribe lo que pasó y queda registrado. */
@@ -29,9 +30,14 @@ export function QuickEntry() {
   const first = user.nombre.split(" ")[0]
 
   const submit = async () => {
-    const p = parseEntry(text)
-    if (!p) return toast.error("No entendí el valor", { description: "Escribe algo como “gasté 15 mil en almuerzo ayer”." })
     setBusy(true)
+    let p: (NonNullable<ReturnType<typeof parseEntry>> & { category_id?: string | null }) | null = parseEntry(text)
+    if (!p) {
+      // Si las reglas no entienden la frase, la IA lo intenta (EXTRA_FORM.nl de la v4).
+      const r = await parseNL(text)
+      if (r.ok) p = { tipo: r.tipo!, valor: r.valor!, descripcion: r.descripcion!, fecha: r.fecha!, category_id: r.category_id }
+    }
+    if (!p) { setBusy(false); return toast.error("No entendí el valor", { description: "Escribe algo como “gasté 15 mil en almuerzo ayer”." }) }
     const sb = createClient()
     if (p.tipo === "ingreso") {
       const { data, error } = await sb.from("extra_incomes").insert({ book_id: book.id, fecha: p.fecha, descripcion: p.descripcion, valor: p.valor }).select("id").single()
@@ -41,7 +47,7 @@ export function QuickEntry() {
       invalidateBook(qc, book.id, "extra_incomes")
     } else {
       const cat = localCat(p.descripcion, { rules, expenses: history, categories: cats })
-      const category_id = cat?.category_id ?? cats.find((c) => c.nombre === "Otros")?.id ?? null
+      const category_id = cat?.category_id ?? p.category_id ?? cats.find((c) => c.nombre === "Otros")?.id ?? null
       const { data, error } = await sb.from("expenses").insert({ book_id: book.id, fecha: p.fecha, descripcion: p.descripcion, valor: p.valor, category_id, cat_src: cat?.src ?? null, origen: "voz", hormiga: false }).select("id").single()
       setBusy(false)
       if (error) return toast.error("No se pudo registrar", { description: error.message })

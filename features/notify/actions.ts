@@ -5,7 +5,8 @@ import { requireRole, getAppContext } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { getIntegration } from "@/features/integrations/store"
 import { telegramApi } from "@/lib/notify/channels"
-import { defaultRule, sendDigest, type Rule } from "@/lib/notify/digest"
+import { avisosPara, defaultRule, horaBogota, sendDigest, upsertAppNotifs, type Rule } from "@/lib/notify/digest"
+import { enSilencio } from "@/lib/notify/rules"
 
 async function myRule() {
   const ctx = await getAppContext()
@@ -56,4 +57,16 @@ export async function telegramConfirm(): Promise<{ ok: boolean; msg: string }> {
 export async function telegramUnlink() {
   const ctx = await requireRole("viewer")
   await supabaseAdmin().from("telegram_links").delete().eq("user_id", ctx.user.id)
+}
+
+/** Al abrir la app: actualiza la campana y devuelve hasta 3 avisos urgentes para mostrar (maybePopups de la v4). */
+export async function openAppNotifs(): Promise<{ id: string; t: string; b: string; go: string; lvl: string }[]> {
+  try {
+    const { ctx, rule } = await myRule()
+    if (rule.canales?.app === false) return []
+    const list = await avisosPara(ctx.book.id, rule, "app")
+    await upsertAppNotifs(rule, list)
+    if (rule.canales?.popup === false || enSilencio(horaBogota(), rule.silencio)) return []
+    return list.filter((n) => n.lvl === "bad" || n.lvl === "warn").slice(0, 6).map((n) => ({ id: n.id, t: n.t, b: n.b, go: n.go, lvl: n.lvl }))
+  } catch { return [] }
 }

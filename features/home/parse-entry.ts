@@ -4,7 +4,7 @@ export type ParsedEntry = { tipo: "gasto" | "ingreso"; valor: number; descripcio
 
 /**
  * Lectura local de frases como "gasté 15 mil en almuerzo ayer" o "me pagaron 300 mil por un trabajo".
- * La IA (fase 4) entiende frases más libres; esto cubre los casos comunes sin conexión.
+ * Si esto no entiende la frase, la IA lo intenta (parseNL); esto cubre los casos comunes sin conexión.
  */
 export function parseEntry(text: string, today = todayISO()): ParsedEntry | null {
   const t = text.trim()

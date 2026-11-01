@@ -27,6 +27,7 @@ import { ApplyPrefs } from "@/features/settings/prefs"
 import { ChatWidget } from "@/features/chat/chat-widget"
 import { Tour } from "./tour"
 import { GamiCheck } from "@/features/gami/gami-check"
+import { NotifPopups } from "@/features/notify/popups"
 
 export function AppShell({ ctx, sidebarOpen, children }: { ctx: AppContext; sidebarOpen: boolean; children: React.ReactNode }) {
   return (
@@ -65,6 +66,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <ApplyPrefs />
       <ChatWidget />
       <GamiCheck />
+      <NotifPopups />
       <Suspense fallback={null}><Tour /></Suspense>
     </>
   )

@@ -38,7 +38,7 @@ for (const hoy of HOYS.slice(0, 3))
             const R = rentaOf(sc, y, mid)
             expect(titularId(R.members)).toBe(sc.plain("titularId()"))
             expectClose(rentaAuto(R, mid, hoy), sc.plain(`rentaAuto(${y},'${mid}')`))
-            const { A: _a, ...c5 } = calcRenta(R, y, mid, hoy)
+            const { A: _a, ...c5 } = calcRenta(R, y, mid, hoy, { deps: "v4" })
             const { A: _b, ...c4 } = sc.plain(`calcRenta(${y},'${mid}')`)
             expectClose({ ...c5, useA: !!c5.useA }, { ...c4, useA: !!c4.useA })
             const { B: _c, ...p5 } = patrimonio(R, mid, hoy)
@@ -58,4 +58,19 @@ for (const hoy of HOYS.slice(0, 3))
 describe("tarifa241 = v4", () => {
   const sc = scenario(HOYS[0])
   for (const u of [0, 500, 1090, 1500, 1700, 3000, 4100, 8000, 8670, 15000, 18970, 25000, 31000, 50000]) it(`${u} UVT`, () => expectClose(tarifa241(u), sc.plain(`tarifa241(${u})`)))
+})
+
+describe("dependientes según el Decreto 2231/2023", () => {
+  const hoy = HOYS[0]
+  const sc = scenario(hoy).mutate(RICO + EXTRA)
+  const mid = sc.S.perfil.miembros[0].id
+  it("el mismo dependiente da el 10 % y los 72 UVT", () => {
+    const R = rentaOf(sc, 2025, mid)
+    const a = calcRenta(R, 2025, mid, hoy), b = calcRenta(R, 2025, mid, hoy, { deps: "v4" })
+    expect(a.nD).toBeGreaterThan(0)
+    expect(a.dep10).toBeCloseTo(Math.min(0.1 * (a.lab + a.hon), 384 * a.U))
+    expect(a.dep72).toBeCloseTo(Math.min(a.nD, 4) * 72 * a.U)
+    expect(a.dep10 + a.dep72).toBeGreaterThanOrEqual(b.dep10 + b.dep72)
+    expect(a.imp).toBeLessThanOrEqual(b.imp)
+  })
 })

@@ -246,8 +246,8 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
             <h2 className="font-semibold">¿Cuánto te ahorran?</h2>
             <p className="text-sm">Tienes <b>{C.nD}</b> dependiente{C.nD === 1 ? "" : "s"} válido{C.nD === 1 ? "" : "s"}.</p>
             <div className="flex justify-between border-b py-2 text-sm"><span>10 % de tus ingresos laborales (tope 32 UVT al mes) — dentro del límite del 40 %</span><Money value={C.dep10} /></div>
-            <div className="flex justify-between py-2 text-sm"><span>72 UVT por dependiente adicional (hasta 4) — fuera del límite</span><Money value={C.dep72} /></div>
-            {C.nD > 0 && <p className="text-xs text-muted-foreground">Elegimos la combinación más conveniente: {C.useA ? "10 % por uno y 72 UVT por los demás" : "72 UVT por cada uno"}.</p>}
+            <div className="flex justify-between py-2 text-sm"><span>72 UVT por cada dependiente (hasta 4) — fuera del límite</span><Money value={C.dep72} /></div>
+            {C.nD > 0 && <p className="text-xs text-muted-foreground">Desde el Decreto 2231 de 2023, un mismo dependiente sirve para el 10 % y para los 72 UVT.</p>}
           </Card>
         </div>
       )}

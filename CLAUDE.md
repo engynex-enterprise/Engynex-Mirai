@@ -1,7 +1,7 @@
 # CLAUDE.md — Mirai
 
 > Punto de entrada para Claude Code y cualquier agente. Reglas de dominio en `.agents/rules/`.
-> **Estado: migrando de la v4.0 (HTML único, en `legacy/`) a la v5 (Next.js + shadcn + Supabase).**
+> **Estado: v5.0 (Next.js + shadcn + Supabase). Todas las secciones de la v4.0 (en `legacy/`) están migradas.**
 > Diseño aprobado: `docs/superpowers/specs/2026-10-31-migracion-nextjs-design.md`. Lista de control funcional: `docs/migracion/inventario-1…5.md` (nada de la v4 se omite).
 
 ## 1. Qué es Mirai
@@ -29,16 +29,28 @@ app/
   (auth)/           login (contraseña, enlace mágico, Google), registro (Ley 1581), recuperar, actualizar-clave, verificacion (MFA)
   (onboarding)/     bienvenida (crea hogar + libro con create_household)
   (app)/            shell (sidebar, migas, ⌘K, Agregar, notificaciones) + una ruta por sección del menú
-  (app)/[seccion]   página provisional de secciones aún no migradas (lib/migration-status.ts)
+  (app)/[seccion]   respaldo para secciones sin ruta (hoy ninguna; ver lib/migration-status.ts)
+  (auth)/invitacion/[token]  aceptar invitación a un hogar
+  contador/[token]  portal público del contador (solo lectura, datos en vivo, notas)
+  api/cron/notify   cron de avisos y datos de referencia (Bearer CRON_SECRET)
+  api/google/*      OAuth de Gmail (solo lectura) y Google Calendar
   auth/callback|confirm   PKCE / token_hash
   legal/            términos y política de datos
 components/ui       shadcn (radix-nova) — no editar salvo ajustes de marca
 components/app      shell: app-shell, app-sidebar, command-palette, add-menu, notifications-sheet, help-sheet, mobile-tabbar
 components/mirai    piezas propias: IsoIcon, Icon (lucide por nombre), PageHeader…
 components/skeletons  esqueletos de carga
+features/<módulo>/  vista + acciones de cada sección (settings, integrations, notify, advisor, chat, ai, reports,
+                    renta, contador, correo, gami, ayuda, profile, household, data…)
 hooks/              use-book-data (useList/useSave/useSoftDelete), use-realtime (canal por libro)
 lib/dal.ts          getAppContext(): usuario, hogar, libro activo (cookie mirai-book) — solo servidor
-lib/domain/         cálculos puros portados 1:1 de la v4 (+ pruebas Vitest)
+lib/domain/         cálculos puros portados 1:1 de la v4 (+ pruebas Vitest contra el bundle de la v4):
+                    totales, préstamos, renta (art. 241), consejero, reportes, logros, agenda/avisos…
+lib/ai/             modelo por proveedor (model.ts) y aiText/aiObject con respaldo entre proveedores (run.ts)
+lib/integrations/   registro único de integraciones (registry.ts); secretos con lib/crypto.ts
+lib/notify/         reglas aviso×canal, resumen (digest), correo, Telegram, push y WhatsApp
+lib/book-data.ts    loadBookData(sb, bookId): el libro en la forma de lib/domain (navegador y servidor)
+lib/content/ayuda.ts  versión, novedades, FAQ, guías y tour
 lib/content/help.ts HELP / MDESC / fieldHelp (textos literales de la v4 en lib/data/legacy-*.json)
 lib/nav.ts          menú efectivo de la v4 → rutas
 lib/supabase/       database.types.ts (generado), tables.ts (tipos + qk), admin.ts (clave secreta, solo servidor)
@@ -76,7 +88,13 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 - `components/ui/command.tsx`: `CommandDialog` NO envuelve en `<Command>`; hazlo tú.
 - `useList` filtra por `book_id`; las tablas por hogar (`family_members`, `integrations`) se consultan aparte.
 - Supabase Auth: configurar Site URL, Redirect URLs (`/auth/callback`, `/auth/confirm`), proveedor Google y SMTP propio en el panel.
-- Cron en Vercel Hobby: 1 vez al día → avisos horarios con `pg_cron` + `pg_net`.
+- Cron en Vercel Hobby: 1 vez al día → avisos horarios con `pg_cron` + `pg_net` (`select mirai_schedule_notify(url, secreto)`).
+- Archivos `"use server"`: solo exportan funciones async (y tipos). Constantes compartidas van en otro archivo (p. ej. `features/correo/query.ts`).
+- `MoneyAutosave`/inputs que guardan al salir comparan con `Object.is` (un `NaN` en una fila optimista causaba un bucle de render).
+- Filas optimistas tienen id `tmp-…`: deshabilita borrar/editar hasta que el guardado confirme.
+- La burbuja del chat se aparta al desplazar; si una prueba hace clic cerca de la esquina inferior derecha en móvil, desplaza antes.
+- Clic en opciones de `ChoiceCards`: usa `getByRole("radio", { name })` (el radio transparente cubre la tarjeta).
+- Los textos del portal del contador y Ajustes › Integraciones nunca reciben secretos: solo `integrations_public` (máscaras).
 
 ## 8. Documentación
-`AGENTS.md` (resumen para otros agentes) · `.agents/rules/` · `.claude/agents/` (finanzas-colombia, qa-playwright, ux-simple) · `docs/BACKLOG.md` · `docs/HISTORIAL.md` · `docs/migracion/` · `docs/superpowers/specs/`.
+`AGENTS.md` (resumen para otros agentes) · `docs/DEPLOY-VERCEL.md` (variables, cron, Google, Telegram) · `.agents/rules/` · `.claude/agents/` (finanzas-colombia, qa-playwright, ux-simple) · `docs/BACKLOG.md` · `docs/HISTORIAL.md` · `docs/migracion/` · `docs/superpowers/specs/`.

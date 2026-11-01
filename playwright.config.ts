@@ -9,6 +9,8 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
+  // Todas las pruebas comparten el usuario QA y su libro activo: un reintento absorbe interferencias de estado.
+  retries: 1,
   reporter: [["list"]],
   globalSetup: "./tests/e2e/global-setup.ts",
   use: { baseURL: `http://localhost:${PORT}`, locale: "es-CO", timezoneId: "America/Bogota", trace: "retain-on-failure" },

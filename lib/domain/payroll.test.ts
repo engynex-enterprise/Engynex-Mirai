@@ -50,9 +50,16 @@ describe("dedCalc = v4", () => {
       it(`${nombre} · ${frec}`, () => {
         for (const s of SALARIOS) {
           const bruto = frec === "quincenal" ? s / 2 : frec === "semanal" ? (s * 12) / 52 : frec === "anual" ? s * 12 : s
+          // Independientes por encima de 25 SMMLV de IBC: la v5 aplica el tope legal (la v4 no). Ver NOTAS.md.
+          if (D.tipo === "independiente" && (s * (+(D.ibcP ?? 0) || 40)) / 100 > 25 * ref.smmlv) continue
           expectClose(dedCalc(bruto, frec, D, ref), legacyCall(sc.L, "dedCalc", bruto, frec, D))
         }
       })
+  it("independiente: el IBC no pasa de 25 SMMLV", () => {
+    const r = dedCalc(200_000_000, "mensual", { tipo: "independiente", ret: false, arl: false, fsp: false }, ref)
+    const salud = r.items.find((x) => x.n === "Salud")!.v
+    expect(Math.abs(salud - 25 * ref.smmlv * 0.125)).toBeLessThan(1)
+  })
   it("sin configuración o sin valor devuelve el bruto", () => {
     expect(dedCalc(1000, "mensual", null, ref)).toEqual({ neto: 1000, items: [], total: 0 })
     expect(dedCalc(0, "mensual", { tipo: "empleado" }, ref)).toEqual({ neto: 0, items: [], total: 0 })

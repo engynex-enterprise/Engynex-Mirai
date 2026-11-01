@@ -3,7 +3,7 @@
 Guía corta para agentes de código. **Lee `CLAUDE.md` para el contexto completo.**
 
 ## Proyecto
-Mirai: finanzas personales y familiares para Colombia, en español, para personas sin conocimientos financieros. **v5 en migración:** Next.js 16 (App Router, `cacheComponents`) + React 19 + Tailwind 4 + shadcn + Supabase (Postgres con RLS, Auth, Realtime, Storage), desplegado en Vercel. La v4 (HTML único) vive en `legacy/` como referencia.
+Mirai: finanzas personales y familiares para Colombia, en español, para personas sin conocimientos financieros. **v5.0 (migración completa):** Next.js 16 (App Router, `cacheComponents`) + React 19 + Tailwind 4 + shadcn + Supabase (Postgres con RLS, Auth, Realtime, Storage), desplegado en Vercel. La v4 (HTML único) vive en `legacy/` como referencia.
 
 ## Comandos
 `npm run dev` · `npm run build` · `npm run typecheck` · `npm run lint` · `npm run test` (Vitest) · `npm run test:e2e` (Playwright 1366 px y 400 px) · `npm run db:migrate` · `npm run db:types`
@@ -16,3 +16,5 @@ Mirai: finanzas personales y familiares para Colombia, en español, para persona
 5. Valores tributarios/laborales de Colombia en tablas `ref_*` con fuente oficial; se muestran como estimados.
 6. Sin logos de marcas de terceros. Responsive móvil primero, sin scroll horizontal a 400 px.
 7. Cada cambio: build → pruebas → capturas. Nada de la v4 se omite (ver `docs/migracion/`).
+8. Cálculos nuevos o portados: en `lib/domain/` con prueba Vitest; si existían en la v4, compáralos contra el bundle (`lib/domain/__tests__/legacy.ts`).
+9. Archivos `"use server"` solo exportan funciones async; valida la entrada con zod y revisa el rol con `requireRole`.

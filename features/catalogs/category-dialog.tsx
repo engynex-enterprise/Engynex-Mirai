@@ -1,5 +1,9 @@
 "use client"
 
+import { Sparkles } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
+import { suggestCategory } from "@/features/ai/actions"
+import { localCatGuess } from "@/features/ai/local"
 import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -17,7 +21,7 @@ import { useCategories } from "./hooks"
 export const ICON_CHOICES = ["house", "zap", "droplets", "wifi", "shopping-cart", "car", "bus", "fuel", "graduation-cap", "heart-pulse", "landmark", "utensils", "coffee", "bike", "cookie", "film", "tv", "shirt", "repeat", "dog", "gift", "plane", "piggy-bank", "trending-up", "briefcase", "store", "baby", "dumbbell", "smartphone", "receipt", "banknote", "credit-card", "coins", "percent", "file-text", "tag", "umbrella", "sprout", "circle-ellipsis", "paw-print", "pill", "scissors", "wrench", "gamepad-2", "book-open", "music"]
 
 /** "Nueva categoría" (mini-modal de la v4). Devuelve el id creado. */
-export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; initialName?: string; onCreated?: (id: string) => void }) {
+export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated, ctxDesc = "" }: { open: boolean; onOpenChange: (o: boolean) => void; initialName?: string; onCreated?: (id: string) => void; ctxDesc?: string }) {
   const { data: cats = [] } = useCategories()
   const save = useSave("categories")
   const [nombre, setNombre] = useState(initialName)
@@ -26,6 +30,15 @@ export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated
   const [tope, setTope] = useState(0)
   const [prev, setPrev] = useState(initialName)
   if (prev !== initialName) { setPrev(initialName); setNombre(initialName) }
+  const [ai, setAi] = useState<{ busy: boolean; msg: string | null }>({ busy: false, msg: null })
+  const suggest = async () => {
+    if (!nombre.trim() && !ctxDesc.trim()) return toast("Escribe una idea en el nombre (por ejemplo “comida del perro”) y la IA la completa.")
+    setAi({ busy: true, msg: null })
+    const r = await suggestCategory(ctxDesc, nombre, ICON_CHOICES)
+    const s = r.ok && r.s ? r.s : localCatGuess(ctxDesc, nombre)
+    setNombre(s.nombre); setGrupo(s.grupo); setIcon(s.icon); if (s.tope) setTope(s.tope)
+    setAi({ busy: false, msg: r.ok && r.s ? r.s.razon || "Sugerencia lista. Puedes ajustarla antes de crearla." : "La IA no está disponible ahora; te dejamos una sugerencia. Ajústala si quieres." })
+  }
 
   const submit = async () => {
     const n = nombre.trim()
@@ -41,7 +54,14 @@ export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated
       description="Crea un grupo para clasificar tus gastos. Aparecerá en tus listas, presupuesto y reportes."
       footer={<><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={save.isPending}>Crear categoría</Button></>}>
       <FieldGroup>
-        <FormField label="Nombre de la categoría" required><Input className="h-11" value={nombre} maxLength={40} placeholder="Ej. Mascotas" onChange={(e) => setNombre(e.target.value)} autoFocus /></FormField>
+        <div className="grid gap-2 rounded-lg bg-brand-soft p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="flex flex-1 items-center gap-2 text-sm font-semibold"><Sparkles className="size-4 text-brand" /> Que la IA la proponga</p>
+            <Button type="button" size="sm" variant="soft" disabled={ai.busy} onClick={suggest}>{ai.busy ? <Spinner /> : <Sparkles />}{ai.busy ? "Pensando…" : ai.msg ? "Sugerir otra vez" : "Sugerir"}</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">{ai.msg ?? (ctxDesc ? `Usará “${ctxDesc}” para sugerir nombre, ícono y tipo.` : "Escribe una idea en el nombre y la IA completa el resto.")}</p>
+        </div>
+        <FormField label="Nombre de la categoría" htmlFor="cat-nombre" required><Input id="cat-nombre" className="h-11" value={nombre} maxLength={40} placeholder="Ej. Mascotas" onChange={(e) => setNombre(e.target.value)} autoFocus /></FormField>
         <FormField label="¿Qué tipo de gasto es?">
           <ChoiceCards value={grupo} onChange={setGrupo} cols={3} items={[
             { value: "n", label: "Necesidad", desc: "Lo indispensable", icon: "house" },
@@ -50,8 +70,8 @@ export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated
           ]} />
         </FormField>
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Ícono"><Combobox value={icon} onChange={setIcon} options={ICON_CHOICES.map((i) => ({ value: i, label: i.replace(/-/g, " "), icon: i }))} /></FormField>
-          <FormField label="Tope mensual" hint="Opcional. Te avisamos al acercarte."><MoneyInput value={tope} onChange={setTope} /></FormField>
+          <FormField label="Ícono" htmlFor="cat-icon"><Combobox id="cat-icon" value={icon} onChange={setIcon} options={ICON_CHOICES.map((i) => ({ value: i, label: i.replace(/-/g, " "), icon: i }))} /></FormField>
+          <FormField label="Tope mensual" htmlFor="cat-tope" hint="Opcional. Te avisamos al acercarte."><MoneyInput id="cat-tope" value={tope} onChange={setTope} /></FormField>
         </div>
       </FieldGroup>
     </ResponsiveDialog>

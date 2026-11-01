@@ -3,7 +3,10 @@
 // Todo es un ESTIMADO: el valor final lo da la nómina o el contador.
 import { formatCOP as $ } from "./money"
 
-/** SMMLV por año (fuente: decretos del Gobierno). Verificar con fuentes oficiales antes de agregar uno nuevo. */
+/**
+ * SMMLV por año. 2026: $1.750.905 rige por el Decreto 0159 de 2026 (transitorio; el Decreto 1469 de 2025 fue
+ * suspendido por el Consejo de Estado). Verificar con fuentes oficiales antes de agregar uno nuevo.
+ */
 export const SMMLV: Record<number, number> = { 2026: 1750905 }
 /** UVT por año (fuente: resoluciones DIAN). */
 export const UVT: Record<number, number> = { 2025: 49799, 2026: 52374 }
@@ -124,7 +127,9 @@ export function dedCalc(bruto: number, frec: string, D: Deducciones | null | und
       add("Retención en la fuente", r, D.retModo === "manual" ? "valor fijo" : D.retModo === "pct" ? `${pc(D.retV)}% del pago` : "cálculo aproximado (tabla art. 383)")
     }
   } else if (t === "independiente") {
-    const ib = Math.max(ref.smmlv, (M * (+(D.ibcP ?? 0) || 40)) / 100)
+    // IBC: 40 % del ingreso (Ley 2277/2022 art. 89), mínimo 1 SMMLV y máximo 25 SMMLV (Ley 797/2003 art. 5;
+    // Decreto 780/2016 art. 3.2.7.1). La v4 no aplicaba el tope (ver NOTAS.md).
+    const ib = Math.min(25 * ref.smmlv, Math.max(ref.smmlv, (M * (+(D.ibcP ?? 0) || 40)) / 100))
     const sp = +(D.saludP ?? 0) || 12.5
     const pp = +(D.pensionP ?? 0) || 16
     const s = D.salud !== false ? (ib * sp) / 100 : 0

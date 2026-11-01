@@ -210,7 +210,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
             <FormField label="Categoría" htmlFor="g-cat" error={errors.category_id?.message} required hint={!catManual && catSrc && w.descripcion ? { regla: "Se puso sola por una de tus reglas.", historial: "Se puso sola: así la registraste antes.", palabras: "Se puso sola según lo que escribiste.", ia: "Categoría sugerida por IA." }[catSrc] + " Puedes cambiarla." : undefined}>
               <Controller control={form.control} name="category_id" render={({ field }) => (
                 <Combobox id="g-cat" value={field.value} onChange={(v) => { setCatManual(true); field.onChange(v) }} options={categoryOptions(cats)} invalid={!!errors.category_id}
-                  placeholder="Elige una categoría" createLabel="Crear" onCreate={(t) => setNewCat(t || " ")} />
+                  placeholder="Elige una categoría" createLabel="Crear" onCreate={(t) => setNewCat(t || " ")} onCreateAI={(t) => setNewCat(t || " ")} />
               )} />
             </FormField>
             <FormField label="¿Es un gasto hormiga?" hint={w.hormigaMode === "si" ? "Lo marcaste como hormiga." : w.hormigaMode === "auto" ? (aiBusy === "cat" ? "La IA está pensando…" : aiH ? (aiH.h ? `La IA lo detecta como gasto hormiga: ${aiH.razon}` : `La IA no lo ve como hormiga: ${aiH.razon}`) : autoH ? "Parece un gasto hormiga." : "Mirai lo decide solo.") : undefined}>
@@ -239,7 +239,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
           </FieldGroup>
           {isSubmitting && <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Guardando…</p>}
         </form>
-      <CategoryDialog open={newCat !== null} onOpenChange={(o) => !o && setNewCat(null)} initialName={newCat?.trim() ?? ""}
+      <CategoryDialog open={newCat !== null} onOpenChange={(o) => !o && setNewCat(null)} initialName={newCat?.trim() ?? ""} ctxDesc={w.descripcion}
         onCreated={(id) => { setCatManual(true); form.setValue("category_id", id, { shouldValidate: true }) }} />
     </>
   )

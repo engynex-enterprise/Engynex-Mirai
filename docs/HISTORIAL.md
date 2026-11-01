@@ -32,3 +32,11 @@ Resumen de lo que pidió el dueño del producto y lo que se decidió, para que c
 - Respuestas y UI en español; directo, sin rodeos; entiende la intención aunque haya errores de tipeo.
 - No es experto en finanzas: todo debe ser extremadamente simple e intuitivo.
 - Lenguaje ejecutivo; términos técnicos acompañados de definiciones simples.
+
+## v5.0 (31 oct 2026): migración a Next.js + Supabase
+- Pedido: migrar todo a Next.js + shadcn con Supabase y Vercel, sin omitir nada, responsive, con skeletons, Realtime y librerías modernas; todas las integraciones activables y ajustables desde Ajustes.
+- Decisiones: tablas normalizadas con RLS; login con correo y contraseña, enlace mágico y Google; hogares con roles (dueño, editor, lector); la v4 se conserva en `legacy/` como referencia y como "oráculo" de las pruebas.
+- Cálculos portados 1:1 a `lib/domain` y probados contra el bundle de la v4. Diferencias intencionales documentadas en `lib/domain/NOTAS.md` (p. ej. "2.300.000" ahora sí se entiende en el consejero sin IA).
+- IA con respaldo entre proveedores (AI Gateway, Gemini, Groq, OpenRouter, Claude, OpenAI); toda función tiene alternativa sin IA.
+- Contador con datos en vivo y enlace con token (solo se guarda su hash), en lugar del cifrado de extremo a extremo de la v4.
+- Avisos desde el servidor (cron diario de Vercel + horario con pg_cron) por app, correo, Telegram, push y WhatsApp.

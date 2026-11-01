@@ -1,34 +1,30 @@
-# Backlog y limitaciones conocidas
+# Backlog y limitaciones conocidas (v5.0)
 
-## Prioridad alta (siguiente gran paso)
-- **Cuentas de usuario y sincronización multi-dispositivo fuera de claude.ai.** Hoy los datos viven en el `localStorage` del navegador. Propuesta: Supabase Auth (correo + enlace mágico o Google) y tabla `mirai_libros` con el estado `S` cifrado por usuario (o normalizado por tablas), con RLS por `auth.uid()`. Migrar el `MIRAI_TOKEN` único a sesiones por usuario y permitir varios hogares por despliegue.
-- **Respaldo automático** en el servidor (versiones diarias del libro) y restauración.
-- **Calendario DIAN 2027** (año gravable 2026): actualizar `RENTA26` → `RENTA27` cuando la DIAN lo publique (normalmente en diciembre/enero).
+## Hecho en la v5 (antes en este backlog)
+Cuentas y sincronización multi-dispositivo (Supabase Auth + hogares con roles) · respaldos en la nube y restauración · adjuntos de certificados DIAN visibles para el contador · Excel `.xlsx` real · plantillas de correo con la marca · push del navegador (PWA) · pruebas unitarias de los cálculos (más de 1.170, comparadas con la v4) · lint con ESLint.
+
+## Configuración pendiente del despliegue (no es código)
+- Registrar tarjeta en Vercel para que funcione el **AI Gateway** (hoy responde 403). Mientras tanto, activa Gemini o Groq (gratis) en Ajustes › Integraciones.
+- Google Cloud: URI `…/api/google/callback`, habilitar Gmail API y Calendar API (ver `docs/DEPLOY-VERCEL.md`).
+- Supabase: programar el cron horario (`select mirai_schedule_notify(...)`), SMTP propio, Turnstile si se usa.
+- Cambiar la contraseña temporal de la base de datos (`SUPABASE_DB_URL`).
 
 ## DIAN / renta
-- Rentas no laborales y de capital con su propia depuración; dividendos (cédula de dividendos); ganancias ocasionales (venta de bienes, herencias); pensiones con su cédula completa.
-- Anticipo de renta para el año siguiente; renta presuntiva (0 % vigente); pérdidas fiscales; régimen SIMPLE.
-- Generar borrador del **formulario 210** con renglones oficiales y exportar en el formato que pide el contador.
-- Adjuntar archivos (certificados en PDF/foto) a cada documento de la lista, cifrados, visibles para el contador.
-- Exógena: importar la información reportada por terceros (cuando el usuario descargue el archivo de la DIAN).
-- Excel real `.xlsx` (hoy SpreadsheetML `.xls` con aviso de Excel).
+- Rentas no laborales y de capital con su propia depuración; dividendos; ganancias ocasionales; pensiones con cédula completa.
+- Anticipo de renta, pérdidas fiscales, régimen SIMPLE.
+- Borrador del formulario 210 con renglones oficiales.
+- Exógena: importar lo reportado por terceros.
+- Calendario DIAN del año gravable 2026 (se declara en 2027) cuando la DIAN lo publique; UVT 2027.
+- Paridad pendiente de verificar con `finanzas-colombia` (ver `lib/domain/NOTAS.md`): retención 40 %/1.340 UVT en nómina, tope IBC 25 SMMLV, ingresos anuales en el flujo.
 
 ## Calendario e impuestos locales
-- Predial y vehicular por ciudad (hoy aproximaciones Bogotá: 7 por mil y 1,5 %/2,5 %/3,5 %). Permitir elegir ciudad y tarifa.
-- SOAT: tabla de referencia por tipo de vehículo y cilindraje.
+- Predial y vehicular por ciudad (hoy aproximaciones Bogotá). SOAT por tipo y cilindraje.
 
 ## Notificaciones e integraciones
-- Plantillas de correo HTML con la marca Mirai.
-- WhatsApp: más de una plantilla (resumen, recordatorio puntual).
-- Push del navegador (PWA) con service worker; instalar como app.
+- WhatsApp: más de una plantilla; modo "abrir WhatsApp con el resumen" (wa.me) además de la API.
+- Webhook de Telegram (hoy la vinculación usa `getUpdates`).
 
-## Técnico
-- `iso/gen.py` desincronizado de `iso/iso.json` (isotipos `logros` y `contador` agregados a mano).
-- Dividir `a_shell.html` (CSS) en hojas por módulo dentro del build.
-- Pruebas unitarias para cálculos puros (`calcRenta`, `engine`, `dedCalc`, `calEst`) con `node:test`.
-- Lint/format (ESLint + Prettier) sin romper el estilo compacto existente.
-- Accesibilidad: auditoría con axe en las pruebas.
-
-## Producto (ideas)
-- Gamificación: retos familiares compartidos y logros por miembro.
-- Modo negocio (libros separados ya existen: mejorar reportes para independientes y facturación).
+## Producto
+- Retos familiares compartidos y logros por miembro.
+- Modo negocio: reportes para independientes y facturación.
+- Auditoría de accesibilidad con axe en las pruebas.

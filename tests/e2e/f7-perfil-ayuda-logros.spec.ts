@@ -24,7 +24,7 @@ test("perfil, novedades, preguntas, manual, tour y logros", async ({ page }, inf
   await expect(page.getByText("Mirai en la nube: tu familia, en tiempo real").first()).toBeVisible()
   await page.goto("/faq")
   await page.getByRole("textbox", { name: "Buscar en preguntas frecuentes" }).fill("contador")
-  await expect(page.getByText("¿Cómo le doy acceso a mi contador?")).toBeVisible()
+  await expect(page.getByRole("button", { name: "¿Cómo le doy acceso a mi contador?" })).toBeVisible()
   await expect(page.getByText(/quitarle el acceso cuando quieras/)).toBeVisible()
   await page.goto("/manual")
   await page.getByRole("button", { name: /Registrar tu primer gasto/ }).click()
