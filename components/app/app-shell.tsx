@@ -13,7 +13,7 @@ import { CommandPalette } from "./command-palette"
 import { NotificationsSheet, useNotifications } from "./notifications-sheet"
 import { HelpSheet } from "./help-sheet"
 import { FeedbackDialog } from "@/features/opiniones/feedback-dialog"
-import { AdsConsentBanner } from "@/features/ads/ad-slot"
+import { AdModal, AdsConsentBanner, AdTicker, AfterActionAd } from "@/features/ads/ad-slot"
 import { LegalUpdate } from "@/features/legal/legal-update"
 import { PlatformNotice } from "./platform-notice"
 import { WelcomeDialog } from "@/features/onboarding/welcome-dialog"
@@ -55,7 +55,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     <>
       <AppSidebar live={status} online={online} badges={badges} hidden={hidden} unread={unread} />
       <SidebarInset className="min-w-0 bg-transparent">
-        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-28 sm:px-6 md:pb-16 lg:px-8"><PlatformNotice /><LegalUpdate />{children}</main>
+        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-28 sm:px-6 md:pb-16 lg:px-8"><AdTicker /><PlatformNotice /><LegalUpdate />{children}</main>
       </SidebarInset>
       <MobileTabBar />
       <AddMenu />
@@ -64,6 +64,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <HelpSheet />
       <FeedbackDialog />
       <AdsConsentBanner />
+      <AdModal />
+      <AfterActionAd />
       <WelcomeDialog />
       <NewBookDialog />
       <ApplyPrefs />

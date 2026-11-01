@@ -337,6 +337,7 @@ export async function adminSystem() {
   ])
 
   const env = (k: string) => !!process.env[k]
+  const { data: ads } = await db.from("platform_integrations").select("modo").eq("kind", "adsense").maybeSingle()
   return {
     settings, migraciones: migr ?? [], huerfanos: Number(orphans.data ?? 0), referidos: referidos ?? 0, premiados: premiados ?? 0,
     estado: [
@@ -345,7 +346,7 @@ export async function adminSystem() {
       { k: "Notificaciones push (VAPID)", ok: env("NEXT_PUBLIC_VAPID_PUBLIC_KEY") && env("VAPID_PRIVATE_KEY") },
       { k: "Mercado Pago", ok: env("MERCADOPAGO_ACCESS_TOKEN") }, { k: "Webhook Mercado Pago firmado", ok: env("MERCADOPAGO_WEBHOOK_SECRET") },
       { k: "Wompi", ok: env("NEXT_PUBLIC_WOMPI_PUBLIC_KEY") && env("WOMPI_INTEGRITY_SECRET") }, { k: "Eventos Wompi firmados", ok: env("WOMPI_EVENTS_SECRET") },
-      { k: "Google AdSense", ok: env("NEXT_PUBLIC_ADSENSE_CLIENT") && env("NEXT_PUBLIC_ADSENSE_SLOT") }, { k: "Dirección del sitio", ok: env("NEXT_PUBLIC_SITE_URL") || env("VERCEL_PROJECT_PRODUCTION_URL") },
+      { k: "Google AdSense", ok: (!!ads && ads.modo !== "apagada") || (env("NEXT_PUBLIC_ADSENSE_CLIENT") && env("NEXT_PUBLIC_ADSENSE_SLOT")) }, { k: "Dirección del sitio", ok: env("NEXT_PUBLIC_SITE_URL") || env("VERCEL_PROJECT_PRODUCTION_URL") },
     ],
     ambiente: process.env.VERCEL_ENV ?? "local", rama: process.env.VERCEL_GIT_COMMIT_REF ?? "local", commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7),
   }
@@ -388,7 +389,8 @@ export async function adminGlobalIntegrations() {
   })
 }
 
-export async function adminSaveGlobalIntegration(kind: string, input: { modo: string; planes: string[]; values: Record<string, string | number | boolean> }) {
+/** Guarda una integración global. Los errores que el administrador debe leer se devuelven (en producción Next oculta los de un throw). */
+export async function adminSaveGlobalIntegration(kind: string, input: { modo: string; planes: string[]; values: Record<string, string | number | boolean> }): Promise<{ ok: boolean; msg?: string }> {
   const ctx = await requirePlatformAdmin()
   const def = integrationByKind(kind)
   if (!def) throw new Error("Integración desconocida")
@@ -406,10 +408,16 @@ export async function adminSaveGlobalIntegration(kind: string, input: { modo: st
     else if (config[f.k] === undefined && f.def !== undefined) config[f.k] = f.def
   }
   const missing = def.fields.filter((f) => f.required && !(f.type === "secret" ? secrets[f.k] || (def.env && process.env[def.env]) : config[f.k]))
-  if (modo !== "apagada" && missing.length) throw new Error(`Falta: ${missing.map((f) => f.l).join(", ")}`)
+  if (modo !== "apagada" && missing.length) return { ok: false, msg: `Falta: ${missing.map((f) => f.l).join(", ")}` }
+  if (kind === "adsense" && modo !== "apagada") {
+    if (!/^ca-pub-\d{10,20}$/.test(String(config.client ?? "").trim())) return { ok: false, msg: "El id de cliente debe verse así: ca-pub-1234567890123456" }
+    if (!/^\d{6,20}$/.test(String(config.slot ?? "").trim())) return { ok: false, msg: "El id del bloque de anuncios debe ser solo números." }
+    config.client = String(config.client).trim(); config.slot = String(config.slot).trim()
+  }
   const { error } = await db.from("platform_integrations").upsert({ kind, modo, planes, config: config as never, meta: meta as never, secrets_enc: Object.keys(secrets).length ? encrypt(JSON.stringify(secrets)) : null, updated_by: ctx.user.id, updated_at: new Date().toISOString() })
-  if (error) throw new Error(error.message)
+  if (error) return { ok: false, msg: "No se pudo guardar. Intenta de nuevo." }
   await audit(ctx.user.id, "integración global", kind, { modo, planes })
+  return { ok: true }
 }
 
 /** Prueba la integración global (IA: una respuesta corta; correo: te envía uno; Telegram: valida el bot). */

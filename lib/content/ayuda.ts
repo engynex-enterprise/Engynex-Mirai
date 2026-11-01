@@ -73,6 +73,7 @@ const V54: Release = {
     ["new", "Invita y gana", "Comparte tu enlace: cuando alguien se registra y crea su hogar, los dos ganan días de Mirai Premium."],
     ["imp", "Bienvenida y migas de pan", "Una bienvenida al entrar por primera vez y, arriba de cada sección, el camino para volver atrás."],
     ["imp", "Menús más cómodos", "Los menús de opciones ya no parten el texto en varias líneas."],
+    ["imp", "Anuncios con límite", "En el plan gratis cada anuncio sale pocas veces al día y puedes cerrar la barra de arriba. Con Premium no ves ninguno."],
   ],
 }
 export const RELEASES: Release[] = [V54, V53, V52, V51, V5, ...(RELEASES_V4 as Release[])]

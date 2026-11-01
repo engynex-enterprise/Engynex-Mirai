@@ -65,20 +65,54 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"ad_events": {
+                },"ad_campaigns": {
                   Row: {
-                    "ad_id": string,"clics": number,"dia": string,"slot": string,"vistas": number
+                    "anunciante": string,"created_at": string,"desde": string | null,"dispositivos": (string)[],"estado": string,"frecuencia_max": number,"hasta": string | null,"id": string,"modelo_cobro": string,"nombre": string,"objetivo": string,"planes": (string)[],"presupuesto": number | null,"prioridad": number,"tarifa": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ad_id": string,"clics"?: number,"dia"?: string,"slot": string,"vistas"?: number
+                    "anunciante"?: string,"created_at"?: string,"desde"?: string | null,"dispositivos"?: (string)[],"estado"?: string,"frecuencia_max"?: number,"hasta"?: string | null,"id"?: string,"modelo_cobro"?: string,"nombre": string,"objetivo"?: string,"planes"?: (string)[],"presupuesto"?: number | null,"prioridad"?: number,"tarifa"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "ad_id"?: string,"clics"?: number,"dia"?: string,"slot"?: string,"vistas"?: number
+                    "anunciante"?: string,"created_at"?: string,"desde"?: string | null,"dispositivos"?: (string)[],"estado"?: string,"frecuencia_max"?: number,"hasta"?: string | null,"id"?: string,"modelo_cobro"?: string,"nombre"?: string,"objetivo"?: string,"planes"?: (string)[],"presupuesto"?: number | null,"prioridad"?: number,"tarifa"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ad_events": {
+                  Row: {
+                    "ad_id": string,"cierres": number,"clics": number,"dia": string,"slot": string,"vistas": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ad_id": string,"cierres"?: number,"clics"?: number,"dia"?: string,"slot": string,"vistas"?: number
+                  }
+                  Update: {
+                    "ad_id"?: string,"cierres"?: number,"clics"?: number,"dia"?: string,"slot"?: string,"vistas"?: number
                   }
                   Relationships: [
                     {
       foreignKeyName: "ad_events_ad_id_fkey"
+      columns: ["ad_id"]
+isOneToOne: false
+      referencedRelation: "ads"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"ad_user_daily": {
+                  Row: {
+                    "ad_id": string,"cierres": number,"clics": number,"dia": string,"user_id": string,"vistas": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ad_id": string,"cierres"?: number,"clics"?: number,"dia"?: string,"user_id": string,"vistas"?: number
+                  }
+                  Update: {
+                    "ad_id"?: string,"cierres"?: number,"clics"?: number,"dia"?: string,"user_id"?: string,"vistas"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ad_user_daily_ad_id_fkey"
       columns: ["ad_id"]
 isOneToOne: false
       referencedRelation: "ads"
@@ -115,17 +149,23 @@ isOneToOne: false
                   ]
                 },"ads": {
                   Row: {
-                    "activo": boolean,"anunciante": string,"created_at": string,"cta": string,"desde": string | null,"hasta": string | null,"id": string,"imagen": string | null,"prioridad": number,"texto": string,"titulo": string,"ubicaciones": (string)[],"updated_at": string,"url": string
+                    "activo": boolean,"anunciante": string,"campaign_id": string | null,"created_at": string,"cta": string,"desde": string | null,"formato": string,"hasta": string | null,"id": string,"imagen": string | null,"media": NonNullable<Json>,"prioridad": number,"texto": string,"titulo": string,"ubicaciones": (string)[],"updated_at": string,"url": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "activo"?: boolean,"anunciante"?: string,"created_at"?: string,"cta"?: string,"desde"?: string | null,"hasta"?: string | null,"id"?: string,"imagen"?: string | null,"prioridad"?: number,"texto"?: string,"titulo": string,"ubicaciones"?: (string)[],"updated_at"?: string,"url": string
+                    "activo"?: boolean,"anunciante"?: string,"campaign_id"?: string | null,"created_at"?: string,"cta"?: string,"desde"?: string | null,"formato"?: string,"hasta"?: string | null,"id"?: string,"imagen"?: string | null,"media"?: NonNullable<Json>,"prioridad"?: number,"texto"?: string,"titulo": string,"ubicaciones"?: (string)[],"updated_at"?: string,"url": string
                   }
                   Update: {
-                    "activo"?: boolean,"anunciante"?: string,"created_at"?: string,"cta"?: string,"desde"?: string | null,"hasta"?: string | null,"id"?: string,"imagen"?: string | null,"prioridad"?: number,"texto"?: string,"titulo"?: string,"ubicaciones"?: (string)[],"updated_at"?: string,"url"?: string
+                    "activo"?: boolean,"anunciante"?: string,"campaign_id"?: string | null,"created_at"?: string,"cta"?: string,"desde"?: string | null,"formato"?: string,"hasta"?: string | null,"id"?: string,"imagen"?: string | null,"media"?: NonNullable<Json>,"prioridad"?: number,"texto"?: string,"titulo"?: string,"ubicaciones"?: (string)[],"updated_at"?: string,"url"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "ads_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "ad_campaigns"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"advisor_consultations": {
                   Row: {
@@ -1419,14 +1459,14 @@ isOneToOne: false
                   ]
                 },"platform_settings": {
                   Row: {
-                    "aviso_global": string,"aviso_tono": string,"id": boolean,"limites_db": boolean,"referidos_activo": boolean,"referidos_dias": number,"referidos_plan": string,"registro_abierto": boolean,"updated_at": string
+                    "anuncios_accion_cada": number,"anuncios_adsense_pct": number,"anuncios_modal_horas": number,"anuncios_ticker": boolean,"aviso_global": string,"aviso_tono": string,"id": boolean,"limites_db": boolean,"referidos_activo": boolean,"referidos_dias": number,"referidos_plan": string,"registro_abierto": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"updated_at"?: string
+                    "anuncios_accion_cada"?: number,"anuncios_adsense_pct"?: number,"anuncios_modal_horas"?: number,"anuncios_ticker"?: boolean,"aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"updated_at"?: string
+                    "anuncios_accion_cada"?: number,"anuncios_adsense_pct"?: number,"anuncios_modal_horas"?: number,"anuncios_ticker"?: boolean,"aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -1899,6 +1939,11 @@ isOneToOne: false
           Functions: {
             "accept_invitation":
 { Args: { "p_token": string }; Returns: string
+                           },
+"ad_reach":
+{ Args: { "p_desde": string,"p_hasta": string }; Returns: {
+              "ad_id": string,"alcance": number,"clics": number,"vistas": number
+            }[]
                            },
 "ad_track":
 { Args: { "p_ad": string,"p_kind": string,"p_slot": string }; Returns: undefined

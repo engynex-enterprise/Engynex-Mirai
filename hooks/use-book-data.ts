@@ -53,6 +53,9 @@ const settle = new Map<string, () => void>()
 const waitSaved = async (id: string) => { await inflight.get(id) }
 
 /** Crear o editar (upsert por id) con actualización optimista. */
+/** Registros cuya creación cuenta como "acción" (para el anuncio después de una acción). */
+const ACTION_TABLES = new Set<string>(["expenses", "incomes", "extra_incomes", "loans", "loan_payments", "fixed_expenses", "subscriptions", "card_purchases", "goals", "fund_movements", "contacts", "wishlist", "credit_cards"])
+
 export function useSave<T extends BookTable>(table: T, messages?: { created?: string; updated?: string }) {
   const bookId = useBookId()
   const qc = useQueryClient()
@@ -97,7 +100,9 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
       toast.error("No se pudo guardar", { description: e.message })
     },
     onSuccess: (_d, v) => {
-      const msg = (v as { id?: string }).id ? messages?.updated : messages?.created
+      const created = !(v as { id?: string }).id
+      if (created && ACTION_TABLES.has(table) && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("mirai:accion", { detail: table }))
+      const msg = created ? messages?.created : messages?.updated
       if (msg) toast.success(msg)
     },
     onSettled: () => invalidateBook(qc, bookId, table),

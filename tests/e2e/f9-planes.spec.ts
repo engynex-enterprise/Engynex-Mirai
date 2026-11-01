@@ -132,6 +132,37 @@ test("consola: integración global activa por defecto llega a los hogares", asyn
   expect(errs).toEqual([])
 })
 
+test("consola: Google AdSense se configura en integraciones globales y publica ads.txt", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "escritorio", "Configuración global: una vez basta")
+  test.setTimeout(180_000)
+  await login(page)
+  const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
+  await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  try {
+    await page.goto("/admin/integraciones")
+    const card = page.locator("[data-slot=card]", { hasText: "Google AdSense" })
+    await card.getByRole("button", { name: "Configurar" }).click()
+    const dlg = page.getByRole("dialog")
+    await dlg.getByRole("radio", { name: /Opcional/ }).click()
+    await dlg.getByRole("textbox", { name: "Id de cliente (ca-pub-…)" }).fill("pub-mal")
+    await dlg.getByRole("textbox", { name: "Id del bloque de anuncios" }).fill("1234567890")
+    await dlg.getByRole("button", { name: "Guardar" }).click()
+    await expect(page.getByText("El id de cliente debe verse así")).toBeVisible()
+    await dlg.getByRole("textbox", { name: "Id de cliente (ca-pub-…)" }).fill("ca-pub-1234567890123456")
+    await dlg.getByRole("button", { name: "Guardar" }).click()
+    await expect(page.getByText("Integración global guardada")).toBeVisible()
+    expect(await (await request.get("/ads.txt")).text()).toContain("google.com, pub-1234567890123456, DIRECT")
+    await page.goto("/admin/anuncios")
+    await page.getByRole("radio", { name: "Ajustes" }).click()
+    await expect(page.getByText(/Activo \(ca-pub-1234567890123456\)/)).toBeVisible({ timeout: 30_000 })
+    await page.goto("/ajustes?tab=integraciones")
+    await expect(page.getByText("TRM del día")).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText("Google AdSense")).toHaveCount(0)
+  } finally {
+    await admin().from("platform_integrations").delete().eq("kind", "adsense")
+  }
+})
+
 test("página pública: qué es Mirai y planes con precio", async ({ page }, info) => {
   const errs = watchErrors(page)
   await page.goto("/")

@@ -127,7 +127,7 @@ export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
         <section key={c} className="grid gap-3">
           <div><h3 className="flex items-center gap-2 font-semibold"><Icon name={CATS[c].icon} className="size-5 text-brand" />{CATS[c].n}</h3><p className="text-sm text-muted-foreground">{CATS[c].d}</p></div>
           <div className="grid gap-3 xl:grid-cols-2">
-            {INTEGRATIONS.filter((i) => i.cat === c).map((def) => {
+            {INTEGRATIONS.filter((i) => i.cat === c && !i.adminOnly).map((def) => {
               const cur = state?.[def.kind]
               const meta = (cur?.meta ?? {}) as { lastOk?: boolean; lastMsg?: string }
               const g = globals?.[def.kind]

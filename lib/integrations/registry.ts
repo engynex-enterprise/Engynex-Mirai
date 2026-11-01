@@ -18,6 +18,8 @@ export type IntegrationDef = {
   fields: IntegrationField[]
   /** Variable de entorno que, si existe, la habilita sin configurar nada. */
   env?: string
+  /** Solo se configura en la consola (Integraciones globales); los hogares no la ven. */
+  adminOnly?: boolean
   testable?: boolean
 }
 
@@ -66,6 +68,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
   // ── Infraestructura (del despliegue)
   { kind: "turnstile", cat: "infra", n: "Cloudflare Turnstile", d: "Captcha invisible en el registro y el login contra bots. Gratis.", icon: "shield-check", scope: "platform", free: "gratis", url: "https://dash.cloudflare.com/?to=/:account/turnstile", fields: [{ k: "siteKey", l: "Site key", type: "text", required: true }, { k: "secretKey", l: "Secret key", type: "secret", required: true, help: "Pégala también en Supabase › Auth › Bot and Abuse Protection." }] },
   { kind: "sentry", cat: "infra", n: "Sentry", d: "Te avisa de errores antes de que tu familia los note. Plan gratis.", icon: "bug", scope: "platform", free: "plan-gratis", url: "https://sentry.io", fields: [{ k: "dsn", l: "DSN", type: "url", required: true }] },
+  { kind: "adsense", cat: "infra", n: "Google AdSense", d: "Anuncios de Google en los espacios del plan gratis que no tengan un anuncio propio. Solo se muestran a quien acepte las cookies de publicidad.", icon: "megaphone", scope: "platform", free: "gratis", url: "https://www.google.com/adsense", adminOnly: true, fields: [{ k: "client", l: "Id de cliente (ca-pub-…)", type: "text", required: true, placeholder: "ca-pub-1234567890123456", help: "AdSense › Cuenta › Información de la cuenta. Con esto Mirai publica también /ads.txt." }, { k: "slot", l: "Id del bloque de anuncios", type: "text", required: true, placeholder: "1234567890", help: "AdSense › Anuncios › Por bloque de anuncios › crea un bloque \"Display\" adaptable y copia su id (data-ad-slot)." }] },
   { kind: "analytics", cat: "infra", n: "Vercel Analytics y Speed Insights", d: "Visitas y velocidad real de la app, sin cookies. Se activan en el panel de Vercel.", icon: "gauge", scope: "platform", free: "plan-gratis", fields: [] },
   { kind: "upstash", cat: "infra", n: "Upstash Redis", d: "Límite de peticiones por usuario para que nadie abuse de la IA. Plan gratis.", icon: "database-zap", scope: "platform", free: "plan-gratis", url: "https://console.upstash.com", fields: [{ k: "url", l: "REST URL", type: "url", required: true }, { k: "token", l: "REST token", type: "secret", required: true }, { k: "aiPerHour", l: "Consultas de IA por hora por usuario", type: "number", def: 60 }] },
 ]

@@ -88,8 +88,7 @@ Diseño: `docs/superpowers/specs/2026-11-01-freemium-admin-design.md`. Sin las v
 | `NEXT_PUBLIC_WOMPI_PUBLIC_KEY` | Config | Wompi › Desarrolladores › Llave pública (`pub_test_…` en pruebas, `pub_prod_…` en producción) |
 | `WOMPI_INTEGRITY_SECRET` | **Sensitive** | Wompi › Desarrolladores › Secreto de integridad |
 | `WOMPI_EVENTS_SECRET` | **Sensitive** | Wompi › Desarrolladores › Secreto de eventos |
-| `NEXT_PUBLIC_ADSENSE_CLIENT` | Config | `ca-pub-…` cuando Google apruebe el dominio (genera `/ads.txt`) |
-| `NEXT_PUBLIC_ADSENSE_SLOT` | Config | Id del bloque de anuncios adaptable creado en AdSense |
+| `NEXT_PUBLIC_ADSENSE_CLIENT` / `NEXT_PUBLIC_ADSENSE_SLOT` | Config | Opcionales: lo normal es configurar AdSense en la consola (Admin › Integraciones globales › Google AdSense); estas variables solo son respaldo |
 
 **URLs de notificación (webhooks):**
 - Mercado Pago › Webhooks: `https://mirai.engynex.com/api/pagos/mercadopago` con los eventos *Planes y suscripciones* y *Pagos*.

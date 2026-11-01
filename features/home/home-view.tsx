@@ -14,7 +14,7 @@ import { IsoIcon } from "@/components/mirai/iso-icon"
 import { Icon } from "@/components/mirai/icon"
 import { PageHeader } from "@/components/mirai/page-header"
 import { RatingPrompt } from "@/features/opiniones/rating-prompt"
-import { AdSlot } from "@/features/ads/ad-slot"
+import { AdSlot, StoryAd } from "@/features/ads/ad-slot"
 import { HallazgosCard } from "@/features/hallazgos/hallazgos-card"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp } from "@/components/app/app-context"
@@ -163,6 +163,7 @@ export function HomeView() {
           <Button variant="gradient" asChild><Link href="/consejero">Preguntar al consejero</Link></Button>
         </div>
       </div>
+      <AdSlot slot="consejero" />
     </>
   )
 
@@ -202,6 +203,7 @@ export function HomeView() {
           <div className="no-scrollbar -mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             <Story href={`/balance?tab=${d.which}`} bg={d.q.disp >= 0 ? "bg-[linear-gradient(160deg,#9EDB4E,#2A7F14_60%,#13778F)]" : "bg-[linear-gradient(160deg,#FF8A9B,#D0243F)]"} iso="balance" label="Te queda esta quincena" value={<Money value={d.q.disp} />} sub={`Entra ${fmtShort(d.q.E)} · sale ${fmtShort(d.q.Sa)}`} />
             <Story href="/balance" bg="bg-[linear-gradient(160deg,#5AA9FF,#1B5FA8_60%,#1F2B4B)]" iso="inicio" label="Lo que tienes menos lo que debes" value={<Money value={d.T.pat} />} sub="Patrimonio neto" />
+            <StoryAd />
             {d.next && <Story href={`/${d.next.go}`} bg="bg-[linear-gradient(160deg,#FFD36B,#E08A00_60%,#B4500A)]" iso="recordatorios" label={`Próximo pago · ${d.next.lbl.toLowerCase()}`} value={<Money value={d.next.monto} />} sub={d.next.titulo} />}
             <Story href="/gastos" bg={d.H.over ? "bg-[linear-gradient(160deg,#FF8A9B,#D0243F_70%)]" : "bg-[linear-gradient(160deg,#C4A6FF,#7A4BE0_60%,#3B2A8F)]"} iso="gastos" label="Gastos hormiga este mes" value={<Money value={d.H.totalMes} />} sub={d.H.over ? "Por encima de tu límite" : "Dentro de tu límite"} />
             <Story href="/le-debo" bg="bg-[linear-gradient(160deg,#4FC3D6,#13778F_60%,#1F2B4B)]" iso="le-debo" label="Cuotas de deudas al mes" value={<Money value={d.cuotas} />} sub={`Te deben ${fmtShort(d.T.xc)} en total`} />

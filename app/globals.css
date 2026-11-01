@@ -321,3 +321,6 @@ html.dense input[data-slot="input"], html.dense [data-slot="input-group"] { heig
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }
 }
+
+/* Anuncios: texto en movimiento (se pausa al pasar el mouse; quieto si la persona reduce el movimiento) */
+@keyframes mirai-ticker { from { transform: translateX(0) } to { transform: translateX(-50%) } }

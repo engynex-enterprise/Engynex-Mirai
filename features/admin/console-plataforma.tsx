@@ -141,7 +141,7 @@ function GlobalDialog({ def, row, onClose }: { def: IntegrationDef; row: GlobalR
   const v = (k: string, d?: unknown) => (k in vals ? vals[k] : (row.config[k] as string | undefined) ?? d ?? "")
   const save = async () => {
     setBusy(true)
-    try { await adminSaveGlobalIntegration(def.kind, { modo, planes, values: vals }); toast.success("Integración global guardada"); qc.invalidateQueries({ queryKey: ["admin", "globals"] }); onClose() }
+    try { const r = await adminSaveGlobalIntegration(def.kind, { modo, planes, values: vals }); if (!r.ok) return void toast.error(r.msg); toast.success("Integración global guardada"); qc.invalidateQueries({ queryKey: ["admin", "globals"] }); onClose() }
     catch (e) { toast.error("No se pudo guardar", { description: (e as Error).message }) }
     finally { setBusy(false) }
   }

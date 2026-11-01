@@ -27,7 +27,7 @@ export default function Privacidad() {
         <li>Cobrar el plan Premium, emitir la factura y atender devoluciones.</li>
         <li>Mejorar Mirai con las opiniones que nos envías y con estadísticas de uso agregadas (sin montos).</li>
       </ul>
-      <p><b>No vendemos tus datos ni usamos tu información financiera para publicidad.</b> En el plan Gratis, los anuncios propios se eligen sin mirar tus datos y solo contamos vistas y clics totales, sin saber quién los hizo. Los anuncios de Google AdSense solo se cargan si aceptas sus cookies; Google puede usarlas para personalizar anuncios según su propia política. Puedes retirar ese permiso borrando los datos del sitio en tu navegador o pasando a Premium.</p>
+      <p><b>No vendemos tus datos ni usamos tu información financiera para publicidad.</b> En el plan Gratis, los anuncios propios se eligen sin mirar tus datos financieros: solo según tu plan y tu tipo de dispositivo. Para no mostrarte el mismo anuncio demasiadas veces, guardamos cuántas veces viste, tocaste o cerraste cada anuncio por día; esa información nunca se comparte con los anunciantes, que solo reciben totales. Los anuncios de Google AdSense solo se cargan si aceptas sus cookies; Google puede usarlas para personalizar anuncios según su propia política. Puedes retirar ese permiso borrando los datos del sitio en tu navegador o pasando a Premium.</p>
       <h2>4. Tus derechos</h2>
       <ul>
         <li>Conocer, actualizar y rectificar tus datos (Perfil y cada sección).</li>
