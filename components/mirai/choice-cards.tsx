@@ -16,7 +16,7 @@ export function ChoiceCards({ value, onChange, items, cols = 2, name }: { value:
       {items.map((i) => (
         <label key={i.value}
           className="relative flex cursor-pointer items-start gap-3 rounded-lg border bg-card p-3 transition hover:bg-muted/60 has-[[data-state=checked]]:border-2 has-[[data-state=checked]]:border-brand has-[[data-state=checked]]:bg-brand-soft has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50">
-          <RadioGroupItem value={i.value} className="sr-only" />
+          <RadioGroupItem value={i.value} aria-label={i.label} className="absolute inset-0 z-10 size-full cursor-pointer rounded-lg border-0 opacity-0 shadow-none" />
           {i.iso ? <IsoIcon k={i.iso} size={28} /> : i.icon ? <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted"><Icon name={i.icon} className="size-4" /></span> : null}
           <span className="grid gap-0.5">
             <span className="text-sm font-semibold">{i.label}</span>
