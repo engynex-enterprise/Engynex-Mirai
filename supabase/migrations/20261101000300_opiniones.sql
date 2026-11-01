@@ -86,7 +86,7 @@ declare
     when 'funcion' then 'pidió una función' when 'sugerencia' then 'dejó una sugerencia' when 'pregunta' then 'hizo una pregunta' else 'dejó un comentario' end;
 begin
   insert into public.notifications (user_id, kind, titulo, cuerpo, href, dedupe)
-  select a.user_id, 'opinion', quien || ' ' || que, left(coalesce(nullif(btrim(new.mensaje), ''), 'Sin comentario.'), 200), '/admin?tab=opiniones', 'fb-new-' || new.id
+  select a.user_id, 'opinion', quien || ' ' || que, left(coalesce(nullif(btrim(new.mensaje), ''), 'Sin comentario.'), 200), '/admin/opiniones', 'fb-new-' || new.id
   from public.platform_admins a where a.user_id <> new.user_id
   on conflict (user_id, dedupe) do nothing;
   return new;

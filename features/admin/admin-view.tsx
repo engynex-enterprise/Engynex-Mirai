@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
@@ -16,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Combobox } from "@/components/mirai/combobox"
 import { Icon } from "@/components/mirai/icon"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
-import { PageHeader } from "@/components/mirai/page-header"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { UserAvatar } from "@/components/mirai/user-avatar"
@@ -25,22 +24,13 @@ import { norm } from "@/lib/domain"
 import { fmtDate } from "@/lib/format"
 import { Stars } from "@/features/opiniones/stars"
 import { adminClients, adminFeedback, adminOverview, adminUpdateFeedback } from "./actions"
-import { GiftPremium, Ingresos, PlanesAdmin } from "./admin-money"
-import { AnunciosAdmin } from "./admin-ads"
+import { GiftPremium } from "./admin-money"
+import { tablaLabel } from "@/lib/admin-nav"
 
-const TABS = [
-  { value: "resumen", label: "Resumen", icon: "gauge" }, { value: "ingresos", label: "Ingresos", icon: "banknote" }, { value: "clientes", label: "Clientes", icon: "users" },
-  { value: "opiniones", label: "Opiniones", icon: "message-square-heart" }, { value: "anuncios", label: "Anuncios", icon: "megaphone" }, { value: "planes", label: "Planes", icon: "crown" },
-]
-const TABLAS: Record<string, string> = {
-  expenses: "Gastos", incomes: "Ingresos", extra_incomes: "Ingresos extra", fixed_expenses: "Gastos fijos", loans: "Préstamos", debts: "Deudas", contacts: "Contactos",
-  goals: "Metas", subscriptions: "Suscripciones", cards: "Tarjetas", investments: "Inversiones", categories: "Categorías", payment_methods: "Medios de pago",
-  budgets: "Presupuesto", family_members: "Familia", challenges: "Retos", allowances: "Mesadas", shared_expenses: "Compartidos", book_settings: "Ajustes",
-}
 const rel = (d?: string | null) => (d ? formatDistanceToNowStrict(new Date(d), { locale: es, addSuffix: true }) : "Nunca")
 const n = (x: number) => x.toLocaleString("es-CO")
 
-function Resumen() {
+export function UsoPanel() {
   const { data: o, isPending } = useQuery({ queryKey: ["admin", "overview"], queryFn: () => adminOverview() })
   const max = Math.max(1, ...(o?.byDay.map((d) => d.acciones) ?? [1]))
   return (
@@ -71,7 +61,7 @@ function Resumen() {
             <ul className="grid gap-2">
               {o!.porSeccion.map((s) => (
                 <li key={s.tabla} className="grid gap-1">
-                  <div className="flex justify-between text-sm"><span>{TABLAS[s.tabla] ?? s.tabla}</span><span className="font-semibold tabular-nums">{n(s.n)}</span></div>
+                  <div className="flex justify-between text-sm"><span>{tablaLabel(s.tabla)}</span><span className="font-semibold tabular-nums">{n(s.n)}</span></div>
                   <span className="h-1.5 rounded-full bg-secondary"><span className="block h-full rounded-full bg-brand" style={{ width: `${(s.n / o!.porSeccion[0].n) * 100}%` }} /></span>
                 </li>
               ))}
@@ -84,7 +74,7 @@ function Resumen() {
   )
 }
 
-function Clientes() {
+export function ClientesPanel() {
   const { data, isPending } = useQuery({ queryKey: ["admin", "clients"], queryFn: () => adminClients() })
   const [q, setQ] = useState("")
   const list = useMemo(() => (data ?? []).filter((c) => !q || norm(`${c.nombre} ${c.email} ${c.hogares.join(" ")}`).includes(norm(q))), [data, q])
@@ -106,7 +96,7 @@ function Clientes() {
             <tbody>
               {list.map((c) => (
                 <tr key={c.id} className="border-b last:border-0">
-                  <td className="py-2.5"><div className="flex items-center gap-2.5"><UserAvatar src={c.avatar} name={c.nombre || c.email} className="size-8" /><div className="min-w-0"><p className="truncate font-medium">{c.nombre || "Sin nombre"}</p><p className="truncate text-xs text-muted-foreground">{c.email} · {c.acceso}</p></div></div></td>
+                  <td className="py-2.5"><div className="flex items-center gap-2.5"><UserAvatar src={c.avatar} name={c.nombre || c.email} className="size-8" /><div className="min-w-0"><Link href={`/admin/usuarios/${c.id}`} className="block truncate font-medium text-link hover:underline">{c.nombre || "Sin nombre"}</Link><p className="truncate text-xs text-muted-foreground">{c.email} · {c.acceso}</p></div></div></td>
                   <td className="max-w-48 truncate">{c.hogares.join(", ") || "—"}</td>
                   <td><div className="flex items-center gap-1.5"><StatusPill tone={c.plan === "Premium" ? "pagado" : "gray"} title={c.premiumHasta ? `Hasta ${fmtDate(c.premiumHasta.slice(0, 10), { year: true })}` : undefined}>{c.plan}</StatusPill>{c.hogarPropio && <GiftPremium householdId={c.hogarPropio} nombre={c.nombre || c.email} premiumHasta={c.premiumHasta} />}</div></td>
                   <td className="whitespace-nowrap">{fmtDate(c.creado.slice(0, 10))}</td>
@@ -164,7 +154,7 @@ function FeedbackItem({ f }: { f: Fb }) {
   )
 }
 
-function Opiniones() {
+export function OpinionesPanel() {
   const { data, isPending } = useQuery({ queryKey: ["admin", "feedback"], queryFn: () => adminFeedback() })
   const [tipo, setTipo] = useState("todas")
   const [estado, setEstado] = useState("abiertas")
@@ -195,22 +185,6 @@ function Opiniones() {
       {isPending ? <Skeleton className="h-60" /> : !list.length ? <Card className="p-8 text-center text-sm text-muted-foreground shadow-card ring-0">No hay opiniones con estos filtros.</Card> : (
         <ul className="grid gap-3">{list.map((f) => <li key={f.id}><FeedbackItem key={`${f.id}-${f.updated_at}`} f={f} /></li>)}</ul>
       )}
-    </div>
-  )
-}
-
-/** Panel del dueño de Mirai: uso de la plataforma, clientes y opiniones. Solo para administradores de la plataforma. */
-export function AdminView() {
-  const params = useSearchParams()
-  const router = useRouter()
-  const path = usePathname()
-  const tab = TABS.some((t) => t.value === params.get("tab")) ? params.get("tab")! : "resumen"
-  return (
-    <div className="grid gap-6">
-      <PageHeader id="admin" title="Panel de administración" description="Cómo va Mirai: quiénes la usan, cuánto la usan y qué opinan. Solo tú ves esta sección."
-        actions={<Button variant="outline" asChild><a href="https://vercel.com/dashboard" target="_blank" rel="noreferrer"><ExternalLink /> Vercel</a></Button>} />
-      <Segmented value={tab} onChange={(v) => router.replace(`${path}?tab=${v}`, { scroll: false })} items={TABS} />
-      {tab === "resumen" ? <Resumen /> : tab === "ingresos" ? <Ingresos /> : tab === "clientes" ? <Clientes /> : tab === "planes" ? <PlanesAdmin /> : tab === "anuncios" ? <AnunciosAdmin /> : <Opiniones />}
     </div>
   )
 }

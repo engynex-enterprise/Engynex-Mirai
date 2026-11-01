@@ -8,6 +8,7 @@ import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { loadRentaData, type RentaData } from "@/features/renta/data"
 import { siteUrl } from "@/lib/site-url"
+import { can } from "@/lib/plans"
 
 const hash = (t: string) => createHash("sha256").update(t).digest("hex")
 const New = z.object({ label: z.string().trim().min(1, "Escribe el nombre de tu contador").max(80), email: z.union([z.email("Correo inválido"), z.literal("")]), perms: z.enum(["renta", "todo"]), exp: z.enum(["30", "90", "dic", "nunca"]) })
@@ -33,7 +34,7 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
   const p = New.safeParse(input)
   if (!p.success) return { ok: false, msg: p.error.issues[0].message }
   const ctx = await requireRole("owner")
-  if (ctx.plan !== "premium") return { ok: false, msg: "El acceso para tu contador es parte de Mirai Premium." }
+  if (!can(ctx.plan, "impuestos")) return { ok: false, msg: "El acceso para tu contador no está incluido en tu plan." }
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").insert({ book_id: ctx.book.id, label: p.data.label, email: p.data.email, perms: p.data.perms, token_hash: hash(token), expires_at: expiry(p.data.exp), created_by: ctx.user.id })
   if (error) return { ok: false, msg: error.message }

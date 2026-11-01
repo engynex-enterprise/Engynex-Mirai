@@ -28,6 +28,15 @@ import { cn } from "@/lib/utils"
 type Pub = { kind: string; enabled: boolean; config: Record<string, unknown>; meta: Record<string, unknown> }
 const FREE = { gratis: ["pagado", "Gratis"], "plan-gratis": ["estimado", "Plan gratis"], pago: ["gray", "De pago"] } as const
 
+/** Integraciones que ofrece la plataforma (sin secretos). */
+function useGlobalIntegrations() {
+  return useQuery({
+    queryKey: ["platform-integrations"],
+    queryFn: async () => Object.fromEntries(((await createClient().from("platform_integrations_public").select("kind,modo,planes")).data ?? []).map((r) => [r.kind!, r])) as Record<string, { modo: string; planes: string[] }>,
+    staleTime: 5 * 60_000,
+  })
+}
+
 export function useIntegrations() {
   const { household } = useApp()
   return useQuery({
@@ -100,10 +109,11 @@ function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef; cur?: Pub; o
 }
 
 export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
-  const { household } = useApp()
+  const { household, plan } = useApp()
   const qc = useQueryClient()
   const isOwner = household.role === "owner"
   const { data: state, isPending } = useIntegrations()
+  const { data: globals } = useGlobalIntegrations()
   const [editing, setEditing] = useState<IntegrationDef | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
   const refresh = () => qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] })
@@ -120,24 +130,30 @@ export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
             {INTEGRATIONS.filter((i) => i.cat === c).map((def) => {
               const cur = state?.[def.kind]
               const meta = (cur?.meta ?? {}) as { lastOk?: boolean; lastMsg?: string }
-              const on = !!cur?.enabled
+              const g = globals?.[def.kind]
+              const offered = !!g && g.modo !== "apagada" && (!g.planes?.length || g.planes.includes(plan.id))
+              const locked = offered && g!.modo === "obligatoria"
+              const usesMirai = offered && (locked || (g!.modo === "por_defecto" && !cur) || cur?.config?.usa_plataforma === true)
+              const on = locked || (cur ? !!cur.enabled : offered && g!.modo === "por_defecto")
               return (
                 <Card key={def.kind} className={cn("gap-3 p-4 shadow-card ring-0", on && "ring-1 ring-brand")}>
                   <div className="flex items-start gap-3">
                     {INTEGRATION_BRAND[def.kind] ? <BrandLogo k={INTEGRATION_BRAND[def.kind]} size={40} className={cn(!on && "opacity-80 grayscale-[.35]")} /> : <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", on ? "bg-brand-soft text-brand" : "bg-muted text-muted-foreground")}><Icon name={def.icon} className="size-5" /></span>}
                     <div className="grid flex-1 gap-1">
-                      <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={FREE[def.free][0]}>{FREE[def.free][1]}</StatusPill>{def.scope === "platform" && <StatusPill tone="info">Del despliegue</StatusPill>}</p>
+                      <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={FREE[def.free][0]}>{FREE[def.free][1]}</StatusPill>{def.scope === "platform" && <StatusPill tone="info">Del despliegue</StatusPill>}{offered && <StatusPill tone="pagado">{locked ? "Incluida por Mirai · obligatoria" : "Incluida por Mirai"}</StatusPill>}</p>
                       <p className="text-sm text-muted-foreground">{def.d}</p>
+                      {usesMirai && on && <p className="text-xs font-medium text-success">Usas el servicio de Mirai: no tienes que configurar nada.</p>}
+                      {offered && !usesMirai && g!.modo === "opcional" && !on && <p className="text-xs text-muted-foreground">Mirai la ofrece: actívala y listo, sin claves.</p>}
                     </div>
-                    <Switch checked={on} disabled={!isOwner} aria-label={`Activar ${def.n}`} onCheckedChange={async (v) => {
-                      if (v && def.fields.some((f) => f.required) && !cur?.config) return setEditing(def)
+                    <Switch checked={on} disabled={!isOwner || locked} aria-label={`Activar ${def.n}`} onCheckedChange={async (v) => {
+                      if (v && !offered && def.fields.some((f) => f.required) && !cur?.config) return setEditing(def)
                       try { await toggleIntegration(def.kind, v); toast(v ? `${def.n} activado` : `${def.n} apagado`); refresh() } catch (e) { toast.error((e as Error).message); setEditing(def) }
                     }} />
                   </div>
                   {meta.lastMsg && <p className={cn("flex items-start gap-1.5 text-xs", meta.lastOk ? "text-success" : "text-danger")}>{meta.lastOk ? <CircleCheck className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0" />}{meta.lastMsg}</p>}
                   {isOwner && (
                     <div className="flex flex-wrap gap-2">
-                      {def.fields.length > 0 && <Button size="sm" variant="outline" onClick={() => setEditing(def)}><Settings2 /> Configurar</Button>}
+                      {def.fields.length > 0 && !locked && <Button size="sm" variant="outline" onClick={() => setEditing(def)}><Settings2 /> {offered ? "Usar mi propia cuenta" : "Configurar"}</Button>}
                       {def.testable && on && <Button size="sm" variant="soft" disabled={testing === def.kind} onClick={async () => {
                         setTesting(def.kind); const r = await testIntegration(def.kind); setTesting(null); toast[r.ok ? "success" : "error"](r.ok ? "Conexión exitosa" : "La prueba falló", { description: r.msg }); refresh()
                       }}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar</Button>}

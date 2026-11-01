@@ -14,13 +14,13 @@ export async function POST(req: NextRequest) {
   if (body.event !== "transaction.updated") return NextResponse.json({ ok: true, ignorado: body.event })
   const tx = body.data?.transaction as { id: string; status: string; reference: string; amount_in_cents: number; payment_method_type?: string; customer_email?: string } | undefined
   if (!tx?.reference) return NextResponse.json({ ok: true, ignorado: "sin referencia" })
-  const { data: pay } = await supabaseAdmin().from("plan_payments").select("household_id,periodo,monto").eq("proveedor", "wompi").eq("referencia", tx.reference).maybeSingle()
+  const { data: pay } = await supabaseAdmin().from("plan_payments").select("household_id,periodo,monto,plan,cupon").eq("proveedor", "wompi").eq("referencia", tx.reference).maybeSingle()
   if (!pay?.household_id || !pay.periodo) return NextResponse.json({ ok: true, ignorado: "referencia desconocida" })
   const montoOk = tx.amount_in_cents === pay.monto * 100
   await applyPayment({
     householdId: pay.household_id, proveedor: "wompi", referencia: tx.reference, periodo: pay.periodo as "mes" | "anio", monto: pay.monto,
     estado: montoOk ? STATE[tx.status] ?? "pendiente" : "anulado", metodo: tx.payment_method_type ?? null, pagador: tx.customer_email ?? null,
-    raw: { ...tx, ...(montoOk ? {} : { alerta: "El monto no coincide con el generado por Mirai" }) },
+    raw: { ...tx, ...(montoOk ? {} : { alerta: "El monto no coincide con el generado por Mirai" }) }, plan: pay.plan ?? "premium", cupon: pay.cupon,
   })
   return NextResponse.json({ ok: true })
 }

@@ -8,7 +8,8 @@ import { integrationByKind } from "@/lib/integrations/registry"
 import { aiErrMsg, modelFrom } from "@/lib/ai/model"
 import { MODEL_LIST, modelOptions, parseModels, type ModelOption } from "@/lib/ai/models"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
-import { getIntegration } from "./store"
+import { getGlobalIntegration, getIntegration, getOwnIntegration } from "./store"
+import { USE_PLATFORM } from "@/lib/integrations/resolve"
 import { fetchFestivos, fetchFx, fetchTrm, fetchUsura } from "./data-sources"
 
 /** Guarda la configuración (los secretos vacíos conservan los guardados) y la activa. */
@@ -16,7 +17,7 @@ export async function saveIntegration(kind: string, values: Record<string, strin
   const ctx = await requireRole("owner")
   const def = integrationByKind(kind)
   if (!def) throw new Error("Integración desconocida")
-  const prev = await getIntegration(ctx.household.id, kind)
+  const prev = await getOwnIntegration(ctx.household.id, kind)
   const config: Record<string, unknown> = {}
   const secrets: Record<string, string> = { ...(prev?.secrets ?? {}) }
   const meta: Record<string, string> = {}
@@ -39,9 +40,14 @@ export async function saveIntegration(kind: string, values: Record<string, strin
 export async function toggleIntegration(kind: string, enabled: boolean) {
   const ctx = await requireRole("owner")
   const def = integrationByKind(kind)
-  const prev = await getIntegration(ctx.household.id, kind)
-  if (enabled && def?.fields.some((f) => f.required) && !prev) throw new Error("Primero completa sus datos")
-  const { error } = await supabaseAdmin().from("integrations").upsert({ household_id: ctx.household.id, kind, enabled, updated_by: ctx.user.id }, { onConflict: "household_id,kind" })
+  const own = await getOwnIntegration(ctx.household.id, kind)
+  const global = await getGlobalIntegration(kind)
+  const offered = !!global && global.modo !== "apagada" && (!global.planes.length || global.planes.includes(ctx.plan.id))
+  if (global?.modo === "obligatoria" && offered) throw new Error("Mirai administra esta integración para todos: no se puede apagar.")
+  // Sin datos propios, prender = usar la de la plataforma (si la ofrece).
+  const useGlobal = enabled && offered && !Object.keys(own?.secrets ?? {}).length
+  if (enabled && !useGlobal && def?.fields.some((f) => f.required) && !own) throw new Error("Primero completa sus datos")
+  const { error } = await supabaseAdmin().from("integrations").upsert({ household_id: ctx.household.id, kind, enabled, updated_by: ctx.user.id, ...(useGlobal ? { config: { ...(own?.config ?? {}), [USE_PLATFORM]: true } as never } : {}) }, { onConflict: "household_id,kind" })
   if (error) throw new Error(error.message)
 }
 

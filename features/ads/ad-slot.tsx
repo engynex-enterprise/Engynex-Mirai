@@ -67,14 +67,14 @@ export function AdSlot({ slot, className }: { slot: AdSlotId; className?: string
   const seen = useRef(false)
   const box = useRef<HTMLDivElement>(null)
   const [hoy] = useState(hoyCo)
-  const ad = plan === "premium" || !ads ? null : pickAd(ads, slot, hoy, adSeed(user.id, hoy))
+  const ad = !plan.ads || !ads ? null : pickAd(ads, slot, hoy, adSeed(user.id, hoy))
   useEffect(() => {
     if (!ad || !box.current || seen.current) return
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting && !seen.current) { seen.current = true; track(ad.id, slot, "vista"); io.disconnect() } }, { threshold: 0.5 })
     io.observe(box.current)
     return () => io.disconnect()
   }, [ad, slot])
-  if (plan === "premium" || !ads) return null
+  if (!plan.ads || !ads) return null
 
   if (ad) return (
     <Card ref={box} className={cn("gap-3 p-4 shadow-card ring-0", className)} data-testid={`ad-${slot}`}>
@@ -106,7 +106,7 @@ export function AdSlot({ slot, className }: { slot: AdSlotId; className?: string
 export function AdsConsentBanner() {
   const { plan } = useApp()
   const consent = useAdsConsent()
-  if (!adsenseEnabled || plan === "premium" || consent) return null
+  if (!adsenseEnabled || !plan.ads || consent) return null
   return (
     <div role="dialog" aria-label="Cookies de publicidad" className="fixed inset-x-3 bottom-20 z-40 mx-auto max-w-xl rounded-2xl bg-popover p-4 shadow-xl ring-1 ring-border md:bottom-4">
       <p className="text-sm"><b>¿Aceptas anuncios personalizados?</b> En el plan gratis mostramos anuncios de Google, que usa cookies para elegirlos. Si no aceptas, verás solo anuncios de Mirai y sus aliados, sin cookies de terceros. <Link href="/legal/privacidad" className="text-link underline">Más información</Link></p>

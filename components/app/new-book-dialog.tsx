@@ -14,7 +14,7 @@ import { Icon } from "@/components/mirai/icon"
 import { useShell } from "./shell-store"
 import { createBook } from "./actions"
 import { useApp } from "./app-context"
-import { FREE_LIMITS } from "@/lib/plans"
+import { limitOf } from "@/lib/plans"
 import { PremiumUpsell } from "@/features/planes/premium"
 
 const TIPOS = [
@@ -32,11 +32,12 @@ export function NewBookDialog() {
   const router = useRouter()
   const qc = useQueryClient()
   const { plan, books, household } = useApp()
-  const limite = plan !== "premium" && books.filter((b) => b.household_id === household.id).length >= FREE_LIMITS.libros
+  const max = limitOf(plan, "libros")
+  const limite = max !== undefined && books.filter((b) => b.household_id === household.id).length >= max
   if (limite) return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>Nuevo libro</DialogTitle><DialogDescription>El plan gratis incluye {FREE_LIMITS.libros} libro de cuentas. Con Premium llevas aparte tu negocio, tus arriendos o un viaje.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Nuevo libro</DialogTitle><DialogDescription>Tu plan incluye {max} libro(s) de cuentas. Con un plan mayor llevas aparte tu negocio, tus arriendos o un viaje.</DialogDescription></DialogHeader>
         <PremiumUpsell feature="familia" compact />
       </DialogContent>
     </Dialog>

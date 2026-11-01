@@ -4,7 +4,7 @@ import { cookies } from "next/headers"
 import { connection } from "next/server"
 import { redirect } from "next/navigation"
 import { createClient } from "@/utils/supabase/server"
-import { FEATURES, type PlanId, type PremiumFeature } from "@/lib/plans"
+import { FEATURES, can, toPlanInfo, type PlanInfo, type PremiumFeature } from "@/lib/plans"
 
 export const BOOK_COOKIE = "mirai-book"
 
@@ -17,8 +17,8 @@ export type AppContext = {
   books: { id: string; nombre: string; tipo: string; icon: string; household_id: string }[]
   /** Administrador de la plataforma (dueño de Mirai): ve el panel /admin. */
   isAdmin: boolean
-  /** Plan del hogar activo (Premium lo comparten todos sus integrantes). */
-  plan: PlanId
+  /** Plan del hogar activo (lo comparten todos sus integrantes): funciones, anuncios y límites. */
+  plan: PlanInfo
 }
 
 /** Lee la sesión, el hogar y el libro activo. Una sola vez por petición (cache de React). */
@@ -51,7 +51,8 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
   const wanted = store.get(BOOK_COOKIE)?.value ?? profile?.last_book_id
   const book = books.find((b) => b.id === wanted) ?? books.find((b) => b.is_default) ?? books[0]
   const household = households.find((h) => h.id === book.household_id)!
-  const { data: plan } = await sb.rpc("household_plan", { h: household.id })
+  const { data: planId } = await sb.rpc("household_plan", { h: household.id })
+  const { data: planRow } = await sb.from("plans").select("id,nombre,funciones,anuncios,limites,precio_mes").eq("id", planId ?? "gratis").maybeSingle()
 
   return {
     user: { id: uid, email: profile?.email ?? String(claims?.claims.email ?? ""), nombre: profile?.nombre || "Tú", avatar: profile?.avatar_url ?? null, apodo: profile?.apodo ?? "", nacimiento: profile?.nacimiento ?? null },
@@ -60,14 +61,14 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
     book: { id: book.id, nombre: book.nombre, tipo: book.tipo, icon: book.icon },
     books: books.map((b) => ({ id: b.id, nombre: b.nombre, tipo: b.tipo, icon: b.icon, household_id: b.household_id })),
     isAdmin: !!admin,
-    plan: plan === "premium" ? "premium" : "gratis",
+    plan: toPlanInfo(planRow),
   }
 })
 
 /** Exige Premium en el hogar activo para una función (Server Actions de IA, banco, impuestos y familia). */
 export async function requirePremium(feature: PremiumFeature) {
   const ctx = await getAppContext()
-  if (ctx.plan !== "premium") throw new Error(`${FEATURES[feature].label} es parte de Mirai Premium. Conoce los planes en /planes.`)
+  if (!can(ctx.plan, feature)) throw new Error(`${FEATURES[feature].label} no está incluido en tu plan. Conoce los planes en /planes.`)
   return ctx
 }
 

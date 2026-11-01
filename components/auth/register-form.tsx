@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { MailCheck } from "lucide-react"
 import { toast } from "sonner"
+import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/utils/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -35,6 +36,7 @@ export function RegisterForm() {
   const { errors, isSubmitting } = form.formState
   const pw = form.watch("password")
   const captcha = useCaptcha()
+  const { data: abierto } = useQuery({ queryKey: ["registro-abierto"], queryFn: async () => (await createClient().rpc("registro_abierto")).data ?? true, staleTime: 60_000 })
 
   async function onSubmit(v: Values) {
     const { error } = await createClient().auth.signUp({
@@ -60,6 +62,8 @@ export function RegisterForm() {
         <Button asChild variant="ghost"><Link href="/login">Volver a entrar</Link></Button>
       </div>
     )
+
+  if (abierto === false) return <div className="grid gap-3 text-center"><h1 className="font-heading text-2xl font-semibold">El registro está cerrado por ahora</h1><p className="text-muted-foreground">Estamos preparando todo para recibirte. Vuelve pronto o, si ya tienes cuenta, entra normalmente.</p><Button variant="outline" asChild><Link href="/login">Ir a entrar</Link></Button></div>
 
   return (
     <div className="grid gap-6">

@@ -76,3 +76,30 @@ El panel `/admin` (uso, clientes y opiniones) solo lo ven las cuentas de `public
 ```sql
 insert into public.platform_admins(user_id) select id from auth.users where email = 'tu@correo';
 ```
+
+## Planes, pagos y anuncios (freemium)
+
+Diseño: `docs/superpowers/specs/2026-11-01-freemium-admin-design.md`. Sin las variables de abajo la app funciona igual: los botones de pago aparecen deshabilitados ("Muy pronto podrás pagar aquí") y los espacios de anuncio invitan a Premium.
+
+| Variable | Tipo en Vercel | Para qué |
+|---|---|---|
+| `MERCADOPAGO_ACCESS_TOKEN` | **Sensitive** | Mercado Pago › Tus integraciones › Credenciales (de **prueba** en Preview, de **producción** en Production) |
+| `MERCADOPAGO_WEBHOOK_SECRET` | **Sensitive** | Mercado Pago › Webhooks › Clave secreta |
+| `NEXT_PUBLIC_WOMPI_PUBLIC_KEY` | Config | Wompi › Desarrolladores › Llave pública (`pub_test_…` en pruebas, `pub_prod_…` en producción) |
+| `WOMPI_INTEGRITY_SECRET` | **Sensitive** | Wompi › Desarrolladores › Secreto de integridad |
+| `WOMPI_EVENTS_SECRET` | **Sensitive** | Wompi › Desarrolladores › Secreto de eventos |
+| `NEXT_PUBLIC_ADSENSE_CLIENT` | Config | `ca-pub-…` cuando Google apruebe el dominio (genera `/ads.txt`) |
+| `NEXT_PUBLIC_ADSENSE_SLOT` | Config | Id del bloque de anuncios adaptable creado en AdSense |
+
+**URLs de notificación (webhooks):**
+- Mercado Pago › Webhooks: `https://mirai.engynex.com/api/pagos/mercadopago` con los eventos *Planes y suscripciones* y *Pagos*.
+- Wompi › Desarrolladores › URL de eventos: `https://mirai.engynex.com/api/pagos/wompi`.
+- Para el ambiente de pruebas usa la dirección de pruebas y las llaves de prueba (sandbox). Las rutas `/api/pagos/*` son públicas: la autenticidad la da la firma.
+
+**Al publicar los planes en producción:**
+1. Aplica las migraciones (ya están en la base compartida) y despliega `main`.
+2. Configura las variables y los webhooks de producción de cada pasarela.
+3. En `/admin` › Planes, revisa precios y límites y enciende *Hacer cumplir los límites también en la base de datos*.
+4. Factura electrónica: conecta tu proveedor (Alegra, Siigo…) o factura a mano con el CSV de `/admin` › Ingresos. El campo `plan_payments.factura_ref` está listo.
+
+**Prueba local de pagos:** con las llaves de prueba en `.env.local`, Mercado Pago y Wompi te dan tarjetas de prueba en su documentación. Los webhooks necesitan una URL pública: usa el ambiente de pruebas de Vercel.

@@ -70,12 +70,10 @@ test("opiniones: calificar, reportar un error y recibir respuesta del administra
 
   // Como administrador: ve el panel, la opinión y responde.
   await admin().from("platform_admins").upsert({ user_id: await qaId() })
-  await page.goto("/admin")
-  await expect(page.getByRole("heading", { name: "Panel de administración", level: 1 })).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText("Personas registradas")).toBeVisible()
-  await page.getByRole("radio", { name: "Clientes" }).click()
+  await page.goto("/admin/usuarios")
+  await expect(page.getByRole("heading", { name: "Usuarios", level: 1 })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(QA.email).first()).toBeVisible({ timeout: 20_000 })
-  await page.getByRole("radio", { name: "Opiniones" }).click()
+  await page.goto("/admin/opiniones")
   const item = page.locator("[data-slot=card]", { hasText: `El botón de guardar no responde (${tag})` })
   await expect(item).toBeVisible({ timeout: 20_000 })
   await item.getByRole("textbox").fill(`Gracias, ya lo estamos revisando (${tag})`)

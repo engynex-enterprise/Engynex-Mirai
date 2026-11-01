@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { supabaseServer } from "@/utils/supabase/server"
 import { G_SCOPES, redirectUri, siteUrl } from "@/lib/google"
 import { getAppContext } from "@/lib/dal"
+import { can } from "@/lib/plans"
 
 /** Inicia la conexión con Google: ?s=gmail|calendar&back=/correo */
 export async function GET(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { data } = await sb.auth.getClaims()
   if (!data?.claims) return NextResponse.redirect(`${siteUrl()}/login`)
   const ctx = await getAppContext()
-  if (ctx.plan !== "premium") return NextResponse.redirect(`${siteUrl()}/planes?f=banco`)
+  if (!can(ctx.plan, "banco")) return NextResponse.redirect(`${siteUrl()}/planes?f=banco`)
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) return NextResponse.json({ error: "Falta configurar GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET" }, { status: 500 })
   const s = req.nextUrl.searchParams.get("s") === "calendar" ? "calendar" : "gmail"
   const back = (req.nextUrl.searchParams.get("back") || "/correo").replace(/^(?!\/)/, "/").replace(/^\/\//, "/")

@@ -85,6 +85,34 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"admin_audit": {
+                  Row: {
+                    "accion": string,"actor": string | null,"created_at": string,"detalle": NonNullable<Json>,"id": number,"objetivo": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accion": string,"actor"?: string | null,"created_at"?: string,"detalle"?: NonNullable<Json>,"id"?: never,"objetivo"?: string | null
+                  }
+                  Update: {
+                    "accion"?: string,"actor"?: string | null,"created_at"?: string,"detalle"?: NonNullable<Json>,"id"?: never,"objetivo"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"admin_notes": {
+                  Row: {
+                    "autor": string | null,"created_at": string,"id": string,"texto": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "autor"?: string | null,"created_at"?: string,"id"?: string,"texto": string,"user_id": string
+                  }
+                  Update: {
+                    "autor"?: string | null,"created_at"?: string,"id"?: string,"texto"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"ads": {
                   Row: {
                     "activo": boolean,"anunciante": string,"created_at": string,"cta": string,"desde": string | null,"hasta": string | null,"id": string,"imagen": string | null,"prioridad": number,"texto": string,"titulo": string,"ubicaciones": (string)[],"updated_at": string,"url": string
@@ -303,6 +331,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"broadcasts": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"cuerpo": string,"enviados": number,"href": string | null,"id": string,"segmento": string,"titulo": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"cuerpo"?: string,"enviados"?: number,"href"?: string | null,"id"?: string,"segmento"?: string,"titulo": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"cuerpo"?: string,"enviados"?: number,"href"?: string | null,"id"?: string,"segmento"?: string,"titulo"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"calendar_events": {
                   Row: {
                     "anual": boolean,"book_id": string,"cat": string | null,"created_at": string,"created_by": string | null,"deleted_at": string | null,"fecha": string,"fuente": string | null,"id": string,"monto": number,"nota": string,"template_key": string | null,"tipo": string,"titulo": string,"updated_at": string
@@ -460,6 +502,20 @@ isOneToOne: false
       referencedRelation: "books"
       referencedColumns: ["id"]
     }
+                  ]
+                },"coupons": {
+                  Row: {
+                    "activo": boolean,"codigo": string,"created_at": string,"descripcion": string,"desde": string | null,"hasta": string | null,"max_usos": number | null,"periodos": (string)[],"planes": (string)[],"tipo": string,"usos": number,"valor": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"codigo": string,"created_at"?: string,"descripcion"?: string,"desde"?: string | null,"hasta"?: string | null,"max_usos"?: number | null,"periodos"?: (string)[],"planes"?: (string)[],"tipo": string,"usos"?: number,"valor": number
+                  }
+                  Update: {
+                    "activo"?: boolean,"codigo"?: string,"created_at"?: string,"descripcion"?: string,"desde"?: string | null,"hasta"?: string | null,"max_usos"?: number | null,"periodos"?: (string)[],"planes"?: (string)[],"tipo"?: string,"usos"?: number,"valor"?: number
+                  }
+                  Relationships: [
+                    
                   ]
                 },"credit_cards": {
                   Row: {
@@ -1243,14 +1299,14 @@ isOneToOne: false
                   ]
                 },"plan_payments": {
                   Row: {
-                    "created_at": string,"estado": string,"factura_ref": string | null,"household_id": string | null,"id": string,"metodo": string | null,"monto": number,"pagador": string | null,"paid_at": string | null,"periodo": string | null,"proveedor": string,"raw": NonNullable<Json>,"referencia": string,"subscription_id": string | null,"updated_at": string
+                    "created_at": string,"cupon": string | null,"estado": string,"factura_ref": string | null,"household_id": string | null,"id": string,"metodo": string | null,"monto": number,"nota": string | null,"pagador": string | null,"paid_at": string | null,"periodo": string | null,"plan": string | null,"proveedor": string,"raw": NonNullable<Json>,"referencia": string,"subscription_id": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"estado"?: string,"factura_ref"?: string | null,"household_id"?: string | null,"id"?: string,"metodo"?: string | null,"monto": number,"pagador"?: string | null,"paid_at"?: string | null,"periodo"?: string | null,"proveedor": string,"raw"?: NonNullable<Json>,"referencia": string,"subscription_id"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"cupon"?: string | null,"estado"?: string,"factura_ref"?: string | null,"household_id"?: string | null,"id"?: string,"metodo"?: string | null,"monto": number,"nota"?: string | null,"pagador"?: string | null,"paid_at"?: string | null,"periodo"?: string | null,"plan"?: string | null,"proveedor": string,"raw"?: NonNullable<Json>,"referencia": string,"subscription_id"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"estado"?: string,"factura_ref"?: string | null,"household_id"?: string | null,"id"?: string,"metodo"?: string | null,"monto"?: number,"pagador"?: string | null,"paid_at"?: string | null,"periodo"?: string | null,"proveedor"?: string,"raw"?: NonNullable<Json>,"referencia"?: string,"subscription_id"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"cupon"?: string | null,"estado"?: string,"factura_ref"?: string | null,"household_id"?: string | null,"id"?: string,"metodo"?: string | null,"monto"?: number,"nota"?: string | null,"pagador"?: string | null,"paid_at"?: string | null,"periodo"?: string | null,"plan"?: string | null,"proveedor"?: string,"raw"?: NonNullable<Json>,"referencia"?: string,"subscription_id"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1258,6 +1314,12 @@ isOneToOne: false
       columns: ["household_id"]
 isOneToOne: false
       referencedRelation: "households"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_payments_plan_fkey"
+      columns: ["plan"]
+isOneToOne: false
+      referencedRelation: "plans"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "plan_payments_subscription_id_fkey"
@@ -1295,14 +1357,14 @@ isOneToOne: false
                   ]
                 },"plans": {
                   Row: {
-                    "id": string,"limites": NonNullable<Json>,"nombre": string,"precio_anio": number,"precio_mes": number,"updated_at": string
+                    "activo": boolean,"anuncios": boolean,"descripcion": string,"destacado": boolean,"funciones": (string)[],"id": string,"limites": NonNullable<Json>,"nombre": string,"orden": number,"precio_anio": number,"precio_mes": number,"publico": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "id": string,"limites"?: NonNullable<Json>,"nombre": string,"precio_anio"?: number,"precio_mes"?: number,"updated_at"?: string
+                    "activo"?: boolean,"anuncios"?: boolean,"descripcion"?: string,"destacado"?: boolean,"funciones"?: (string)[],"id": string,"limites"?: NonNullable<Json>,"nombre": string,"orden"?: number,"precio_anio"?: number,"precio_mes"?: number,"publico"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "id"?: string,"limites"?: NonNullable<Json>,"nombre"?: string,"precio_anio"?: number,"precio_mes"?: number,"updated_at"?: string
+                    "activo"?: boolean,"anuncios"?: boolean,"descripcion"?: string,"destacado"?: boolean,"funciones"?: (string)[],"id"?: string,"limites"?: NonNullable<Json>,"nombre"?: string,"orden"?: number,"precio_anio"?: number,"precio_mes"?: number,"publico"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -1321,16 +1383,30 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"platform_settings": {
+                },"platform_integrations": {
                   Row: {
-                    "id": boolean,"limites_db": boolean,"updated_at": string
+                    "config": NonNullable<Json>,"kind": string,"meta": NonNullable<Json>,"modo": string,"planes": (string)[],"secrets_enc": string | null,"updated_at": string,"updated_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "id"?: boolean,"limites_db"?: boolean,"updated_at"?: string
+                    "config"?: NonNullable<Json>,"kind": string,"meta"?: NonNullable<Json>,"modo"?: string,"planes"?: (string)[],"secrets_enc"?: string | null,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Update: {
-                    "id"?: boolean,"limites_db"?: boolean,"updated_at"?: string
+                    "config"?: NonNullable<Json>,"kind"?: string,"meta"?: NonNullable<Json>,"modo"?: string,"planes"?: (string)[],"secrets_enc"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"platform_settings": {
+                  Row: {
+                    "aviso_global": string,"aviso_tono": string,"id": boolean,"limites_db": boolean,"registro_abierto": boolean,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"registro_abierto"?: boolean,"updated_at"?: string
+                  }
+                  Update: {
+                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"registro_abierto"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -1736,6 +1812,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"platform_integrations_public": {
+                  Row: {
+                    "config": NonNullable<Json>,"kind": string,"meta": Json | null,"modo": string,"planes": (string)[]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "config"?: Json | null,"kind"?: string | null,"meta"?: never,"modo"?: string | null,"planes"?: (string)[] | null
+                         }
+                        Update: {
+                           "config"?: Json | null,"kind"?: string | null,"meta"?: never,"modo"?: string | null,"planes"?: (string)[] | null
+                         }
+                        Relationships: [
+                    
+                  ]
                 }
           }
           Functions: {
@@ -1744,6 +1834,11 @@ isOneToOne: false
                            },
 "ad_track":
 { Args: { "p_ad": string,"p_kind": string,"p_slot": string }; Returns: undefined
+                           },
+"admin_migrations":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "applied_at": string,"name": string
+            }[]
                            },
 "book_household":
 { Args: { "bk": string }; Returns: string
@@ -1788,6 +1883,9 @@ isOneToOne: false
                            },
 "pay_fixed_expense":
 { Args: { "p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json
+                           },
+"registro_abierto":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "role_rank":
 { Args: { "r": string }; Returns: number

@@ -12,10 +12,11 @@ export const payConfig = () => ({
   wompi: !!(process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY && process.env.WOMPI_INTEGRITY_SECRET),
 })
 
-/** Precio vigente del plan Premium (tabla plans, editable en el panel). */
-export async function premiumPrice(periodo: Periodo) {
-  const { data } = await supabaseAdmin().from("plans").select("precio_mes,precio_anio").eq("id", "premium").single()
-  return periodo === "anio" ? data?.precio_anio ?? 149000 : data?.precio_mes ?? 14900
+/** Precio vigente de un plan comprable (tabla plans, editable en la consola). */
+export async function planPrice(planId: string, periodo: Periodo) {
+  const { data } = await supabaseAdmin().from("plans").select("nombre,precio_mes,precio_anio,activo").eq("id", planId).maybeSingle()
+  if (!data || !data.activo || !data.precio_mes) throw new Error("Ese plan no está disponible.")
+  return { nombre: data.nombre, monto: periodo === "anio" ? data.precio_anio : data.precio_mes }
 }
 
 async function owners(householdId: string) {
@@ -36,10 +37,11 @@ export async function notifyOwners(householdId: string, titulo: string, cuerpo: 
  */
 export async function applyPayment(p: {
   householdId: string; proveedor: Proveedor; referencia: string; periodo: Periodo; monto: number; estado: PayState
-  metodo?: string | null; pagador?: string | null; raw?: unknown; subscriptionRef?: string | null
+  metodo?: string | null; pagador?: string | null; raw?: unknown; subscriptionRef?: string | null; plan?: string; cupon?: string | null; nota?: string | null
 }) {
+  const plan = p.plan ?? "premium"
   const db = supabaseAdmin()
-  const { data: prev } = await db.from("plan_payments").select("id,estado,subscription_id").eq("proveedor", p.proveedor).eq("referencia", p.referencia).maybeSingle()
+  const { data: prev } = await db.from("plan_payments").select("id,estado,subscription_id,cupon").eq("proveedor", p.proveedor).eq("referencia", p.referencia).maybeSingle()
   const firstApproval = p.estado === "aprobado" && prev?.estado !== "aprobado"
 
   // Suscripción a la que pertenece el pago: la de Mercado Pago por su id, o la del hogar con esa pasarela.
@@ -50,7 +52,7 @@ export async function applyPayment(p: {
     subId = sub?.id ?? null
   }
   if (!subId && p.estado === "aprobado") {
-    const { data: sub, error } = await db.from("plan_subscriptions").insert({ household_id: p.householdId, proveedor: p.proveedor, proveedor_ref: p.subscriptionRef ?? null, periodo: p.periodo, estado: "activa" }).select("id").single()
+    const { data: sub, error } = await db.from("plan_subscriptions").insert({ household_id: p.householdId, plan, proveedor: p.proveedor, proveedor_ref: p.subscriptionRef ?? null, periodo: p.periodo, estado: "activa" }).select("id").single()
     if (error) throw new Error(error.message)
     subId = sub.id
   }
@@ -58,6 +60,7 @@ export async function applyPayment(p: {
   const row = {
     household_id: p.householdId, subscription_id: subId, proveedor: p.proveedor, referencia: p.referencia, periodo: p.periodo, monto: Math.round(p.monto),
     estado: p.estado, metodo: p.metodo ?? null, pagador: p.pagador ?? null, raw: (p.raw ?? {}) as never, paid_at: p.estado === "aprobado" ? new Date().toISOString() : null,
+    plan, cupon: p.cupon ?? prev?.cupon ?? null, ...(p.nota ? { nota: p.nota } : {}),
   }
   const { error } = await db.from("plan_payments").upsert(row, { onConflict: "proveedor,referencia" })
   if (error) throw new Error(error.message)
@@ -66,10 +69,13 @@ export async function applyPayment(p: {
     // Se extiende desde el vencimiento más lejano del hogar (si paga antes de que se acabe, no pierde días).
     const { data: subs } = await db.from("plan_subscriptions").select("vence_at").eq("household_id", p.householdId).in("estado", ["activa", "cancelada", "cortesia"]).order("vence_at", { ascending: false, nullsFirst: false }).limit(1)
     const vence = extendVence(subs?.[0]?.vence_at ?? null, p.periodo)
-    await db.from("plan_subscriptions").update({ estado: "activa", periodo: p.periodo, vence_at: vence.toISOString() }).eq("id", subId)
-    await notifyOwners(p.householdId, "¡Bienvenido a Mirai Premium!", `Recibimos tu pago de ${precio(p.monto)}. Premium está activo hasta el ${vence.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}.`, `pay-ok-${p.proveedor}-${p.referencia}`)
+    await db.from("plan_subscriptions").update({ estado: "activa", plan, periodo: p.periodo, vence_at: vence.toISOString() }).eq("id", subId)
+    const cupon = p.cupon ?? prev?.cupon
+    if (cupon) { const { data: c } = await db.from("coupons").select("usos").eq("codigo", cupon).maybeSingle(); if (c) await db.from("coupons").update({ usos: c.usos + 1 }).eq("codigo", cupon) }
+    const { data: pl } = await db.from("plans").select("nombre").eq("id", plan).maybeSingle()
+    await notifyOwners(p.householdId, `¡Bienvenido a Mirai ${pl?.nombre ?? "Premium"}!`, `Recibimos tu pago de ${precio(p.monto)}. Tu plan está activo hasta el ${vence.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}.`, `pay-ok-${p.proveedor}-${p.referencia}`)
   } else if (p.estado === "rechazado" && prev?.estado !== "rechazado") {
-    await notifyOwners(p.householdId, "Tu pago no se aprobó", "El banco o la pasarela rechazó el pago de Mirai Premium. Intenta de nuevo o usa otro medio en Ajustes › Mi plan.", `pay-ko-${p.proveedor}-${p.referencia}`)
+    await notifyOwners(p.householdId, "Tu pago no se aprobó", "El banco o la pasarela rechazó el pago de tu plan. Intenta de nuevo o usa otro medio en Ajustes › Mi plan.", `pay-ko-${p.proveedor}-${p.referencia}`)
   }
   return { subscriptionId: subId, firstApproval }
 }

@@ -34,7 +34,7 @@ export function OpinionesView() {
       <PageHeader id="opiniones" title="Tu opinión" description="Califica Mirai, cuéntanos qué falla o qué te gustaría. Aquí ves lo que nos has enviado y nuestras respuestas."
         actions={<>
           <Button onClick={() => open()}><Send /> Enviar una opinión</Button>
-          {isAdmin && <Button variant="outline" asChild><Link href="/admin?tab=opiniones"><ShieldCheck /> Panel de administración</Link></Button>}
+          {isAdmin && <Button variant="outline" asChild><Link href="/admin/opiniones"><ShieldCheck /> Ver en la consola</Link></Button>}
         </>} />
       <div className="grid gap-3 sm:grid-cols-3">
         {(["calificacion", "error", "funcion"] as const).map((k) => (

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import { LEGAL_VERSION } from "../../lib/legal/version"
 
 /** Usuario de pruebas (se crea confirmado con la clave secreta; no envía correos). */
 process.loadEnvFile?.(".env.local")
@@ -24,7 +25,7 @@ export async function resetQaUser() {
   }
   const { error } = await sb.auth.admin.createUser({
     email: QA.email, password: QA.password, email_confirm: true,
-    user_metadata: { nombre: QA.nombre, acepta_version: "2026-10-31" },
+    user_metadata: { nombre: QA.nombre, acepta_version: LEGAL_VERSION },
   })
   if (error) throw error
   // Restos de corridas anteriores: hogares de prueba que quedaron sin integrantes.

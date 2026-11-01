@@ -8,7 +8,7 @@ import { supabaseServer } from "@/utils/supabase/server"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { siteUrl } from "@/lib/site-url"
-import { FREE_LIMITS } from "@/lib/plans"
+import { limitOf } from "@/lib/plans"
 
 const Invite = z.object({ email: z.email("Escribe un correo válido"), role: z.enum(["editor", "viewer"]) })
 
@@ -18,12 +18,13 @@ export async function inviteMember(input: { email: string; role: "editor" | "vie
   if (!p.success) return { ok: false, msg: p.error.issues[0].message }
   const ctx = await requireRole("owner")
   const db = supabaseAdmin()
-  if (ctx.plan !== "premium") {
+  const maxPersonas = limitOf(ctx.plan, "personas")
+  if (maxPersonas !== undefined) {
     const [{ count: miembros }, { count: pendientes }] = await Promise.all([
       db.from("household_members").select("user_id", { count: "exact", head: true }).eq("household_id", ctx.household.id),
       db.from("household_invitations").select("id", { count: "exact", head: true }).eq("household_id", ctx.household.id).is("accepted_at", null).gt("expires_at", new Date().toISOString()),
     ])
-    if ((miembros ?? 0) + (pendientes ?? 0) >= FREE_LIMITS.personas) return { ok: false, msg: `El plan gratis permite ${FREE_LIMITS.personas} personas por hogar. Pásate a Premium para invitar a toda tu familia.` }
+    if ((miembros ?? 0) + (pendientes ?? 0) >= maxPersonas) return { ok: false, msg: `Tu plan permite ${maxPersonas} personas por hogar. Cambia de plan para invitar a toda tu familia.` }
   }
   const token = randomBytes(24).toString("base64url")
   const { error } = await db.from("household_invitations").insert({

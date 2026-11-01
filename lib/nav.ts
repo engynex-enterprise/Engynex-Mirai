@@ -54,9 +54,6 @@ export const NAV: NavSection[] = [
 
 export const isGroup = (e: NavLeaf | NavGroup): e is NavGroup => "g" in e
 
-/** Panel del dueño de Mirai: no está en NAV; el menú lo muestra solo a los administradores. */
-export const ADMIN_PAGE: NavLeaf = { id: "admin", label: "Panel de administración", icon: "shield-check", href: "/admin" }
-
 /** Lista plana de páginas: buscador ⌘K, selector de vista inicial, migas. */
 export const PAGES: (NavLeaf & { section: string; group?: NavGroup })[] = NAV.flatMap((s) =>
   s.entries.flatMap((e) => (isGroup(e) ? e.items.map((i) => ({ ...i, section: s.sec, group: e })) : [{ ...e, section: s.sec }])),

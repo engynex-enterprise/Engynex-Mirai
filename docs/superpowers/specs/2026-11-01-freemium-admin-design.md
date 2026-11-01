@@ -1,6 +1,6 @@
 # Mirai freemium: planes, pagos, anuncios y panel de administración
 
-**Estado:** propuesta para aprobación · **Fecha:** 1 nov 2026 · **Decidido por el dueño:** pasarelas, precio, funciones Premium y tipo de anuncios.
+**Estado:** implementado en la rama `pruebas` (decisiones de la sección 3 tomadas por delegación del dueño) · **Fecha:** 1 nov 2026 · **Decidido por el dueño:** pasarelas, precio, funciones Premium y tipo de anuncios.
 
 ## 1. Objetivo
 
@@ -28,8 +28,8 @@ Mirai sale al público. Quien no paga conserva lo básico y ve anuncios; quien p
 ## 4. Modelo de datos (migración nueva)
 
 - `plans` — `id` (`gratis`, `premium`), nombre, `precio_mes`, `precio_anio`, `funciones jsonb`, `limites jsonb` (`{libros: 1, personas: 2}`), activo. Lectura pública; edición solo admin.
-- `subscriptions` — por `household_id`: plan, periodo (`mes`/`anio`), estado (`activa`, `pendiente`, `vencida`, `cancelada`, `cortesia`), proveedor (`mercadopago`, `wompi`, `manual`), `proveedor_ref` (id de la suscripción en Mercado Pago), `vence_at`, `cancelar_al_vencer`, quién la creó.
-- `payments` — cada cobro: hogar, suscripción, proveedor, referencia, monto, estado (`aprobado`, `pendiente`, `rechazado`, `reembolsado`), método (tarjeta, PSE, Nequi…), `raw jsonb` del proveedor, fecha de pago. Solo lo escriben los webhooks (clave secreta).
+- `plan_subscriptions` (no `subscriptions`: ese nombre ya es la sección Suscripciones) — por `household_id`: plan, periodo (`mes`/`anio`), estado (`activa`, `pendiente`, `vencida`, `cancelada`, `cortesia`), proveedor (`mercadopago`, `wompi`, `manual`), `proveedor_ref` (id de la suscripción en Mercado Pago), `vence_at`, `cancelar_al_vencer`, quién la creó.
+- `plan_payments` — cada cobro: hogar, suscripción, proveedor, referencia, monto, estado (`aprobado`, `pendiente`, `rechazado`, `reembolsado`), método (tarjeta, PSE, Nequi…), `raw jsonb` del proveedor, fecha de pago. Solo lo escriben los webhooks (clave secreta).
 - `ads` — título, texto, imagen, enlace, botón, ubicaciones (`inicio`, `lista`, `reportes`), vigencia, prioridad, activo.
 - `ad_events` — impresiones y clics por anuncio y día (agregados, sin datos personales).
 - Función `household_plan(household_id)` → `premium` si hay suscripción activa/cortesía con `vence_at + 3 días > now()`, si no `gratis`.
@@ -99,3 +99,13 @@ Ya existen **Resumen** (uso), **Clientes** y **Opiniones**. Se agregan:
 - Vitest: `household_plan` (vigencia y gracia), cálculo de MRR, verificación de firmas de Mercado Pago y Wompi con ejemplos de su documentación, elección del anuncio por ubicación.
 - E2E: usuario gratis ve el paywall en Consejero y no puede crear un segundo libro; con Premium de cortesía lo desbloquea; anuncio propio aparece en Inicio solo en gratis; el administrador crea un anuncio y regala Premium.
 - Pagos: flujo completo en sandbox de cada pasarela con sus tarjetas de prueba, webhooks probados en el ambiente de pruebas.
+
+## 13. Consola de administración (agregado el 1 nov 2026)
+
+Pedido del dueño: una "plataforma aparte" dentro de Mirai, con su propio menú, a la que se entra desde el menú de perfil › **Admin**.
+- Ruta `/admin` (grupo `app/(admin)`), layout propio y menú `lib/admin-nav.ts`. Solo `platform_admins`; para el resto responde 404.
+- **Planes configurables:** `plans` ahora tiene `funciones[]`, `anuncios`, `limites`, `activo`, `publico`, `destacado`, `orden`. La app usa `PlanInfo` (`can(plan, feature)`, `limitOf`, `plan.ads`) en lugar de "premium sí/no".
+- **Integraciones globales** (`platform_integrations`): modo apagada · opcional · por defecto · obligatoria, y planes a los que aplica. Se combinan con las del hogar en `getIntegration()`.
+- **Cupones** (`coupons`), **comunicados** (`broadcasts`), **auditoría** (`admin_audit`) y **notas internas** (`admin_notes`).
+- **Usuarios:** ficha con perfil, hogares, plan, pagos, actividad (sin montos), opiniones y notas; suspender/reactivar, enlace de contraseña, hacer admin, eliminar (confirmando el correo), asignar plan.
+- **Sistema:** aviso para todos, registro abierto/cerrado (`registro_abierto()`), límites en BD, mantenimiento y estado de variables.

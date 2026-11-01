@@ -29,3 +29,24 @@ describe("planes", () => {
     expect(Math.round(mrr(subs, 14900, 149000))).toBe(14900 + 12417)
   })
 })
+
+import { couponProblem, withCoupon, type Coupon } from "./plans"
+
+describe("cupones", () => {
+  const c: Coupon = { codigo: "LANZA", tipo: "porcentaje", valor: 50, planes: [], periodos: ["mes", "anio"], desde: "2026-11-01", hasta: "2026-11-30", max_usos: 10, usos: 3, activo: true }
+  it("valida vigencia, usos, plan y periodo", () => {
+    expect(couponProblem(c, "premium", "mes", "2026-11-15")).toBeNull()
+    expect(couponProblem(c, "premium", "mes", "2026-10-31")).toMatch(/todavía no/)
+    expect(couponProblem(c, "premium", "mes", "2026-12-01")).toMatch(/venció/)
+    expect(couponProblem({ ...c, usos: 10 }, "premium", "mes", "2026-11-15")).toMatch(/máximo/)
+    expect(couponProblem({ ...c, planes: ["familia"] }, "premium", "mes", "2026-11-15")).toMatch(/plan/)
+    expect(couponProblem({ ...c, periodos: ["anio"] }, "premium", "mes", "2026-11-15")).toMatch(/mensual/)
+    expect(couponProblem(null, "premium", "mes", "2026-11-15")).toMatch(/no existe/)
+  })
+  it("aplica porcentaje o valor con un mínimo de $1.000", () => {
+    expect(withCoupon(14900, c)).toBe(7450)
+    expect(withCoupon(14900, { tipo: "valor", valor: 5000 })).toBe(9900)
+    expect(withCoupon(14900, { tipo: "valor", valor: 50000 })).toBe(1000)
+    expect(withCoupon(14900, null)).toBe(14900)
+  })
+})

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { defaultRule, horaBogota, runRule, type Rule } from "@/lib/notify/digest"
 import { refreshReferenceData } from "@/features/integrations/refresh"
+import { planReminders } from "@/lib/payments/reminders"
 
 export const maxDuration = 60
 
@@ -17,6 +18,8 @@ export async function GET(req: NextRequest) {
   const report: Record<string, unknown> = {}
   // Datos de referencia: una vez al día (pasada diaria o la de las 6 a. m. del cron horario).
   if (daily || horaBogota() === 6) report.refs = await refreshReferenceData()
+  // Vencimientos de Premium: una vez al día (la pasada diaria de Vercel o las 9 a. m. del cron horario).
+  if (daily || horaBogota() === 9) report.planes = await planReminders().catch((e) => `ERROR ${(e as Error).message}`)
 
   const [{ data: books }, { data: members }, { data: rules }, { data: profiles }] = await Promise.all([
     db.from("books").select("id,household_id").is("deleted_at", null),

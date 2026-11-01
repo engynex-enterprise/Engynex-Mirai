@@ -32,6 +32,9 @@ app/
   (auth)/           login (contraseña, enlace mágico, Google), registro (Ley 1581), recuperar, actualizar-clave, verificacion (MFA)
   (onboarding)/     bienvenida (crea hogar + libro con create_household)
   (app)/            shell (sidebar, migas, ⌘K, Agregar, notificaciones) + una ruta por sección del menú
+  (admin)/admin/    consola de la plataforma (solo platform_admins): layout y menú propios (lib/admin-nav.ts),
+                    usuarios, hogares, planes, suscripciones, pagos, cupones, integraciones globales, anuncios,
+                    comunicados, opiniones, administradores, auditoría y sistema. Se entra desde el menú de perfil › Admin
   (app)/[seccion]   respaldo para secciones sin ruta (hoy ninguna; ver lib/migration-status.ts)
   (auth)/invitacion/[token]  aceptar invitación a un hogar
   contador/[token]  portal público del contador (solo lectura, datos en vivo, notas)
@@ -72,6 +75,10 @@ legacy/             Mirai 4.0 (referencia; `npm run legacy:extract` saca sus dat
 - **Escrituras con secretos** (IA, correo, cifrado): Server Actions o Route Handlers validados con zod.
 - **Responsive:** móvil primero; `<768px` sidebar como Sheet + barra inferior + Drawer (vaul); probar a 400 px sin scroll horizontal.
 - **Montos:** marca los valores con `data-money` para el modo privado. Formato COP con `Intl` (`es-CO`).
+- **Planes (freemium):** el plan es del hogar (`household_plan(h)` en la BD, `ctx.plan` en `getAppContext`). Funciones Premium en `lib/plans.ts` (`FEATURES`: ia, banco, impuestos, familia). En el servidor: `requirePremium()` o `ctx.plan`; la IA se bloquea en `lib/ai/run.ts`. En la UI: `<PremiumGate>` en la página de la sección y `<PremiumUpsell>`. Anuncios solo en Gratis con `<AdSlot slot>`. Las pruebas E2E usan QA en Premium (`login(page)`); `login(page, "gratis")` para el plan gratis.
+- **Consola admin:** acciones en `features/admin/server.ts` (todas con `requirePlatformAdmin()` y registro en `admin_audit`). Por privacidad la consola nunca muestra montos ni movimientos de los hogares.
+- **Integraciones globales:** `platform_integrations` (modo apagada/opcional/por_defecto/obligatoria + planes). `getIntegration()` combina la del hogar con la global (`lib/integrations/resolve.ts`); para guardar la del hogar usa `getOwnIntegration()` (nunca mezclar secretos de la plataforma).
+- **Base compartida:** pruebas y producción usan la misma base de Supabase. Las migraciones deben ser **aditivas** (no cambiar el comportamiento de la versión publicada); lo que restrinja va detrás de un interruptor (`platform_settings`).
 
 ## 4. Diseño
 Microsoft 365 / Fluent + shadcn, limpieza tipo Meta. Paleta Engynex: navy `#1F2B4B`, lima `#9EDB4E`, verde `#3F7A1E`; tokens en `app/globals.css` (claro/oscuro). Isotipos propios (`lib/data/iso.json`, `<IsoIcon k="…"/>`). **Logos de terceros (Google, Netflix, Telegram…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; monograma si no hay logo libre). Nunca como decoración ni como logo de Mirai.**
@@ -97,6 +104,8 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 - Registros nuevos con `useSave`: el UUID se genera en el navegador (sin filas `tmp-…`); borrar o editar un registro que aún se guarda espera a que termine (`inflight` en `hooks/use-book-data.ts`).
 - La burbuja del chat se aparta al desplazar; si una prueba hace clic cerca de la esquina inferior derecha en móvil, desplaza antes.
 - Clic en opciones de `ChoiceCards`: usa `getByRole("radio", { name })` (el radio transparente cubre la tarjeta).
+- Tablas del plan: `plan_subscriptions` y `plan_payments` (`subscriptions` ya es la sección Suscripciones de Netflix, Spotify…). Pagos solo los escriben los webhooks (`/api/pagos/*`, firma verificada) con `applyPayment` (idempotente).
+- En producción Next oculta el mensaje de los `throw` de Server Actions: para errores que el usuario debe leer, devuelve `{ ok: false, msg }`.
 - Avatares: `profiles.avatar_url` y `family_members.avatar` guardan una URL (Google o bucket `avatars/{user_id}/…`) o `mirai:<clave>` (`lib/content/avatars.ts`); muéstralos siempre con `<UserAvatar>`. Con cédula (CC), `profiles.digitos` sale solo del documento (`digitosDian`).
 - Aviso de hidratación con atributos raros en `<body>` (`cz-shortcut-listen`, `data-gr-*`): es una extensión del navegador (ColorZilla, Grammarly), no un error de Mirai; `<body>` ya tiene `suppressHydrationWarning`.
 - `ResponsiveDialog` fija Dialog/Drawer mientras está abierta (cambiar de uno a otro remonta el formulario y borra lo escrito; las capturas `fullPage` de Playwright redimensionan la ventana).

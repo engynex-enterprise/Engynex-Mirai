@@ -16,7 +16,7 @@ import { Illustration } from "@/components/mirai/illustration"
 import { useShell } from "./shell-store"
 import { useApp } from "./app-context"
 
-const KIND_ICON: Record<string, string> = { pago: "calendar-clock", cobro: "hand-coins", hormiga: "coffee", presupuesto: "chart-pie", inversion: "trending-up", meta: "target", contador: "user-round-check", logro: "medal", sistema: "info", opinion: "message-square-heart" }
+const KIND_ICON: Record<string, string> = { pago: "calendar-clock", cobro: "hand-coins", hormiga: "coffee", presupuesto: "chart-pie", inversion: "trending-up", meta: "target", contador: "user-round-check", logro: "medal", sistema: "info", opinion: "message-square-heart", plan: "crown" }
 
 export function useNotifications() {
   const { user, book } = useApp()

@@ -14,6 +14,8 @@ import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { chatSend } from "./actions"
 import { IsoIcon } from "@/components/mirai/iso-icon"
+import { PremiumUpsell } from "@/features/planes/premium"
+import { can } from "@/lib/plans"
 
 type Msg = { id: string; role: string; content: string; meta?: { go?: string } }
 const CHIPS = ["¿Cómo puedo ahorrar más cada mes?", "¿Qué deuda debería pagar primero?", "¿Me conviene sacar una tarjeta de crédito?", "Explícame qué es la tasa E.A.", "¿Cuánto debería tener en el fondo de emergencia?"]
@@ -76,7 +78,7 @@ function Fab({ onClick }: { onClick: () => void }) {
 }
 
 export function ChatWidget() {
-  const { user, book } = useApp()
+  const { user, book, plan } = useApp()
   const router = useRouter()
   const path = usePathname()
   const qc = useQueryClient()
@@ -176,7 +178,9 @@ export function ChatWidget() {
               <Button size="icon" variant="ghost" aria-label="Cerrar chat" onClick={() => setOpen(false)}><X /></Button>
             </header>
             <div className="flex-1 overflow-y-auto p-4">
-              {!list.length ? (
+              {!can(plan, "ia") ? (
+                <div className="grid h-full content-center"><PremiumUpsell feature="ia" compact /></div>
+              ) : !list.length ? (
                 <div className="grid h-full content-center justify-items-center gap-4 text-center">
                   <IsoIcon k="chat" size={76} />
                   <p className="text-lg font-semibold">¿En qué te ayudo hoy?</p>
@@ -199,7 +203,7 @@ export function ChatWidget() {
                 </div>
               )}
             </div>
-            <footer className="border-t p-3">
+            {can(plan, "ia") && <footer className="border-t p-3">
               <Segmented value={tono} onChange={(v) => setTono(v as "simple")} items={[{ value: "simple", label: "Sencillo" }, { value: "fin", label: "Financiero" }]} className="mb-2 sm:hidden" />
               <div className="flex items-end gap-2">
                 <Textarea ref={ta} rows={1} value={q} placeholder="Escribe tu pregunta…" aria-label="Tu pregunta" className="max-h-36 min-h-10 resize-none"
@@ -208,7 +212,7 @@ export function ChatWidget() {
                 <Button size="icon-lg" aria-label="Enviar" disabled={!q.trim() || busy} onClick={() => send()}><ArrowUp /></Button>
               </div>
               <p className="mt-1.5 text-[11px] text-muted-foreground">Orientación basada en tus datos de Mirai. No reemplaza a un asesor certificado.</p>
-            </footer>
+            </footer>}
           </section>
         </div>
       )}
