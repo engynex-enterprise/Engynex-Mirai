@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useMemo } from "react"
 import { ArrowRight, Camera, CircleCheck, Flame, HandCoins, MessageCircleQuestion, Receipt } from "lucide-react"
 import { Bar, BarChart, Cell, XAxis } from "recharts"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -17,9 +16,9 @@ import { PageHeader } from "@/components/mirai/page-header"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
-import { initials } from "@/components/app/app-sidebar"
+import { UserAvatar } from "@/components/mirai/user-avatar"
 import { agenda, cuotasMes, days, hormigas, loanEngine, loanName, notifs, parseDate, quincena, totales, type AgendaItem } from "@/lib/domain"
-import { fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
+import { edad, fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
 import { useMembers } from "@/features/catalogs/hooks"
@@ -97,7 +96,8 @@ export function HomeView() {
   const setBell = useShell((s) => s.setBell)
   const online = useShell((s) => s.online)
   const gami = useGami()
-  const first = user.nombre.split(" ")[0]
+  const first = user.apodo || user.nombre.split(" ")[0]
+  const cumple = edad(user.nacimiento)?.cumple
 
   const d = useMemo(() => {
     if (!book) return null
@@ -122,6 +122,7 @@ export function HomeView() {
   if (isPending || !d || !book) return <PageSkeleton kpis={4} />
   const chartCfg = { v: { label: "Gasto hormiga", color: "#F7B928" } }
   const memberName = (id: string | null) => (id ? members.find((m) => m.id === id)?.nombre : null) ?? "La familia"
+  const memberAvatar = (id: string | null) => { const m = id ? members.find((x) => x.id === id) : null; return m ? m.avatar || (m.es_titular ? user.avatar : null) : null }
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Bogota", hour: "numeric", hourCycle: "h23" }).format(new Date()))
   const saludo = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches"
 
@@ -144,9 +145,9 @@ export function HomeView() {
       </RailCard>
       <RailCard title="Tu familia" action={<Button variant="link" size="sm" asChild><Link href="/perfil">Ver <ArrowRight /></Link></Button>}>
         <ul className="-mx-2 grid">
-          {[{ id: user.id, nombre: user.nombre, rol: "Tú", on: true }, ...online.filter((o) => o.id !== user.id).map((o) => ({ id: o.id, nombre: o.nombre, rol: "En línea", on: true })), ...members.filter((m) => !m.user_id && !m.es_titular).slice(0, 5).map((m) => ({ id: m.id, nombre: m.nombre, rol: m.rol, on: false }))].map((p) => (
+          {[{ id: user.id, nombre: user.nombre, avatar: user.avatar, rol: "Tú", on: true }, ...online.filter((o) => o.id !== user.id).map((o) => ({ id: o.id, nombre: o.nombre, avatar: o.avatar, rol: "En línea", on: true })), ...members.filter((m) => !m.user_id && !m.es_titular).slice(0, 5).map((m) => ({ id: m.id, nombre: m.nombre, avatar: m.avatar || null, rol: m.rol, on: false }))].map((p) => (
             <li key={p.id} className="flex items-center gap-3 rounded-xl p-2 hover:bg-hover">
-              <span className="relative"><Avatar className="size-9"><AvatarFallback className="bg-brand-gradient text-xs font-bold text-white">{initials(p.nombre)}</AvatarFallback></Avatar>{p.on && <span className="absolute right-0 bottom-0 size-3 rounded-full bg-[#31A24C] ring-2 ring-card" aria-label="En línea" />}</span>
+              <span className="relative"><UserAvatar src={p.avatar} name={p.nombre} className="size-9" fallbackClassName="text-xs" />{p.on && <span className="absolute right-0 bottom-0 size-3 rounded-full bg-[#31A24C] ring-2 ring-card" aria-label="En línea" />}</span>
               <span className="grid min-w-0"><span className="truncate text-[14px] font-semibold">{p.nombre}</span><span className="text-xs text-muted-foreground">{p.rol}</span></span>
             </li>
           ))}
@@ -164,14 +165,18 @@ export function HomeView() {
 
   return (
     <div className="grid gap-5">
-      <PageHeader id="inicio" title={`${saludo}, ${first}`} description="Así van las finanzas de tu hogar hoy." />
-      {setup && !setup.finished && (
-        <div className="appear flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-lg bg-meta-banner px-4 py-3 text-center text-[15px] text-meta-text">
-          <IsoIcon k="puesta" size={28} />
-          <span>Completa la puesta en marcha: <b>{setup.done} de {setup.total}</b>{setup.next ? <> · siguiente: {setup.next.t}</> : null}</span>
-          <Button variant="link" className="h-auto p-0" asChild><Link href="/puesta">Continuar <ArrowRight /></Link></Button>
-        </div>
-      )}
+      <PageHeader id="inicio" title={cumple ? `¡Feliz cumpleaños, ${first}!` : `${saludo}, ${first}`} description={cumple ? "Hoy es tu día. Date un gusto que quepa en tu presupuesto: así se celebra sin culpa." : "Así van las finanzas de tu hogar hoy."}>
+        {setup && !setup.finished && (
+          <div className="mt-1 flex w-full max-w-xl items-center gap-3 rounded-2xl bg-white/75 px-3 py-2.5 text-[14px] text-meta-text backdrop-blur dark:bg-white/10">
+            <IsoIcon k="puesta" size={32} />
+            <div className="grid min-w-0 flex-1 gap-1.5">
+              <span className="truncate">Puesta en marcha: <b>{setup.done} de {setup.total}</b>{setup.next ? <> · siguiente: {setup.next.t}</> : null}</span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15"><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.round((setup.done / setup.total) * 100)}%` }} /></span>
+            </div>
+            <Button variant="link" className="h-auto shrink-0 p-0" asChild><Link href="/puesta">Continuar <ArrowRight /></Link></Button>
+          </div>
+        )}
+      </PageHeader>
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="grid min-w-0 gap-5">
@@ -244,7 +249,7 @@ export function HomeView() {
             {d.feed.map((x) => (
               <Card key={`${x.k}-${x.id}`} className="appear gap-3 rounded-lg p-4 ring-0">
                 <div className="flex items-center gap-3">
-                  <Avatar className="size-10"><AvatarFallback className="bg-brand-gradient text-xs font-bold text-white">{initials(memberName(x.who))}</AvatarFallback></Avatar>
+                  <UserAvatar src={memberAvatar(x.who)} name={memberName(x.who)} className="size-10" fallbackClassName="text-xs" />
                   <div className="grid min-w-0 flex-1">
                     <p className="truncate text-[15px]"><b>{memberName(x.who)}</b> <span className="text-muted-foreground">{x.k === "g" ? "registró un gasto" : "recibió un ingreso extra"}</span></p>
                     <p className="text-[13px] text-muted-foreground">{relDay(x.fecha, today)}</p>

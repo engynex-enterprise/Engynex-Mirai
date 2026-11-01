@@ -9,7 +9,7 @@ export const BOOK_COOKIE = "mirai-book"
 
 export type Role = "owner" | "editor" | "viewer"
 export type AppContext = {
-  user: { id: string; email: string; nombre: string; avatar: string | null }
+  user: { id: string; email: string; nombre: string; avatar: string | null; apodo: string; nacimiento: string | null }
   household: { id: string; nombre: string; role: Role }
   households: { id: string; nombre: string; role: Role }[]
   book: { id: string; nombre: string; tipo: string; icon: string }
@@ -26,7 +26,7 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
   if (!uid) redirect("/login")
 
   const [{ data: profile }, { data: memberships }] = await Promise.all([
-    sb.from("profiles").select("id,email,nombre,avatar_url,last_book_id").eq("id", uid).single(),
+    sb.from("profiles").select("id,email,nombre,avatar_url,apodo,nacimiento,last_book_id").eq("id", uid).single(),
     sb.from("household_members").select("role, households(id,nombre)").eq("user_id", uid),
   ])
   const households = (memberships ?? [])
@@ -47,7 +47,7 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
   const household = households.find((h) => h.id === book.household_id)!
 
   return {
-    user: { id: uid, email: profile?.email ?? String(claims?.claims.email ?? ""), nombre: profile?.nombre || "Tú", avatar: profile?.avatar_url ?? null },
+    user: { id: uid, email: profile?.email ?? String(claims?.claims.email ?? ""), nombre: profile?.nombre || "Tú", avatar: profile?.avatar_url ?? null, apodo: profile?.apodo ?? "", nacimiento: profile?.nacimiento ?? null },
     household,
     households,
     book: { id: book.id, nombre: book.nombre, tipo: book.tipo, icon: book.icon },

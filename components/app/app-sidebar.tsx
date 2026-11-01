@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/mirai/user-avatar"
 import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/mirai/icon"
@@ -153,10 +153,7 @@ function ProfileRow() {
     <SidebarMenuItem>
       <SidebarMenuButton asChild tooltip={user.nombre} isActive={path === "/perfil"}>
         <Link href="/perfil">
-          <Avatar className="size-9 group-data-[collapsible=icon]:size-7">
-            {user.avatar && <AvatarImage src={user.avatar} alt="" />}
-            <AvatarFallback className="bg-brand-gradient text-xs font-bold text-white">{initials(user.nombre)}</AvatarFallback>
-          </Avatar>
+          <UserAvatar src={user.avatar} name={user.nombre} className="size-9 group-data-[collapsible=icon]:size-7" fallbackClassName="text-xs" />
           <span className="font-semibold">{user.nombre}</span>
         </Link>
       </SidebarMenuButton>
@@ -223,10 +220,7 @@ function LiveBar({ live, online }: { live: LiveStatus; online: PresenceUser[] })
           {others.slice(0, 3).map((o) => (
             <Tooltip key={o.id}>
               <TooltipTrigger asChild>
-                <Avatar className="size-5 ring-2 ring-sidebar">
-                  {o.avatar && <AvatarImage src={o.avatar} alt="" />}
-                  <AvatarFallback className="bg-brand-gradient text-[9px] text-white">{initials(o.nombre)}</AvatarFallback>
-                </Avatar>
+                <UserAvatar src={o.avatar} name={o.nombre} className="size-5 ring-2 ring-sidebar" fallbackClassName="text-[9px]" />
               </TooltipTrigger>
               <TooltipContent>{o.nombre} está conectado</TooltipContent>
             </Tooltip>
@@ -297,10 +291,7 @@ function UserMenu() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton data-tour="user" size="lg" tooltip={user.nombre}>
-              <Avatar className="size-8">
-                {user.avatar && <AvatarImage src={user.avatar} alt="" />}
-                <AvatarFallback className="bg-brand-gradient text-xs text-white">{initials(user.nombre)}</AvatarFallback>
-              </Avatar>
+              <UserAvatar src={user.avatar} name={user.nombre} className="size-8" fallbackClassName="text-xs" />
               <div className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-medium">{user.nombre}</span>
                 <span className="truncate text-xs text-muted-foreground">{lvl ? `Nivel ${lvl.n} · ${lvl.name}` : household.nombre} · {{ owner: "Dueño", editor: "Editor", viewer: "Solo lectura" }[household.role]}</span>

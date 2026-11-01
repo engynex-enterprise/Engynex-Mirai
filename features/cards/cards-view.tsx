@@ -23,6 +23,8 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { BrandLogo } from "@/components/mirai/brand-logo"
+import { brandFor } from "@/lib/brands"
 import { annuity, compraEstado, proxDia, tarjetaPagoMes, tarjetasDeuda, type CreditCardIn } from "@/lib/domain"
 import { fmtDate, fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -97,7 +99,7 @@ export function CardsView() {
             <CardHeader className="gap-3">
               {cards.length > 1 && <Segmented value={card.id} onChange={setSel} items={cards.map((c) => ({ value: c.id, label: c.nombre, icon: "credit-card" }))} />}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="size-5 text-brand" /> {card.nombre}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">{brandFor(card.nombre) ? <BrandLogo k={brandFor(card.nombre)!} size={32} /> : <CreditCard className="size-5 text-brand" />} {card.nombre}</CardTitle>
                 {canEdit && (
                   <div className="flex flex-wrap gap-2">
                     <Button variant="soft" onClick={() => setBuying(card)}><ShoppingBag /> Registrar compra</Button>

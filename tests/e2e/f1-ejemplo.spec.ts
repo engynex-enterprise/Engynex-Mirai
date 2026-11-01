@@ -10,9 +10,10 @@ test("ejemplo: cargar datos de la familia Navarro y recorrer Mi dinero", async (
   await page.goto("/puesta")
   await page.getByRole("button", { name: "Ver un ejemplo" }).click()
   await expect(page.getByText("Datos de ejemplo cargados")).toBeVisible({ timeout: 60_000 })
+  // El nombre del libro va en el aviso (en celular el selector de libro está dentro del menú cerrado).
+  await expect(page.getByText(/Ejemplo · familia Navarro/).first()).toBeAttached()
   await page.waitForURL(/inicio/)
   await expect(page.getByText("Lo que tienes menos lo que debes")).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText("Ejemplo · familia Navarro").first()).toBeAttached()
   await shot(page, "ej-inicio", info.project.name)
   for (const [ruta, texto] of [["/gastos", "Movimientos"], ["/ingresos", "Ingreso mensual"], ["/fijos", "Total al mes"], ["/balance", "Patrimonio"], ["/suscripciones", "Te cuestan al mes"], ["/tarjetas", "Debes en tarjetas"]] as const) {
     await page.goto(ruta)

@@ -2,37 +2,55 @@
 
 import { CircleHelp } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { IsoIcon, hasIso } from "./iso-icon"
+import { BannerArt } from "./banner-art"
+import { hasIso } from "./iso-icon"
 import { useShell } from "@/components/app/shell-store"
 import { HELP } from "@/lib/content/help"
+import { bannerFor } from "@/lib/content/banners"
+import { pageById } from "@/lib/nav"
 
 /**
- * Encabezado de cada sección como el héroe de developers.facebook.com (medido con REA): tarjeta de 32 px con el
- * degradado rosa → lavanda → celeste → aguamarina, título centrado de peso medio y acciones centradas.
+ * Banner de cada módulo: fondo con el degradado de su familia de color, texto a la izquierda (sección, título,
+ * descripción y acciones) y a la derecha una escena vectorial relacionada con el módulo y su isotipo.
+ * `children` va debajo de las acciones (p. ej. el avance de la puesta en marcha en Inicio).
  */
-export function PageHeader({ id, title, description, actions, noHelp }: { id: string; title?: string; description?: string; actions?: React.ReactNode; noHelp?: boolean }) {
+export function PageHeader({ id, title, description, actions, noHelp, children }: {
+  id: string; title?: string; description?: string; actions?: React.ReactNode; noHelp?: boolean; children?: React.ReactNode
+}) {
   const setHelp = useShell((s) => s.setHelp)
   const help = HELP[id]
+  const { theme, motif } = bannerFor(id)
+  const page = pageById(id)
+  const where = page ? (page.group ? `${page.section} · ${page.group.label}` : page.section) : null
+  const iso = hasIso(id) ? id : page?.group?.iso ?? "mirai"
   return (
-    <header className="appear relative px-2 pt-3 pb-1 text-center sm:px-10 sm:pt-6 sm:pb-2">
-      <div className="mx-auto grid max-w-3xl justify-items-center gap-3">
-        {hasIso(id) && (
-          <span className="grid size-16 place-items-center rounded-2xl bg-white/85 shadow-[0_1px_2px_rgba(0,0,0,.12)] backdrop-blur dark:bg-white/10">
-            <IsoIcon k={id} size={44} />
-          </span>
-        )}
-        <h1 className="font-heading text-[30px] leading-[1.15] font-medium tracking-[-0.02em] text-meta-text sm:text-[44px]">{title ?? help?.t}</h1>
-        {(description ?? help?.i) && <p className="max-w-[62ch] text-[15px] leading-relaxed text-meta-text/85 sm:text-[17px]">{description ?? help?.i}</p>}
-        {(actions || (help && !noHelp)) && (
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 max-sm:w-full max-sm:[&>*]:flex-1">
-            {help && !noHelp && (
-              <Button variant="outline" className="bg-white/70 hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" onClick={() => setHelp(id)}>
-                <CircleHelp /> Cómo funciona
-              </Button>
-            )}
-            {actions}
-          </div>
-        )}
+    <header
+      className="banner-bg appear relative overflow-hidden rounded-[24px] sm:rounded-[28px]"
+      style={{ "--bn-bg": theme.bg, "--bn-dark": theme.dark } as React.CSSProperties}
+    >
+      <div className="grid items-center md:grid-cols-[minmax(0,1fr)_minmax(260px,400px)]">
+        <div className="order-2 grid justify-items-start gap-3 px-5 pb-6 sm:px-8 md:order-1 md:py-9 md:pr-2 md:pl-10">
+          {where && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/75 px-3 py-1 text-[13px] font-semibold text-meta-text backdrop-blur dark:bg-white/10">
+              <span className="size-2 rounded-full" style={{ background: theme.b }} />
+              {where}
+            </span>
+          )}
+          <h1 className="font-heading text-[28px] leading-[1.12] font-semibold tracking-[-0.02em] text-meta-text sm:text-[38px]">{title ?? help?.t}</h1>
+          {(description ?? help?.i) && <p className="max-w-[60ch] text-[15px] leading-relaxed text-meta-text/85 sm:text-[16px]">{description ?? help?.i}</p>}
+          {(actions || (help && !noHelp)) && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 max-sm:w-full max-sm:[&>*]:flex-1">
+              {help && !noHelp && (
+                <Button variant="outline" className="bg-white/75 hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" onClick={() => setHelp(id)}>
+                  <CircleHelp /> Cómo funciona
+                </Button>
+              )}
+              {actions}
+            </div>
+          )}
+          {children}
+        </div>
+        <BannerArt id={id} iso={iso} theme={theme} motif={motif} className="order-1 mx-auto h-[150px] w-auto max-w-full pt-3 sm:h-[180px] md:order-2 md:h-[236px] md:pt-0 md:pr-4" />
       </div>
     </header>
   )

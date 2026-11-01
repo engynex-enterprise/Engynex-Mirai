@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Copy, LogOut, MailPlus, Trash2, UserMinus } from "lucide-react"
 import { toast } from "sonner"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/mirai/user-avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -23,7 +23,6 @@ const ROLES = [
   { value: "editor", label: "Editor", hint: "Registra y cambia movimientos", icon: "pencil" },
   { value: "viewer", label: "Lector", hint: "Solo puede ver", icon: "eye" },
 ]
-const initials = (s: string) => s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 
 function useHousehold() {
   const { household } = useApp()
@@ -76,7 +75,7 @@ export function HogarTab() {
               const n = m.p?.nombre || m.p?.email || "Sin nombre"
               return (
                 <li key={m.user_id} className="flex flex-wrap items-center gap-3 border-b py-3 last:border-0">
-                  <Avatar className="size-10">{m.p?.avatar_url && <AvatarImage src={m.p.avatar_url} alt="" />}<AvatarFallback>{initials(n)}</AvatarFallback></Avatar>
+                  <UserAvatar src={m.p?.avatar_url} name={n} className="size-10" fallbackClassName="text-xs" />
                   <div className="min-w-0 flex-1"><p className="truncate font-medium">{n}{me && <span className="text-muted-foreground"> (tú)</span>}</p><p className="truncate text-sm text-muted-foreground">{m.p?.email}</p></div>
                   {owner ? (
                     <div className="w-40"><Combobox value={m.role} onChange={(v) => run(() => setMemberRole(m.user_id, v as "owner"), "Rol actualizado")} options={ROLES} /></div>

@@ -94,3 +94,14 @@ sección no tiene caja propia (el título va directo sobre el degradado, como "S
 
 Reglas: un borde con degradado (`p-[2px]` sobre un fondo de color) necesita relleno opaco `bg-popover`, si no el color
 se transparenta. Los separadores de formulario no usan fondo detrás del texto (líneas a cada lado).
+
+## Banner de cada módulo
+
+`PageHeader` es ahora un banner: fondo con el degradado de la familia de color del módulo, a la izquierda la ubicación
+(sección · grupo del menú), título, descripción y acciones; a la derecha una escena vectorial (`components/mirai/banner-art.tsx`)
+con una tarjeta de vidrio cuyo motivo depende del módulo (barras y monedas, recibo, tarjeta, personas, tendencia, dona
+50/30/20, calendario, documento con sello, trofeo, chat, interruptores, sobre, lista de pasos, tablero) y el isotipo del
+módulo encima. Tema y motivo por módulo en `lib/content/banners.ts`; un módulo nuevo solo necesita una línea ahí.
+`children` va debajo de las acciones (avance de la puesta en marcha en Inicio y en Puesta en marcha). En celular la escena
+va arriba y el texto debajo. Animación de flotación suave que se apaga con `prefers-reduced-motion`.
+Captura de cada banner: `tests/e2e/zz-visual.spec.ts` › "banner de cada módulo" → `tests/.out/banner-<id>-*.png`.

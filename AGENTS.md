@@ -16,7 +16,7 @@ Mirai: finanzas personales y familiares para Colombia, en español, para persona
 3. Datos: TanStack Query (`useList`, `useSave`, `useSoftDelete`), borrado lógico con "Deshacer", Realtime por libro.
 4. Seguridad: RLS en cada tabla nueva; secretos solo en servidor y cifrados; nunca `SUPABASE_SECRET_KEY` en el cliente.
 5. Valores tributarios/laborales de Colombia en tablas `ref_*` con fuente oficial; se muestran como estimados.
-6. Sin logos de marcas de terceros. Responsive móvil primero, sin scroll horizontal a 400 px.
+6. Logos de terceros (Google, Netflix, Telegram…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; monograma si no hay logo libre). Nunca como decoración ni como logo de Mirai. Responsive móvil primero, sin scroll horizontal a 400 px.
 7. Cada cambio: build → pruebas → capturas. Nada de la v4 se omite (ver `docs/migracion/`).
 8. Cálculos nuevos o portados: en `lib/domain/` con prueba Vitest; si existían en la v4, compáralos contra el bundle (`lib/domain/__tests__/legacy.ts`).
 9. Archivos `"use server"` solo exportan funciones async; valida la entrada con zod y revisa el rol con `requireRole`.

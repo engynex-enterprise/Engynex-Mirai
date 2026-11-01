@@ -85,7 +85,7 @@ function Body({ onOpenChange, sub, preset }: Props) {
         <FormField label="¿La compartes?" tip="Si la pagan entre varias personas, contamos solo tu parte en tu presupuesto.">
           <Segmented value={comparte} onChange={setComparte} items={[{ value: "1", label: "No" }, ...[2, 3, 4, 5].map((n) => ({ value: String(n), label: `Entre ${n}` }))]} />
         </FormField>
-        <FormField label="Logo (opcional)" tip="Sube la imagen que quieras. Mirai no incluye logos de marcas.">
+        <FormField label="Logo (opcional)" tip="Los servicios conocidos ya traen su logo. Si quieres otra imagen, súbela aquí.">
           <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 text-sm text-muted-foreground hover:bg-hover">
             <ImagePlus className="size-4" /> {logo ? "Cambiar imagen" : "Subir imagen"}
             <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setLogo(await toLogo(f)) }} />

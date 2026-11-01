@@ -14,10 +14,12 @@ const toISO = (d: Date) => format(d, "yyyy-MM-dd")
 
 /** Selector de fecha con accesos rápidos (Hoy, Ayer, +1 mes…) como el datep de la v4. */
 export function DatePicker({
-  value, onChange, id, placeholder = "Elige una fecha", quick = "pasado", invalid, disabled, clearable,
+  value, onChange, id, placeholder = "Elige una fecha", quick = "pasado", invalid, disabled, clearable, years = [2000, 2045], startAt,
 }: {
   value: string | null | undefined; onChange: (v: string | null) => void; id?: string; placeholder?: string
   quick?: "pasado" | "futuro" | "ninguno"; invalid?: boolean; disabled?: boolean; clearable?: boolean
+  /** Años del selector (p. ej. [1920, este año] para fechas de nacimiento) y mes que se muestra si no hay fecha. */
+  years?: [number, number]; startAt?: string
 }) {
   const [open, setOpen] = useState(false)
   const today = todayISO()
@@ -49,10 +51,10 @@ export function DatePicker({
           mode="single"
           locale={es}
           captionLayout="dropdown"
-          startMonth={new Date(2000, 0)}
-          endMonth={new Date(2045, 11)}
+          startMonth={new Date(years[0], 0)}
+          endMonth={new Date(years[1], 11)}
           selected={value ? parseISO(value) : undefined}
-          defaultMonth={value ? parseISO(value) : t}
+          defaultMonth={value ? parseISO(value) : startAt ? parseISO(startAt) : t}
           onSelect={(d) => { if (d) { onChange(toISO(d)); setOpen(false) } }}
         />
       </PopoverContent>

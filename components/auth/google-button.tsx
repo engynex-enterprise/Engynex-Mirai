@@ -3,10 +3,11 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { BrandLogo } from "@/components/mirai/brand-logo"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 
-/** Botón "Continuar con Google". Ícono genérico (sin logo de la marca). */
+/** Botón "Continuar con Google" con el logo oficial de Google (pautas de marca de Google Sign-In). */
 export function GoogleButton({ next = "/inicio" }: { next?: string }) {
   const [busy, setBusy] = useState(false)
   return (
@@ -28,7 +29,7 @@ export function GoogleButton({ next = "/inicio" }: { next?: string }) {
         }
       }}
     >
-      {busy ? <Spinner /> : <span className="grid size-5 place-items-center rounded-full border text-[11px] font-bold">G</span>}
+      {busy ? <Spinner /> : <BrandLogo k="google" size={20} bare />}
       Continuar con Google
     </Button>
   )

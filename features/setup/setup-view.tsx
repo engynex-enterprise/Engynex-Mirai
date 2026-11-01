@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { IsoIcon } from "@/components/mirai/iso-icon"
+import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
@@ -42,18 +43,14 @@ export function SetupView() {
   const { steps, done, total, next, setup } = data
   return (
     <div className="grid gap-6">
-      <section className="flex flex-col gap-5 rounded-xl bg-[linear-gradient(120deg,#1F2B4B,#2C4A3A_60%,#3F7A1E)] p-6 text-white sm:flex-row sm:items-center">
-        <span className="grid size-[72px] shrink-0 place-items-center rounded-xl bg-white"><IsoIcon k="mirai" size={56} /></span>
-        <div className="grid flex-1 gap-2">
-          <h1 className="font-heading text-2xl font-semibold">{done === 0 ? `¡Bienvenido a Mirai, ${first}! Organicemos tus finanzas` : `Vas muy bien, ${first}`}</h1>
-          <p className="text-white/80">Sigue estos pasos en orden. Cada uno toma un par de minutos y le enseña al libro lo que necesita para avisarte, aconsejarte y mostrarte números exactos.</p>
+      <PageHeader id="puesta" noHelp
+        title={done === 0 ? `¡Bienvenido a Mirai, ${first}! Organicemos tus finanzas` : `Vas muy bien, ${first}`}
+        description="Sigue estos pasos en orden. Cada uno toma un par de minutos y le enseña al libro lo que necesita para avisarte, aconsejarte y mostrarte números exactos.">
+        <div className="mt-1 grid w-full max-w-sm gap-2 rounded-2xl bg-white/75 px-4 py-3 text-meta-text backdrop-blur dark:bg-white/10">
+          <p className="flex items-baseline gap-2"><span className="text-[26px] font-semibold">{done} de {total}</span><span className="text-[13px] text-meta-text/75">pasos completados</span></p>
+          <Progress value={(done / total) * 100} className="h-2 bg-black/10 dark:bg-white/15" />
         </div>
-        <div className="grid min-w-40 gap-2">
-          <p className="text-3xl font-semibold">{done} de {total}</p>
-          <Progress value={(done / total) * 100} className="h-2 bg-white/20 [&>div]:bg-lime" />
-          <p className="text-xs text-white/70">pasos completados</p>
-        </div>
-      </section>
+      </PageHeader>
 
       {next ? (
         <div className="rounded-xl bg-[linear-gradient(135deg,#1F2B4B,#9EDB4E)] p-[1.5px] shadow-card">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Mail, RefreshCw, Search, Unplug } from "lucide-react"
+import { RefreshCw, Search, Unplug } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { Combobox } from "@/components/mirai/combobox"
+import { BrandLogo } from "@/components/mirai/brand-logo"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { Money } from "@/components/mirai/money"
 import { Notice } from "@/components/mirai/notice"
@@ -81,9 +82,9 @@ export function CorreoView() {
       <PageHeader id="correo" title="Gastos desde el correo" description="Mirai lee las notificaciones de compras de tus bancos en Gmail y te propone registrarlas. Tú revisas y confirmas." />
       {isPending ? <Skeleton className="h-32" /> : !gmail ? (
         <Card className="items-center gap-4 p-8 text-center shadow-card ring-0">
-          <IsoIcon k="correo" size={64} />
+          <span className="relative"><IsoIcon k="correo" size={64} /><span className="absolute -right-3 -bottom-2"><BrandLogo k="gmail" size={32} /></span></span>
           <div><h2 className="text-lg font-semibold">Conecta tu Gmail</h2><p className="max-w-md text-muted-foreground">Solo pedimos permiso de lectura. Mirai busca los correos de compras de tus bancos; no lee nada más ni envía correos.</p></div>
-          <Button onClick={() => { location.href = "/api/google/connect?s=gmail&back=/correo" }}><Mail /> Conectar con Google</Button>
+          <Button variant="outline" size="lg" onClick={() => { location.href = "/api/google/connect?s=gmail&back=/correo" }}><BrandLogo k="google" size={20} bare /> Conectar con Google</Button>
           <p className="text-xs text-muted-foreground">Puedes desconectarlo cuando quieras.</p>
         </Card>
       ) : (

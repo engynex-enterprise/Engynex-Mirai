@@ -13,6 +13,8 @@ export function IsoDefs() {
 }
 
 export const hasIso = (k: string) => k in ICONS
+/** SVG interior del isotipo (viewBox 256), para anidarlo dentro de otras ilustraciones. */
+export const isoMarkup = (k: string) => ICONS[k] ?? ICONS.mirai
 
 /** Isotipo ilustrado (estilo Fluent) de cada sección. */
 export function IsoIcon({ k, size = 24, className, title }: { k: string; size?: number; className?: string; title?: string }) {

@@ -10,7 +10,7 @@ test("balance: agregar cuenta, patrimonio y quincenas", async ({ page }, info) =
   await page.getByRole("textbox", { name: "Valor hoy" }).fill("12400000")
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText(nombre)).toBeVisible()
-  await expect(page.getByText("Patrimonio")).toBeVisible()
+  await expect(page.getByText("Patrimonio", { exact: true })).toBeVisible()
   await shot(page, "balance", info.project.name)
   await page.getByRole("radio", { name: "1ª quincena" }).click()
   await expect(page.getByText("Disponible del periodo")).toBeVisible()

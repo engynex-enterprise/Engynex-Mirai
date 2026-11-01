@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { CalendarCheck, ChevronLeft, ChevronRight, Download, Plus } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { es } from "react-day-picker/locale"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { BrandLogo } from "@/components/mirai/brand-logo"
 import { Spinner } from "@/components/ui/spinner"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Money } from "@/components/mirai/money"
@@ -214,6 +215,6 @@ function GoogleCalendarButton() {
       if (r.ok) return toast.success(r.msg)
       if (/Conecta tu cuenta de Google|venció/.test(r.msg)) { toast(r.msg, { action: { label: "Conectar", onClick: () => { location.href = "/api/google/connect?s=calendar&back=/recordatorios" } } }); return }
       toast.error("No se pudo sincronizar", { description: r.msg })
-    }}>{busy ? <Spinner /> : <CalendarCheck />} Google Calendar</Button>
+    }}>{busy ? <Spinner /> : <BrandLogo k="google-calendar" size={18} bare />} Google Calendar</Button>
   )
 }

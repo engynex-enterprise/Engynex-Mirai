@@ -38,25 +38,50 @@ export function useList<T extends BookTable>(table: T, opts: ListOpts<T> = {}) {
   })
 }
 
+// Los registros nuevos reciben su UUID definitivo en el navegador (antes eran filas "tmp-…" que no se podían borrar ni
+// editar hasta que el servidor respondiera: borrar enviaba ?id=eq.tmp-… y fallaba con 400). Mientras se guarda, el id
+// queda en `inflight`: borrar o editar ese registro espera a que termine la inserción.
+const newIds = new WeakMap<object, string>()
+const idOf = (v: object) => {
+  const own = (v as { id?: string }).id
+  if (own) return own
+  if (!newIds.has(v)) newIds.set(v, crypto.randomUUID())
+  return newIds.get(v)!
+}
+const inflight = new Map<string, Promise<void>>()
+const settle = new Map<string, () => void>()
+const waitSaved = async (id: string) => { await inflight.get(id) }
+
 /** Crear o editar (upsert por id) con actualización optimista. */
 export function useSave<T extends BookTable>(table: T, messages?: { created?: string; updated?: string }) {
   const bookId = useBookId()
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (values: Insert<T> | (Update<T> & { id: string })) => {
-      const payload = { ...values, book_id: bookId } as never
-      const { data, error } = await createClient().from(table).upsert(payload).select().single()
-      if (error) throw new Error(error.message)
-      return data as unknown as Row<T>
+      const isNew = !(values as { id?: string }).id
+      const id = idOf(values)
+      try {
+        if (!isNew) await waitSaved(id)
+        const payload = { ...values, id, book_id: bookId } as never
+        const { data, error } = await createClient().from(table).upsert(payload).select().single()
+        if (error) throw new Error(error.message)
+        return data as unknown as Row<T>
+      } finally {
+        if (isNew) { settle.get(id)?.(); settle.delete(id); inflight.delete(id) }
+      }
     },
     onMutate: async (values) => {
+      if (!(values as { id?: string }).id) {
+        const id = idOf(values)
+        inflight.set(id, new Promise<void>((r) => settle.set(id, r)))
+      }
       await qc.cancelQueries({ queryKey: qk(bookId, table) })
       const prev = qc.getQueriesData<Row<T>[]>({ queryKey: qk(bookId, table) })
       const v = values as Partial<Row<T>> & { id?: string }
       qc.setQueriesData<Row<T>[]>({ queryKey: qk(bookId, table) }, (old) => {
         if (!old) return old
         if (v.id && old.some((r) => r.id === v.id)) return old.map((r) => (r.id === v.id ? { ...r, ...v } : r))
-        return [...old, { ...v, id: v.id ?? `tmp-${crypto.randomUUID()}`, book_id: bookId } as Row<T>]
+        return [...old, { ...v, id: idOf(values), book_id: bookId } as Row<T>]
       })
       return { prev }
     },
@@ -78,6 +103,7 @@ export function useSoftDelete<T extends BookTable>(table: T, label = "Registro e
   const qc = useQueryClient()
   const sb = createClient()
   const setDeleted = async (id: string, value: string | null) => {
+    await waitSaved(id) // si el registro se acaba de crear, primero termina de guardarse
     const { error } = await sb.from(table).update({ deleted_at: value } as never).eq("id" as never, id as never)
     if (error) throw new Error(error.message)
   }

@@ -571,14 +571,14 @@ isOneToOne: false
                   ]
                 },"family_members": {
                   Row: {
-                    "color": string,"created_at": string,"created_by": string | null,"cupo": number,"deleted_at": string | null,"dep_de": string | null,"dep_rel": string | null,"discapacidad": boolean,"doc": string,"es_titular": boolean,"estudia": boolean,"household_id": string,"id": string,"nacimiento": string | null,"nombre": string,"rol": string,"sin_ingresos": boolean,"sort": number,"updated_at": string,"user_id": string | null
+                    "avatar": string,"color": string,"created_at": string,"created_by": string | null,"cupo": number,"deleted_at": string | null,"dep_de": string | null,"dep_rel": string | null,"discapacidad": boolean,"doc": string,"es_titular": boolean,"estudia": boolean,"household_id": string,"id": string,"nacimiento": string | null,"nombre": string,"rol": string,"sin_ingresos": boolean,"sort": number,"updated_at": string,"user_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "color"?: string,"created_at"?: string,"created_by"?: string | null,"cupo"?: number,"deleted_at"?: string | null,"dep_de"?: string | null,"dep_rel"?: string | null,"discapacidad"?: boolean,"doc"?: string,"es_titular"?: boolean,"estudia"?: boolean,"household_id": string,"id"?: string,"nacimiento"?: string | null,"nombre": string,"rol"?: string,"sin_ingresos"?: boolean,"sort"?: number,"updated_at"?: string,"user_id"?: string | null
+                    "avatar"?: string,"color"?: string,"created_at"?: string,"created_by"?: string | null,"cupo"?: number,"deleted_at"?: string | null,"dep_de"?: string | null,"dep_rel"?: string | null,"discapacidad"?: boolean,"doc"?: string,"es_titular"?: boolean,"estudia"?: boolean,"household_id": string,"id"?: string,"nacimiento"?: string | null,"nombre": string,"rol"?: string,"sin_ingresos"?: boolean,"sort"?: number,"updated_at"?: string,"user_id"?: string | null
                   }
                   Update: {
-                    "color"?: string,"created_at"?: string,"created_by"?: string | null,"cupo"?: number,"deleted_at"?: string | null,"dep_de"?: string | null,"dep_rel"?: string | null,"discapacidad"?: boolean,"doc"?: string,"es_titular"?: boolean,"estudia"?: boolean,"household_id"?: string,"id"?: string,"nacimiento"?: string | null,"nombre"?: string,"rol"?: string,"sin_ingresos"?: boolean,"sort"?: number,"updated_at"?: string,"user_id"?: string | null
+                    "avatar"?: string,"color"?: string,"created_at"?: string,"created_by"?: string | null,"cupo"?: number,"deleted_at"?: string | null,"dep_de"?: string | null,"dep_rel"?: string | null,"discapacidad"?: boolean,"doc"?: string,"es_titular"?: boolean,"estudia"?: boolean,"household_id"?: string,"id"?: string,"nacimiento"?: string | null,"nombre"?: string,"rol"?: string,"sin_ingresos"?: boolean,"sort"?: number,"updated_at"?: string,"user_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -1189,14 +1189,14 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "avatar_url": string | null,"ciudad": string,"created_at": string,"deletion_requested_at": string | null,"digitos": string,"direccion": NonNullable<Json>,"doc": string,"doc_tipo": string,"email": string | null,"id": string,"last_book_id": string | null,"nombre": string,"ocupacion": string,"riesgo": string,"telefono": string,"updated_at": string
+                    "apodo": string,"avatar_url": string | null,"ciudad": string,"cobro": NonNullable<Json>,"created_at": string,"deletion_requested_at": string | null,"digitos": string,"direccion": NonNullable<Json>,"doc": string,"doc_tipo": string,"email": string | null,"id": string,"last_book_id": string | null,"nacimiento": string | null,"nombre": string,"ocupacion": string,"portada": string,"riesgo": string,"telefono": string,"trabajo": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_url"?: string | null,"ciudad"?: string,"created_at"?: string,"deletion_requested_at"?: string | null,"digitos"?: string,"direccion"?: NonNullable<Json>,"doc"?: string,"doc_tipo"?: string,"email"?: string | null,"id": string,"last_book_id"?: string | null,"nombre"?: string,"ocupacion"?: string,"riesgo"?: string,"telefono"?: string,"updated_at"?: string
+                    "apodo"?: string,"avatar_url"?: string | null,"ciudad"?: string,"cobro"?: NonNullable<Json>,"created_at"?: string,"deletion_requested_at"?: string | null,"digitos"?: string,"direccion"?: NonNullable<Json>,"doc"?: string,"doc_tipo"?: string,"email"?: string | null,"id": string,"last_book_id"?: string | null,"nacimiento"?: string | null,"nombre"?: string,"ocupacion"?: string,"portada"?: string,"riesgo"?: string,"telefono"?: string,"trabajo"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "avatar_url"?: string | null,"ciudad"?: string,"created_at"?: string,"deletion_requested_at"?: string | null,"digitos"?: string,"direccion"?: NonNullable<Json>,"doc"?: string,"doc_tipo"?: string,"email"?: string | null,"id"?: string,"last_book_id"?: string | null,"nombre"?: string,"ocupacion"?: string,"riesgo"?: string,"telefono"?: string,"updated_at"?: string
+                    "apodo"?: string,"avatar_url"?: string | null,"ciudad"?: string,"cobro"?: NonNullable<Json>,"created_at"?: string,"deletion_requested_at"?: string | null,"digitos"?: string,"direccion"?: NonNullable<Json>,"doc"?: string,"doc_tipo"?: string,"email"?: string | null,"id"?: string,"last_book_id"?: string | null,"nacimiento"?: string | null,"nombre"?: string,"ocupacion"?: string,"portada"?: string,"riesgo"?: string,"telefono"?: string,"trabajo"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     

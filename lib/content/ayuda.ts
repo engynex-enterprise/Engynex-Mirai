@@ -10,7 +10,7 @@ export type Release = { v: string; f: string; t: string; items: ReleaseItem[] }
 export type Faq = { c: string; q: string; a: string; go?: string; tab?: string }
 export type Guide = { id: string; t: string; icon: string; go: string; min: number; s: string[]; tip?: string }
 
-export const APP_VER = "5.0"
+export const APP_VER = "5.1"
 
 const V5: Release = {
   v: "5.0", f: "31 oct 2026", t: "Mirai en la nube: tu familia, en tiempo real",
@@ -28,7 +28,19 @@ const V5: Release = {
   ],
 }
 
-export const RELEASES: Release[] = [V5, ...(RELEASES_V4 as Release[])]
+const V51: Release = {
+  v: "5.1", f: "1 nov 2026", t: "Un Mirai más tuyo: nuevo diseño y perfil",
+  items: [
+    ["new", "Elige tu avatar", "Toca tu foto en Perfil y escoge entre 10 avatares de Mirai, tu foto de Google, una foto tuya o tus iniciales. Cada integrante de la familia también puede tener el suyo."],
+    ["new", "Tu foto de Google", "Si entras con Google y no tienes foto, Mirai usa la de tu cuenta. También puedes vincular Google desde Perfil."],
+    ["new", "Perfil más completo", "Apodo para saludarte, fecha de nacimiento (te saludamos en tu cumpleaños), color de portada, avance del perfil y tus cuentas conectadas."],
+    ["new", "Logos de tus servicios", "Netflix, Spotify, Google, Telegram, Visa y muchos más aparecen con su logo en Suscripciones, Tarjetas e Integraciones."],
+    ["imp", "Nuevo diseño", "Fondo con degradado, menú y tarjetas translúcidas, y un banner ilustrado en cada sección."],
+    ["fix", "Formularios que no se borran", "Si giras el celular o cambias el tamaño de la ventana con un formulario abierto, ya no se pierde lo que escribiste."],
+    ["fix", "Borrar justo después de crear", "Ya puedes eliminar un registro apenas lo creas, sin esperar a que termine de guardarse."],
+  ],
+}
+export const RELEASES: Release[] = [V51, V5, ...(RELEASES_V4 as Release[])]
 
 const FIX: Record<string, Partial<Faq>> = {
   "¿Cómo le doy acceso a mi contador?": { a: "Ve a <b>DIAN › Acceso de tu contador</b>, escribe su nombre, elige qué puede ver y hasta cuándo, y envíale el enlace. Solo puede ver, descargar los documentos y dejarte notas. Puedes quitarle el acceso cuando quieras." },

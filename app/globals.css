@@ -266,6 +266,12 @@
   .bg-hero-gradient { background-image: var(--gradient-hero); }
   .bg-soft-gradient { background-image: var(--gradient-soft); }
   .bg-meta-gradient { background-image: var(--gradient-meta); }
+  /* Banner de cada módulo (lib/content/banners.ts): el fondo llega en --bn-bg / --bn-dark */
+  .banner-bg { background-image: var(--bn-bg); }
+  .dark .banner-bg { background-image: var(--bn-dark); }
+  .bn-float { animation: bn-float 7s ease-in-out infinite; }
+  .bn-float-2 { animation: bn-float 7s ease-in-out -3.5s infinite; }
+  @media (prefers-reduced-motion: reduce) { .bn-float, .bn-float-2 { animation: none; } }
   /* Fondo de la página como developers.facebook.com: pastel arriba que se funde con el gris */
   .bg-meta-wash { background-image: linear-gradient(180deg, transparent 0, var(--background) 520px), var(--gradient-meta-wash); background-repeat: no-repeat; background-size: 100% 560px; background-color: var(--background); }
   .bg-ai-gradient { background-image: linear-gradient(135deg, #1F2B4B, #2A7F14 60%, #13778F); }
@@ -310,3 +316,8 @@ html.rm *, html.rm *::before, html.rm *::after { animation-duration: .01ms !impo
 html.priv-blur #main, html.priv-blur [data-sidebar="sidebar"] { filter: blur(14px); }
 html.dense [data-slot="card"] { padding: 14px; gap: 12px; }
 html.dense input[data-slot="input"], html.dense [data-slot="input-group"] { height: 38px; }
+
+@keyframes bn-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}

@@ -74,3 +74,26 @@ export function typedMoney(raw: string, dec: boolean): { n: number; text: string
   const text = (intD ? new Intl.NumberFormat("es-CO").format(Number(intD)) : hasComma ? "0" : "") + (hasComma ? `,${decD}` : "")
   return { n, text }
 }
+
+/** Edad cumplida a una fecha (por defecto hoy en Colombia) y si ese día es su cumpleaños. */
+export function edad(nacimiento: string | null | undefined, hoy = todayISO()) {
+  if (!nacimiento) return null
+  const [y, m, d] = nacimiento.split("-").map(Number), [ty, tm, td] = hoy.split("-").map(Number)
+  const años = ty - y - (tm < m || (tm === m && td < d) ? 1 : 0)
+  return { años, cumple: tm === m && td === d }
+}
+
+/** Días que faltan para el próximo cumpleaños (0 = hoy) y los años que cumplirá. El 29 de febrero se celebra el 28 en años no bisiestos. */
+export function proxCumple(nacimiento: string | null | undefined, hoy = todayISO()) {
+  if (!nacimiento) return null
+  const [y, m, d] = nacimiento.split("-").map(Number), [ty, tm, td] = hoy.split("-").map(Number)
+  const t = Date.UTC(ty, tm - 1, td)
+  const fecha = (yr: number) => { const leap = (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0; return Date.UTC(yr, m - 1, m === 2 && d === 29 && !leap ? 28 : d) }
+  let yr = ty
+  if (fecha(yr) < t) yr++
+  return { dias: Math.round((fecha(yr) - t) / 86_400_000), años: yr - y }
+}
+
+/** Dígitos de un documento (sin puntos, guiones ni letras) y los 2 últimos que usa la DIAN. */
+export const soloDigitos = (s: string) => s.replace(/\D/g, "")
+export const digitosDian = (doc: string) => { const d = soloDigitos(doc); return d.length >= 2 ? d.slice(-2) : "" }

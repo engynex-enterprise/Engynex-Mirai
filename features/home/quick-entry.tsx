@@ -4,10 +4,9 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Sparkles } from "lucide-react"
 import { toast } from "sonner"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
-import { initials } from "@/components/app/app-sidebar"
+import { UserAvatar } from "@/components/mirai/user-avatar"
 import { useApp } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
@@ -27,7 +26,7 @@ export function QuickEntry() {
   const { data: rules = [] } = useKeywordRules()
   const { data: cfg } = useSettings()
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
-  const first = user.nombre.split(" ")[0]
+  const first = user.apodo || user.nombre.split(" ")[0]
 
   const submit = async () => {
     setBusy(true)
@@ -64,7 +63,7 @@ export function QuickEntry() {
   return (
     <div className="grid gap-2">
       <form data-tour="quick" className="flex items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) submit() }}>
-        <Avatar className="size-10"><AvatarFallback className="bg-brand-gradient text-sm font-bold text-white">{initials(user.nombre)}</AvatarFallback></Avatar>
+        <UserAvatar src={user.avatar} name={user.nombre} className="size-10" fallbackClassName="text-sm" />
         <InputGroup className="h-11 rounded-full border-0 bg-secondary transition-colors hover:bg-secondary-hover has-[input:focus]:bg-card has-[input:focus]:ring-2 has-[input:focus]:ring-ring/30">
           <InputGroupInput aria-label="Escribe lo que pasó" value={text} onChange={(e) => setText(e.target.value)} placeholder={`¿Qué gastaste hoy, ${first}?`} className="pl-4 text-[16px] placeholder:text-muted-foreground" />
           <InputGroupAddon align="inline-end">

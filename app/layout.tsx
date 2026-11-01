@@ -30,7 +30,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es-CO" suppressHydrationWarning className={`${inter.variable} ${mono.variable} h-full`}>
-      <body className="min-h-full">
+      {/* suppressHydrationWarning: extensiones como ColorZilla (cz-shortcut-listen) o Grammarly agregan atributos al
+          body antes de que React cargue; solo ignora atributos de esta etiqueta, no su contenido */}
+      <body className="min-h-full" suppressHydrationWarning>
         <IsoDefs />
         <Providers>{children}</Providers>
         {process.env.VERCEL && <SpeedInsights />}

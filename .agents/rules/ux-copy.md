@@ -12,5 +12,5 @@ Personas y familias colombianas **sin conocimientos financieros**. El dueño del
 - Estados vacíos útiles (`empty()` con botón de acción).
 - Diseño Microsoft 365 / Fluent + shadcn: sidebar izquierda colapsable (Ctrl+B), sin header; miga de pan en el contenido; botón "Agregar" en el menú (atajo N); chat flotante arrastrable.
 - Paleta Engynex: navy `#1F2B4B`, lima `#9EDB4E`, verde `#3F7A1E`. Modo oscuro obligatorio.
-- Isotipos propios (iso/iso.json) para secciones; Lucide para íconos de interfaz. Sin logos de marcas de terceros.
+- Isotipos propios (iso/iso.json) para secciones; Lucide para íconos de interfaz. Logos de terceros (Google, Netflix, Telegram…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; monograma si no hay logo libre). Nunca como decoración ni como logo de Mirai.
 - Probar en 1366 px y 400 px. Sin scroll horizontal. Accesible: `aria-label` en botones de solo ícono, foco visible, respeta `prefers-reduced-motion`.
