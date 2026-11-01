@@ -11,6 +11,7 @@
 - **Idioma:** UI, textos, comentarios de cara al usuario y respuestas al dueño del producto en **español de Colombia**, con tuteo.
 - **Principio:** *extremadamente simple*. Cada sección tiene "Cómo funciona" (`HELP`), cada modal su descripción (`MDESC`), cada campo su ayuda (`fieldHelp()`).
 - **Dónde vive:** Vercel (front + back en Next.js) + Supabase (Postgres, Auth, Realtime, Storage).
+- **Ambientes:** producción = rama `main` → https://mirai.engynex.com · pruebas = rama `pruebas` → https://engynex-mirai-pruebas.vercel.app. Hoy comparten la base de Supabase; cómo separarla en `docs/DEPLOY-VERCEL.md`.
 
 ## 2. Comandos
 ```bash
@@ -20,7 +21,7 @@ npm run typecheck    # next typegen + tsc
 npm run lint         # ESLint (0 errores)
 npm run test         # Vitest: cálculos puros (lib/domain)
 npm run test:e2e     # Playwright escritorio 1366 px + móvil 400 px (crea el usuario QA con la clave secreta)
-npm run db:migrate   # aplica supabase/migrations/*.sql en orden (SUPABASE_DB_URL)
+npm run db:migrate   # aplica supabase/migrations/*.sql en orden (SUPABASE_DB_URL de .env.local; :prod lee .env.produccion.local)
 npm run db:types     # regenera lib/supabase/database.types.ts desde la BD
 ```
 Tras tocar el esquema: `db:migrate` → `db:types` → `typecheck`. Antes de cerrar un cambio: `build` + `test:e2e` y revisar capturas en `tests/.out/`.

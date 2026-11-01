@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "db:migrate": "node scripts/db-migrate.mjs",
+    "db:migrate:prod": "node scripts/db-migrate.mjs --prod",
     "db:types": "node --env-file=.env.local -e \"require('child_process').execSync('npx supabase gen types typescript --db-url '+process.env.SUPABASE_DB_URL+' --schema public > lib/supabase/database.types.ts',{stdio:'inherit'})\"",
     "legacy:extract": "node scripts/extract-legacy.mjs",
     "icons": "node scripts/gen-icons.mjs",

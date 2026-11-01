@@ -41,3 +41,28 @@ Nunca pongas el prefijo `NEXT_PUBLIC_` a un secreto: todo lo que lo lleva se inc
    El mismo cron actualiza cada día la TRM, la tasa de usura y los festivos.
 9. **Google (Gmail y Calendar).** En Google Cloud › Credenciales, al mismo cliente OAuth agrega la URI de redirección `https://tu-dominio/api/google/callback` (y `http://localhost:3000/api/google/callback` para desarrollo). Habilita *Gmail API* y *Google Calendar API* en el proyecto. Los permisos son `gmail.readonly` y `calendar.events`; mientras la app esté en modo "Prueba" en la pantalla de consentimiento, agrega los correos de prueba.
 10. **Telegram.** Cada hogar crea su bot con @BotFather y pega el token en Ajustes › Integraciones › Telegram; cada persona vincula su chat en Ajustes › Alertas (no requiere webhook).
+
+## Ambientes: producción y pruebas
+
+| | Producción | Pruebas |
+|---|---|---|
+| Rama de Git | `main` | `pruebas` |
+| Dirección | https://mirai.engynex.com (`engynex-mirai.vercel.app` redirige aquí) | https://engynex-mirai-pruebas.vercel.app (solo con sesión en Vercel) |
+| Ambiente de Vercel | Production | Preview (variables con rama `pruebas`) |
+| Base de datos | Supabase "Engynex Mirai" | **La misma** por ahora (ver abajo) |
+| Cron de avisos | Sí | No (Vercel solo corre crons en producción) |
+
+**Flujo:** sube los cambios a `pruebas` → revisa en la dirección de pruebas → `git checkout main && git merge pruebas && git push` para publicar.
+
+DNS: `mirai.engynex.com` es un CNAME en Hostinger hacia el valor que indica Vercel › Domains. El certificado HTTPS (Let's Encrypt) lo emite y renueva Vercel gratis.
+
+### Separar la base de datos de pruebas (cuando haya cupo en Supabase)
+
+El plan gratis de Supabase permite 2 proyectos activos por dueño. Cuando haya cupo (o con el plan Pro):
+
+1. Crea el proyecto "Mirai Pruebas" en la misma región (`us-west-2`).
+2. Copia tu `.env.local` actual (producción) a `.env.produccion.local` y cambia en `.env.local` `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` y `SUPABASE_DB_URL` por los del proyecto nuevo. Usa también un `ENCRYPTION_KEY` nuevo (las integraciones se configuran aparte en cada ambiente).
+3. `npm run db:migrate` aplica las migraciones a pruebas; `npm run db:migrate:prod` a producción (lee `.env.produccion.local`).
+4. En Supabase (proyecto nuevo) › Authentication: *Site URL* = la dirección de pruebas, *Redirect URLs* = esa dirección y `http://localhost:3000/**`; activa Google con el mismo cliente OAuth, TOTP (MFA) y *Manual linking*. En Google Cloud agrega `https://<ref-nuevo>.supabase.co/auth/v1/callback`.
+5. En Vercel › Environment Variables, deja las cuatro variables de Supabase y `ENCRYPTION_KEY` solo en **Production** y créalas de nuevo en **Preview** (rama `pruebas`) con los valores del proyecto nuevo. Vuelve a desplegar `pruebas`.
+6. Desde ese momento las pruebas automáticas (`npm run test:e2e`) y `npm run dev` usan la base de pruebas.
