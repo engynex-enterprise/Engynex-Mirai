@@ -225,3 +225,8 @@ html.rm *, html.rm *::before, html.rm *::after { animation-duration: .01ms !impo
   50% { transform: translateY(-8px); }
 }
 
+
+/* Privacidad al cambiar de ventana y densidad compacta (Ajustes) */
+html.priv-blur #main, html.priv-blur [data-sidebar="sidebar"] { filter: blur(14px); }
+html.dense [data-slot="card"] { padding: 14px; gap: 12px; }
+html.dense input[data-slot="input"], html.dense [data-slot="input-group"] { height: 38px; }

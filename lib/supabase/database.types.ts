@@ -1129,14 +1129,14 @@ isOneToOne: false
                   ]
                 },"notification_rules": {
                   Row: {
-                    "book_id": string,"email_to": string | null,"frecuencia": string,"hora": number,"matriz": NonNullable<Json>,"ocultar_montos": boolean,"silencio": NonNullable<Json>,"timezone": string,"updated_at": string,"user_id": string,"whatsapp_to": string | null
+                    "book_id": string,"canales": NonNullable<Json>,"email_to": string | null,"frecuencia": string,"hora": number,"last_sent": NonNullable<Json>,"matriz": NonNullable<Json>,"ocultar_montos": boolean,"silencio": NonNullable<Json>,"timezone": string,"updated_at": string,"user_id": string,"whatsapp_to": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"email_to"?: string | null,"frecuencia"?: string,"hora"?: number,"matriz"?: NonNullable<Json>,"ocultar_montos"?: boolean,"silencio"?: NonNullable<Json>,"timezone"?: string,"updated_at"?: string,"user_id": string,"whatsapp_to"?: string | null
+                    "book_id": string,"canales"?: NonNullable<Json>,"email_to"?: string | null,"frecuencia"?: string,"hora"?: number,"last_sent"?: NonNullable<Json>,"matriz"?: NonNullable<Json>,"ocultar_montos"?: boolean,"silencio"?: NonNullable<Json>,"timezone"?: string,"updated_at"?: string,"user_id": string,"whatsapp_to"?: string | null
                   }
                   Update: {
-                    "book_id"?: string,"email_to"?: string | null,"frecuencia"?: string,"hora"?: number,"matriz"?: NonNullable<Json>,"ocultar_montos"?: boolean,"silencio"?: NonNullable<Json>,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"whatsapp_to"?: string | null
+                    "book_id"?: string,"canales"?: NonNullable<Json>,"email_to"?: string | null,"frecuencia"?: string,"hora"?: number,"last_sent"?: NonNullable<Json>,"matriz"?: NonNullable<Json>,"ocultar_montos"?: boolean,"silencio"?: NonNullable<Json>,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"whatsapp_to"?: string | null
                   }
                   Relationships: [
                     {
@@ -1315,14 +1315,14 @@ isOneToOne: false
                   ]
                 },"ref_trm": {
                   Row: {
-                    "fecha": string,"valor": number
+                    "fecha": string,"fuente": string | null,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "fecha": string,"valor": number
+                    "fecha": string,"fuente"?: string | null,"valor": number
                   }
                   Update: {
-                    "fecha"?: string,"valor"?: number
+                    "fecha"?: string,"fuente"?: string | null,"valor"?: number
                   }
                   Relationships: [
                     
@@ -1614,6 +1614,9 @@ isOneToOne: false
                            },
 "is_household_member":
 { Args: { "hh": string,"min_role"?: string }; Returns: boolean
+                           },
+"mirai_schedule_notify":
+{ Args: { "cron_secret": string,"site_url": string }; Returns: string
                            },
 "pay_fixed_expense":
 { Args: { "p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json

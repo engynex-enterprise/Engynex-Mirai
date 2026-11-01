@@ -22,6 +22,7 @@ import { NewBookDialog } from "./new-book-dialog"
 import { useShell } from "./shell-store"
 import { applyPrivacy, togglePrivacy } from "./privacy"
 import { useNavBadges } from "./nav-badges"
+import { ApplyPrefs } from "@/features/settings/prefs"
 
 export function AppShell({ ctx, sidebarOpen, children }: { ctx: AppContext; sidebarOpen: boolean; children: React.ReactNode }) {
   return (
@@ -57,6 +58,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <NotificationsSheet />
       <HelpSheet />
       <NewBookDialog />
+      <ApplyPrefs />
     </>
   )
 }

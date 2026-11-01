@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { BellPlus, ExternalLink, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -174,7 +174,7 @@ export function FiscalCalendar() {
   const del = useSoftDelete("calendar_events", "Fecha eliminada")
   const smmlv = smmlvFor(+today.slice(0, 4), cfg?.smmlv as Record<string, number>)
 
-  const rows = useMemo(() => events.map((e) => ({ e, nx: nextOcc(e, today), cat: fcatOf(e) })).sort((a, b) => a.nx.localeCompare(b.nx)), [events, today])
+  const rows = events.map((e) => ({ e, nx: nextOcc(e, today), cat: fcatOf(e) })).sort((a, b) => a.nx.localeCompare(b.nx))
   if (isPending || !book) return <PageSkeleton kpis={3} />
   const est = (e: Row<"calendar_events">) => calEst(e, book, assets.map((a) => ({ ...a, avaluo: Number(a.avaluo), predial: a.predial == null ? null : Number(a.predial), imp_veh: a.imp_veh == null ? null : Number(a.imp_veh), soat: a.soat == null ? null : Number(a.soat), pct: Number(a.pct) })), smmlv, incCats)
   const val = (e: Row<"calendar_events">) => Number(e.monto) || est(e)?.v || 0

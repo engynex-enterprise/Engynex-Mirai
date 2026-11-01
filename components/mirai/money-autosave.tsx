@@ -7,6 +7,6 @@ import { MoneyInput } from "./money-input"
 export function MoneyAutosave({ value, onSave, id, placeholder }: { value: number; onSave: (v: number) => void; id?: string; placeholder?: string }) {
   const [v, setV] = useState(value)
   const [prev, setPrev] = useState(value)
-  if (prev !== value) { setPrev(value); setV(value) }
+  if (!Object.is(prev, value)) { setPrev(value); setV(value) }
   return <MoneyInput id={id} value={v} onChange={setV} placeholder={placeholder} onBlur={() => { if (v !== value) onSave(v) }} />
 }

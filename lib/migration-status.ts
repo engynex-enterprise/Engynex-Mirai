@@ -7,5 +7,5 @@ export const PHASE_OF: Record<string, string> = {
   compartidos: "fase 3", recordatorios: "fase 3", calendario: "fase 3", indicadores: "fase 3",
   consejero: "fase 4", correo: "fase 4", reportes: "fase 4",
   renta: "fase 5", contador: "fase 5",
-  logros: "fase 7", novedades: "fase 7", faq: "fase 7", manual: "fase 7", perfil: "fase 7", ajustes: "fase 7",
+  logros: "fase 7", novedades: "fase 7", faq: "fase 7", manual: "fase 7", perfil: "fase 7",
 }
