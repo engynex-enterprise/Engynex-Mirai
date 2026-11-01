@@ -16,6 +16,7 @@ import { FeedbackDialog } from "@/features/opiniones/feedback-dialog"
 import { AdsConsentBanner } from "@/features/ads/ad-slot"
 import { LegalUpdate } from "@/features/legal/legal-update"
 import { PlatformNotice } from "./platform-notice"
+import { WelcomeDialog } from "@/features/onboarding/welcome-dialog"
 import { MobileTabBar } from "./mobile-tabbar"
 import { NewBookDialog } from "./new-book-dialog"
 import { useShell } from "./shell-store"
@@ -63,6 +64,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <HelpSheet />
       <FeedbackDialog />
       <AdsConsentBanner />
+      <WelcomeDialog />
       <NewBookDialog />
       <ApplyPrefs />
       <ChatWidget />

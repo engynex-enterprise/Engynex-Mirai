@@ -34,6 +34,18 @@ export async function resetQaUser() {
   if (ids.length) await sb.from("households").delete().in("id", ids)
 }
 
+/** Marca la bienvenida como vista para QA (las pruebas no la ven, salvo la suya). */
+export async function setQaWelcome(seen: boolean) {
+  const sb = admin()
+  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = data.users.find((u) => u.email === QA.email)?.id
+  if (!uid) return
+  const { data: p } = await sb.from("user_preferences").select("extra").eq("user_id", uid).maybeSingle()
+  const extra = { ...((p?.extra ?? {}) as Record<string, unknown>) }
+  if (seen) extra.welcome_seen = extra.welcome_seen ?? new Date().toISOString(); else delete extra.welcome_seen
+  await sb.from("user_preferences").upsert({ user_id: uid, extra })
+}
+
 /** Pone el hogar de QA en Premium (cortesía de prueba) o en Gratis. Las pruebas usan Premium salvo las del plan gratis. */
 export async function setQaPlan(plan: "premium" | "gratis") {
   const sb = admin()

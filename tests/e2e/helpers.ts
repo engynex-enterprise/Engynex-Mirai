@@ -1,8 +1,8 @@
 import { expect, type Page } from "@playwright/test"
-import { QA, setQaPlan } from "./qa"
+import { QA, setQaPlan, setQaWelcome } from "./qa"
 
 /** Entra con el usuario QA (en Premium, salvo que se pida Gratis) y pasa la bienvenida si hace falta. */
-export async function login(page: Page, plan: "premium" | "gratis" = "premium") {
+export async function login(page: Page, plan: "premium" | "gratis" = "premium", { welcome = false } = {}) {
   await page.goto("/login")
   await page.getByLabel("Correo").fill(QA.email)
   await page.getByLabel("Contraseña", { exact: true }).fill(QA.password)
@@ -11,6 +11,7 @@ export async function login(page: Page, plan: "premium" | "gratis" = "premium") 
   await expect(start.or(page.getByRole("button", { name: "Cómo funciona" }))).toBeVisible({ timeout: 30_000 })
   if (await start.isVisible()) { await start.click(); await page.waitForURL(/puesta/) }
   await setQaPlan(plan)
+  await setQaWelcome(!welcome)
   await page.reload()
 }
 

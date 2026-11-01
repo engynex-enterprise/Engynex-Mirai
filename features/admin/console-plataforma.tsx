@@ -17,6 +17,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { BrandLogo } from "@/components/mirai/brand-logo"
+import { DataTable, DTTwoLine } from "@/components/mirai/data-table"
 import { Combobox } from "@/components/mirai/combobox"
 import { FormField } from "@/components/mirai/field"
 import { Icon } from "@/components/mirai/icon"
@@ -283,24 +284,20 @@ export function AdminsPanel() {
 
 export function AuditPanel() {
   const { data, isPending } = useQuery({ queryKey: ["admin", "audit"], queryFn: () => adminAuditLog() })
+  type A = NonNullable<typeof data>[number]
   return (
-    <Card className="gap-3 p-5 shadow-card ring-0">
-      {isPending ? <Skeleton className="h-60" /> : !data?.length ? <p className="py-6 text-center text-sm text-muted-foreground">Aún no hay acciones registradas.</p> : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-sm">
-            <thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">Cuándo</th><th className="font-medium">Quién</th><th className="font-medium">Acción</th><th className="font-medium">Detalle</th></tr></thead>
-            <tbody>{data.map((a) => (
-              <tr key={a.id} className="border-b align-top last:border-0">
-                <td className="py-2 whitespace-nowrap" title={a.created_at}>{rel(a.created_at)}</td>
-                <td>{a.quien}</td>
-                <td className="font-medium">{a.accion}</td>
-                <td className="max-w-md truncate font-mono text-xs text-muted-foreground">{a.objetivo ? `${a.objetivo} ` : ""}{Object.keys(a.detalle ?? {}).length ? JSON.stringify(a.detalle) : ""}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+    <DataTable<A>
+      title="Auditoría" info="Todo lo que hacen los administradores en la consola (últimos 500 registros)." data={data} loading={isPending} rowKey={(a) => String(a.id)}
+      search={{ placeholder: "Buscar acción, persona o detalle", text: (a) => `${a.accion} ${a.quien} ${a.objetivo ?? ""} ${JSON.stringify(a.detalle ?? {})}` }}
+      filters={[{ id: "acc", label: "Acción", options: [...new Set((data ?? []).map((a) => a.accion))].map((x) => ({ value: x, label: x })), match: (a, v) => a.accion === v }, { id: "quien", label: "Quién", options: [...new Set((data ?? []).map((a) => a.quien))].map((x) => ({ value: x, label: x })), match: (a, v) => a.quien === v }]}
+      exportName="mirai-auditoria" initialSort={{ id: "cuando", dir: "desc" }}
+      columns={[
+        { id: "cuando", header: "Cuándo", sort: (a) => a.created_at, csv: (a) => a.created_at, cell: (a) => <DTTwoLine top={fmtDate(a.created_at.slice(0, 10), { year: true })} bottom={rel(a.created_at)} /> },
+        { id: "quien", header: "Quién", sort: (a) => a.quien, csv: (a) => a.quien, cell: (a) => a.quien },
+        { id: "accion", header: "Acción", sort: (a) => a.accion, csv: (a) => a.accion, cell: (a) => <span className="font-medium">{a.accion}</span> },
+        { id: "detalle", header: "Detalle", csv: (a) => `${a.objetivo ?? ""} ${JSON.stringify(a.detalle ?? {})}`, cell: (a) => <span className="line-clamp-2 max-w-md font-mono text-xs text-muted-foreground">{a.objetivo ? `${a.objetivo} ` : ""}{Object.keys(a.detalle ?? {}).length ? JSON.stringify(a.detalle) : ""}</span> },
+      ]}
+    />
   )
 }
 

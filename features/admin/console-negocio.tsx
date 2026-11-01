@@ -1,16 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
-import { Download, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -24,9 +24,11 @@ import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { MoneyInput } from "@/components/mirai/money-input"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { Segmented } from "@/components/mirai/choice-cards"
+import { DataTable, DTPrimary, DTTwoLine } from "@/components/mirai/data-table"
+import { Icon } from "@/components/mirai/icon"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { createClient } from "@/utils/supabase/client"
-import { norm } from "@/lib/domain"
+
 import { fmtDate } from "@/lib/format"
 import { precio, type Coupon } from "@/lib/plans"
 import { adminClients, adminOverview, adminRevenue } from "./actions"
@@ -44,11 +46,6 @@ export function usePlanOptions() {
     queryKey: ["admin", "plan-options"],
     queryFn: async () => ((await createClient().from("plans").select("id,nombre,precio_mes,precio_anio").order("orden")).data ?? []).map((p) => ({ value: p.id, label: p.nombre, mes: p.precio_mes, anio: p.precio_anio })),
   })
-}
-
-function csvDownload(name: string, rows: (string | number)[][]) {
-  const blob = new Blob(["﻿" + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n")], { type: "text/csv;charset=utf-8" })
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href)
 }
 
 async function run(fn: () => Promise<unknown>, ok: string, qc: ReturnType<typeof useQueryClient>) {
@@ -122,38 +119,30 @@ export function AssignPlanDialog({ householdId, nombre, open, onOpenChange }: { 
 export function HogaresPanel() {
   const { data, isPending } = useQuery({ queryKey: ["admin", "households"], queryFn: () => adminHouseholds() })
   const { data: plans = [] } = usePlanOptions()
-  const [q, setQ] = useState("")
-  const [plan, setPlan] = useState("todos")
   const [assign, setAssign] = useState<{ id: string; nombre: string } | null>(null)
-  const list = useMemo(() => (data ?? []).filter((h) => (plan === "todos" || h.plan === plan) && (!q || norm(`${h.nombre} ${h.dueno?.nombre ?? ""} ${h.dueno?.email ?? ""}`).includes(norm(q)))), [data, q, plan])
   const pn = (id: string) => plans.find((p) => p.value === id)?.label ?? id
+  type H = NonNullable<typeof data>[number]
   return (
-    <Card className="gap-4 p-5 shadow-card ring-0">
-      <div className="flex flex-wrap gap-2">
-        <div className="relative min-w-56 flex-1"><Search className="absolute top-3 left-3 size-4 text-muted-foreground" /><Input className="h-10 pl-9" placeholder="Buscar hogar o dueño" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar hogares" /></div>
-        <div className="w-48"><Combobox value={plan} onChange={setPlan} options={[{ value: "todos", label: "Todos los planes" }, ...plans]} /></div>
-        <Button variant="outline" disabled={!list.length} onClick={() => csvDownload("mirai-hogares", [["Hogar", "Dueño", "Correo", "Plan", "Vence", "Integrantes", "Libros", "Acciones 30 d", "Creado"], ...list.map((h) => [h.nombre, h.dueno?.nombre ?? "", h.dueno?.email ?? "", pn(h.plan), h.vence?.slice(0, 10) ?? "", h.integrantes, h.libros, h.acciones30, h.creado.slice(0, 10)])])}><Download /> CSV</Button>
-      </div>
-      {isPending ? <Skeleton className="h-60" /> : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[46rem] text-sm">
-            <thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">Hogar</th><th className="font-medium">Dueño</th><th className="font-medium">Plan</th><th className="font-medium">Integrantes</th><th className="font-medium">Libros</th><th className="font-medium">Creado</th><th /></tr></thead>
-            <tbody>{list.map((h) => (
-              <tr key={h.id} className="border-b last:border-0">
-                <td className="py-2.5 font-medium">{h.nombre}</td>
-                <td>{h.dueno ? <Link href={`/admin/usuarios/${h.dueno.id}`} className="text-link hover:underline">{h.dueno.nombre || h.dueno.email}</Link> : "—"}</td>
-                <td><StatusPill tone={h.plan === "gratis" ? "gray" : "pagado"} title={h.vence ? `Hasta ${fmtDate(h.vence.slice(0, 10), { year: true })}` : undefined}>{pn(h.plan)}</StatusPill></td>
-                <td className="tabular-nums">{h.integrantes}</td><td className="tabular-nums">{h.libros}</td>
-                <td className="whitespace-nowrap">{fmtDate(h.creado.slice(0, 10))}</td>
-                <td className="text-right"><Button size="sm" variant="ghost" onClick={() => setAssign({ id: h.id, nombre: h.nombre })}>Asignar plan</Button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-          <p className="pt-3 text-xs text-muted-foreground">{list.length} hogares. Por privacidad, la consola no muestra montos ni movimientos de los hogares.</p>
-        </div>
-      )}
+    <>
+      <DataTable<H>
+        title="Hogares" info="Cuentas familiares con al menos un integrante. Por privacidad no se muestran montos." data={data} loading={isPending} rowKey={(h) => h.id}
+        search={{ placeholder: "Buscar hogar, dueño o correo", text: (h) => `${h.nombre} ${h.dueno?.nombre ?? ""} ${h.dueno?.email ?? ""}` }}
+        filters={[{ id: "plan", label: "Plan", options: plans.map((p) => ({ value: p.value, label: p.label })), match: (h, v) => h.plan === v }, { id: "fam", label: "Integrantes", options: [{ value: "1", label: "Una persona" }, { value: "2", label: "Dos o más" }], match: (h, v) => (v === "1" ? h.integrantes === 1 : h.integrantes > 1) }]}
+        exportName="mirai-hogares" initialSort={{ id: "creado", dir: "desc" }}
+        details={(h) => (h.dueno ? `/admin/usuarios/${h.dueno.id}` : null)}
+        actions={[{ label: "Asignar plan", onSelect: (h) => setAssign({ id: h.id, nombre: h.nombre }) }]}
+        columns={[
+          { id: "hogar", header: "Hogar", sort: (h) => h.nombre.toLowerCase(), csv: (h) => h.nombre, cell: (h) => <DTPrimary media={<span className="grid size-10 place-items-center rounded-full bg-secondary"><Icon name="house" className="size-5" /></span>} title={h.nombre} sub={`Creado ${fmtDate(h.creado.slice(0, 10), { year: true })}`} /> },
+          { id: "dueno", header: "Dueño", sort: (h) => h.dueno?.nombre ?? "", csv: (h) => h.dueno?.email ?? "", cell: (h) => <DTTwoLine top={h.dueno?.nombre || "—"} bottom={h.dueno?.email} /> },
+          { id: "plan", header: "Plan", sort: (h) => h.plan, csv: (h) => pn(h.plan), cell: (h) => <DTTwoLine top={<StatusPill tone={h.plan === "gratis" ? "gray" : "pagado"}>{pn(h.plan)}</StatusPill>} bottom={h.vence ? `hasta ${fmtDate(h.vence.slice(0, 10))}` : undefined} /> },
+          { id: "integrantes", header: "Integrantes", align: "right", sort: (h) => h.integrantes, csv: (h) => h.integrantes, cell: (h) => h.integrantes },
+          { id: "libros", header: "Libros", align: "right", sort: (h) => h.libros, csv: (h) => h.libros, cell: (h) => h.libros },
+          { id: "act", header: "Acciones (30 d)", align: "right", sort: (h) => h.acciones30, csv: (h) => h.acciones30, cell: (h) => <span className="font-semibold tabular-nums">{h.acciones30}</span> },
+          { id: "creado", header: "Creado", hidden: true, sort: (h) => h.creado, csv: (h) => h.creado.slice(0, 10), cell: (h) => fmtDate(h.creado.slice(0, 10)) },
+        ]}
+      />
       {assign && <AssignPlanDialog householdId={assign.id} nombre={assign.nombre} open onOpenChange={(o) => !o && setAssign(null)} />}
-    </Card>
+    </>
   )
 }
 
@@ -163,42 +152,36 @@ export function SuscripcionesPanel() {
   const qc = useQueryClient()
   const { data, isPending } = useQuery({ queryKey: ["admin", "subs"], queryFn: () => adminSubscriptions() })
   const { data: plans = [] } = usePlanOptions()
-  const [f, setF] = useState("vigentes")
-  const list = (data ?? []).filter((s) => f === "todas" || (f === "vigentes" ? s.vigente : !s.vigente))
   const pn = (id: string) => plans.find((p) => p.value === id)?.label ?? id
+  type S = NonNullable<typeof data>[number]
+  const upd = (s: S, a: Parameters<typeof adminUpdateSubscription>[1], ok: string) => run(() => adminUpdateSubscription(s.id, a), ok, qc)
   return (
-    <Card className="gap-4 p-5 shadow-card ring-0">
-      <Segmented value={f} onChange={setF} items={[{ value: "vigentes", label: "Vigentes" }, { value: "pasadas", label: "Vencidas o pendientes" }, { value: "todas", label: "Todas" }]} />
-      {isPending ? <Skeleton className="h-60" /> : !list.length ? <p className="py-6 text-center text-sm text-muted-foreground">No hay suscripciones con este filtro.</p> : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[46rem] text-sm">
-            <thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">Hogar</th><th className="font-medium">Plan</th><th className="font-medium">Cómo</th><th className="font-medium">Estado</th><th className="font-medium">Vence</th><th /></tr></thead>
-            <tbody>{list.map((s) => (
-              <tr key={s.id} className="border-b last:border-0">
-                <td className="py-2.5">{s.hogar}{s.nota && <span className="block text-xs text-muted-foreground">{s.nota}</span>}</td>
-                <td>{pn(s.plan)} <span className="text-xs text-muted-foreground">· {s.periodo === "anio" ? "anual" : "mensual"}</span></td>
-                <td>{PROV[s.proveedor] ?? s.proveedor}</td>
-                <td><StatusPill tone={SUB[s.estado]?.[0] ?? "gray"}>{SUB[s.estado]?.[1] ?? s.estado}</StatusPill></td>
-                <td className="whitespace-nowrap">{s.vence_at ? fmtDate(s.vence_at.slice(0, 10), { year: true }) : "—"}</td>
-                <td className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={`Acciones de la suscripción de ${s.hogar}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {[7, 30, 365].map((d) => <DropdownMenuItem key={d} onSelect={() => run(() => adminUpdateSubscription(s.id, { kind: "extender", dias: d }), `Extendida ${d} días`, qc)}>Extender {d === 365 ? "1 año" : `${d} días`}</DropdownMenuItem>)}
-                      <DropdownMenuSeparator />
-                      {plans.filter((p) => p.value !== s.plan && p.value !== "gratis").map((p) => <DropdownMenuItem key={p.value} onSelect={() => run(() => adminUpdateSubscription(s.id, { kind: "plan", plan: p.value }), `Cambiada a ${p.label}`, qc)}>Cambiar a {p.label}</DropdownMenuItem>)}
-                      <DropdownMenuSeparator />
-                      {s.estado === "activa" && s.proveedor === "mercadopago" && <DropdownMenuItem onSelect={() => run(() => adminUpdateSubscription(s.id, { kind: "cancelar" }), "Renovación cancelada", qc)}>Cancelar renovación</DropdownMenuItem>}
-                      <DropdownMenuItem variant="destructive" onSelect={() => { if (confirm("¿Terminar esta suscripción ya? El hogar vuelve al plan Gratis.")) run(() => adminUpdateSubscription(s.id, { kind: "terminar" }), "Suscripción terminada", qc) }}>Terminar ahora</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+    <DataTable<S>
+      title="Suscripciones" info="Qué plan tiene cada hogar, por qué medio y hasta cuándo." data={data} loading={isPending} rowKey={(s) => s.id}
+      search={{ placeholder: "Buscar hogar o nota", text: (s) => `${s.hogar} ${s.nota ?? ""}` }}
+      filters={[
+        { id: "vig", label: "Vigencia", options: [{ value: "si", label: "Vigentes" }, { value: "no", label: "Vencidas o pendientes" }], match: (s, v) => (v === "si" ? s.vigente : !s.vigente) },
+        { id: "estado", label: "Estado", options: Object.entries(SUB).map(([k, v]) => ({ value: k, label: v[1] })), match: (s, v) => s.estado === v },
+        { id: "prov", label: "Medio", options: Object.entries(PROV).map(([k, v]) => ({ value: k, label: v })), match: (s, v) => s.proveedor === v },
+        { id: "plan", label: "Plan", options: plans.map((p) => ({ value: p.value, label: p.label })), match: (s, v) => s.plan === v },
+      ]}
+      exportName="mirai-suscripciones" initialSort={{ id: "vence", dir: "desc" }}
+      actions={[
+        { label: "Extender 7 días", onSelect: (s) => upd(s, { kind: "extender", dias: 7 }, "Extendida 7 días") },
+        { label: "Extender 30 días", onSelect: (s) => upd(s, { kind: "extender", dias: 30 }, "Extendida 30 días") },
+        { label: "Extender 1 año", onSelect: (s) => upd(s, { kind: "extender", dias: 365 }, "Extendida 1 año") },
+        ...plans.filter((p) => p.value !== "gratis").map((p) => ({ label: `Cambiar a ${p.label}`, onSelect: (s: S) => upd(s, { kind: "plan", plan: p.value }, `Cambiada a ${p.label}`), hidden: (s: S) => s.plan === p.value })),
+        { label: "Cancelar renovación", onSelect: (s) => upd(s, { kind: "cancelar" }, "Renovación cancelada"), hidden: (s) => !(s.estado === "activa" && s.proveedor === "mercadopago") },
+        { label: "Terminar ahora", destructive: true, onSelect: (s) => { if (confirm("¿Terminar esta suscripción ya? El hogar vuelve al plan Gratis.")) upd(s, { kind: "terminar" }, "Suscripción terminada") } },
+      ]}
+      columns={[
+        { id: "hogar", header: "Hogar", sort: (s) => s.hogar.toLowerCase(), csv: (s) => s.hogar, cell: (s) => <DTTwoLine top={<span className="font-medium">{s.hogar}</span>} bottom={s.nota} /> },
+        { id: "plan", header: "Plan", sort: (s) => s.plan, csv: (s) => pn(s.plan), cell: (s) => <DTTwoLine top={pn(s.plan)} bottom={s.periodo === "anio" ? "Anual" : "Mensual"} /> },
+        { id: "prov", header: "Medio", csv: (s) => PROV[s.proveedor] ?? s.proveedor, cell: (s) => PROV[s.proveedor] ?? s.proveedor },
+        { id: "estado", header: "Estado", sort: (s) => s.estado, csv: (s) => s.estado, cell: (s) => <StatusPill tone={SUB[s.estado]?.[0] ?? "gray"}>{SUB[s.estado]?.[1] ?? s.estado}</StatusPill> },
+        { id: "vence", header: "Vence", sort: (s) => s.vence_at ?? "", csv: (s) => s.vence_at?.slice(0, 10) ?? "", cell: (s) => <DTTwoLine top={s.vence_at ? fmtDate(s.vence_at.slice(0, 10), { year: true }) : "—"} bottom={s.vence_at ? rel(s.vence_at) : undefined} /> },
+      ]}
+    />
   )
 }
 
@@ -231,9 +214,7 @@ export function PagosPanel() {
   const qc = useQueryClient()
   const { data: r, isPending } = useQuery({ queryKey: ["admin", "revenue"], queryFn: () => adminRevenue() })
   const [manual, setManual] = useState(false)
-  const [estado, setEstado] = useState("todos")
-  const [q, setQ] = useState("")
-  const list = (r?.pagos ?? []).filter((x) => (estado === "todos" || x.estado === estado) && (!q || norm(`${x.hogar} ${x.pagador ?? ""} ${x.referencia}`).includes(norm(q))))
+  type P = NonNullable<typeof r>["pagos"][number]
   return (
     <div className="grid gap-5">
       <KpiGrid>
@@ -242,41 +223,30 @@ export function PagosPanel() {
         <Kpi icon="wallet" tone="violet" label="Total histórico" value={r ? precio(r.ingresosTotal) : ""} sub={r && r.porProveedor.map((x) => `${PROV[x.p]}: ${x.n}`).join(" · ")} loading={isPending} />
         <Kpi icon="circle-alert" tone="red" label="Problemas del mes" value={r ? String(r.rechazadosMes + r.canceladasMes) : ""} sub={r && `${r.rechazadosMes} rechazados · ${r.canceladasMes} cancelaciones`} loading={isPending} />
       </KpiGrid>
-      <Card className="gap-4 p-5 shadow-card ring-0">
-        <div className="flex flex-wrap gap-2">
-          <div className="relative min-w-56 flex-1"><Search className="absolute top-3 left-3 size-4 text-muted-foreground" /><Input className="h-10 pl-9" placeholder="Buscar hogar, correo o referencia" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar pagos" /></div>
-          <div className="w-44"><Combobox value={estado} onChange={setEstado} options={[{ value: "todos", label: "Todos los estados" }, ...Object.entries(PAY).map(([k, v]) => ({ value: k, label: v[1] }))]} /></div>
-          <Button variant="outline" disabled={!list.length} onClick={() => csvDownload("mirai-pagos", [["Fecha", "Hogar", "Pasarela", "Plan", "Periodo", "Monto", "Estado", "Método", "Pagador", "Cupón", "Factura", "Referencia"], ...list.map((x) => [(x.paid_at ?? x.created_at).slice(0, 10), x.hogar, PROV[x.proveedor] ?? x.proveedor, (x as { plan?: string }).plan ?? "", x.periodo ?? "", x.monto, x.estado, x.metodo ?? "", x.pagador ?? "", (x as { cupon?: string }).cupon ?? "", (x as { factura_ref?: string }).factura_ref ?? "", x.referencia])])}><Download /> CSV</Button>
-          <Button onClick={() => setManual(true)}><Plus /> Registrar pago</Button>
-        </div>
-        {isPending ? <Skeleton className="h-60" /> : !list.length ? <p className="py-6 text-center text-sm text-muted-foreground">No hay pagos con estos filtros.</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[46rem] text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">Fecha</th><th className="font-medium">Hogar</th><th className="font-medium">Pasarela</th><th className="font-medium">Estado</th><th className="text-right font-medium">Monto</th><th /></tr></thead>
-              <tbody>{list.map((x) => (
-                <tr key={x.id} className="border-b last:border-0">
-                  <td className="py-2 whitespace-nowrap">{fmtDate((x.paid_at ?? x.created_at).slice(0, 10))}</td>
-                  <td className="max-w-56 truncate">{x.hogar}<span className="block truncate text-xs text-muted-foreground">{x.pagador}</span></td>
-                  <td>{PROV[x.proveedor] ?? x.proveedor}{x.metodo ? <span className="block text-xs text-muted-foreground">{x.metodo}</span> : null}</td>
-                  <td><StatusPill tone={PAY[x.estado]?.[0] ?? "gray"}>{PAY[x.estado]?.[1] ?? x.estado}</StatusPill></td>
-                  <td className="text-right font-semibold tabular-nums">{precio(x.monto)}</td>
-                  <td className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={`Acciones del pago de ${x.hogar}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => { const f = prompt("Número de la factura electrónica:"); if (f) run(() => adminUpdatePayment(x.id, { factura_ref: f }), "Factura anotada", qc) }}>Anotar factura</DropdownMenuItem>
-                        {x.estado === "aprobado" && <DropdownMenuItem onSelect={() => { const n = prompt("Nota de la devolución (la devolución real se hace en la pasarela):"); if (n !== null) run(() => adminUpdatePayment(x.id, { estado: "reembolsado", nota: n }), "Marcado como devuelto", qc) }}>Marcar como devuelto</DropdownMenuItem>}
-                        {x.estado !== "anulado" && <DropdownMenuItem variant="destructive" onSelect={() => { if (confirm("¿Anular este pago en Mirai?")) run(() => adminUpdatePayment(x.id, { estado: "anulado" }), "Pago anulado", qc) }}>Anular</DropdownMenuItem>}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground">Las devoluciones de dinero se hacen en el panel de Mercado Pago o Wompi; aquí se anotan para que los informes cuadren.</p>
-      </Card>
+      <DataTable<P>
+        title="Pagos" info="Cobros de las pasarelas y pagos registrados a mano. Las devoluciones de dinero se hacen en Mercado Pago o Wompi; aquí se anotan." data={r?.pagos} loading={isPending} rowKey={(x) => x.id}
+        search={{ placeholder: "Buscar hogar, correo o referencia", text: (x) => `${x.hogar} ${x.pagador ?? ""} ${x.referencia}` }}
+        filters={[
+          { id: "estado", label: "Estado", options: Object.entries(PAY).map(([k, v]) => ({ value: k, label: v[1] })), match: (x, v) => x.estado === v },
+          { id: "prov", label: "Pasarela", options: Object.entries(PROV).map(([k, v]) => ({ value: k, label: v })), match: (x, v) => x.proveedor === v },
+          { id: "per", label: "Periodo", options: [{ value: "mes", label: "Mensual" }, { value: "anio", label: "Anual" }], match: (x, v) => x.periodo === v },
+        ]}
+        create={{ label: "Registrar pago", onClick: () => setManual(true) }} exportName="mirai-pagos" initialSort={{ id: "fecha", dir: "desc" }}
+        actions={[
+          { label: "Anotar factura", onSelect: (x) => { const f = prompt("Número de la factura electrónica:"); if (f) run(() => adminUpdatePayment(x.id, { factura_ref: f }), "Factura anotada", qc) } },
+          { label: "Copiar referencia", onSelect: (x) => { navigator.clipboard.writeText(x.referencia); toast.success("Referencia copiada") } },
+          { label: "Marcar como devuelto", hidden: (x) => x.estado !== "aprobado", onSelect: (x) => { const n = prompt("Nota de la devolución:"); if (n !== null) run(() => adminUpdatePayment(x.id, { estado: "reembolsado", nota: n }), "Marcado como devuelto", qc) } },
+          { label: "Anular", destructive: true, hidden: (x) => x.estado === "anulado", onSelect: (x) => { if (confirm("¿Anular este pago en Mirai?")) run(() => adminUpdatePayment(x.id, { estado: "anulado" }), "Pago anulado", qc) } },
+        ]}
+        columns={[
+          { id: "fecha", header: "Fecha", sort: (x) => x.paid_at ?? x.created_at, csv: (x) => (x.paid_at ?? x.created_at).slice(0, 10), cell: (x) => fmtDate((x.paid_at ?? x.created_at).slice(0, 10), { year: true }) },
+          { id: "hogar", header: "Hogar", sort: (x) => x.hogar.toLowerCase(), csv: (x) => x.hogar, cell: (x) => <DTTwoLine top={<span className="font-medium">{x.hogar}</span>} bottom={x.pagador} /> },
+          { id: "prov", header: "Pasarela", csv: (x) => PROV[x.proveedor] ?? x.proveedor, cell: (x) => <DTTwoLine top={PROV[x.proveedor] ?? x.proveedor} bottom={x.metodo} /> },
+          { id: "estado", header: "Estado", sort: (x) => x.estado, csv: (x) => x.estado, cell: (x) => <StatusPill tone={PAY[x.estado]?.[0] ?? "gray"}>{PAY[x.estado]?.[1] ?? x.estado}</StatusPill> },
+          { id: "monto", header: "Monto", align: "right", sort: (x) => x.monto, csv: (x) => x.monto, cell: (x) => <span className="font-semibold tabular-nums">{precio(x.monto)}</span> },
+          { id: "ref", header: "Referencia", hidden: true, csv: (x) => x.referencia, cell: (x) => <span className="font-mono text-xs">{x.referencia}</span> },
+        ]}
+      />
       <ManualPaymentDialog open={manual} onOpenChange={setManual} />
     </div>
   )

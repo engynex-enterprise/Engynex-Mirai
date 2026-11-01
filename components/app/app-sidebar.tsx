@@ -27,6 +27,7 @@ import { useApp } from "./app-context"
 import { useShell } from "./shell-store"
 import type { LiveStatus, PresenceUser } from "@/hooks/use-realtime"
 import { switchBook } from "./actions"
+import { ModeSwitch } from "./mode-switch"
 import { togglePrivacy } from "./privacy"
 import { useGami } from "@/features/gami/use-gami"
 
@@ -56,6 +57,7 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
   return (
     <Sidebar collapsible="icon" className="border-r-sidebar-border">
       <SidebarHeader className="gap-1.5 pt-3">
+        <ModeSwitch mode="usuario" />
         <div className="flex items-center gap-1 group-data-[collapsible=icon]:flex-col">
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full"><BookSwitcher /></div>
           <Tooltip>

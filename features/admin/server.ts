@@ -426,3 +426,13 @@ export async function adminTestGlobal(kind: string): Promise<{ ok: boolean; msg:
     return { ok: false, msg }
   }
 }
+
+/** Invita a una persona por correo (Supabase envía el enlace para crear su cuenta). */
+export async function adminInviteUser(email: string, nombre: string) {
+  const ctx = await requirePlatformAdmin()
+  const e = z.email("Correo inválido").parse(email.trim().toLowerCase())
+  const n = z.string().trim().max(80).parse(nombre)
+  const { error } = await supabaseAdmin().auth.admin.inviteUserByEmail(e, { data: { nombre: n }, redirectTo: `${siteUrl()}/auth/callback?next=/bienvenida` })
+  if (error) throw new Error(/already/i.test(error.message) ? "Ya existe una cuenta con ese correo." : error.message)
+  await audit(ctx.user.id, "invitar persona", e, { nombre: n })
+}

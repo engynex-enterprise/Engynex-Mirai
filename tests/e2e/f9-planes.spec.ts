@@ -4,6 +4,8 @@ import { QA, admin, setQaPlan } from "./qa"
 
 // Las demás pruebas usan QA en Premium: al terminar se deja así.
 test.afterAll(async () => {
+  await admin().from("plan_subscriptions").delete().eq("plan", "plan-qa")
+  await admin().from("plans").delete().eq("id", "plan-qa")
   await setQaPlan("premium")
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   const id = data.users.find((u) => u.email === QA.email)?.id
@@ -28,7 +30,7 @@ test("plan gratis: secciones Premium bloqueadas, planes y Mi plan", async ({ pag
   await expect(page.getByTestId("plan-premium").getByText("$149.000")).toBeVisible()
   await page.getByRole("radio", { name: "Mensual" }).click()
   await expect(page.getByTestId("plan-premium").getByText("$14.900")).toBeVisible()
-  await expect(page.getByRole("button", { name: /Pagar con tarjeta/ })).toBeVisible()
+  await expect(page.getByTestId("plan-premium").getByRole("button", { name: /Pagar con tarjeta/ })).toBeVisible()
   await shot(page, "planes", info.project.name)
 
   // Mi plan
@@ -61,6 +63,16 @@ test("consola: entrar desde el perfil, crear un plan, asignarlo y ver pagos", as
   await page.getByRole("menuitem", { name: "Admin" }).click()
   await expect(page.getByRole("heading", { name: "Resumen", level: 1 })).toBeVisible({ timeout: 30_000 })
   await shot(page, "consola-resumen", info.project.name)
+  // Selector de modo: Usuario ↔ Admin
+  if (!mobile) {
+    await page.getByRole("radio", { name: "Usuario" }).click()
+    await expect(page).toHaveURL(/\/inicio/)
+    await page.getByRole("radio", { name: "Admin" }).click()
+    await expect(page.getByRole("heading", { name: "Resumen", level: 1 })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole("button", { name: /Minimizar o expandir el menú/ }).first().click()
+    await shot(page, "consola-minimizada", info.project.name)
+    await page.getByRole("button", { name: /Minimizar o expandir el menú/ }).first().click()
+  }
 
   // Crear un plan
   await page.goto("/admin/planes")
@@ -75,8 +87,9 @@ test("consola: entrar desde el perfil, crear un plan, asignarlo y ver pagos", as
 
   // Asignarlo desde la ficha del usuario
   await page.goto("/admin/usuarios")
-  await page.getByRole("textbox", { name: "Buscar clientes" }).fill(QA.email)
-  await page.getByRole("link", { name: QA.nombre }).first().click()
+  await page.getByRole("textbox", { name: "Buscar por nombre, correo u hogar" }).fill(QA.email)
+  await shot(page, "consola-usuarios", info.project.name)
+  await page.locator("#main").getByRole("link", { name: QA.nombre }).first().click()
   await expect(page.getByRole("heading", { name: QA.nombre, level: 1 })).toBeVisible({ timeout: 30_000 })
   await page.getByRole("button", { name: "Asignar plan" }).first().click()
   await page.getByRole("dialog").getByRole("combobox").first().click()

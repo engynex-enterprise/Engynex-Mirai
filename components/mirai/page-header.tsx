@@ -7,7 +7,8 @@ import { hasIso } from "./iso-icon"
 import { useShell } from "@/components/app/shell-store"
 import { HELP } from "@/lib/content/help"
 import { bannerFor } from "@/lib/content/banners"
-import { pageById } from "@/lib/nav"
+import { crumbsFor, pageById } from "@/lib/nav"
+import { Crumbs } from "./crumbs"
 
 /**
  * Banner de cada módulo: fondo con el degradado de su familia de color, texto a la izquierda (sección, título,
@@ -21,7 +22,7 @@ export function PageHeader({ id, title, description, actions, noHelp, children }
   const help = HELP[id]
   const { theme, motif } = bannerFor(id)
   const page = pageById(id)
-  const where = page ? (page.group ? `${page.section} · ${page.group.label}` : page.section) : null
+  const crumbs = crumbsFor(id)
   const iso = hasIso(id) ? id : page?.group?.iso ?? "mirai"
   return (
     <header
@@ -30,12 +31,7 @@ export function PageHeader({ id, title, description, actions, noHelp, children }
     >
       <div className="grid items-center md:grid-cols-[minmax(0,1fr)_minmax(260px,400px)]">
         <div className="order-2 grid justify-items-start gap-3 px-5 pb-6 sm:px-8 md:order-1 md:py-9 md:pr-2 md:pl-10">
-          {where && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/75 px-3 py-1 text-[13px] font-semibold text-meta-text backdrop-blur dark:bg-white/10">
-              <span className="size-2 rounded-full" style={{ background: theme.b }} />
-              {where}
-            </span>
-          )}
+          <Crumbs items={crumbs} />
           <h1 className="font-heading text-[28px] leading-[1.12] font-semibold tracking-[-0.02em] text-meta-text sm:text-[38px]">{title ?? help?.t}</h1>
           {(description ?? help?.i) && <p className="max-w-[60ch] text-[15px] leading-relaxed text-meta-text/85 sm:text-[16px]">{description ?? help?.i}</p>}
           {(actions || (help && !noHelp)) && (

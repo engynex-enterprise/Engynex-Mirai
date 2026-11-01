@@ -63,3 +63,16 @@ export const pageById = (id: string) => PAGES.find((p) => p.id === id)
 
 /** Barra inferior en móvil */
 export const MOBILE_TABS = ["inicio", "gastos", "recordatorios", "consejero"] as const
+
+/** Migas de pan de una sección: Inicio › Sección › Grupo (cada nivel lleva a su primera página). */
+export function crumbsFor(id: string): { label: string; href?: string }[] {
+  if (id === "inicio") return []
+  const home = { label: "Inicio", href: "/inicio" }
+  const page = pageById(id)
+  if (!page) return [home]
+  const firstOfSection = PAGES.find((p) => p.section === page.section)
+  const out = [home]
+  if (firstOfSection && page.section !== "General") out.push({ label: page.section, href: firstOfSection.href })
+  if (page.group) out.push({ label: page.group.label, href: page.group.items[0].href })
+  return out
+}

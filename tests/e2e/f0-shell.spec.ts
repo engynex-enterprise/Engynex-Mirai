@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { QA } from "./qa"
+import { QA, setQaWelcome } from "./qa"
 
 const errors = (page: Page) => {
   const list: string[] = []
@@ -40,8 +40,19 @@ test("login → bienvenida → shell con menú, Ctrl K y Agregar", async ({ page
     await page.getByRole("button", { name: "Empezar" }).click()
     await page.waitForURL(/\/puesta/)
   }
+  // Modal de bienvenida (una sola vez): se ve, se cierra y no vuelve a salir
+  await setQaWelcome(false)
   await page.goto("/inicio")
+  const modal = page.getByRole("dialog", { name: /Bienvenido a Mirai, / })
+  await expect(modal).toBeVisible({ timeout: 20_000 })
+  await expect(modal.getByText("Tus datos, seguros y privados")).toBeVisible()
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: `tests/.out/bienvenida-modal-${test.info().project.name}.png` })
+  await modal.getByRole("button", { name: "Cerrar" }).click()
+  await expect(modal).toHaveCount(0)
+  await page.reload()
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+  await expect(page.getByRole("dialog", { name: /Bienvenido a Mirai, / })).toHaveCount(0)
   await expect(page.getByText("Sincronizado en vivo").or(page.getByRole("button", { name: "Menú", exact: true }))).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: `tests/.out/inicio-${test.info().project.name}.png`, fullPage: true })
 
