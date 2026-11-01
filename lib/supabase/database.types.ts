@@ -1603,6 +1603,12 @@ isOneToOne: false
 "create_household":
 { Args: { "p_libro"?: string,"p_nombre": string }; Returns: string
                            },
+"fund_save":
+{ Args: { "p_book": string,"p_fecha": string,"p_nota"?: string,"p_valor": number }; Returns: number
+                           },
+"fund_use":
+{ Args: { "p_book": string,"p_desc": string,"p_fecha": string,"p_medio"?: string,"p_valor": number }; Returns: Json
+                           },
 "is_book_member":
 { Args: { "bk": string,"min_role"?: string }; Returns: boolean
                            },
