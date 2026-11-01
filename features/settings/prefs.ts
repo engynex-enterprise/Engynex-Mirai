@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { createClient } from "@/utils/supabase/client"
@@ -18,15 +18,19 @@ export function usePrefs() {
     queryFn: async () => (await createClient().from("user_preferences").select("*").eq("user_id", user.id).maybeSingle()).data,
   })
   const m = useMutation({
-    mutationFn: async (p: Partial<Prefs>) => {
+    mutationFn: async ({ p }: { p: Partial<Prefs>; quiet?: boolean }) => {
       const { error } = await createClient().from("user_preferences").upsert({ user_id: user.id, ...p })
       if (error) throw new Error(error.message)
     },
-    onMutate: (p) => qc.setQueryData(["prefs", user.id], (o: Prefs | null) => (o ? { ...o, ...p } : o)),
-    onSuccess: () => toast("Guardado"),
+    onMutate: ({ p }) => qc.setQueryData(["prefs", user.id], (o: Prefs | null) => (o ? { ...o, ...p } : o)),
+    onSuccess: (_d, v) => { if (!v.quiet) toast("Guardado") },
     onError: (e) => toast.error("No se pudo guardar", { description: e.message }),
   })
-  return { prefs: q.data, isPending: q.isPending, save: m.mutate }
+  const { mutate } = m
+  // save: cambios que hace la persona (con aviso). saveQuiet: marcas automáticas (novedades vistas, tour hecho).
+  const save = useCallback((p: Partial<Prefs>) => mutate({ p }), [mutate])
+  const saveQuiet = useCallback((p: Partial<Prefs>) => mutate({ p, quiet: true }), [mutate])
+  return { prefs: q.data, isPending: q.isPending, save, saveQuiet }
 }
 
 /** Ajustes del libro: actualizar campos de book_settings. */

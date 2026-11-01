@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
-import { BellOff, CheckCheck } from "lucide-react"
+import { CheckCheck } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -12,6 +12,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Icon } from "@/components/mirai/icon"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
+import { Illustration } from "@/components/mirai/illustration"
 import { useShell } from "./shell-store"
 import { useApp } from "./app-context"
 
@@ -63,7 +64,7 @@ export function NotificationsSheet() {
           ) : !data?.length ? (
             <Empty className="mt-10">
               <EmptyHeader>
-                <EmptyMedia variant="icon"><BellOff /></EmptyMedia>
+                <EmptyMedia><Illustration k="sin-avisos" width={190} /></EmptyMedia>
                 <EmptyTitle>No tienes notificaciones</EmptyTitle>
                 <EmptyDescription>Te avisaremos cuando se acerque un pago.</EmptyDescription>
               </EmptyHeader>
@@ -72,11 +73,11 @@ export function NotificationsSheet() {
             data.map((n) => {
               const body = (
                 <>
-                  <span className={cn("grid size-11 shrink-0 place-items-center rounded-full", n.read_at ? "bg-muted text-muted-foreground" : "bg-brand-soft text-brand")}>
-                    <Icon name={KIND_ICON[n.kind] ?? "bell"} className="size-5" />
+                  <span className={cn("grid size-14 shrink-0 place-items-center rounded-full", n.read_at ? "bg-secondary text-muted-foreground" : "bg-brand-gradient text-white")}>
+                    <Icon name={KIND_ICON[n.kind] ?? "bell"} className="size-6" />
                   </span>
                   <span className="grid flex-1 gap-0.5 text-left">
-                    <span className="font-semibold">{n.titulo}</span>
+                    <span className={cn("text-[15px]", n.read_at ? "font-normal" : "font-semibold")}>{n.titulo}</span>
                     {n.cuerpo && <span className="text-sm text-muted-foreground">{n.cuerpo}</span>}
                     <span className={cn("text-xs", n.read_at ? "text-muted-foreground" : "font-medium text-brand")}>
                       {formatDistanceToNowStrict(new Date(n.created_at), { locale: es, addSuffix: true })}
@@ -85,7 +86,7 @@ export function NotificationsSheet() {
                   {!n.read_at && <span className="mt-2 size-2.5 shrink-0 rounded-full bg-brand" aria-label="Sin leer" />}
                 </>
               )
-              const cls = "flex w-full gap-3 rounded-lg p-3 hover:bg-muted"
+              const cls = "flex w-full gap-3 rounded-lg p-2.5 hover:bg-hover"
               return n.href ? (
                 <Link key={n.id} href={n.href} className={cls} onClick={() => { markOne(n.id); setOpen(false) }}>{body}</Link>
               ) : (

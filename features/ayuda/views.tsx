@@ -18,6 +18,7 @@ import { PAGES } from "@/lib/nav"
 import { HELP } from "@/lib/content/help"
 import { APP_VER, FAQ, FAQ_CATS, GUIDES, RELEASES, stripHtml } from "@/lib/content/ayuda"
 import { cn } from "@/lib/utils"
+import { Illustration } from "@/components/mirai/illustration"
 import { usePrefs } from "@/features/settings/prefs"
 
 const KIND = { new: ["sparkles", "Nuevo", "pagado"], imp: ["trending-up", "Mejora", "info"], fix: ["wrench", "Corrección", "porVencer"] } as const
@@ -25,8 +26,8 @@ const goHref = (go?: string, tab?: string) => (go ? `/${go}${tab ? `?tab=${tab}`
 const Html = ({ html, className }: { html: string; className?: string }) => <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 
 export function NovedadesView() {
-  const { prefs, save } = usePrefs()
-  useEffect(() => { if (prefs && prefs.seen_release !== APP_VER) { const t = setTimeout(() => save({ seen_release: APP_VER }), 400); return () => clearTimeout(t) } }, [prefs, save])
+  const { prefs, saveQuiet } = usePrefs()
+  useEffect(() => { if (prefs && prefs.seen_release !== APP_VER) { const t = setTimeout(() => saveQuiet({ seen_release: APP_VER }), 400); return () => clearTimeout(t) } }, [prefs, saveQuiet])
   const [top, ...rest] = RELEASES
   const counts = (r: (typeof RELEASES)[number]) => (["new", "imp", "fix"] as const).map((k) => [k, r.items.filter((i) => i[0] === k).length] as const).filter(([, n]) => n)
   const label = { new: ["nuevo", "nuevos"], imp: ["mejora", "mejoras"], fix: ["corrección", "correcciones"] }
@@ -64,7 +65,7 @@ export function FaqView() {
         {["Todas", ...FAQ_CATS].map((c) => <button key={c} type="button" onClick={() => setCat(c)} className={cn("rounded-full border px-3 py-1.5 text-sm", cat === c ? "border-brand bg-brand-soft font-semibold text-link" : "hover:bg-hover")}>{c} <span className="text-muted-foreground">{c === "Todas" ? FAQ.length : FAQ.filter((f) => f.c === c).length}</span></button>)}
       </div>
       {!list.length ? (
-        <Card className="items-center gap-3 p-8 text-center shadow-card ring-0"><p>No encontramos “{q}”. Prueba con otra palabra o revisa el Manual.</p><Button variant="outline" asChild><Link href="/manual"><BookOpen /> Ir al manual</Link></Button></Card>
+        <Card className="items-center gap-3 p-8 text-center shadow-card ring-0"><Illustration k="sin-resultados" width={200} /><p>No encontramos “{q}”. Prueba con otra palabra o revisa el Manual.</p><Button variant="outline" asChild><Link href="/manual"><BookOpen /> Ir al manual</Link></Button></Card>
       ) : (
         <Card className="p-2 shadow-card ring-0">
           <Accordion key={q + cat} type="multiple" defaultValue={q ? list.slice(0, 3).map((f) => f.q) : []}>

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { useQueryClient } from "@tanstack/react-query"
-import { Bell, Check, ChevronRight, ChevronsUpDown, CirclePlus, LogOut, Moon, Plus, Search, Settings, Sun, User } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, CirclePlus, LogOut, Moon, Plus, Search, Settings, Sun, User } from "lucide-react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge,
   SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, useSidebar,
@@ -52,25 +52,27 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
 
   return (
     <Sidebar collapsible="icon" className="border-r-sidebar-border">
-      <SidebarHeader className="gap-2 pt-3">
+      <SidebarHeader className="gap-1.5 pt-3">
         <BookSwitcher />
+        <SidebarMenu className="gap-1.5">
+          <SidebarMenuItem>
+            <SidebarMenuButton data-tour="search" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-10 rounded-full bg-secondary px-3 text-muted-foreground hover:bg-secondary-hover group-data-[collapsible=icon]:rounded-full">
+              <Search /> <span>Buscar en Mirai</span> <Kbd className="ml-auto bg-card">Ctrl K</Kbd>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton data-tour="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-10 justify-center rounded-md bg-primary font-semibold text-primary-foreground shadow-[0_2px_6px_rgba(42,127,20,.3)] hover:bg-primary-hover hover:text-primary-foreground active:bg-primary-hover active:text-primary-foreground group-data-[collapsible=icon]:rounded-full">
+              <CirclePlus /> <span className="flex-none">Agregar</span> <Kbd className="ml-auto bg-white/20 text-inherit group-data-[collapsible=icon]:hidden">N</Kbd>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton data-tour="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-9 bg-sidebar-primary font-medium text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground active:bg-sidebar-primary/90 active:text-sidebar-primary-foreground">
-              <CirclePlus /> <span>Agregar</span> <Kbd className="ml-auto bg-white/15 text-inherit">N</Kbd>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton data-tour="search" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-9 border bg-background text-muted-foreground">
-              <Search /> <span>Buscar…</span> <Kbd className="ml-auto">Ctrl K</Kbd>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <ProfileRow />
           <SidebarMenuItem>
             <SidebarMenuButton data-tour="bell" onClick={() => openBell(true)} tooltip="Notificaciones">
-              <span className="relative"><Bell />{collapsed && unread > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-expense" />}</span>
+              <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card group-data-[collapsible=icon]:size-7"><IsoIcon k="notificaciones" size={22} />{unread > 0 && <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-expense px-1 text-[10px] font-bold text-white ring-2 ring-sidebar">{unread > 9 ? "9+" : unread}</span>}</span>
               <span>Notificaciones</span>
             </SidebarMenuButton>
-            {unread > 0 && <SidebarMenuBadge className="bg-expense text-white">{unread > 9 ? "9+" : unread}</SidebarMenuBadge>}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -78,7 +80,7 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
       <SidebarContent className="gap-0">
         {NAV.map((s) => (
           <SidebarGroup key={s.sec} className="py-1">
-            <SidebarGroupLabel>{s.sec}</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[13px]">{s.sec}</SidebarGroupLabel>
             <SidebarMenu>
               {s.entries.filter((e) => isGroup(e) || !hidden.includes(e.id)).map((e) =>
                 isGroup(e) ? (
@@ -86,7 +88,7 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton tooltip={e.label} isActive={(collapsed || openGroup !== e.g) && e.items.some((i) => i.id === current)}>
-                          <IsoIcon k={e.iso} size={20} />
+                          <NavIcon iso={e.iso} />
                           <span>{e.label}</span>
                           <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
                         </SidebarMenuButton>
@@ -117,12 +119,40 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 border-t pb-3">
+      <SidebarFooter className="gap-2 pb-3">
         {!collapsed && <LiveBar live={live} online={online} />}
         <UserMenu />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  )
+}
+
+/** Ícono del menú en círculo (estilo accesos de Facebook). */
+function NavIcon({ iso, icon }: { iso?: string; icon?: string }) {
+  return (
+    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card transition-transform group-hover/menu-button:scale-105 group-data-[collapsible=icon]:size-7 group-data-[active=true]/menu-button:bg-white dark:group-data-[active=true]/menu-button:bg-card">
+      {iso ? <IsoIcon k={iso} size={22} /> : <Icon name={icon ?? "circle"} className="size-5! text-brand" />}
+    </span>
+  )
+}
+
+/** Primera fila: tu foto y nombre (como en Facebook), lleva a tu perfil. */
+function ProfileRow() {
+  const { user } = useApp()
+  const path = usePathname()
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip={user.nombre} isActive={path === "/perfil"}>
+        <Link href="/perfil">
+          <Avatar className="size-9 group-data-[collapsible=icon]:size-7">
+            {user.avatar && <AvatarImage src={user.avatar} alt="" />}
+            <AvatarFallback className="bg-brand-gradient text-xs font-bold text-white">{initials(user.nombre)}</AvatarFallback>
+          </Avatar>
+          <span className="font-semibold">{user.nombre}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   )
 }
 
@@ -139,7 +169,7 @@ function Leaf({ item, active, badge }: { item: NavLeaf; active: boolean; badge?:
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
         <Link href={item.href} prefetch>
-          {hasIso(item.id) ? <IsoIcon k={item.id} size={20} /> : <Icon name={item.icon} />}
+          {hasIso(item.id) ? <NavIcon iso={item.id} /> : <NavIcon icon={item.icon} />}
           <span>{item.label}</span>
         </Link>
       </SidebarMenuButton>

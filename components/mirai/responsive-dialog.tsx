@@ -22,11 +22,11 @@ export function ResponsiveDialog({
     return (
       <Drawer open={open} onOpenChange={onOpenChange} repositionInputs={false}>
         <DrawerContent className="max-h-[94dvh]">
-          <DrawerHeader className="text-left">
-            <DrawerTitle className="text-lg">{title}</DrawerTitle>
-            {desc && <DrawerDescription>{desc}</DrawerDescription>}
+          <DrawerHeader className="border-b text-center">
+            <DrawerTitle className="text-[20px] font-bold">{title}</DrawerTitle>
+            {desc && <DrawerDescription className="text-[14px]">{desc}</DrawerDescription>}
           </DrawerHeader>
-          <div className="overflow-y-auto px-4 pb-2">{children}</div>
+          <div className="overflow-y-auto px-4 pt-4 pb-2">{children}</div>
           {footer && <DrawerFooter className="pb-safe grid grid-cols-2 border-t">{footer}</DrawerFooter>}
         </DrawerContent>
       </Drawer>
@@ -34,12 +34,13 @@ export function ResponsiveDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("flex max-h-[92dvh] flex-col gap-0 p-0", wide ? "sm:max-w-[820px]" : "sm:max-w-[700px]")}>
-        <DialogHeader className="px-7 pt-6 pb-4">
-          <DialogTitle className="text-xl">{title}</DialogTitle>
-          {desc && <DialogDescription className="max-w-[60ch]">{desc}</DialogDescription>}
+        {/* Encabezado estilo Facebook: título centrado, línea divisoria y cerrar en círculo gris */}
+        <DialogHeader className="items-center border-b px-14 pt-4 pb-3 text-center">
+          <DialogTitle className="text-[20px] leading-6 font-bold">{title}</DialogTitle>
+          {desc && <DialogDescription className="max-w-[60ch] text-center text-[14px]">{desc}</DialogDescription>}
         </DialogHeader>
-        <div className="overflow-y-auto px-7 pb-6">{children}</div>
-        {footer && <DialogFooter className="border-t px-7 py-4">{footer}</DialogFooter>}
+        <div className="overflow-y-auto px-6 pt-5 pb-6">{children}</div>
+        {footer && <DialogFooter className="border-t px-6 py-3">{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>
   )

@@ -17,11 +17,11 @@ export function ListRow({ icon, media, iconClassName, title, badges, subtitle, e
   value?: React.ReactNode; actions?: RowAction[]; onClick?: () => void; className?: string
 }) {
   return (
-    <li className={cn("flex items-start gap-3 rounded-md px-2 py-3 hover:bg-hover sm:items-center", className)}>
-      {media ?? <span className={cn("grid size-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground", iconClassName)}><Icon name={icon} className="size-5" /></span>}
+    <li className={cn("flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-hover sm:items-center", className)}>
+      {media ?? <span className={cn("grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-foreground", iconClassName)}><Icon name={icon} className="size-5" /></span>}
       <button type="button" disabled={!onClick} onClick={onClick} className="grid min-w-0 flex-1 gap-0.5 text-left disabled:cursor-default">
         <span className="flex flex-wrap items-center gap-1.5 font-semibold"><span className="min-w-0 break-words">{title}</span>{badges}</span>
-        {subtitle && <span className="text-[13px] text-muted-foreground">{subtitle}</span>}
+        {subtitle && <span className="text-[13.5px] text-muted-foreground">{subtitle}</span>}
         {extra && <span className="text-xs text-muted-foreground">{extra}</span>}
         {value && <span className="mt-1 sm:hidden">{value}</span>}
       </button>

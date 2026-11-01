@@ -13,6 +13,7 @@ import { useShell } from "@/components/app/shell-store"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { chatSend } from "./actions"
+import { IsoIcon } from "@/components/mirai/iso-icon"
 
 type Msg = { id: string; role: string; content: string; meta?: { go?: string } }
 const CHIPS = ["¿Cómo puedo ahorrar más cada mes?", "¿Qué deuda debería pagar primero?", "¿Me conviene sacar una tarjeta de crédito?", "Explícame qué es la tasa E.A.", "¿Cuánto debería tener en el fondo de emergencia?"]
@@ -177,23 +178,23 @@ export function ChatWidget() {
             <div className="flex-1 overflow-y-auto p-4">
               {!list.length ? (
                 <div className="grid h-full content-center justify-items-center gap-4 text-center">
-                  <span className="grid size-14 place-items-center rounded-full bg-navy text-lime"><Sparkles /></span>
+                  <IsoIcon k="chat" size={76} />
                   <p className="text-lg font-semibold">¿En qué te ayudo hoy?</p>
                   <div className="flex max-w-md flex-wrap justify-center gap-2">{CHIPS.map((c) => <button key={c} type="button" className="rounded-full border px-3 py-1.5 text-sm hover:bg-hover" onClick={() => send(c)}>{c}</button>)}</div>
                 </div>
               ) : (
                 <div className="grid gap-3">
                   {list.map((m) => m.role === "user" ? (
-                    <div key={m.id} className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-brand px-3.5 py-2 text-sm text-white whitespace-pre-wrap">{m.content}</div>
+                    <div key={m.id} className="ml-auto max-w-[85%] rounded-[18px] rounded-br-md bg-brand px-3.5 py-2 text-sm text-white whitespace-pre-wrap">{m.content}</div>
                   ) : (
                     <div key={m.id} className="flex max-w-[92%] gap-2">
                       <span className="grid size-7 shrink-0 place-items-center rounded-full bg-navy text-lime"><Sparkles className="size-3.5" /></span>
-                      <div className="rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2 text-sm"><MdLite text={m.content} />
+                      <div className="rounded-[18px] rounded-tl-md bg-muted px-3.5 py-2 text-sm"><MdLite text={m.content} />
                         {m.meta?.go && <Button size="sm" variant="soft" className="mt-2" onClick={() => goCons(m.meta!.go!)}>Abrir Consejo antes de gastar</Button>}
                       </div>
                     </div>
                   ))}
-                  {busy && <div className="flex gap-2"><span className="grid size-7 place-items-center rounded-full bg-navy text-lime"><Sparkles className="size-3.5" /></span><div className="flex items-center gap-1 rounded-2xl bg-muted px-4 py-3" aria-label="Escribiendo">{[0, 1, 2].map((i) => <span key={i} className="size-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: `${i * 0.15}s` }} />)}</div></div>}
+                  {busy && <div className="flex gap-2"><span className="grid size-7 place-items-center rounded-full bg-navy text-lime"><Sparkles className="size-3.5" /></span><div className="flex items-center gap-1 rounded-[18px] bg-muted px-4 py-3" aria-label="Escribiendo">{[0, 1, 2].map((i) => <span key={i} className="size-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: `${i * 0.15}s` }} />)}</div></div>}
                   <div ref={end} />
                 </div>
               )}

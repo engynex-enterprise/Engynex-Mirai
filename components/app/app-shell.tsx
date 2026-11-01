@@ -44,6 +44,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const ctx = useApp()
   const me = useMemo(() => ({ id: ctx.user.id, nombre: ctx.user.nombre, avatar: ctx.user.avatar }), [ctx.user])
   const { status, online } = useBookRealtime(ctx.book.id, me, path)
+  const setOnline = useShell((s) => s.setOnline)
+  useEffect(() => { setOnline(online.map((o) => ({ id: o.id, nombre: o.nombre, avatar: o.avatar }))) }, [online, setOnline])
   const { data: notifs } = useNotifications()
   const unread = notifs?.filter((n) => !n.read_at).length ?? 0
   const { badges, hidden } = useNavBadges()
@@ -55,7 +57,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <AppSidebar live={status} online={online} badges={badges} hidden={hidden} unread={unread} />
       <SidebarInset className="min-w-0 bg-background">
         <Crumbs />
-        <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pt-2 pb-28 sm:px-6 md:pb-16 lg:px-8">{children}</main>
+        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-28 sm:px-6 md:pb-16 lg:px-8">{children}</main>
       </SidebarInset>
       <MobileTabBar />
       <AddMenu />
@@ -78,7 +80,7 @@ function Crumbs() {
   const { book } = useApp()
   const page = pageById(path.split("/")[1] ?? "")
   return (
-    <div className="sticky top-0 z-30 flex h-12 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6 lg:px-8">
+    <div className="sticky top-0 z-30 flex h-14 items-center gap-2 bg-card/90 px-4 shadow-[0_1px_2px_rgba(0,0,0,.08)] backdrop-blur-md sm:px-6 lg:px-8">
       <SidebarTrigger className="-ml-1" aria-label="Contraer o expandir el menú (Ctrl B)" />
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">

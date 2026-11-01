@@ -20,7 +20,7 @@ export function NotesThread({ notes, me, other, onSend, limit }: { notes: Note[]
     <div className="grid gap-3">
       {!list.length && <p className="text-sm text-muted-foreground">Aún no hay notas.</p>}
       {list.map((n) => (
-        <div key={n.id} className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm", n.autor === me ? "ml-auto rounded-br-sm bg-brand text-white" : "rounded-bl-sm bg-muted")}>
+        <div key={n.id} className={cn("max-w-[85%] rounded-[18px] px-3.5 py-2 text-sm", n.autor === me ? "ml-auto rounded-br-sm bg-brand text-white" : "rounded-bl-sm bg-muted")}>
           <p className="whitespace-pre-wrap">{n.texto}</p>
           <p className={cn("mt-1 text-[11px]", n.autor === me ? "text-white/70" : "text-muted-foreground")}>{n.autor === me ? "Tú" : other} · {formatDistanceToNowStrict(new Date(n.created_at), { locale: es, addSuffix: true })}</p>
         </div>

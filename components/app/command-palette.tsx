@@ -1,5 +1,6 @@
 "use client"
 
+import { Illustration } from "@/components/mirai/illustration"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { useQuery } from "@tanstack/react-query"
@@ -41,7 +42,7 @@ export function CommandPalette() {
       <Command loop>
       <CommandInput placeholder="Buscar secciones, contactos, préstamos…" />
       <CommandList>
-        <CommandEmpty>Sin resultados.</CommandEmpty>
+        <CommandEmpty><span className="grid justify-items-center gap-1 py-2"><Illustration k="sin-resultados" width={150} /><span className="font-semibold">No encontramos eso</span><span className="text-xs text-muted-foreground">Prueba con otra palabra.</span></span></CommandEmpty>
         <CommandGroup heading="Secciones">
           {PAGES.map((p) => (
             <CommandItem key={p.id} value={`${p.label} ${p.group?.label ?? ""}`} onSelect={() => go(p.href)}>

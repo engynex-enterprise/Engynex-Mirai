@@ -13,17 +13,17 @@ export function MobileTabBar() {
   const { setOpenMobile } = useSidebar()
   const setAdd = useShell((s) => s.setAdd)
   const tab = (href: string, label: string, icon: React.ReactNode) => (
-    <Link href={href} className={cn("flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium", path.startsWith(href) ? "text-brand" : "text-muted-foreground")} aria-current={path.startsWith(href) ? "page" : undefined}>
+    <Link href={href} className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold", path.startsWith(href) ? "text-brand after:absolute after:inset-x-4 after:top-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-muted-foreground")} aria-current={path.startsWith(href) ? "page" : undefined}>
       {icon}{label}
     </Link>
   )
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur md:hidden" aria-label="Navegación principal">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 bg-card/95 shadow-[0_-1px_3px_rgba(0,0,0,.08)] backdrop-blur-md md:hidden" aria-label="Navegación principal">
       <div className="mx-auto flex max-w-lg items-end">
         {tab("/inicio", "Inicio", <House className="size-5" />)}
         {tab("/gastos", "Gastos", <Receipt className="size-5" />)}
         <button type="button" onClick={() => setAdd(true)} className="-mt-5 flex flex-1 flex-col items-center gap-0.5 text-[11px] font-medium text-muted-foreground" aria-label="Agregar">
-          <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-float"><Plus className="size-6" /></span>
+          <span className="bg-brand-gradient grid size-13 place-items-center rounded-full text-white shadow-[0_4px_14px_rgba(42,127,20,.45)] ring-4 ring-card"><Plus className="size-7" /></span>
           Agregar
         </button>
         {tab("/recordatorios", "Pagos", <Bell className="size-5" />)}

@@ -64,17 +64,17 @@ export function QuickEntry() {
   return (
     <div className="grid gap-2">
       <form data-tour="quick" className="flex items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) submit() }}>
-        <Avatar className="hidden size-10 sm:flex"><AvatarFallback className="bg-brand-gradient text-sm text-white">{initials(user.nombre)}</AvatarFallback></Avatar>
-        <InputGroup className="h-12 rounded-full bg-card">
-          <InputGroupInput aria-label="Escribe lo que pasó" value={text} onChange={(e) => setText(e.target.value)} placeholder={`Escribe lo que pasó, ${first}: “gasté 15 mil en almuerzo ayer”`} className="pl-4" />
+        <Avatar className="size-10"><AvatarFallback className="bg-brand-gradient text-sm font-bold text-white">{initials(user.nombre)}</AvatarFallback></Avatar>
+        <InputGroup className="h-11 rounded-full border-0 bg-secondary transition-colors hover:bg-secondary-hover has-[input:focus]:bg-card has-[input:focus]:ring-2 has-[input:focus]:ring-ring/30">
+          <InputGroupInput aria-label="Escribe lo que pasó" value={text} onChange={(e) => setText(e.target.value)} placeholder={`¿Qué gastaste hoy, ${first}?`} className="pl-4 text-[16px] placeholder:text-muted-foreground" />
           <InputGroupAddon align="inline-end">
-            <InputGroupButton type="submit" className="bg-ai-gradient rounded-full px-4 text-white hover:text-white hover:opacity-90" disabled={busy || !text.trim()}>
-              {busy ? <Spinner /> : <Sparkles />} Registrar
+            <InputGroupButton type="submit" className="bg-brand-gradient rounded-full px-4 font-semibold text-white hover:text-white hover:brightness-105 disabled:opacity-60" disabled={busy || !text.trim()}>
+              {busy ? <Spinner /> : <Sparkles />}<span className="max-sm:sr-only">Registrar</span>
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
       </form>
-      <p className="pl-1 text-xs text-muted-foreground sm:pl-14">Mirai entiende frases como “pagué 120 mil de la luz” o “me pagaron 300 mil por un trabajo”.</p>
+      <p className="pl-[3.25rem] text-xs text-muted-foreground">Escríbelo como lo dirías: “gasté 15 mil en almuerzo ayer”, “pagué 120 mil de la luz” o “me pagaron 300 mil”.</p>
     </div>
   )
 }

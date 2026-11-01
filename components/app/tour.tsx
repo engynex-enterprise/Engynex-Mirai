@@ -26,7 +26,7 @@ export function Tour() {
   const params = useSearchParams()
   const router = useRouter()
   const path = usePathname()
-  const { prefs, save } = usePrefs()
+  const { prefs, saveQuiet } = usePrefs()
   const [i, setI] = useState<number | null>(null)
   const [box, setBox] = useState<DOMRect | null>(null)
   const steps = TOUR
@@ -48,7 +48,7 @@ export function Tour() {
 
   function end() {
     setI(null); setBox(null)
-    if (prefs && !prefs.tour_done) save({ tour_done: true })
+    if (prefs && !prefs.tour_done) saveQuiet({ tour_done: true })
     if (params.get("tour")) router.replace(path)
   }
   if (i === null || !box) return null
