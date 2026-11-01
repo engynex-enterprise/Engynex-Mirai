@@ -1,0 +1,28 @@
+import { expect, test } from "@playwright/test"
+import { login, shot, watchErrors } from "./helpers"
+
+test("agenda: calendario de pagos (mes/semana/agenda) y calendario fiscal con renta", async ({ page }, info) => {
+  test.setTimeout(180_000)
+  const errs = watchErrors(page)
+  await login(page)
+  await page.goto("/puesta")
+  await page.getByRole("button", { name: "Ver un ejemplo" }).click()
+  await expect(page.getByText("Datos de ejemplo cargados")).toBeVisible({ timeout: 60_000 })
+  await page.waitForURL(/inicio/)
+  await page.goto("/recordatorios")
+  await expect(page.getByText("Mis calendarios")).toBeVisible({ timeout: 30_000 })
+  await page.getByRole("radio", { name: "Mes" }).click()
+  await shot(page, "pagos-mes", info.project.name)
+  await page.getByRole("radio", { name: "Semana" }).click()
+  await page.getByRole("radio", { name: "Agenda" }).click()
+  await expect(page.getByText(/Cuota|Arriendo|Salario/).first()).toBeVisible()
+  await shot(page, "pagos-agenda", info.project.name)
+  await page.goto("/calendario")
+  await page.getByRole("textbox", { name: "Últimos 2 dígitos de tu cédula" }).fill("45")
+  await expect(page.getByText(/14 de septiembre de 2026|14 septiembre 2026/)).toBeVisible()
+  await page.getByRole("button", { name: "Fechas de Colombia" }).click()
+  await page.getByRole("checkbox").first().click({ force: true }).catch(() => {})
+  await page.keyboard.press("Escape")
+  await shot(page, "fiscal", info.project.name)
+  expect(errs, errs.join("\n")).toEqual([])
+})

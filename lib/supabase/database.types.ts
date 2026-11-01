@@ -271,14 +271,14 @@ isOneToOne: false
                   ]
                 },"calendar_events": {
                   Row: {
-                    "anual": boolean,"book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"fecha": string,"id": string,"monto": number,"nota": string,"template_key": string | null,"tipo": string,"titulo": string,"updated_at": string
+                    "anual": boolean,"book_id": string,"cat": string | null,"created_at": string,"created_by": string | null,"deleted_at": string | null,"fecha": string,"fuente": string | null,"id": string,"monto": number,"nota": string,"template_key": string | null,"tipo": string,"titulo": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "anual"?: boolean,"book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"fecha": string,"id"?: string,"monto"?: number,"nota"?: string,"template_key"?: string | null,"tipo"?: string,"titulo": string,"updated_at"?: string
+                    "anual"?: boolean,"book_id": string,"cat"?: string | null,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"fecha": string,"fuente"?: string | null,"id"?: string,"monto"?: number,"nota"?: string,"template_key"?: string | null,"tipo"?: string,"titulo": string,"updated_at"?: string
                   }
                   Update: {
-                    "anual"?: boolean,"book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"fecha"?: string,"id"?: string,"monto"?: number,"nota"?: string,"template_key"?: string | null,"tipo"?: string,"titulo"?: string,"updated_at"?: string
+                    "anual"?: boolean,"book_id"?: string,"cat"?: string | null,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"fecha"?: string,"fuente"?: string | null,"id"?: string,"monto"?: number,"nota"?: string,"template_key"?: string | null,"tipo"?: string,"titulo"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
