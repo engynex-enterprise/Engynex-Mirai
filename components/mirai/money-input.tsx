@@ -2,7 +2,7 @@
 
 import { forwardRef, useState } from "react"
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
-import { parseMoney } from "@/lib/format"
+import { parseMoney, typedMoney } from "@/lib/format"
 
 const fmt = (n: number, dec: boolean) => (n ? new Intl.NumberFormat("es-CO", { maximumFractionDigits: dec ? 2 : 0 }).format(n) : "")
 
@@ -44,10 +44,9 @@ export const MoneyInput = forwardRef<HTMLInputElement, Props>(function MoneyInpu
         onFocus={() => { setText(fmt(Number(value ?? 0), dec)); setFocus(true) }}
         onChange={(e) => {
           const raw = e.target.value
-          const n = parseMoney(raw)
-          // Mantiene lo escrito si es texto ("120 mil"); si son solo dígitos, reformatea en vivo
-          setText(/^[\d.,\s$]*$/.test(raw) ? fmt(n, dec) || raw.replace(/[^\d,]/g, "") : raw)
-          onChange(n)
+          // Solo cifras: puntos de miles en vivo sin perder dígitos. Texto ("120 mil", "1,5 millones"): se interpreta.
+          if (/^[\d.,\s$]*$/.test(raw)) { const t = typedMoney(raw, dec); setText(t.text); onChange(t.n) }
+          else { setText(raw); onChange(parseMoney(raw)) }
         }}
         onBlur={() => { setFocus(false); onBlur?.() }}
       />

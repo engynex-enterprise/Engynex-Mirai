@@ -53,3 +53,24 @@ export function parseMoney(input: string | number | null | undefined): number {
   const n = Number(s)
   return Number.isFinite(n) ? n * mult : 0
 }
+
+/**
+ * Lo que la persona va escribiendo en un campo de dinero (solo cifras y separadores).
+ * Los puntos son siempre de miles (se reformatean en vivo) y la coma es decimal solo si `dec`.
+ * Así "4.5500" (lo que queda al teclear tras "4.550") se lee 45.500 y no 4,55.
+ */
+export function typedMoney(raw: string, dec: boolean): { n: number; text: string } {
+  const clean = raw.replace(/[$\s]/g, "")
+  if (!dec) {
+    const d = clean.replace(/\D/g, "").replace(/^0+(?=\d)/, "")
+    const n = d ? Number(d) : 0
+    return { n, text: d ? new Intl.NumberFormat("es-CO").format(n) : "" }
+  }
+  const [ent = "", ...rest] = clean.replace(/\./g, "").split(",")
+  const intD = ent.replace(/\D/g, "").replace(/^0+(?=\d)/, "")
+  const hasComma = rest.length > 0
+  const decD = rest.join("").replace(/\D/g, "").slice(0, 2)
+  const n = Number(`${intD || "0"}.${decD || "0"}`)
+  const text = (intD ? new Intl.NumberFormat("es-CO").format(Number(intD)) : hasComma ? "0" : "") + (hasComma ? `,${decD}` : "")
+  return { n, text }
+}
