@@ -8,7 +8,7 @@ import { supabaseServer } from "@/utils/supabase/server"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 
-const SITE = () => process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "")
 const Invite = z.object({ email: z.email("Escribe un correo válido"), role: z.enum(["editor", "viewer"]) })
 
 /** Crea una invitación de 7 días. Envía el correo si hay proveedor; si no, devuelve el enlace para compartir. */

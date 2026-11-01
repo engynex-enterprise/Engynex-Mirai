@@ -7,7 +7,7 @@ import { AVISOS, avisoOf, enSilencio, onFor, type Canales, type CanalKey, type M
 import { brandEmail, EMAIL_KINDS, sendEmail } from "./email"
 import { pushReady, sendPush, sendTelegram, sendWhatsApp } from "./channels"
 
-const SITE = () => process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "")
 const MONEY = /\$\s?[\d.]+(,\d+)?/g
 
 export type Rule = {
