@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { encrypt, mask } from "@/lib/crypto"
 import { integrationByKind } from "@/lib/integrations/registry"
 import { aiErrMsg, modelFrom } from "@/lib/ai/model"
+import { MODEL_LIST, modelOptions, parseModels, type ModelOption } from "@/lib/ai/models"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { getIntegration } from "./store"
 import { fetchFestivos, fetchFx, fetchTrm, fetchUsura } from "./data-sources"
@@ -93,6 +94,29 @@ export async function testIntegration(kind: string): Promise<{ ok: boolean; msg:
     return { ok: true, msg: "Esta integración no necesita prueba." }
   } catch (e) {
     return done(false, aiErrMsg(e, def?.url))
+  }
+}
+
+/**
+ * Modelos de chat que la cuenta puede usar, leídos de la API del proveedor. Usa la clave recién escrita
+ * o, si está vacía, la guardada (o la del despliegue para el AI Gateway).
+ */
+export async function listModels(kind: string, apiKey?: string): Promise<{ ok: boolean; models: ModelOption[]; rec?: string; msg?: string }> {
+  const ctx = await requireRole("owner")
+  const src = MODEL_LIST[kind]
+  if (!src) return { ok: false, models: [], msg: "Este proveedor no tiene lista de modelos." }
+  const saved = await getIntegration(ctx.household.id, kind)
+  const def = integrationByKind(kind)
+  const key = apiKey?.trim() || saved?.secrets.apiKey || (def?.env ? process.env[def.env] : "") || ""
+  if (!key && !src.keyless) return { ok: false, models: [], msg: "Pega la clave de API para ver los modelos de tu cuenta." }
+  try {
+    const r = await fetch(src.url + (key && src.query ? src.query(key) : ""), { headers: key && src.headers ? src.headers(key) : {}, signal: AbortSignal.timeout(12000), cache: "no-store" })
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`)
+    const { options, rec } = modelOptions(kind, parseModels(kind, await r.json()))
+    if (!options.length) return { ok: false, models: [], msg: "Tu cuenta no tiene modelos de chat disponibles en este proveedor." }
+    return { ok: true, models: options, rec }
+  } catch (e) {
+    return { ok: false, models: [], msg: aiErrMsg(e, def?.url) }
   }
 }
 

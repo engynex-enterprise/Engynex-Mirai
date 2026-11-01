@@ -45,13 +45,4 @@ export async function aiSettings(bookId: string) {
   return (data?.ia ?? {}) as { on?: boolean; orden?: string[]; autocat?: boolean; hormiga?: boolean; ocr?: boolean; consejero?: boolean; asist?: boolean }
 }
 
-/** Mensaje en español para errores de proveedores (aiErrMsg de la v4). */
-export function aiErrMsg(e: unknown, url?: string) {
-  const m = String((e as Error)?.message ?? e)
-  if (/credit card|customer_verification/i.test(m)) return "El AI Gateway de Vercel pide registrar una tarjeta para activar los créditos gratis."
-  if (/401|403|invalid|api key|unauthorized/i.test(m)) return `La clave no es válida o no tiene permisos.${url ? ` Revísala en ${url}.` : ""}`
-  if (/404|model/i.test(m)) return "El modelo no existe o no está disponible en tu cuenta. Prueba con el modelo sugerido."
-  if (/429|quota|rate/i.test(m)) return "Se alcanzó el límite de uso del proveedor. Intenta más tarde o usa otro proveedor."
-  if (/fetch|network|ENOTFOUND|timeout/i.test(m)) return "No pudimos conectarnos con el proveedor. Revisa tu conexión."
-  return m.slice(0, 200)
-}
+export { aiErrMsg } from "./errors"

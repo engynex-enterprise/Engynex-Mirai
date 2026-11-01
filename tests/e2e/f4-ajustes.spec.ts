@@ -39,6 +39,21 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, integraciones, hogar y 
   await expect(page.getByText("TRM del día")).toBeVisible()
   await expect(page.getByRole("switch", { name: "Activar Telegram" })).toBeVisible()
   await shot(page, "ajustes-integraciones", info.project.name)
+  // El modelo de IA se escoge de la lista del proveedor (OpenRouter la publica sin clave).
+  const card = (n: string) => page.locator("[data-slot=card]", { hasText: n })
+  await card("OpenRouter").getByRole("button", { name: "Configurar" }).click()
+  const dlg = page.getByRole("dialog")
+  await expect(dlg.getByText(/modelos? disponibles? en tu cuenta/)).toBeVisible({ timeout: 20000 })
+  await dlg.getByRole("combobox", { name: "Modelo" }).click()
+  await page.getByPlaceholder("Buscar modelo…").fill("free")
+  await expect(page.getByRole("option").first()).toBeVisible()
+  await shot(page, "ajustes-integraciones-modelos", info.project.name)
+  await page.keyboard.press("Escape")
+  await dlg.getByRole("button", { name: "Cancelar" }).click()
+  // Sin clave guardada, Gemini pide la clave antes de mostrar modelos.
+  await card("Google Gemini").getByRole("button", { name: "Configurar" }).click()
+  await expect(page.getByRole("dialog").getByText("Cuando pegues la clave, aquí aparecen los modelos que puedes usar.")).toBeVisible()
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar" }).click()
 
   await tab("ia")
   await expect(page.getByRole("switch", { name: "Usar inteligencia artificial" })).toBeVisible()

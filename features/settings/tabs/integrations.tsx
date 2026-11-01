@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { CircleCheck, CircleX, ExternalLink, FlaskConical, Settings2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -20,7 +20,8 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { CATS, INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
-import { deleteIntegration, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/actions"
+import { deleteIntegration, listModels, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/actions"
+import { MODEL_LIST } from "@/lib/ai/models"
 import { INTEGRATION_BRAND } from "@/lib/brands"
 import { cn } from "@/lib/utils"
 
@@ -38,15 +39,33 @@ export function useIntegrations() {
   })
 }
 
-function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef | null; cur?: Pub; onClose: () => void }) {
+/**
+ * Modelos de la cuenta del usuario en el proveedor de IA. Se piden al pegar la clave (con una pausa
+ * para no consultar en cada tecla) o de una vez si ya hay una clave guardada o el proveedor no la pide.
+ */
+function useModels(kind: string, typedKey: string, hasSaved: boolean) {
+  const [key, setKey] = useState(typedKey.trim())
+  useEffect(() => { const t = setTimeout(() => setKey(typedKey.trim()), 600); return () => clearTimeout(t) }, [typedKey])
+  const src = MODEL_LIST[kind]
+  const ready = !!src && (!!src.keyless || hasSaved || key.length >= 10)
+  const q = useQuery({ queryKey: ["ai-models", kind, key], queryFn: () => listModels(kind, key || undefined), enabled: ready, staleTime: 10 * 60_000, retry: false })
+  return { ...q, ready, loading: ready && q.isFetching }
+}
+
+function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef; cur?: Pub; onClose: () => void }) {
   const { household } = useApp()
   const qc = useQueryClient()
   const [vals, setVals] = useState<Record<string, string | number | boolean>>({})
   const [pending, start] = useTransition()
-  if (!def) return null
+  const hasModel = def.fields.some((f) => f.type === "model")
+  const models = useModels(hasModel ? def.kind : "", String(vals.apiKey ?? ""), !!cur?.meta?.apiKey)
   const v = (k: string, d?: unknown) => (k in vals ? vals[k] : (cur?.config?.[k] as string | undefined) ?? d ?? "")
+  // Si el modelo guardado (o el de fábrica) no está en la cuenta, se propone el recomendado.
+  const list = models.data?.ok ? models.data.models : []
+  const savedModel = String(v("model", def.fields.find((f) => f.k === "model")?.def))
+  const modelVal = "model" in vals || !list.length || list.some((m) => m.value === savedModel) ? savedModel : models.data?.rec ?? savedModel
   const save = (enabled: boolean) => start(async () => {
-    try { await saveIntegration(def.kind, vals, enabled); toast.success(`${def.n} guardado`); qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] }); onClose() }
+    try { await saveIntegration(def.kind, hasModel ? { ...vals, model: modelVal } : vals, enabled); toast.success(`${def.n} guardado`); qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] }); onClose() }
     catch (e) { toast.error("No se pudo guardar", { description: (e as Error).message }) }
   })
   return (
@@ -56,7 +75,17 @@ function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef | null; cur?:
         {!def.fields.length && <p className="text-sm text-muted-foreground">No necesita datos: solo actívala.</p>}
         {def.fields.map((f) => (
           <FormField key={f.k} label={f.l} htmlFor={`int-${f.k}`} tip={f.help ?? false} required={f.required}>
-            {f.type === "select" ? <Combobox id={`int-${f.k}`} value={String(v(f.k, f.def))} onChange={(x) => setVals({ ...vals, [f.k]: x })} options={f.options ?? []} />
+            {f.type === "model" ? (
+              <div className="grid gap-1.5">
+                <Combobox id={`int-${f.k}`} value={modelVal} onChange={(x) => setVals({ ...vals, [f.k]: x })} disabled={!list.length}
+                  options={list.length ? list : [{ value: modelVal, label: modelVal }]} searchPlaceholder="Buscar modelo…" emptyText="Ningún modelo con ese nombre"
+                  placeholder={!models.ready ? "Pega la clave para ver los modelos" : models.loading ? "Cargando modelos…" : "Selecciona un modelo"} />
+                {models.loading ? <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Spinner className="size-3" /> Buscando los modelos de tu cuenta…</p>
+                  : models.data && !models.data.ok ? <p className="text-xs text-danger">{models.data.msg}</p>
+                  : list.length ? <p className="text-xs text-muted-foreground">{list.length} modelo{list.length === 1 ? "" : "s"} disponible{list.length === 1 ? "" : "s"} en tu cuenta.</p>
+                  : !models.ready && <p className="text-xs text-muted-foreground">Cuando pegues la clave, aquí aparecen los modelos que puedes usar.</p>}
+              </div>
+            ) : f.type === "select" ? <Combobox id={`int-${f.k}`} value={String(v(f.k, f.def))} onChange={(x) => setVals({ ...vals, [f.k]: x })} options={f.options ?? []} />
               : f.type === "boolean" ? <Switch id={`int-${f.k}`} checked={v(f.k, f.def) === true || v(f.k, f.def) === "true"} onCheckedChange={(x) => setVals({ ...vals, [f.k]: x })} />
               : <Input id={`int-${f.k}`} className="h-11" type={f.type === "secret" ? "password" : f.type === "number" ? "number" : f.type === "email" ? "email" : "text"} autoComplete="off"
                   placeholder={f.type === "secret" ? (cur?.meta?.[f.k] ? `${cur.meta[f.k]} (déjalo vacío para conservarla)` : "Pega aquí la clave") : f.placeholder ?? String(f.def ?? "")}
@@ -121,7 +150,7 @@ export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
           </div>
         </section>
       ))}
-      {editing && <ConfigDialog def={editing} cur={state?.[editing.kind]} onClose={() => setEditing(null)} />}
+      {editing && <ConfigDialog key={editing.kind} def={editing} cur={state?.[editing.kind]} onClose={() => setEditing(null)} />}
     </div>
   )
 }

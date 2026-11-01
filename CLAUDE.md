@@ -100,6 +100,8 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 - Avatares: `profiles.avatar_url` y `family_members.avatar` guardan una URL (Google o bucket `avatars/{user_id}/…`) o `mirai:<clave>` (`lib/content/avatars.ts`); muéstralos siempre con `<UserAvatar>`. Con cédula (CC), `profiles.digitos` sale solo del documento (`digitosDian`).
 - Aviso de hidratación con atributos raros en `<body>` (`cz-shortcut-listen`, `data-gr-*`): es una extensión del navegador (ColorZilla, Grammarly), no un error de Mirai; `<body>` ya tiene `suppressHydrationWarning`.
 - `ResponsiveDialog` fija Dialog/Drawer mientras está abierta (cambiar de uno a otro remonta el formulario y borra lo escrito; las capturas `fullPage` de Playwright redimensionan la ventana).
+- Si una prueba E2E muestra la página en blanco sin errores, revisa que no haya un `next start` viejo en el puerto 3100 (`lsof -ti:3100`): Playwright lo reutiliza y sirve una compilación que ya no existe.
+- Modelos de IA: el campo `type: "model"` del registro se llena con la API de modelos de cada proveedor (`listModels` + `lib/ai/models.ts`); no escribas nombres de modelos a mano en la UI.
 - Los textos del portal del contador y Ajustes › Integraciones nunca reciben secretos: solo `integrations_public` (máscaras).
 
 ## 8. Documentación

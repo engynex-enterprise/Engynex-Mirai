@@ -1,7 +1,7 @@
 // Registro único de integraciones de Mirai. Cada una se activa, ajusta y prueba en Ajustes › Integraciones.
 // Los campos "secret" se guardan cifrados (AES-256-GCM) y el navegador solo ve ••••1234.
 
-export type FieldType = "text" | "secret" | "number" | "select" | "email" | "url" | "boolean"
+export type FieldType = "text" | "secret" | "number" | "select" | "email" | "url" | "boolean" | "model"
 export type IntegrationField = { k: string; l: string; type: FieldType; placeholder?: string; options?: { value: string; label: string }[]; help?: string; required?: boolean; def?: string | number | boolean }
 export type IntegrationCategory = "ia" | "avisos" | "datos" | "google" | "infra"
 
@@ -29,17 +29,17 @@ export const CATS: Record<IntegrationCategory, { n: string; d: string; icon: str
   infra: { n: "Infraestructura", d: "Protección contra bots, errores, analítica y límites de uso.", icon: "server" },
 }
 
-const model = (def: string): IntegrationField => ({ k: "model", l: "Modelo", type: "text", def, help: "Déjalo así si no sabes cuál usar." })
+const model = (def: string): IntegrationField => ({ k: "model", l: "Modelo", type: "model", def, help: "La lista sale de tu cuenta en el proveedor. Si no sabes cuál usar, deja el recomendado." })
 const apiKey = (url: string): IntegrationField => ({ k: "apiKey", l: "Clave de API", type: "secret", required: true, help: `Créala en ${url}. Las cuentas personales (ChatGPT Plus, Gemini Advanced, Claude Pro) no sirven: se necesita una clave de API.` })
 
 export const INTEGRATIONS: IntegrationDef[] = [
   // ── IA
   { kind: "ai_gateway", cat: "ia", n: "Vercel AI Gateway", d: "Una sola clave para Claude, OpenAI, Gemini, Kimi y más. Requiere una tarjeta registrada en Vercel (incluye créditos gratis).", icon: "network", scope: "platform", free: "plan-gratis", url: "https://vercel.com/ai-gateway", env: "AI_GATEWAY_API_KEY", fields: [{ ...apiKey("vercel.com › AI Gateway"), required: false, help: "Si ya está en las variables de Vercel (AI_GATEWAY_API_KEY) déjalo vacío." }, model("google/gemini-2.5-flash")], testable: true },
-  { kind: "ai_gemini", cat: "ia", n: "Google Gemini", d: "Plan gratis generoso. Recomendado para empezar sin pagar: chat, consejero y lectura de facturas.", icon: "sparkles", scope: "household", free: "plan-gratis", url: "https://aistudio.google.com/apikey", fields: [apiKey("aistudio.google.com"), model("gemini-2.5-flash")], testable: true },
+  { kind: "ai_gemini", cat: "ia", n: "Google Gemini", d: "Plan gratis generoso. Recomendado para empezar sin pagar: chat, consejero y lectura de facturas.", icon: "sparkles", scope: "household", free: "plan-gratis", url: "https://aistudio.google.com/apikey", fields: [apiKey("aistudio.google.com"), model("gemini-flash-latest")], testable: true },
   { kind: "ai_groq", cat: "ia", n: "Groq", d: "Modelos abiertos muy rápidos con plan gratis (con límites). Buen respaldo.", icon: "zap", scope: "household", free: "plan-gratis", url: "https://console.groq.com/keys", fields: [apiKey("console.groq.com"), model("llama-3.3-70b-versatile")], testable: true },
-  { kind: "ai_openrouter", cat: "ia", n: "OpenRouter", d: "Acceso a muchos modelos, algunos gratis (terminan en :free).", icon: "route", scope: "household", free: "plan-gratis", url: "https://openrouter.ai/keys", fields: [apiKey("openrouter.ai"), model("meta-llama/llama-3.3-70b-instruct:free")], testable: true },
-  { kind: "ai_anthropic", cat: "ia", n: "Claude (Anthropic)", d: "Usa tu propia clave de la API de Anthropic. El uso se cobra en tu cuenta.", icon: "brain", scope: "household", free: "pago", url: "https://console.anthropic.com", fields: [apiKey("console.anthropic.com"), model("claude-sonnet-4-5")], testable: true },
-  { kind: "ai_openai", cat: "ia", n: "OpenAI (ChatGPT)", d: "Usa tu clave de la API de OpenAI. El uso se cobra en tu cuenta.", icon: "bot", scope: "household", free: "pago", url: "https://platform.openai.com/api-keys", fields: [apiKey("platform.openai.com"), model("gpt-4o-mini")], testable: true },
+  { kind: "ai_openrouter", cat: "ia", n: "OpenRouter", d: "Acceso a muchos modelos, algunos gratis (terminan en :free).", icon: "route", scope: "household", free: "plan-gratis", url: "https://openrouter.ai/keys", fields: [apiKey("openrouter.ai"), model("openrouter/free")], testable: true },
+  { kind: "ai_anthropic", cat: "ia", n: "Claude (Anthropic)", d: "Usa tu propia clave de la API de Anthropic. El uso se cobra en tu cuenta.", icon: "brain", scope: "household", free: "pago", url: "https://console.anthropic.com", fields: [apiKey("console.anthropic.com"), model("claude-haiku-4-5")], testable: true },
+  { kind: "ai_openai", cat: "ia", n: "OpenAI (ChatGPT)", d: "Usa tu clave de la API de OpenAI. El uso se cobra en tu cuenta.", icon: "bot", scope: "household", free: "pago", url: "https://platform.openai.com/api-keys", fields: [apiKey("platform.openai.com"), model("gpt-5-mini")], testable: true },
 
   // ── Avisos
   { kind: "email_resend", cat: "avisos", n: "Correo con Resend", d: "3.000 correos al mes gratis. Necesitas un dominio verificado (o usa onboarding@resend.dev para probar).", icon: "mail", scope: "household", free: "plan-gratis", url: "https://resend.com", fields: [apiKey("resend.com › API Keys"), { k: "from", l: "Remitente", type: "email", required: true, placeholder: "avisos@tudominio.co" }, { k: "fromName", l: "Nombre del remitente", type: "text", def: "Mirai" }], testable: true },
