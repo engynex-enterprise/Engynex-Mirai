@@ -328,14 +328,17 @@ export async function adminAuditLog() {
 export async function adminSystem() {
   await requirePlatformAdmin()
   const db = supabaseAdmin()
-  const [{ data: settings }, { data: migr }, orphans] = await Promise.all([
+  const [{ data: settings }, { data: migr }, orphans, { count: referidos }, { count: premiados }] = await Promise.all([
     db.from("platform_settings").select("*").single(),
     db.rpc("admin_migrations"),
     db.rpc("count_orphan_households"),
+    db.from("referrals").select("id", { count: "exact", head: true }),
+    db.from("referrals").select("id", { count: "exact", head: true }).eq("estado", "recompensado"),
   ])
+
   const env = (k: string) => !!process.env[k]
   return {
-    settings, migraciones: migr ?? [], huerfanos: Number(orphans.data ?? 0),
+    settings, migraciones: migr ?? [], huerfanos: Number(orphans.data ?? 0), referidos: referidos ?? 0, premiados: premiados ?? 0,
     estado: [
       { k: "Supabase (servicio)", ok: env("SUPABASE_SECRET_KEY") }, { k: "Cifrado de claves", ok: env("ENCRYPTION_KEY") }, { k: "Cron de avisos", ok: env("CRON_SECRET") },
       { k: "Google (Gmail y Calendar)", ok: env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET") }, { k: "Vercel AI Gateway", ok: env("AI_GATEWAY_API_KEY") },
@@ -348,7 +351,10 @@ export async function adminSystem() {
   }
 }
 
-const Settings = z.object({ aviso_global: z.string().trim().max(300).optional(), aviso_tono: z.enum(["info", "warn", "ok"]).optional(), registro_abierto: z.boolean().optional(), limites_db: z.boolean().optional() })
+const Settings = z.object({
+  aviso_global: z.string().trim().max(300).optional(), aviso_tono: z.enum(["info", "warn", "ok"]).optional(), registro_abierto: z.boolean().optional(), limites_db: z.boolean().optional(),
+  referidos_activo: z.boolean().optional(), referidos_plan: z.string().regex(/^[a-z0-9-]{2,30}$/).optional(), referidos_dias: z.number().int().min(1).max(365).optional(),
+})
 
 export async function adminSaveSettings(patch: z.input<typeof Settings>) {
   const ctx = await requirePlatformAdmin()

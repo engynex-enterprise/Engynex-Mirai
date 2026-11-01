@@ -11,6 +11,23 @@ export const HELP: Record<string, HelpEntry> = {
     p: ["Toca <b>Enviar una opinión</b> y elige el tema: calificar, algo que no funciona, una función que quieres, una sugerencia o una duda.", "Si es un error, adjunta una captura de pantalla: nos ayuda a encontrarlo más rápido.", "Cada opinión muestra su estado (<b>Recibido</b>, <b>En revisión</b>, <b>Planeado</b>, <b>Listo</b>) y nuestra respuesta. Te llega un aviso cuando respondemos."],
     tips: ["Nunca enviamos tus montos ni tus datos financieros: solo lo que escribes, la página donde estabas y tu tipo de pantalla."],
   },
+  deseos: {
+    t: "Lista de deseos", i: "Antes de comprar algo que no necesitas ya, anótalo y espera unos días.",
+    p: ["Agrega lo que te antoja con su precio y qué tanto lo necesitas.", "Mirai te muestra cuántos días faltan para decidir (la regla de los 30 días).", "Al final marca <b>Lo compré</b> o <b>Ya no lo quiero</b>: verás cuánto te ahorraste al no comprar por impulso."],
+    tips: ["Si pasados los días lo sigues queriendo y te cabe en el presupuesto, cómpralo tranquilo."],
+  },
+  calculadoras: {
+    t: "Calculadoras", i: "Haz cuentas antes de decidir. Todos los resultados son estimados.",
+    p: ["<b>CDT</b>: cuánto ganas, con la retención en la fuente.", "<b>Crédito</b>: tu cuota, cuánto pagas en total y la tabla mes a mes.", "<b>Ahorro y metas</b>: cuánto tendrás, o cuánto ahorrar al mes para llegar a una meta.", "<b>4×1000</b> e <b>inflación</b>: lo que se lleva el banco y lo que pierde la plata quieta."],
+  },
+  academia: {
+    t: "Academia Mirai", i: "Lecciones de 2 a 4 minutos para entender tu plata.",
+    p: ["Abre una lección, léela y responde la pregunta de repaso.", "Tu avance queda guardado.", "Cada lección te lleva a la sección de Mirai donde lo pones en práctica."],
+  },
+  referidos: {
+    t: "Invita y gana", i: "Comparte Mirai y gana días de plan gratis.",
+    p: ["Copia tu enlace o compártelo por WhatsApp.", "Cuando tu invitado se registra y crea su hogar, los dos reciben días de Mirai Premium.", "Aquí ves a quién invitaste y si ya recibieron el premio."],
+  },
   planes: {
     t: "Planes de Mirai", i: "Lo básico es gratis para siempre. Premium agrega lo que más tiempo te ahorra.",
     p: ["<b>Gratis</b>: gastos, ingresos, quincena, presupuesto, préstamos, metas, avisos y más, con anuncios.", "<b>Premium</b>: inteligencia artificial, automatización con tu banco, impuestos y contador, y toda la familia con varios libros. Sin anuncios.", "Paga con tarjeta (se renueva sola y la cancelas cuando quieras) o con Nequi, PSE o Bancolombia por un mes o un año."],

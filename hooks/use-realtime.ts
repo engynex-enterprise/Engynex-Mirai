@@ -13,7 +13,7 @@ const LIVE_TABLES = [
   "credit_cards", "card_purchases", "contacts", "loans", "loan_payments", "assets", "liabilities",
   "investments", "goals", "emergency_funds", "fund_movements", "calendar_events", "shared_groups",
   "shared_group_expenses", "allowances", "allowance_movements", "savings_challenges", "tax_years",
-  "tax_assets", "attachments", "accountant_notes", "advisor_consultations", "gami_badges",
+  "tax_assets", "attachments", "accountant_notes", "advisor_consultations", "gami_badges", "wishlist", "net_worth_snapshots",
 ] as const
 
 export type PresenceUser = { id: string; nombre: string; avatar: string | null; path: string; at: string }

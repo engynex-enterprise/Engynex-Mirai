@@ -305,6 +305,7 @@ export function AuditPanel() {
 
 export function SistemaPanel() {
   const qc = useQueryClient()
+  const { data: plans = [] } = usePlanOptions()
   const { data, isPending } = useQuery({ queryKey: ["admin", "system"], queryFn: () => adminSystem() })
   const [aviso, setAviso] = useState<string | null>(null)
   const [tono, setTono] = useState<string | null>(null)
@@ -324,6 +325,14 @@ export function SistemaPanel() {
         <h2 className="font-semibold">Acceso y límites</h2>
         <label className="flex items-start justify-between gap-4 text-sm"><span><b>Registro abierto</b><span className="block text-muted-foreground">Si lo apagas, nadie nuevo puede crear cuenta (las cuentas existentes siguen entrando).</span></span><Switch checked={s.registro_abierto} onCheckedChange={(x) => save({ registro_abierto: x }, x ? "Registro abierto" : "Registro cerrado")} aria-label="Registro abierto" /></label>
         <label className="flex items-start justify-between gap-4 text-sm"><span><b>Límites de los planes también en la base de datos</b><span className="block text-muted-foreground">La app ya respeta los límites. Esto los hace cumplir aunque alguien use la API directamente. Enciéndelo al publicar los planes en producción.</span></span><Switch checked={s.limites_db} onCheckedChange={(x) => save({ limites_db: x }, x ? "Límites activos en la base" : "Límites de la base apagados")} aria-label="Límites en la base de datos" /></label>
+      </Card>
+      <Card className="gap-4 p-5 shadow-card ring-0">
+        <div><h2 className="font-semibold">Programa de referidos</h2><p className="text-sm text-muted-foreground">{data.referidos} personas llegaron invitadas · {data.premiados} invitaciones premiadas. Quien invita y quien llega reciben días del plan elegido (máximo 12 premios por persona).</p></div>
+        <label className="flex items-center justify-between gap-4 text-sm"><b>Programa activo</b><Switch checked={s.referidos_activo} onCheckedChange={(x) => save({ referidos_activo: x }, x ? "Referidos activos" : "Referidos en pausa")} aria-label="Programa de referidos activo" /></label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField label="Plan que se regala" tip={false}><Combobox value={s.referidos_plan} onChange={(x) => save({ referidos_plan: x }, "Plan del premio guardado")} options={plans.filter((p) => p.value !== "gratis")} /></FormField>
+          <FormField label="Días de premio" htmlFor="rf-d" tip={false}><Input id="rf-d" type="number" min={1} max={365} className="h-11" defaultValue={s.referidos_dias} onBlur={(e) => { const n = +e.target.value; if (n >= 1 && n <= 365 && n !== s.referidos_dias) save({ referidos_dias: n }, "Días del premio guardados") }} /></FormField>
+        </div>
       </Card>
       <Card className="gap-3 p-5 shadow-card ring-0">
         <h2 className="font-semibold">Estado de la configuración</h2>

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
 import { AssetForm, PUC } from "./asset-form"
+import { PatrimonioCard } from "@/features/patrimonio/patrimonio-card"
 
 type Line = { id?: string; table?: "assets" | "liabilities"; icon: string; n: string; s: string; v: number; href?: string; row?: Row<"assets"> | Row<"liabilities"> }
 
@@ -110,6 +111,8 @@ export function BalanceView() {
         { value: "general", label: "Lo que tengo y lo que debo", icon: "scale" }, { value: "q1", label: "1ª quincena", icon: "calendar" },
         { value: "q2", label: "2ª quincena", icon: "calendar" }, { value: "mes", label: "Mes completo", icon: "calendar-days" },
       ]} />
+
+      {tab === "general" && <PatrimonioCard activos={data.T.A} deudas={data.T.P} />}
 
       {tab === "general" ? (
         <Card className="shadow-card ring-0">

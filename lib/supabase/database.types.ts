@@ -1217,6 +1217,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"net_worth_snapshots": {
+                  Row: {
+                    "activos": number,"book_id": string,"created_at": string,"deleted_at": string | null,"deudas": number,"id": string,"mes": string,"patrimonio": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activos"?: number,"book_id": string,"created_at"?: string,"deleted_at"?: string | null,"deudas"?: number,"id"?: string,"mes": string,"patrimonio"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "activos"?: number,"book_id"?: string,"created_at"?: string,"deleted_at"?: string | null,"deudas"?: number,"id"?: string,"mes"?: string,"patrimonio"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "net_worth_snapshots_book_id_fkey"
+      columns: ["book_id"]
+isOneToOne: false
+      referencedRelation: "books"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"notification_outbox": {
                   Row: {
                     "attempts": number,"book_id": string | null,"channel": string,"created_at": string,"error": string | null,"id": string,"kind": string,"payload": NonNullable<Json>,"scheduled_for": string,"sent_at": string | null,"status": string,"user_id": string | null
@@ -1399,14 +1419,14 @@ isOneToOne: false
                   ]
                 },"platform_settings": {
                   Row: {
-                    "aviso_global": string,"aviso_tono": string,"id": boolean,"limites_db": boolean,"registro_abierto": boolean,"updated_at": string
+                    "aviso_global": string,"aviso_tono": string,"id": boolean,"limites_db": boolean,"referidos_activo": boolean,"referidos_dias": number,"referidos_plan": string,"registro_abierto": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"registro_abierto"?: boolean,"updated_at"?: string
+                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"registro_abierto"?: boolean,"updated_at"?: string
+                    "aviso_global"?: string,"aviso_tono"?: string,"id"?: boolean,"limites_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -1575,6 +1595,34 @@ isOneToOne: false
                   }
                   Update: {
                     "fuente"?: string | null,"valor"?: number,"year"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"referral_codes": {
+                  Row: {
+                    "codigo": string,"created_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "codigo": string,"created_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "codigo"?: string,"created_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"referrals": {
+                  Row: {
+                    "codigo": string,"created_at": string,"estado": string,"id": string,"referred": string,"referrer": string,"rewarded_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "codigo": string,"created_at"?: string,"estado"?: string,"id"?: string,"referred": string,"referrer": string,"rewarded_at"?: string | null
+                  }
+                  Update: {
+                    "codigo"?: string,"created_at"?: string,"estado"?: string,"id"?: string,"referred"?: string,"referrer"?: string,"rewarded_at"?: string | null
                   }
                   Relationships: [
                     
@@ -1774,6 +1822,26 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"wishlist": {
+                  Row: {
+                    "book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"esperar_hasta": string,"estado": string,"id": string,"nombre": string,"nota": string,"precio": number,"prioridad": number,"updated_at": string,"url": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"esperar_hasta"?: string,"estado"?: string,"id"?: string,"nombre": string,"nota"?: string,"precio"?: number,"prioridad"?: number,"updated_at"?: string,"url"?: string | null
+                  }
+                  Update: {
+                    "book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"esperar_hasta"?: string,"estado"?: string,"id"?: string,"nombre"?: string,"nota"?: string,"precio"?: number,"prioridad"?: number,"updated_at"?: string,"url"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "wishlist_book_id_fkey"
+      columns: ["book_id"]
+isOneToOne: false
+      referencedRelation: "books"
+      referencedColumns: ["id"]
+    }
                   ]
                 }
           }

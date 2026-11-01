@@ -26,6 +26,7 @@ export const NAV: NavSection[] = [
         leaf("logros", "Logros y nivel", "medal"), leaf("primas", "Primas y cesantías", "gift"),
         leaf("familia", "Por miembro", "users"), leaf("mesadas", "Mesada de los hijos", "baby"),
         leaf("compartidos", "Gastos compartidos", "split"),
+        leaf("deseos", "Lista de deseos", "heart"), leaf("calculadoras", "Calculadoras", "calculator"),
       ] },
       leaf("inversiones", "Inversiones", "trending-up"),
     ],
@@ -45,11 +46,11 @@ export const NAV: NavSection[] = [
   { sec: "Soporte", entries: [
     { g: "ayuda", label: "Ayuda", icon: "life-buoy", iso: "consejero", items: [
       leaf("novedades", "Novedades", "megaphone"), leaf("faq", "Preguntas frecuentes", "circle-help"),
-      leaf("manual", "Manual e instructivos", "book-open"),
+      leaf("manual", "Manual e instructivos", "book-open"), leaf("academia", "Academia Mirai", "graduation-cap"),
       leaf("opiniones", "Tu opinión", "message-square-heart"),
     ] },
   ] },
-  { sec: "Configuración", entries: [leaf("perfil", "Perfil", "user"), leaf("ajustes", "Ajustes", "settings")] },
+  { sec: "Configuración", entries: [leaf("perfil", "Perfil", "user"), leaf("referidos", "Invita y gana", "gift"), leaf("ajustes", "Ajustes", "settings")] },
 ]
 
 export const isGroup = (e: NavLeaf | NavGroup): e is NavGroup => "g" in e

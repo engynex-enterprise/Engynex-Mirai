@@ -10,7 +10,7 @@ export type Release = { v: string; f: string; t: string; items: ReleaseItem[] }
 export type Faq = { c: string; q: string; a: string; go?: string; tab?: string }
 export type Guide = { id: string; t: string; icon: string; go: string; min: number; s: string[]; tip?: string }
 
-export const APP_VER = "5.3"
+export const APP_VER = "5.4"
 
 const V5: Release = {
   v: "5.0", f: "31 oct 2026", t: "Mirai en la nube: tu familia, en tiempo real",
@@ -62,7 +62,20 @@ const V53: Release = {
     ["imp", "Términos actualizados", "Explicamos los pagos, el derecho de retracto de 5 días hábiles y los anuncios del plan gratis. Te pedimos aceptarlos de nuevo."],
   ],
 }
-export const RELEASES: Release[] = [V53, V52, V51, V5, ...(RELEASES_V4 as Release[])]
+const V54: Release = {
+  v: "5.4", f: "1 nov 2026", t: "Más herramientas para tu plata",
+  items: [
+    ["new", "Calculadoras", "CDT con retención, crédito con tabla de pagos, ahorro y metas con interés compuesto, 4×1000 e inflación. En Planeación › Calculadoras."],
+    ["new", "Lista de deseos", "Anota lo que te antoja y espera 7, 30 o 60 días antes de comprar. Mirai te muestra cuánto te ahorraste al no comprar por impulso."],
+    ["new", "Hallazgos en Inicio", "Mirai te avisa qué categoría subió o bajó frente al mes pasado, gastos fuera de lo normal y tu día de más gasto."],
+    ["new", "Patrimonio mes a mes", "En Balance ves cómo cambia lo que tienes menos lo que debes, mes a mes."],
+    ["new", "Academia Mirai", "Ocho lecciones cortas (presupuesto, emergencia, tasas, deudas, tarjeta, inversión y renta) con repaso."],
+    ["new", "Invita y gana", "Comparte tu enlace: cuando alguien se registra y crea su hogar, los dos ganan días de Mirai Premium."],
+    ["imp", "Bienvenida y migas de pan", "Una bienvenida al entrar por primera vez y, arriba de cada sección, el camino para volver atrás."],
+    ["imp", "Menús más cómodos", "Los menús de opciones ya no parten el texto en varias líneas."],
+  ],
+}
+export const RELEASES: Release[] = [V54, V53, V52, V51, V5, ...(RELEASES_V4 as Release[])]
 
 const FIX: Record<string, Partial<Faq>> = {
   "¿Cómo le doy acceso a mi contador?": { a: "Ve a <b>DIAN › Acceso de tu contador</b>, escribe su nombre, elige qué puede ver y hasta cuándo, y envíale el enlace. Solo puede ver, descargar los documentos y dejarte notas. Puedes quitarle el acceso cuando quieras." },

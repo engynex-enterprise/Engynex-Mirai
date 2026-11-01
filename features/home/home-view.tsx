@@ -15,6 +15,7 @@ import { Icon } from "@/components/mirai/icon"
 import { PageHeader } from "@/components/mirai/page-header"
 import { RatingPrompt } from "@/features/opiniones/rating-prompt"
 import { AdSlot } from "@/features/ads/ad-slot"
+import { HallazgosCard } from "@/features/hallazgos/hallazgos-card"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
@@ -208,6 +209,8 @@ export function HomeView() {
           </div>
 
           <AdSlot slot="inicio" />
+
+          <HallazgosCard />
 
           {/* Quincena */}
           <Card className="appear gap-4 rounded-lg p-4 ring-0 sm:p-5">

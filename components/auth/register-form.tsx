@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -36,6 +36,9 @@ export function RegisterForm() {
   const { errors, isSubmitting } = form.formState
   const pw = form.watch("password")
   const captcha = useCaptcha()
+  // Referidos: /registro?ref=CÓDIGO queda en una cookie (sirve también si se registra con Google).
+  const ref = typeof window !== "undefined" ? new URLSearchParams(location.search).get("ref")?.toUpperCase() ?? null : null
+  useEffect(() => { if (ref && /^[A-Z0-9]{6,12}$/.test(ref)) document.cookie = `mirai_ref=${ref}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax` }, [ref])
   const { data: abierto } = useQuery({ queryKey: ["registro-abierto"], queryFn: async () => (await createClient().rpc("registro_abierto")).data ?? true, staleTime: 60_000 })
 
   async function onSubmit(v: Values) {
@@ -44,7 +47,7 @@ export function RegisterForm() {
       password: v.password,
       options: {
         emailRedirectTo: `${location.origin}/auth/callback?next=/bienvenida`,
-        data: { nombre: v.nombre.trim(), acepta_version: LEGAL_VERSION },
+        data: { nombre: v.nombre.trim(), acepta_version: LEGAL_VERSION, ...(ref ? { ref } : {}) },
         captchaToken: captcha.token,
       },
     })
