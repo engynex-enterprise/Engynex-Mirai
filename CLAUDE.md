@@ -1,5 +1,7 @@
 # CLAUDE.md — Mirai
 
+> **IDIOMA OBLIGATORIO: responde SIEMPRE en español de Colombia (tuteo)** — mensajes al dueño del producto, avances entre pasos, resúmenes finales, preguntas y descripciones de comandos. Esto aplica a Claude Code, subagentes y cualquier agente. Solo el código (nombres de variables, APIs) puede ir en inglés.
+
 > Punto de entrada para Claude Code y cualquier agente. Reglas de dominio en `.agents/rules/`.
 > **Estado: v5.0 (Next.js + shadcn + Supabase). Todas las secciones de la v4.0 (en `legacy/`) están migradas.**
 > Diseño aprobado: `docs/superpowers/specs/2026-10-31-migracion-nextjs-design.md`. Lista de control funcional: `docs/migracion/inventario-1…5.md` (nada de la v4 se omite).
@@ -94,6 +96,7 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 - Filas optimistas tienen id `tmp-…`: deshabilita borrar/editar hasta que el guardado confirme.
 - La burbuja del chat se aparta al desplazar; si una prueba hace clic cerca de la esquina inferior derecha en móvil, desplaza antes.
 - Clic en opciones de `ChoiceCards`: usa `getByRole("radio", { name })` (el radio transparente cubre la tarjeta).
+- `ResponsiveDialog` fija Dialog/Drawer mientras está abierta (cambiar de uno a otro remonta el formulario y borra lo escrito; las capturas `fullPage` de Playwright redimensionan la ventana).
 - Los textos del portal del contador y Ajustes › Integraciones nunca reciben secretos: solo `integrations_public` (máscaras).
 
 ## 8. Documentación

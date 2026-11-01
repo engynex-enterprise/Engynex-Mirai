@@ -1,15 +1,9 @@
 "use client"
 
 import { Suspense } from "react"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Fragment, useEffect, useMemo } from "react"
-import { Eye } from "lucide-react"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { pageById } from "@/lib/nav"
+import { useEffect, useMemo } from "react"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useBookRealtime } from "@/hooks/use-realtime"
 import type { AppContext } from "@/lib/dal"
 import { AppContextProvider, useApp } from "./app-context"
@@ -21,7 +15,7 @@ import { HelpSheet } from "./help-sheet"
 import { MobileTabBar } from "./mobile-tabbar"
 import { NewBookDialog } from "./new-book-dialog"
 import { useShell } from "./shell-store"
-import { applyPrivacy, togglePrivacy } from "./privacy"
+import { applyPrivacy } from "./privacy"
 import { useNavBadges } from "./nav-badges"
 import { ApplyPrefs } from "@/features/settings/prefs"
 import { ChatWidget } from "@/features/chat/chat-widget"
@@ -55,8 +49,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   return (
     <>
       <AppSidebar live={status} online={online} badges={badges} hidden={hidden} unread={unread} />
-      <SidebarInset className="min-w-0 bg-background">
-        <Crumbs />
+      <SidebarInset className="min-w-0 bg-transparent">
         <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-28 sm:px-6 md:pb-16 lg:px-8">{children}</main>
       </SidebarInset>
       <MobileTabBar />
@@ -74,44 +67,6 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   )
 }
 
-
-function Crumbs() {
-  const path = usePathname()
-  const { book } = useApp()
-  const page = pageById(path.split("/")[1] ?? "")
-  return (
-    <div className="sticky top-0 z-30 flex h-14 items-center gap-2 bg-card/90 px-4 shadow-[0_1px_2px_rgba(0,0,0,.08)] backdrop-blur-md sm:px-6 lg:px-8">
-      <SidebarTrigger className="-ml-1" aria-label="Contraer o expandir el menú (Ctrl B)" />
-      <Breadcrumb className="min-w-0">
-        <BreadcrumbList className="flex-nowrap">
-          <BreadcrumbItem><BreadcrumbLink asChild><Link href="/inicio">{book.nombre}</Link></BreadcrumbLink></BreadcrumbItem>
-          {page && (
-            <>
-              <BreadcrumbSeparator className="max-md:hidden" />
-              <BreadcrumbItem className="max-md:hidden">{page.section}</BreadcrumbItem>
-              {page.group && (
-                <Fragment>
-                  <BreadcrumbSeparator className="max-md:hidden" />
-                  <BreadcrumbItem className="max-md:hidden">{page.group.label}</BreadcrumbItem>
-                </Fragment>
-              )}
-              <BreadcrumbSeparator />
-              <BreadcrumbItem className="min-w-0"><BreadcrumbPage className="truncate">{page.label}</BreadcrumbPage></BreadcrumbItem>
-            </>
-          )}
-        </BreadcrumbList>
-      </Breadcrumb>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="ml-auto" onClick={togglePrivacy} aria-label="Ocultar o mostrar montos">
-            <Eye />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Ocultar o mostrar montos</TooltipContent>
-      </Tooltip>
-    </div>
-  )
-}
 
 /** Atajos: Ctrl/⌘ K buscar · N agregar (Ctrl/⌘ B lo maneja el sidebar). */
 function useShortcuts() {

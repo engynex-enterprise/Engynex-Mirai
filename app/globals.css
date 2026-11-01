@@ -63,6 +63,12 @@
   --color-hover: var(--hover);
   --color-press: var(--press);
   --color-placeholder: var(--placeholder);
+  --color-meta-text: var(--meta-text);
+  --color-meta-tile: var(--meta-tile);
+  --color-meta-banner: var(--meta-banner);
+  --color-glass: var(--glass);
+  --color-nav-active: var(--nav-active);
+  --color-nav-active-foreground: var(--nav-active-foreground);
   --shadow-emphasis: var(--shadow-emphasis);
   --ease-fb-enter: cubic-bezier(0.14, 1, 0.34, 1);
   --ease-fb-exit: cubic-bezier(0.45, 0.1, 0.2, 1);
@@ -87,12 +93,12 @@
 
 /* Mirai 5 · estilo Meta con marca Engynex viva. Contrastes AA verificados (texto principal y botones). */
 :root {
-  --background: #F0F2F5;
-  --foreground: #050505;
-  --card: #FFFFFF;
-  --card-foreground: #050505;
+  --background: #F3EFF6;
+  --foreground: #1C2B33;
+  --card: rgba(255, 255, 255, .74);
+  --card-foreground: #1C2B33;
   --popover: #FFFFFF;
-  --popover-foreground: #050505;
+  --popover-foreground: #1C2B33;
   --primary: #2A7F14;
   --primary-foreground: #FFFFFF;
   --primary-hover: #23700F;
@@ -137,20 +143,32 @@
   --gradient-brand: linear-gradient(135deg, #9EDB4E 0%, #2A9D3A 45%, #13778F 100%);
   --gradient-hero: linear-gradient(120deg, #1F2B4B 0%, #1F5C3A 55%, #2A9D3A 100%);
   --gradient-soft: linear-gradient(135deg, #EAF7DC 0%, #E3F3EF 55%, #E4EEF8 100%);
-  --sidebar: #F0F2F5;
+  /* developers.facebook.com (REA ev_a18d1b89…): degradado del héroe medido en la captura y el pastel de su CSS */
+  --gradient-meta: radial-gradient(70% 120% at 0% 0%, #FFDFF0 0%, rgba(255, 223, 240, 0) 60%), radial-gradient(60% 110% at 0% 100%, #DCF0FF 0%, rgba(220, 240, 255, 0) 60%), radial-gradient(55% 120% at 100% 100%, #A3F9EB 0%, rgba(163, 249, 235, 0) 60%), linear-gradient(90deg, #EBE0FC 0%, #E4E8FE 25%, #CFEDFE 50%, #B1F0FA 75%, #A7F3F5 100%);
+  --gradient-meta-wash: linear-gradient(295.2deg, #DEF9EA, #DDF7EC 10%, #DAEBFD 28%, #E1E6FA 67%, #F5E4F4 89%, #FDEFE6);
+  --meta-text: #1C2B33;
+  --meta-tile: #172C34;
+  --meta-banner: rgba(255, 255, 255, .55);
+  /* Estilo Meta Business Suite: degradado pastel en toda la app (medido de la captura: #FAF0F1 arriba-izq.,
+     #EDEEF7 arriba-der., #F3EDF5 centro, #E6EDF9 abajo), menú y tarjetas en blanco translúcido, activo en pizarra */
+  --gradient-app: radial-gradient(85% 60% at 0% 0%, #FCE9EC 0%, rgba(252, 233, 236, 0) 70%), radial-gradient(70% 60% at 100% 0%, #E8E9F9 0%, rgba(232, 233, 249, 0) 70%), linear-gradient(180deg, #F8EDF1 0%, #F1EBF6 45%, #DFE9FA 100%);
+  --glass: rgba(255, 255, 255, .6);
+  --nav-active: #283943;
+  --nav-active-foreground: #FFFFFF;
+  --sidebar: rgba(255, 255, 255, .55);
   --sidebar-foreground: #050505;
   --sidebar-primary: #2A7F14;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E4E6EB;
-  --sidebar-accent-foreground: #050505;
+  --sidebar-accent: rgba(0, 0, 0, .05);
+  --sidebar-accent-foreground: #1C2B33;
   --sidebar-border: transparent;
   --sidebar-ring: #2A7F14;
 }
 
 .dark {
-  --background: #18191A;
+  --background: #1A1A1F;
   --foreground: #E4E6EB;
-  --card: #242526;
+  --card: rgba(36, 37, 38, .74);
   --card-foreground: #E4E6EB;
   --popover: #242526;
   --popover-foreground: #E4E6EB;
@@ -197,7 +215,16 @@
   --gradient-brand: linear-gradient(135deg, #9EDB4E 0%, #2A9D3A 45%, #13778F 100%);
   --gradient-hero: linear-gradient(120deg, #141c33 0%, #17432b 55%, #217a30 100%);
   --gradient-soft: linear-gradient(135deg, #22301B 0%, #1C2E2B 55%, #1C2636 100%);
-  --sidebar: #18191A;
+  --gradient-meta: radial-gradient(70% 120% at 0% 0%, #3A2438 0%, rgba(58, 36, 56, 0) 60%), radial-gradient(60% 110% at 0% 100%, #1B2E45 0%, rgba(27, 46, 69, 0) 60%), radial-gradient(55% 120% at 100% 100%, #0F4640 0%, rgba(15, 70, 64, 0) 60%), linear-gradient(90deg, #2C2849 0%, #252C4D 25%, #1B3650 50%, #133F4C 75%, #114443 100%);
+  --gradient-meta-wash: linear-gradient(295.2deg, #15271E, #16261F 10%, #172333 28%, #1D1F33 67%, #2A1E2B 89%, #2B231E);
+  --meta-text: #E4E6EB;
+  --meta-tile: #3A3B3C;
+  --meta-banner: rgba(255, 255, 255, .06);
+  --gradient-app: radial-gradient(85% 60% at 0% 0%, #2B2028 0%, rgba(43, 32, 40, 0) 70%), radial-gradient(70% 60% at 100% 0%, #202234 0%, rgba(32, 34, 52, 0) 70%), linear-gradient(180deg, #1E1B21 0%, #1A1A21 45%, #151C29 100%);
+  --glass: rgba(36, 37, 38, .6);
+  --nav-active: #E4E6EB;
+  --nav-active-foreground: #1C2B33;
+  --sidebar: rgba(36, 37, 38, .5);
   --sidebar-foreground: #E4E6EB;
   --sidebar-primary: #9EDB4E;
   --sidebar-primary-foreground: #102007;
@@ -217,6 +244,8 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    background-image: var(--gradient-app);
+    background-attachment: fixed;
     font-size: 15px;
     line-height: 1.3333;
   }
@@ -236,6 +265,9 @@
   .bg-brand-gradient { background-image: var(--gradient-brand); }
   .bg-hero-gradient { background-image: var(--gradient-hero); }
   .bg-soft-gradient { background-image: var(--gradient-soft); }
+  .bg-meta-gradient { background-image: var(--gradient-meta); }
+  /* Fondo de la página como developers.facebook.com: pastel arriba que se funde con el gris */
+  .bg-meta-wash { background-image: linear-gradient(180deg, transparent 0, var(--background) 520px), var(--gradient-meta-wash); background-repeat: no-repeat; background-size: 100% 560px; background-color: var(--background); }
   .bg-ai-gradient { background-image: linear-gradient(135deg, #1F2B4B, #2A7F14 60%, #13778F); }
   .text-brand-gradient { background-image: var(--gradient-brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .press { transition: transform .1s var(--ease-fb-soft); }

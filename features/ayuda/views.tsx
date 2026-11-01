@@ -100,7 +100,7 @@ export function ManualView() {
           <Accordion type="single" collapsible>
             {guides.map((g) => (
               <AccordionItem key={g.id} value={g.id}>
-                <AccordionTrigger className="px-3"><span className="flex items-center gap-3 text-left"><span className="grid size-8 place-items-center rounded-lg bg-brand-soft text-brand"><Icon name={g.icon} className="size-4" /></span><span><span className="block font-medium">{g.t}</span><span className="block text-xs font-normal text-muted-foreground">{g.s.length} pasos · {g.min} min</span></span></span></AccordionTrigger>
+                <AccordionTrigger className="px-3"><span className="flex items-center gap-3 text-left"><span className="grid size-12 shrink-0 place-items-center rounded-xl bg-meta-tile text-white"><Icon name={g.icon} className="size-6" /></span><span><span className="block text-[15px] font-bold text-link">{g.t} →</span><span className="block text-xs font-normal text-muted-foreground">{g.s.length} pasos · {g.min} min</span></span></span></AccordionTrigger>
                 <AccordionContent className="grid gap-3 px-3">
                   <ol className="grid gap-2">{g.s.map((s, i) => <li key={i} className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-navy text-xs text-white dark:bg-lime dark:text-navy">{i + 1}</span><Html html={s} /></li>)}</ol>
                   {g.tip && <p className="flex gap-2 rounded-lg bg-brand-soft p-3 text-sm"><Lightbulb className="size-4 shrink-0 text-brand" /><Html html={g.tip} /></p>}

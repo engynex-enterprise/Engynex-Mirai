@@ -18,7 +18,7 @@ export function MobileTabBar() {
     </Link>
   )
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 bg-card/95 shadow-[0_-1px_3px_rgba(0,0,0,.08)] backdrop-blur-md md:hidden" aria-label="Navegación principal">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 bg-glass shadow-[0_-1px_3px_rgba(0,0,0,.08)] backdrop-blur-xl md:hidden" aria-label="Navegación principal">
       <div className="mx-auto flex max-w-lg items-end">
         {tab("/inicio", "Inicio", <House className="size-5" />)}
         {tab("/gastos", "Gastos", <Receipt className="size-5" />)}

@@ -139,10 +139,10 @@ export function HomeView() {
           <p className="relative mt-1.5 text-xs text-white/75">{Math.round(gami.X.total).toLocaleString("es-CO")} puntos{gami.L.next ? ` · faltan ${Math.round(gami.L.next - gami.X.total).toLocaleString("es-CO")} para ${gami.L.nextName}` : ""}</p>
         </Link>
       )}
-      <RailCard title="Próximos 15 días" action={<Button variant="link" size="sm" asChild><Link href="/recordatorios">Ver todo</Link></Button>}>
+      <RailCard title="Próximos 15 días" action={<Button variant="link" size="sm" asChild><Link href="/recordatorios">Ver todo <ArrowRight /></Link></Button>}>
         {!d.ag.length ? <p className="text-sm text-muted-foreground">Nada pendiente en los próximos 15 días.</p> : <ul className="-mx-2 grid">{d.ag.map((x) => <AgendaRow key={`${x.k}-${x.id}-${x.fecha}`} x={x} />)}</ul>}
       </RailCard>
-      <RailCard title="Tu familia" action={<Button variant="link" size="sm" asChild><Link href="/perfil">Ver</Link></Button>}>
+      <RailCard title="Tu familia" action={<Button variant="link" size="sm" asChild><Link href="/perfil">Ver <ArrowRight /></Link></Button>}>
         <ul className="-mx-2 grid">
           {[{ id: user.id, nombre: user.nombre, rol: "Tú", on: true }, ...online.filter((o) => o.id !== user.id).map((o) => ({ id: o.id, nombre: o.nombre, rol: "En línea", on: true })), ...members.filter((m) => !m.user_id && !m.es_titular).slice(0, 5).map((m) => ({ id: m.id, nombre: m.nombre, rol: m.rol, on: false }))].map((p) => (
             <li key={p.id} className="flex items-center gap-3 rounded-xl p-2 hover:bg-hover">
@@ -153,7 +153,7 @@ export function HomeView() {
         </ul>
       </RailCard>
       <div className="rounded-lg bg-ai-gradient p-[2px] shadow-card">
-        <div className="grid gap-3 rounded-[calc(.5rem-2px)] bg-card p-4">
+        <div className="grid gap-3 rounded-[calc(.5rem-2px)] bg-popover p-4">
           <div className="flex items-center gap-3"><IsoIcon k="consejero" size={40} /><p className="text-[15px] font-bold">Consejero antes de gastar</p></div>
           <p className="text-sm text-muted-foreground">¿Vas a comprar algo, prestar plata o sacar un crédito? Te digo si te alcanza con tus números.</p>
           <Button variant="gradient" asChild><Link href="/consejero">Preguntar al consejero</Link></Button>
@@ -166,15 +166,11 @@ export function HomeView() {
     <div className="grid gap-5">
       <PageHeader id="inicio" title={`${saludo}, ${first}`} description="Así van las finanzas de tu hogar hoy." />
       {setup && !setup.finished && (
-        <Card className="appear flex-col items-start gap-4 rounded-lg border-0 bg-hero-gradient p-5 text-white ring-0 sm:flex-row sm:items-center">
-          <IsoIcon k="puesta" size={44} />
-          <div className="grid flex-1 gap-1.5">
-            <p className="font-bold">Completa la puesta en marcha ({setup.done} de {setup.total})</p>
-            {setup.next && <p className="text-sm text-white/80">Siguiente: {setup.next.t}</p>}
-            <Progress value={(setup.done / setup.total) * 100} className="h-2 max-w-sm bg-white/20 [&>div]:bg-lime" />
-          </div>
-          <Button asChild className="bg-lime text-navy hover:bg-lime/90"><Link href="/puesta">Continuar <ArrowRight /></Link></Button>
-        </Card>
+        <div className="appear flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-lg bg-meta-banner px-4 py-3 text-center text-[15px] text-meta-text">
+          <IsoIcon k="puesta" size={28} />
+          <span>Completa la puesta en marcha: <b>{setup.done} de {setup.total}</b>{setup.next ? <> · siguiente: {setup.next.t}</> : null}</span>
+          <Button variant="link" className="h-auto p-0" asChild><Link href="/puesta">Continuar <ArrowRight /></Link></Button>
+        </div>
       )}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -206,7 +202,7 @@ export function HomeView() {
           <Card className="appear gap-4 rounded-lg p-4 ring-0 sm:p-5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-[17px] font-bold">{d.which === "q1" ? "Primera" : "Segunda"} quincena de {d.mesName}</h2>
-              <Button variant="link" size="sm" asChild><Link href={`/balance?tab=${d.which}`}>Ver detalle</Link></Button>
+              <Button variant="link" size="sm" asChild><Link href={`/balance?tab=${d.which}`}>Ver detalle <ArrowRight /></Link></Button>
             </div>
             <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
               {([["Entra", d.q.ent, "text-success"], ["Sale", d.q.sal, "text-danger"]] as const).map(([t, list, c]) => (
@@ -300,7 +296,7 @@ export function HomeView() {
         </div>
 
         {/* Columna derecha (en celular va debajo) */}
-        <aside className="grid gap-5 xl:sticky xl:top-16">{rail}</aside>
+        <aside className="grid gap-5 xl:sticky xl:top-4">{rail}</aside>
       </div>
     </div>
   )

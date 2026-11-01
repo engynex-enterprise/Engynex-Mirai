@@ -19,6 +19,13 @@ test("me deben: préstamo con interés, pagos previos, registrar y deshacer pago
   await page.getByRole("spinbutton", { name: "¿Cuántas cuotas ya se pagaron?" }).fill("2")
   await expect(page.getByText(/Así quedará registrado/)).toBeVisible()
   await shot(page, "prestamo-form", info.project.name)
+  // Cruzar los 768 px con la ventana abierta (girar el celular, achicar la ventana) no borra lo escrito.
+  const vp = page.viewportSize()!
+  await page.setViewportSize({ width: vp.width > 767 ? 600 : 1000, height: vp.height })
+  await page.waitForTimeout(300)
+  await page.setViewportSize(vp)
+  await expect(page.getByRole("textbox", { name: "¿Cuánto prestaste?" })).toHaveValue("1.000.000")
+  await expect(page.getByRole("textbox", { name: "Nombre completo" })).toHaveValue(nombre)
   await page.getByRole("button", { name: "Registrar préstamo" }).click()
   await expect(page.getByText("Préstamo registrado.")).toBeVisible()
   await expect(page.getByRole("heading", { name: nombre })).toBeVisible()

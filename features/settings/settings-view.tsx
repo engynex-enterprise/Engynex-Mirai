@@ -76,7 +76,7 @@ export function SettingsView() {
             <div key={g} className="grid gap-0.5">
               <p className="px-2 pt-2 text-xs font-semibold text-muted-foreground uppercase">{g}</p>
               {list.filter((t) => t[3] === g).map((t) => (
-                <button key={t[0]} type="button" onClick={() => setTab(t[0])} className={cn("flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-hover", t[0] === cur[0] && "bg-brand-soft font-semibold text-link")}>
+                <button key={t[0]} type="button" onClick={() => setTab(t[0])} className={cn("flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-hover", t[0] === cur[0] && "bg-nav-active font-semibold text-nav-active-foreground hover:bg-nav-active")}>
                   <Icon name={t[2]} className="size-4" />{t[1]}
                 </button>
               ))}

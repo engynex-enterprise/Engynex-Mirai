@@ -2,6 +2,8 @@
 
 Guía corta para agentes de código. **Lee `CLAUDE.md` para el contexto completo.**
 
+**Idioma:** responde siempre en español de Colombia (tuteo), incluidos avances y resúmenes.
+
 ## Proyecto
 Mirai: finanzas personales y familiares para Colombia, en español, para personas sin conocimientos financieros. **v5.0 (migración completa):** Next.js 16 (App Router, `cacheComponents`) + React 19 + Tailwind 4 + shadcn + Supabase (Postgres con RLS, Auth, Realtime, Storage), desplegado en Vercel. La v4 (HTML único) vive en `legacy/` como referencia.
 

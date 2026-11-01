@@ -160,14 +160,17 @@ function FieldSeparator({
       )}
       {...props}
     >
-      <Separator className="absolute inset-0 top-1/2" />
-      {children && (
-        <span
-          className="relative mx-auto block w-fit bg-background px-2 text-muted-foreground"
-          data-slot="field-separator-content"
-        >
-          {children}
-        </span>
+      {/* Sin fondo detrás del texto: las líneas van a cada lado (funciona sobre tarjetas translúcidas) */}
+      {children ? (
+        <div className="flex h-full items-center gap-2">
+          <Separator className="flex-1" />
+          <span className="shrink-0 text-muted-foreground" data-slot="field-separator-content">
+            {children}
+          </span>
+          <Separator className="flex-1" />
+        </div>
+      ) : (
+        <Separator className="absolute inset-0 top-1/2" />
       )}
     </div>
   )

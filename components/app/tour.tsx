@@ -58,7 +58,7 @@ export function Tour() {
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-label="Tour de Mirai">
       <div className="pointer-events-none absolute rounded-xl ring-4 ring-lime transition-all" style={{ left: box.left - 4, top: box.top - 4, width: box.width + 8, height: box.height + 8, boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.55)" }} />
-      <div className="absolute w-80 max-w-[calc(100vw-24px)] rounded-xl bg-card p-4 shadow-2xl" style={{ left, top: below ? box.bottom + 12 : Math.max(12, box.top - 190) }}>
+      <div className="absolute w-80 max-w-[calc(100vw-24px)] rounded-xl bg-popover p-4 shadow-2xl" style={{ left, top: below ? box.bottom + 12 : Math.max(12, box.top - 190) }}>
         <p className="text-xs text-muted-foreground">Paso {i + 1} de {steps.length}</p>
         <p className="mt-1 font-semibold">{s.t}</p>
         <p className="mt-1 text-sm text-muted-foreground">{s.d}</p>

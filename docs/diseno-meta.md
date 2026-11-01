@@ -49,3 +49,48 @@ se tomó del conocimiento del producto, no de esta captura.
   tarjetas de actividad con avatar y columna derecha (próximos pagos, familia en línea, nivel).
 - **Diálogos**: título centrado en negrita (20 px), línea divisoria y cerrar en círculo gris.
 - **Filtros/segmentados**: chips en píldora grises; el activo en verde suave.
+
+## Portada y fondo estilo developers.facebook.com
+
+Segunda captura con REA de `https://developers.facebook.com/` (1366 × 860, es-CO, 31-oct-2026). Colores muestreados
+de la captura con `sharp`; recetas y radios leídos del CSS público. Igual que arriba: solo medidas y estilos, ningún logo,
+ícono ni imagen de Meta.
+
+| Evidencia | Contenido |
+|---|---|
+| `ev_a18d1b8905c40031d82611a2d5d62a9371c9205cfc24eb54e813a9c07fb70856` | Captura + DOM de la portada de developers.facebook.com |
+
+| Medida (developers) | Valor | En Mirai |
+|---|---|---|
+| Panel de portada (`._apnp`) | `border-radius: 32px` | `PageHeader`: `rounded-[32px]` (24 px en móvil) |
+| Degradado pastel del panel | `#FFDFF0` (rosa, arriba-izq.) → `#EBE0FC` → `#CFEDFE` → `#B1F0FA` → `#A7F3F5` (aguamarina, derecha); abajo `#DCF0FF` → `#A3F9EB` | `--gradient-meta` (claro); versión oscura con los mismos tonos al 18–22 % sobre `#18191A` |
+| Lavado de fondo | `linear-gradient(295.2deg,#def9ea,#ddf7ec 10%,#daebfd 28%,#e1e6fa 67%,#f5e4f4 89%,#fdefe6)` | `--gradient-meta-wash`; `.bg-meta-wash` lo funde con `--background` en los primeros 520 px |
+| Texto principal | `#1C2B33` | `--foreground` / `--meta-text` (claro) |
+| Títulos | centrados, peso medio, tracking negativo | `h1` 30/44 px `font-medium tracking-[-0.02em]` |
+| Enlaces de acción | azul `#0064E0`, negrita, con flecha → | variante `link` del botón (verde, negrita, flecha que se desplaza) |
+| Mosaicos de ícono | cuadrado oscuro `#172C34` | `--meta-tile` (guías del Manual) |
+| Franja de anuncio | gris `#F1F4F7` | `--meta-banner` (aviso de puesta en marcha en Inicio) |
+| Borde de navegación | `#E1E2E3` | sin encabezado: el colapso del menú y el ojo de montos viven en el menú lateral |
+
+### Navegación sin encabezado
+
+Se quitó la barra superior y las migas de pan. El botón para contraer el menú (Ctrl B) está junto al selector de libro
+en la cabecera del menú lateral; el ojo para ocultar montos está al lado del buscador y también en el menú de usuario.
+En móvil siguen la barra inferior y el menú como hoja.
+
+## Vidrio y degradado de Meta Business Suite (vigente)
+
+Referencia: captura de Meta Business Suite › Settings que compartió el dueño del producto (31-oct-2026), muestreada con
+`sharp`. Reemplaza el lavado de developers.facebook.com: ahora el degradado cubre **toda** la app y la portada de cada
+sección no tiene caja propia (el título va directo sobre el degradado, como "Settings").
+
+| Medida (captura) | Valor | En Mirai |
+|---|---|---|
+| Fondo arriba-izquierda / centro / arriba-derecha / abajo | `#FAF0F1` / `#F3EDF5` / `#EDEEF7` / `#E6EDF9` | `--gradient-app` en `body` (`background-attachment: fixed`), un poco más saturado |
+| Menú lateral | blanco translúcido sobre el degradado | `--sidebar: rgba(255,255,255,.55)` + `backdrop-blur-xl` (oscuro `rgba(36,37,38,.5)`) |
+| Tarjetas del área principal | blanco translúcido | `--card: rgba(255,255,255,.74)` (oscuro `rgba(36,37,38,.74)`); menús, diálogos y paneles siguen opacos (`--popover`) |
+| Ítem activo ("Profiles") | pizarra `#283943`, texto blanco | `--nav-active` / `--nav-active-foreground` (menú lateral y menú de Ajustes); en oscuro `#E4E6EB` con texto `#1C2B33` |
+| Texto | `#1C2B33` | `--foreground` |
+
+Reglas: un borde con degradado (`p-[2px]` sobre un fondo de color) necesita relleno opaco `bg-popover`, si no el color
+se transparenta. Los separadores de formulario no usan fondo detrás del texto (líneas a cada lado).

@@ -15,7 +15,7 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover aria-expanded:bg-secondary-hover",
         ghost: "hover:bg-hover hover:text-foreground aria-expanded:bg-hover aria-expanded:text-foreground",
         destructive: "bg-danger-soft text-danger hover:bg-[color-mix(in_oklch,var(--danger-soft),var(--danger)_14%)] focus-visible:ring-danger/30",
-        link: "text-link underline-offset-4 hover:underline active:scale-100",
+        link: "text-link font-bold underline-offset-4 hover:underline active:scale-100 [&_svg]:transition-transform hover:[&_svg]:translate-x-0.5",
         gradient: "bg-brand-gradient text-white shadow-[0_2px_8px_rgba(42,127,20,.35)] hover:brightness-105",
       },
       size: {

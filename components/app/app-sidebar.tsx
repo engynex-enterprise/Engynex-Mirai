@@ -5,10 +5,10 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { useQueryClient } from "@tanstack/react-query"
-import { Check, ChevronRight, ChevronsUpDown, CirclePlus, LogOut, Moon, Plus, Search, Settings, Sun, User } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Eye, EyeOff, LogOut, Moon, Plus, Search, Settings, Sun, User } from "lucide-react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge,
-  SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, useSidebar,
+  SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, SidebarTrigger, useSidebar,
 } from "@/components/ui/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
@@ -26,6 +26,7 @@ import { useApp } from "./app-context"
 import { useShell } from "./shell-store"
 import type { LiveStatus, PresenceUser } from "@/hooks/use-realtime"
 import { switchBook } from "./actions"
+import { togglePrivacy } from "./privacy"
 import { useGami } from "@/features/gami/use-gami"
 
 export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "?"
@@ -53,12 +54,19 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
   return (
     <Sidebar collapsible="icon" className="border-r-sidebar-border">
       <SidebarHeader className="gap-1.5 pt-3">
-        <BookSwitcher />
+        <div className="flex items-center gap-1 group-data-[collapsible=icon]:flex-col">
+          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full"><BookSwitcher /></div>
+          <Tooltip>
+            <TooltipTrigger asChild><SidebarTrigger className="size-9 shrink-0 rounded-full hover:bg-sidebar-accent max-md:hidden" aria-label="Contraer o expandir el menú (Ctrl B)" /></TooltipTrigger>
+            <TooltipContent side="right">Contraer o expandir el menú (Ctrl B)</TooltipContent>
+          </Tooltip>
+        </div>
         <SidebarMenu className="gap-1.5">
-          <SidebarMenuItem>
-            <SidebarMenuButton data-tour="search" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-10 rounded-full bg-secondary px-3 text-muted-foreground hover:bg-secondary-hover group-data-[collapsible=icon]:rounded-full">
+          <SidebarMenuItem className="flex items-center gap-1.5 group-data-[collapsible=icon]:flex-col">
+            <SidebarMenuButton data-tour="search" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-10 flex-1 rounded-full bg-secondary px-3 text-muted-foreground hover:bg-secondary-hover group-data-[collapsible=icon]:rounded-full">
               <Search /> <span>Buscar en Mirai</span> <Kbd className="ml-auto bg-card">Ctrl K</Kbd>
             </SidebarMenuButton>
+            <PrivacyButton />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton data-tour="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-10 justify-center rounded-md bg-primary font-semibold text-primary-foreground shadow-[0_2px_6px_rgba(42,127,20,.3)] hover:bg-primary-hover hover:text-primary-foreground active:bg-primary-hover active:text-primary-foreground group-data-[collapsible=icon]:rounded-full">
@@ -153,6 +161,29 @@ function ProfileRow() {
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
+  )
+}
+
+/** Ojo para ocultar o mostrar los montos (modo privado). */
+function PrivacyButton() {
+  const [on, setOn] = useState(false)
+  useEffect(() => {
+    const read = () => setOn(document.documentElement.classList.contains("priv"))
+    read()
+    const mo = new MutationObserver(read)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+    return () => mo.disconnect()
+  }, [])
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" onClick={togglePrivacy} aria-label="Ocultar o mostrar montos" aria-pressed={on}
+          className="press grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-foreground hover:bg-secondary-hover">
+          {on ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{on ? "Mostrar montos" : "Ocultar montos"}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -281,6 +312,7 @@ function UserMenu() {
             <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">{user.email}</DropdownMenuLabel>
             <DropdownMenuItem asChild><Link href="/perfil"><User /> Tu perfil</Link></DropdownMenuItem>
             <DropdownMenuItem asChild><Link href="/ajustes"><Settings /> Ajustes</Link></DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => togglePrivacy()}><EyeOff /> Ocultar o mostrar montos</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
               {resolvedTheme === "dark" ? <Sun /> : <Moon />} {resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"}
             </DropdownMenuItem>

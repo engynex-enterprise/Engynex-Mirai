@@ -57,7 +57,7 @@ export function SetupView() {
 
       {next ? (
         <div className="rounded-xl bg-[linear-gradient(135deg,#1F2B4B,#9EDB4E)] p-[1.5px] shadow-card">
-        <Card className="flex-col items-start gap-4 rounded-[calc(var(--radius-xl)-1px)] p-5 ring-0 sm:flex-row sm:items-center">
+        <Card className="flex-col items-start gap-4 rounded-[calc(var(--radius-xl)-1px)] bg-popover p-5 ring-0 sm:flex-row sm:items-center">
           <IsoIcon k={next.iso} size={56} />
           <div className="grid flex-1 gap-1">
             <span className="text-xs font-semibold tracking-wide text-link uppercase">Siguiente paso</span>
