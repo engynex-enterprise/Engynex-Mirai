@@ -14,7 +14,9 @@ test("balance: agregar cuenta, patrimonio y quincenas", async ({ page }, info) =
   await shot(page, "balance", info.project.name)
   await page.getByRole("radio", { name: "1ª quincena" }).click()
   await expect(page.getByText("Disponible del periodo")).toBeVisible()
-  await expect(page.getByText("Gasto variable estimado").or(page.getByText("Sin salidas en este periodo."))).toBeVisible()
+  // Depende de los datos del usuario QA: o hay salidas (fijos, suscripciones, gasto variable estimado) o el aviso de vacío.
+  await expect(page.getByText("Salidas", { exact: true })).toBeVisible()
+  await expect(page.getByText(/Te sobra|Te falta/).first()).toBeVisible()
   await shot(page, "quincena", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
 })
