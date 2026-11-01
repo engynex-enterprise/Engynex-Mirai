@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Fragment, useEffect, useMemo } from "react"
@@ -24,6 +25,8 @@ import { applyPrivacy, togglePrivacy } from "./privacy"
 import { useNavBadges } from "./nav-badges"
 import { ApplyPrefs } from "@/features/settings/prefs"
 import { ChatWidget } from "@/features/chat/chat-widget"
+import { Tour } from "./tour"
+import { GamiCheck } from "@/features/gami/gami-check"
 
 export function AppShell({ ctx, sidebarOpen, children }: { ctx: AppContext; sidebarOpen: boolean; children: React.ReactNode }) {
   return (
@@ -61,6 +64,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <NewBookDialog />
       <ApplyPrefs />
       <ChatWidget />
+      <GamiCheck />
+      <Suspense fallback={null}><Tour /></Suspense>
     </>
   )
 }

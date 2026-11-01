@@ -14,6 +14,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSepar
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { LEGAL_VERSION } from "@/lib/legal/version"
+import { useCaptcha } from "./turnstile"
 import { GoogleButton } from "./google-button"
 import { PasswordMeter, passwordScore } from "./password-meter"
 
@@ -33,6 +34,7 @@ export function RegisterForm() {
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { nombre: "", email: "", password: "", confirm: "", acepta: false as unknown as true } })
   const { errors, isSubmitting } = form.formState
   const pw = form.watch("password")
+  const captcha = useCaptcha()
 
   async function onSubmit(v: Values) {
     const { error } = await createClient().auth.signUp({
@@ -41,8 +43,10 @@ export function RegisterForm() {
       options: {
         emailRedirectTo: `${location.origin}/auth/callback?next=/bienvenida`,
         data: { nombre: v.nombre.trim(), acepta_version: LEGAL_VERSION },
+        captchaToken: captcha.token,
       },
     })
+    captcha.reset()
     if (error) return toast.error("No pudimos crear tu cuenta", { description: error.message })
     setSentTo(v.email)
   }
@@ -99,7 +103,8 @@ export function RegisterForm() {
               <FieldError errors={[errors.acepta]} />
             </div>
           </Field>
-          <Button type="submit" size="lg" className="h-11 w-full" disabled={isSubmitting}>
+          {captcha.widget}
+          <Button type="submit" size="lg" className="h-11 w-full" disabled={isSubmitting || (captcha.enabled && !captcha.token)}>
             {isSubmitting && <Spinner />} Crear mi cuenta
           </Button>
         </FieldGroup>

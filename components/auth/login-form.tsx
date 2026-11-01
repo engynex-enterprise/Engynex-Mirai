@@ -16,6 +16,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useCaptcha } from "./turnstile"
 import { GoogleButton } from "./google-button"
 
 const schema = z.object({
@@ -39,20 +40,23 @@ export function LoginForm() {
   const [sent, setSent] = useState(false)
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "", remember: true } })
   const { isSubmitting, errors } = form.formState
+  const captcha = useCaptcha()
 
   async function onSubmit(v: Values) {
     const sb = createClient()
     if (mode === "magic") {
       const { error } = await sb.auth.signInWithOtp({
         email: v.email,
-        options: { emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`, shouldCreateUser: false },
+        options: { emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`, shouldCreateUser: false, captchaToken: captcha.token },
       })
+      captcha.reset()
       if (error) return toast.error("No pudimos enviar el enlace", { description: error.message })
       setSent(true)
       return
     }
     if (!v.password) return form.setError("password", { message: "Escribe tu contraseña" })
-    const { error } = await sb.auth.signInWithPassword({ email: v.email, password: v.password })
+    const { error } = await sb.auth.signInWithPassword({ email: v.email, password: v.password, options: { captchaToken: captcha.token } })
+    captcha.reset()
     if (error) return toast.error("No pudiste entrar", { description: AUTH_ERRORS[error.message] ?? error.message })
     try { localStorage.setItem("mirai-remember", v.remember ? "1" : "0") } catch {}
     const { data } = await sb.auth.mfa.getAuthenticatorAssuranceLevel()
@@ -117,7 +121,8 @@ export function LoginForm() {
           {mode === "magic" && (
             <p className="text-sm text-muted-foreground">Te enviamos un enlace al correo para entrar sin escribir la contraseña.</p>
           )}
-          <Button type="submit" size="lg" className="h-11 w-full" disabled={isSubmitting}>
+          {captcha.widget}
+          <Button type="submit" size="lg" className="h-11 w-full" disabled={isSubmitting || (captcha.enabled && !captcha.token)}>
             {isSubmitting && <Spinner />} {mode === "magic" ? "Enviarme el enlace" : "Entrar"}
           </Button>
         </FieldGroup>

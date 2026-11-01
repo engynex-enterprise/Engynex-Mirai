@@ -1,0 +1,50 @@
+import { expect, test } from "@playwright/test"
+import { login, shot, watchErrors } from "./helpers"
+
+test("perfil, novedades, preguntas, manual, tour y logros", async ({ page }, info) => {
+  test.setTimeout(240_000)
+  const errs = watchErrors(page)
+  await login(page)
+
+  await page.goto("/perfil")
+  await expect(page.getByText("Integrantes de la familia")).toBeVisible({ timeout: 30_000 })
+  await page.getByRole("textbox", { name: "Ocupación" }).fill(`Ingeniera QA ${Date.now() % 10000}`)
+  await page.getByRole("textbox", { name: "Ocupación" }).blur()
+  await expect(page.getByText("Guardado").first()).toBeVisible()
+  await page.getByRole("button", { name: "Agregar integrante" }).click()
+  const name = `Sofía ${Date.now() % 1000}`
+  await page.getByRole("textbox", { name: "Nombre" }).fill(name)
+  await page.getByRole("button", { name: "Agregar", exact: true }).click()
+  await expect(page.getByText(`${name} ya hace parte de tu familia en Mirai.`)).toBeVisible()
+  await page.getByRole("button", { name: `Eliminar ${name}` }).click()
+  await expect(page.getByText("Integrante eliminado")).toBeVisible()
+  await shot(page, "perfil", info.project.name)
+
+  await page.goto("/novedades")
+  await expect(page.getByText("Mirai en la nube: tu familia, en tiempo real").first()).toBeVisible()
+  await page.goto("/faq")
+  await page.getByRole("textbox", { name: "Buscar en preguntas frecuentes" }).fill("contador")
+  await expect(page.getByText("¿Cómo le doy acceso a mi contador?")).toBeVisible()
+  await expect(page.getByText(/quitarle el acceso cuando quieras/)).toBeVisible()
+  await page.goto("/manual")
+  await page.getByRole("button", { name: /Registrar tu primer gasto/ }).click()
+  await expect(page.getByText(/la categoría se elige sola/)).toBeVisible()
+  await page.getByRole("radio", { name: /Manual por sección/ }).click()
+  await expect(page.getByRole("heading", { name: "Gastos" }).first()).toBeVisible()
+
+  await page.goto("/inicio?tour=1")
+  await expect(page.getByRole("dialog", { name: "Tour de Mirai" })).toBeVisible({ timeout: 15_000 })
+  await shot(page, "tour", info.project.name)
+  await page.getByRole("button", { name: "Siguiente" }).click()
+  await page.getByRole("button", { name: "Saltar" }).click()
+  await expect(page.getByRole("dialog", { name: "Tour de Mirai" })).toHaveCount(0)
+
+  await page.goto("/logros")
+  await expect(page.getByText("Misiones de la semana")).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText("Me presento")).toBeVisible()
+  await expect(page.getByText(/Nivel \d/).first()).toBeVisible()
+  await shot(page, "logros", info.project.name)
+  await page.goto("/inicio")
+  await expect(page.getByRole("link", { name: /Nivel \d · / })).toBeVisible({ timeout: 30_000 })
+  expect(errs, errs.join("\n")).toEqual([])
+})

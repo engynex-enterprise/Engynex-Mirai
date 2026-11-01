@@ -57,7 +57,7 @@ export function QuickEntry() {
 
   return (
     <div className="grid gap-2">
-      <form className="flex items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) submit() }}>
+      <form data-tour="quick" className="flex items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) submit() }}>
         <Avatar className="hidden size-10 sm:flex"><AvatarFallback className="bg-brand-gradient text-sm text-white">{initials(user.nombre)}</AvatarFallback></Avatar>
         <InputGroup className="h-12 rounded-full bg-card">
           <InputGroupInput aria-label="Escribe lo que pasó" value={text} onChange={(e) => setText(e.target.value)} placeholder={`Escribe lo que pasó, ${first}: “gasté 15 mil en almuerzo ayer”`} className="pl-4" />

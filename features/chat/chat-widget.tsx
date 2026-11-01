@@ -42,7 +42,15 @@ function group(fecha: string) {
 function Fab({ onClick }: { onClick: () => void }) {
   const ref = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const [away, setAway] = useState(false)
   const drag = useRef<{ sx: number; sy: number; x: number; y: number; moved: boolean } | null>(null)
+  // Mientras desplazas la página la burbuja se aparta para no tapar botones; vuelve al quedarte quieto.
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>
+    const on = () => { setAway(true); clearTimeout(t); t = setTimeout(() => setAway(false), 1500) }
+    addEventListener("scroll", on, { passive: true, capture: true })
+    return () => { removeEventListener("scroll", on, { capture: true }); clearTimeout(t) }
+  }, [])
   useEffect(() => {
     queueMicrotask(() => { try { const p = JSON.parse(localStorage.getItem(POS_KEY) || "null"); if (p) setPos(p) } catch { /* sin posición guardada */ } })
     const fit = () => setPos((p) => (p ? { x: Math.min(Math.max(8, p.x), innerWidth - 64), y: Math.min(Math.max(8, p.y), innerHeight - 64) } : p))
@@ -50,7 +58,7 @@ function Fab({ onClick }: { onClick: () => void }) {
   }, [])
   return (
     <button ref={ref} type="button" aria-label="Pregúntale a Mirai" title="Pregúntale a Mirai"
-      className={cn("fixed z-40 grid size-14 touch-none place-items-center rounded-full bg-navy text-lime shadow-xl ring-4 ring-background transition-transform hover:scale-105", !pos && "right-5 bottom-24 md:bottom-6")}
+      className={cn("fixed z-40 grid size-12 touch-none place-items-center rounded-full bg-navy text-lime shadow-xl ring-4 ring-background transition-all duration-300 hover:scale-105 md:size-14", !pos && "right-3 bottom-[5.5rem] md:right-5 md:bottom-6", away && "pointer-events-none translate-y-4 scale-75 opacity-0")}
       style={pos ? { left: pos.x, top: pos.y } : undefined}
       onPointerDown={(e) => { const r = ref.current!.getBoundingClientRect(); drag.current = { sx: e.clientX, sy: e.clientY, x: r.left, y: r.top, moved: false }; ref.current!.setPointerCapture(e.pointerId) }}
       onPointerMove={(e) => {

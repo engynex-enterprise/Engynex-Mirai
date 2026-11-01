@@ -1,5 +1,6 @@
 "use client"
 
+import { GamiStrip } from "@/features/gami/logros-view"
 import Link from "next/link"
 import { useMemo } from "react"
 import { ArrowRight, CircleCheck } from "lucide-react"
@@ -77,6 +78,7 @@ export function HomeView() {
 
   return (
     <div className="grid gap-6">
+      <GamiStrip />
       <PageHeader id="inicio" />
       {setup && !setup.finished && (
         <Card className="flex-col items-start gap-4 border-0 bg-[linear-gradient(120deg,#1F2B4B,#2C4A3A_60%,#3F7A1E)] p-5 text-white ring-0 sm:flex-row sm:items-center">

@@ -26,6 +26,7 @@ import { useApp } from "./app-context"
 import { useShell } from "./shell-store"
 import type { LiveStatus, PresenceUser } from "@/hooks/use-realtime"
 import { switchBook } from "./actions"
+import { useGami } from "@/features/gami/use-gami"
 
 export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "?"
 
@@ -55,17 +56,17 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
         <BookSwitcher />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-9 bg-sidebar-primary font-medium text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground active:bg-sidebar-primary/90 active:text-sidebar-primary-foreground">
+            <SidebarMenuButton data-tour="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-9 bg-sidebar-primary font-medium text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground active:bg-sidebar-primary/90 active:text-sidebar-primary-foreground">
               <CirclePlus /> <span>Agregar</span> <Kbd className="ml-auto bg-white/15 text-inherit">N</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-9 border bg-background text-muted-foreground">
+            <SidebarMenuButton data-tour="search" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-9 border bg-background text-muted-foreground">
               <Search /> <span>Buscar…</span> <Kbd className="ml-auto">Ctrl K</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => openBell(true)} tooltip="Notificaciones">
+            <SidebarMenuButton data-tour="bell" onClick={() => openBell(true)} tooltip="Notificaciones">
               <span className="relative"><Bell />{collapsed && unread > 0 && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-expense" />}</span>
               <span>Notificaciones</span>
             </SidebarMenuButton>
@@ -185,7 +186,7 @@ function BookSwitcher() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent" tooltip="Cambiar de libro">
+            <SidebarMenuButton data-tour="book" size="lg" className="data-[state=open]:bg-sidebar-accent" tooltip="Cambiar de libro">
               <IsoIcon k="mirai" size={32} />
               <div className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-semibold">{book.nombre}</span>
@@ -227,19 +228,21 @@ function UserMenu() {
   const { user, household } = useApp()
   const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
+  const g = useGami()
+  const lvl = g?.st.on ? g.L : null
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" tooltip={user.nombre}>
+            <SidebarMenuButton data-tour="user" size="lg" tooltip={user.nombre}>
               <Avatar className="size-8">
                 {user.avatar && <AvatarImage src={user.avatar} alt="" />}
                 <AvatarFallback className="bg-brand-gradient text-xs text-white">{initials(user.nombre)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-medium">{user.nombre}</span>
-                <span className="truncate text-xs text-muted-foreground">{household.nombre} · {{ owner: "Dueño", editor: "Editor", viewer: "Solo lectura" }[household.role]}</span>
+                <span className="truncate text-xs text-muted-foreground">{lvl ? `Nivel ${lvl.n} · ${lvl.name}` : household.nombre} · {{ owner: "Dueño", editor: "Editor", viewer: "Solo lectura" }[household.role]}</span>
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>

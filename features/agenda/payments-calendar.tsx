@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { ChevronLeft, ChevronRight, Download, Plus } from "lucide-react"
+import { CalendarCheck, ChevronLeft, ChevronRight, Download, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { es } from "react-day-picker/locale"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -10,6 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Spinner } from "@/components/ui/spinner"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Money } from "@/components/mirai/money"
 import { Notice } from "@/components/mirai/notice"
@@ -21,6 +23,7 @@ import { fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
 import { iso } from "@/lib/domain"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
+import { syncCalendar } from "@/features/correo/actions"
 import { ECAT, calEvents, calIcs, type CalEvent, type ECatKey } from "./events"
 
 type View = "agenda" | "semana" | "mes"
@@ -97,6 +100,7 @@ export function PaymentsCalendar() {
     <div className="grid gap-6">
       <PageHeader id="recordatorios" actions={<>
         <Button variant="outline" onClick={ics}><Download /> Exportar .ics</Button>
+        <GoogleCalendarButton />
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button><Plus /> Agregar</Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -196,5 +200,20 @@ export function PaymentsCalendar() {
         </Card>
       </div>
     </div>
+  )
+}
+
+/** Lleva los próximos pagos a Google Calendar (o pide conectar la cuenta). */
+function GoogleCalendarButton() {
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button variant="outline" disabled={busy} onClick={async () => {
+      setBusy(true)
+      const r = await syncCalendar()
+      setBusy(false)
+      if (r.ok) return toast.success(r.msg)
+      if (/Conecta tu cuenta de Google|venció/.test(r.msg)) { toast(r.msg, { action: { label: "Conectar", onClick: () => { location.href = "/api/google/connect?s=calendar&back=/recordatorios" } } }); return }
+      toast.error("No se pudo sincronizar", { description: r.msg })
+    }}>{busy ? <Spinner /> : <CalendarCheck />} Google Calendar</Button>
   )
 }
