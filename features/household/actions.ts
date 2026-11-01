@@ -8,6 +8,7 @@ import { supabaseServer } from "@/utils/supabase/server"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { siteUrl } from "@/lib/site-url"
+import { FREE_LIMITS } from "@/lib/plans"
 
 const Invite = z.object({ email: z.email("Escribe un correo válido"), role: z.enum(["editor", "viewer"]) })
 
@@ -16,8 +17,15 @@ export async function inviteMember(input: { email: string; role: "editor" | "vie
   const p = Invite.safeParse(input)
   if (!p.success) return { ok: false, msg: p.error.issues[0].message }
   const ctx = await requireRole("owner")
-  const token = randomBytes(24).toString("base64url")
   const db = supabaseAdmin()
+  if (ctx.plan !== "premium") {
+    const [{ count: miembros }, { count: pendientes }] = await Promise.all([
+      db.from("household_members").select("user_id", { count: "exact", head: true }).eq("household_id", ctx.household.id),
+      db.from("household_invitations").select("id", { count: "exact", head: true }).eq("household_id", ctx.household.id).is("accepted_at", null).gt("expires_at", new Date().toISOString()),
+    ])
+    if ((miembros ?? 0) + (pendientes ?? 0) >= FREE_LIMITS.personas) return { ok: false, msg: `El plan gratis permite ${FREE_LIMITS.personas} personas por hogar. Pásate a Premium para invitar a toda tu familia.` }
+  }
+  const token = randomBytes(24).toString("base64url")
   const { error } = await db.from("household_invitations").insert({
     household_id: ctx.household.id, email: p.data.email.toLowerCase(), role: p.data.role, token_hash: createHash("sha256").update(token).digest("hex"), invited_by: ctx.user.id,
   })

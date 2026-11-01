@@ -21,6 +21,7 @@ const pnum = (s: string) => { const t = s.replace(/\s/g, ""); const v = /,\d{2}$
 /** Lee las notificaciones del banco en Gmail y extrae las compras (mailScan de la v4). */
 export async function scanMail(query?: string): Promise<{ ok: boolean; rows: MailRow[]; msg?: string; ia?: boolean }> {
   const ctx = await requireRole("editor")
+  if (ctx.plan !== "premium") return { ok: false, rows: [], msg: "Leer el correo del banco es parte de Mirai Premium." }
   const q = (query || MAILQ_DEFAULT).slice(0, 1000)
   let list: { messages?: { id: string }[] }
   try { list = await googleFetch(ctx.user.id, "gmail", `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${encodeURIComponent(q)}`) }
@@ -63,6 +64,7 @@ export async function googleDisconnect() {
 /** Lleva los próximos pagos y cobros (45 días) a Google Calendar. Ids estables: no duplica. */
 export async function syncCalendar(): Promise<{ ok: boolean; msg: string }> {
   const ctx = await requireRole("viewer")
+  if (ctx.plan !== "premium") return { ok: false, msg: "Llevar tus pagos a Google Calendar es parte de Mirai Premium." }
   try {
     await googleToken(ctx.user.id, "calendar")
     const cfg = await getIntegration(ctx.household.id, "google_calendar")

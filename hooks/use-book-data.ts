@@ -61,9 +61,16 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
       const isNew = !(values as { id?: string }).id
       const id = idOf(values)
       try {
-        if (!isNew) await waitSaved(id)
-        const payload = { ...values, id, book_id: bookId } as never
-        const { data, error } = await createClient().from(table).upsert(payload).select().single()
+        const sb = createClient()
+        if (!isNew) {
+          await waitSaved(id)
+          // Edición: update y no upsert. Con upsert Postgres valida el registro completo como si fuera
+          // nuevo y un cambio parcial (solo el ícono) fallaba por las columnas obligatorias (nombre).
+          const { data, error } = await sb.from(table).update(values as never).eq("id" as never, id as never).select()
+          if (error) throw new Error(error.message)
+          if (data?.length) return data[0] as unknown as Row<T>
+        }
+        const { data, error } = await sb.from(table).upsert({ ...values, id, book_id: bookId } as never).select().single()
         if (error) throw new Error(error.message)
         return data as unknown as Row<T>
       } finally {

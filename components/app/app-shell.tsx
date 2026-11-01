@@ -12,6 +12,8 @@ import { AddMenu } from "./add-menu"
 import { CommandPalette } from "./command-palette"
 import { NotificationsSheet, useNotifications } from "./notifications-sheet"
 import { HelpSheet } from "./help-sheet"
+import { FeedbackDialog } from "@/features/opiniones/feedback-dialog"
+import { AdsConsentBanner } from "@/features/ads/ad-slot"
 import { MobileTabBar } from "./mobile-tabbar"
 import { NewBookDialog } from "./new-book-dialog"
 import { useShell } from "./shell-store"
@@ -57,6 +59,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <CommandPalette />
       <NotificationsSheet />
       <HelpSheet />
+      <FeedbackDialog />
+      <AdsConsentBanner />
       <NewBookDialog />
       <ApplyPrefs />
       <ChatWidget />

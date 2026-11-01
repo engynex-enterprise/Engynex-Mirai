@@ -27,4 +27,21 @@ export async function resetQaUser() {
     user_metadata: { nombre: QA.nombre, acepta_version: "2026-10-31" },
   })
   if (error) throw error
+  // Restos de corridas anteriores: hogares de prueba que quedaron sin integrantes.
+  const { data: orphans } = await sb.from("households").select("id,household_members(user_id)").eq("nombre", "Familia Prueba")
+  const ids = (orphans ?? []).filter((h) => !(h.household_members as unknown[]).length).map((h) => h.id)
+  if (ids.length) await sb.from("households").delete().in("id", ids)
+}
+
+/** Pone el hogar de QA en Premium (cortesía de prueba) o en Gratis. Las pruebas usan Premium salvo las del plan gratis. */
+export async function setQaPlan(plan: "premium" | "gratis") {
+  const sb = admin()
+  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = data.users.find((u) => u.email === QA.email)?.id
+  if (!uid) return
+  const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid)
+  const ids = (hh ?? []).map((h) => h.household_id)
+  if (!ids.length) return
+  await sb.from("plan_subscriptions").delete().in("household_id", ids).eq("proveedor", "manual")
+  if (plan === "premium") await sb.from("plan_subscriptions").insert(ids.map((household_id) => ({ household_id, proveedor: "manual", estado: "cortesia", nota: "e2e", vence_at: new Date(Date.now() + 86_400_000).toISOString() })))
 }

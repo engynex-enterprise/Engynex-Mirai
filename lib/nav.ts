@@ -46,12 +46,16 @@ export const NAV: NavSection[] = [
     { g: "ayuda", label: "Ayuda", icon: "life-buoy", iso: "consejero", items: [
       leaf("novedades", "Novedades", "megaphone"), leaf("faq", "Preguntas frecuentes", "circle-help"),
       leaf("manual", "Manual e instructivos", "book-open"),
+      leaf("opiniones", "Tu opinión", "message-square-heart"),
     ] },
   ] },
   { sec: "Configuración", entries: [leaf("perfil", "Perfil", "user"), leaf("ajustes", "Ajustes", "settings")] },
 ]
 
 export const isGroup = (e: NavLeaf | NavGroup): e is NavGroup => "g" in e
+
+/** Panel del dueño de Mirai: no está en NAV; el menú lo muestra solo a los administradores. */
+export const ADMIN_PAGE: NavLeaf = { id: "admin", label: "Panel de administración", icon: "shield-check", href: "/admin" }
 
 /** Lista plana de páginas: buscador ⌘K, selector de vista inicial, migas. */
 export const PAGES: (NavLeaf & { section: string; group?: NavGroup })[] = NAV.flatMap((s) =>

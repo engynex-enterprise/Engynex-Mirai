@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
 import { useMembers, usePaymentMethods } from "@/features/catalogs/hooks"
 import { generateMonthSummary, type MonthSummary } from "./actions"
+import { AdSlot } from "@/features/ads/ad-slot"
 
 function months(today: string) {
   const [y, m] = today.split("-").map(Number)
@@ -144,6 +145,7 @@ export function ReportsView() {
         </Card>
       </section>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lightbulb className="size-3.5" /> El PDF incluye además la salud financiera, los préstamos y todos los gastos por categoría.</p>
+      <AdSlot slot="reportes" />
     </div>
   )
 }

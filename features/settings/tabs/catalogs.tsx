@@ -11,13 +11,12 @@ import { Icon } from "@/components/mirai/icon"
 import { MoneyAutosave } from "@/components/mirai/money-autosave"
 import { useCanEdit } from "@/components/app/app-context"
 import { useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
-import { ICON_CHOICES } from "@/features/catalogs/category-dialog"
+import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
 import { categoryOptions, useCategories, useEntities, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
 import { SettingSection } from "../ui"
 import { useBookSettingsSave } from "../prefs"
 
 type Kind = "cats" | "ings" | "ents" | "medios" | "rels" | "reglas"
-const ICON_OPTS = ICON_CHOICES.map((i) => ({ value: i, label: i.replace(/-/g, " "), icon: i }))
 const GRUPOS = [{ value: "n", label: "Necesidad", icon: "house" }, { value: "g", label: "Gusto", icon: "coffee" }, { value: "a", label: "Ahorro", icon: "piggy-bank" }]
 const TIPOS_ENT = ["Banco", "Cooperativa", "Fintech", "Billetera", "Fondo", "Otro"].map((t) => ({ value: t, label: t }))
 
@@ -55,7 +54,7 @@ function Categorias() {
       <ul className="grid">
         {data?.map((c) => (
           <li key={c.id} className="grid grid-cols-[3rem_1fr_auto] items-center gap-2 border-b py-2 last:border-0 sm:grid-cols-[10rem_1fr_9rem_11rem_auto]">
-            <div className="w-full sm:w-40"><Combobox value={c.icon} onChange={(v) => save.mutate({ id: c.id, icon: v } as never)} options={ICON_OPTS} /></div>
+            <div className="w-full sm:w-40"><Combobox value={c.icon} onChange={(v) => save.mutate({ id: c.id, icon: v } as never)} options={ICON_OPTIONS} /></div>
             <TextBlur label={`Nombre de ${c.nombre}`} value={c.nombre} disabled={!can} onSave={(v) => save.mutate({ id: c.id, nombre: v } as never)} />
             <Button size="icon" variant="ghost" className="text-danger sm:order-last" aria-label={`Eliminar ${c.nombre}`} disabled={!can || c.id.startsWith("tmp-")} onClick={() => del.mutate(c)}><Trash2 /></Button>
             <div className="col-span-3 sm:col-span-1"><Combobox value={c.grupo} onChange={(v) => save.mutate({ id: c.id, grupo: v } as never)} options={GRUPOS} /></div>
@@ -79,7 +78,7 @@ function Simple({ table, title, icon, placeholder, defIcon }: { table: "income_c
       <ul className="grid">
         {q.data?.map((x) => (
           <li key={x.id} className="grid grid-cols-[3rem_1fr_auto] items-center gap-2 border-b py-2 last:border-0 sm:grid-cols-[10rem_1fr_auto]">
-            <Combobox value={x.icon} onChange={(v) => save.mutate({ id: x.id, icon: v } as never)} options={ICON_OPTS} />
+            <Combobox value={x.icon} onChange={(v) => save.mutate({ id: x.id, icon: v } as never)} options={ICON_OPTIONS} />
             <TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} />
             <Button size="icon" variant="ghost" className="text-danger" aria-label={`Eliminar ${x.nombre}`} disabled={!can || x.id.startsWith("tmp-")} onClick={() => del.mutate(x)}><Trash2 /></Button>
           </li>

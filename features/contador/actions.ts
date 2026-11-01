@@ -33,6 +33,7 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
   const p = New.safeParse(input)
   if (!p.success) return { ok: false, msg: p.error.issues[0].message }
   const ctx = await requireRole("owner")
+  if (ctx.plan !== "premium") return { ok: false, msg: "El acceso para tu contador es parte de Mirai Premium." }
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").insert({ book_id: ctx.book.id, label: p.data.label, email: p.data.email, perms: p.data.perms, token_hash: hash(token), expires_at: expiry(p.data.exp), created_by: ctx.user.id })
   if (error) return { ok: false, msg: error.message }

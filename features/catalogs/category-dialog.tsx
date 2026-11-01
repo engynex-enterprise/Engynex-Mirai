@@ -17,8 +17,18 @@ import { MoneyInput } from "@/components/mirai/money-input"
 import { useSave } from "@/hooks/use-book-data"
 import { useCategories } from "./hooks"
 
-/** Íconos elegibles para categorías y medios (ICON_CHOICES de la v4). */
-export const ICON_CHOICES = ["house", "zap", "droplets", "wifi", "shopping-cart", "car", "bus", "fuel", "graduation-cap", "heart-pulse", "landmark", "utensils", "coffee", "bike", "cookie", "film", "tv", "shirt", "repeat", "dog", "gift", "plane", "piggy-bank", "trending-up", "briefcase", "store", "baby", "dumbbell", "smartphone", "receipt", "banknote", "credit-card", "coins", "percent", "file-text", "tag", "umbrella", "sprout", "circle-ellipsis", "paw-print", "pill", "scissors", "wrench", "gamepad-2", "book-open", "music"]
+/** Íconos elegibles para categorías y medios (ICON_CHOICES de la v4), con su nombre en español. */
+export const ICON_LABELS: Record<string, string> = {
+  house: "Casa", zap: "Energía", droplets: "Agua", wifi: "Internet", "shopping-cart": "Mercado", car: "Carro", bus: "Transporte", fuel: "Gasolina",
+  "graduation-cap": "Educación", "heart-pulse": "Salud", landmark: "Banco", utensils: "Restaurante", coffee: "Café", bike: "Bicicleta", cookie: "Antojos",
+  film: "Cine", tv: "Televisión", shirt: "Ropa", repeat: "Suscripción", dog: "Mascota", gift: "Regalos", plane: "Viajes", "piggy-bank": "Ahorro",
+  "trending-up": "Inversión", briefcase: "Trabajo", store: "Tienda", baby: "Bebé", dumbbell: "Gimnasio", smartphone: "Celular", receipt: "Factura",
+  banknote: "Efectivo", "credit-card": "Tarjeta", coins: "Monedas", percent: "Intereses", "file-text": "Documento", tag: "Etiqueta", umbrella: "Seguro",
+  sprout: "Crecimiento", "circle-ellipsis": "Otros", "paw-print": "Huella", pill: "Medicamentos", scissors: "Belleza", wrench: "Arreglos",
+  "gamepad-2": "Juegos", "book-open": "Libros", music: "Música", "arrow-left-right": "Transferencia", wallet: "Billetera",
+}
+export const ICON_CHOICES = Object.keys(ICON_LABELS)
+export const ICON_OPTIONS = ICON_CHOICES.map((i) => ({ value: i, label: ICON_LABELS[i], icon: i }))
 
 /** "Nueva categoría" (mini-modal de la v4). Devuelve el id creado. */
 export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated, ctxDesc = "" }: { open: boolean; onOpenChange: (o: boolean) => void; initialName?: string; onCreated?: (id: string) => void; ctxDesc?: string }) {
@@ -70,7 +80,7 @@ export function CategoryDialog({ open, onOpenChange, initialName = "", onCreated
           ]} />
         </FormField>
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Ícono" htmlFor="cat-icon"><Combobox id="cat-icon" value={icon} onChange={setIcon} options={ICON_CHOICES.map((i) => ({ value: i, label: i.replace(/-/g, " "), icon: i }))} /></FormField>
+          <FormField label="Ícono" htmlFor="cat-icon"><Combobox id="cat-icon" value={icon} onChange={setIcon} options={ICON_OPTIONS} /></FormField>
           <FormField label="Tope mensual" htmlFor="cat-tope" hint="Opcional. Te avisamos al acercarte."><MoneyInput id="cat-tope" value={tope} onChange={setTope} /></FormField>
         </div>
       </FieldGroup>

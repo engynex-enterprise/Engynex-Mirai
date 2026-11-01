@@ -68,3 +68,11 @@ El plan gratis de Supabase permite 2 proyectos activos por dueño. Cuando haya c
 4. En Supabase (proyecto nuevo) › Authentication: *Site URL* = la dirección de pruebas, *Redirect URLs* = esa dirección y `http://localhost:3000/**`; activa Google con el mismo cliente OAuth, TOTP (MFA) y *Manual linking*. En Google Cloud agrega `https://<ref-nuevo>.supabase.co/auth/v1/callback`.
 5. En Vercel › Environment Variables, deja las cuatro variables de Supabase y `ENCRYPTION_KEY` solo en **Production** y créalas de nuevo en **Preview** (rama `pruebas`) con los valores del proyecto nuevo. Vuelve a desplegar `pruebas`.
 6. Desde ese momento las pruebas automáticas (`npm run test:e2e`) y `npm run dev` usan la base de pruebas.
+
+## Administradores de la plataforma
+
+El panel `/admin` (uso, clientes y opiniones) solo lo ven las cuentas de `public.platform_admins`. Para agregar una (SQL Editor de Supabase):
+
+```sql
+insert into public.platform_admins(user_id) select id from auth.users where email = 'tu@correo';
+```

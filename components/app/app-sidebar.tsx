@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { useQueryClient } from "@tanstack/react-query"
-import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Eye, EyeOff, LogOut, Moon, Plus, Search, Settings, Sun, User } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Crown, Eye, EyeOff, LogOut, MessageSquareHeart, Moon, Plus, Search, Settings, ShieldCheck, Sun, User } from "lucide-react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge,
   SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, SidebarTrigger, useSidebar,
@@ -19,7 +19,8 @@ import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/mirai/icon"
 import { IsoIcon, hasIso } from "@/components/mirai/iso-icon"
-import { NAV, isGroup, type NavGroup, type NavLeaf } from "@/lib/nav"
+import { ADMIN_PAGE, NAV, isGroup, type NavGroup, type NavLeaf } from "@/lib/nav"
+import { featureOfSection } from "@/lib/plans"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { useApp } from "./app-context"
@@ -34,6 +35,8 @@ export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2
 export function AppSidebar({ live, online, badges, hidden = [], unread }: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; hidden?: string[]; unread: number }) {
   const path = usePathname()
   const current = path.split("/")[1] || "inicio"
+  const { isAdmin, plan } = useApp()
+  const isFree = plan !== "premium"
   const { state, isMobile, setOpenMobile } = useSidebar()
   const collapsed = state === "collapsed" && !isMobile
   const openSearch = useShell((s) => s.setSearch)
@@ -109,6 +112,7 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
                               <SidebarMenuSubButton asChild isActive={i.id === current} className="data-[active=true]:font-medium">
                                 <Link href={i.href} prefetch>
                                   <span>{i.label}</span>
+                                  {isFree && featureOfSection(i.id) && <PremiumMark />}
                                   {badges[i.id] !== undefined && <NavBadge v={badges[i.id]} />}
                                 </Link>
                               </SidebarMenuSubButton>
@@ -125,6 +129,12 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
             </SidebarMenu>
           </SidebarGroup>
         ))}
+        {isAdmin && (
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel className="text-[13px]">Administración</SidebarGroupLabel>
+            <SidebarMenu><Leaf item={ADMIN_PAGE} active={current === ADMIN_PAGE.id} /></SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="gap-2 pb-3">
@@ -192,13 +202,20 @@ function NavBadge({ v }: { v: number | string }) {
   )
 }
 
+/** Corona junto a las secciones Premium cuando el hogar está en el plan gratis. */
+function PremiumMark() {
+  return <Crown className="ml-auto size-3.5! shrink-0 text-amber-500" aria-label="Premium" />
+}
+
 function Leaf({ item, active, badge }: { item: NavLeaf; active: boolean; badge?: number | string }) {
+  const { plan } = useApp()
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
         <Link href={item.href} prefetch>
           {hasIso(item.id) ? <NavIcon iso={item.id} /> : <NavIcon icon={item.icon} />}
           <span>{item.label}</span>
+          {plan !== "premium" && featureOfSection(item.id) && <PremiumMark />}
         </Link>
       </SidebarMenuButton>
       {badge !== undefined && <SidebarMenuBadge><NavBadge v={badge} /></SidebarMenuBadge>}
@@ -280,7 +297,8 @@ function BookSwitcher() {
 }
 
 function UserMenu() {
-  const { user, household } = useApp()
+  const { user, household, isAdmin } = useApp()
+  const openFeedback = useShell((s) => s.openFeedback)
   const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
   const g = useGami()
@@ -304,6 +322,8 @@ function UserMenu() {
             <DropdownMenuItem asChild><Link href="/perfil"><User /> Tu perfil</Link></DropdownMenuItem>
             <DropdownMenuItem asChild><Link href="/ajustes"><Settings /> Ajustes</Link></DropdownMenuItem>
             <DropdownMenuItem onSelect={() => togglePrivacy()}><EyeOff /> Ocultar o mostrar montos</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openFeedback()}><MessageSquareHeart /> Danos tu opinión</DropdownMenuItem>
+            {isAdmin && <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck /> Panel de administración</Link></DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
               {resolvedTheme === "dark" ? <Sun /> : <Moon />} {resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"}
             </DropdownMenuItem>

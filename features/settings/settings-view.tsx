@@ -19,10 +19,12 @@ import { FinanzasTab, DefaultsTab } from "./tabs/finance"
 import { CatalogTab } from "./tabs/catalogs"
 import { HogarTab } from "./tabs/household"
 import { DatosTab } from "./tabs/data"
+import { PlanTab } from "@/features/planes/plan-tab"
 
 /** Pestañas de Ajustes (AJTABS de la v4; "servidor" pasa a "integraciones" y se agrega "hogar"). */
 export const TABS = [
   ["general", "General", "settings", "Cuenta", "Pantalla de inicio, ayudas y tour"],
+  ["plan", "Mi plan", "crown", "Cuenta", "Premium, renovación y pagos"],
   ["apariencia", "Apariencia", "palette", "Cuenta", "Tema, tamaño de letra y densidad"],
   ["privacidad", "Privacidad", "eye-off", "Cuenta", "Ocultar montos y datos en mensajes"],
   ["seguridad", "Seguridad", "shield-check", "Cuenta", "Contraseña, dos pasos y bloqueo"],
@@ -45,6 +47,7 @@ type TabId = (typeof TABS)[number][0]
 function Body({ tab }: { tab: TabId }) {
   switch (tab) {
     case "general": return <GeneralTab />
+    case "plan": return <PlanTab />
     case "apariencia": return <AparienciaTab />
     case "privacidad": return <PrivacidadTab />
     case "seguridad": return <SeguridadTab />

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { BookOpen, Lightbulb, MessageCircle, PlayCircle, Search } from "lucide-react"
+import { BookOpen, Lightbulb, MessageCircle, PlayCircle, Search, Send } from "lucide-react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -54,6 +54,7 @@ export function NovedadesView() {
 }
 
 export function FaqView() {
+  const ask = useShell((s) => s.openFeedback)
   const [q, setQ] = useState("")
   const [cat, setCat] = useState("Todas")
   const list = useMemo(() => FAQ.filter((f) => (cat === "Todas" || f.c === cat) && (!q || norm(`${f.q} ${stripHtml(f.a)}`).includes(norm(q)))), [q, cat])
@@ -78,7 +79,7 @@ export function FaqView() {
           </Accordion>
         </Card>
       )}
-      <Card className="flex-row flex-wrap items-center gap-3 p-5 shadow-card ring-0"><p className="flex-1 font-medium">¿No encontraste tu respuesta?</p><Button variant="outline" asChild><Link href="/manual"><BookOpen /> Manual</Link></Button><Button variant="outline" asChild><Link href="/consejero"><MessageCircle /> Consejero IA</Link></Button></Card>
+      <Card className="flex-row flex-wrap items-center gap-3 p-5 shadow-card ring-0"><p className="flex-1 font-medium">¿No encontraste tu respuesta?</p><Button variant="outline" asChild><Link href="/manual"><BookOpen /> Manual</Link></Button><Button variant="outline" asChild><Link href="/consejero"><MessageCircle /> Consejero IA</Link></Button><Button onClick={() => ask({ tipo: "pregunta", mensaje: q })}><Send /> Pregúntanos</Button></Card>
     </div>
   )
 }

@@ -29,6 +29,7 @@ import { memberName, useCategories, useMembers, usePaymentMethods, useSettings }
 import { reviewMonthHormiga } from "@/features/ai/actions"
 import { ExpenseForm } from "./expense-form"
 import { isHormiga } from "./logic"
+import { AdSlot } from "@/features/ads/ad-slot"
 
 const lastMonths = (n: number) => {
   const [y, m] = todayISO().split("-").map(Number)
@@ -203,6 +204,7 @@ export function ExpensesView() {
       </Card>
 
       <ExpenseForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} expense={editing} />
+      <AdSlot slot="lista" />
     </div>
   )
 }

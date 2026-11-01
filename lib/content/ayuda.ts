@@ -10,7 +10,7 @@ export type Release = { v: string; f: string; t: string; items: ReleaseItem[] }
 export type Faq = { c: string; q: string; a: string; go?: string; tab?: string }
 export type Guide = { id: string; t: string; icon: string; go: string; min: number; s: string[]; tip?: string }
 
-export const APP_VER = "5.1"
+export const APP_VER = "5.2"
 
 const V5: Release = {
   v: "5.0", f: "31 oct 2026", t: "Mirai en la nube: tu familia, en tiempo real",
@@ -40,7 +40,18 @@ const V51: Release = {
     ["fix", "Borrar justo después de crear", "Ya puedes eliminar un registro apenas lo creas, sin esperar a que termine de guardarse."],
   ],
 }
-export const RELEASES: Release[] = [V51, V5, ...(RELEASES_V4 as Release[])]
+const V52: Release = {
+  v: "5.2", f: "1 nov 2026", t: "Tu opinión cuenta",
+  items: [
+    ["new", "Califica Mirai y danos tu opinión", "En Ayuda › Tu opinión (o desde tu foto en el menú) puedes calificarnos, reportar algo que no funciona con una captura, pedir funciones o dejar sugerencias. Ves el estado de cada una y nuestra respuesta."],
+    ["new", "Escoge el modelo de IA de una lista", "Al configurar Gemini, Groq, OpenRouter, Claude, OpenAI o el AI Gateway, el modelo se elige de la lista de tu cuenta, con el recomendado primero y los gratis aparte."],
+    ["imp", "Reporta un error en un toque", "Si una sección muestra \"Algo salió mal\", el botón Reportar este error nos lo envía con la página donde pasó."],
+    ["imp", "Íconos con nombre en español", "Al elegir el ícono de una categoría, medio de pago o meta ves su nombre en español (Efectivo, Transferencia, Billetera…)."],
+    ["fix", "Cambiar solo el ícono", "Cambiar el ícono de un medio de pago o una categoría sin tocar el nombre ya no muestra un error."],
+    ["fix", "Mensajes de IA más claros", "Mirai ya no dice que el modelo no existe cuando el problema es la clave o el límite de uso del proveedor."],
+  ],
+}
+export const RELEASES: Release[] = [V52, V51, V5, ...(RELEASES_V4 as Release[])]
 
 const FIX: Record<string, Partial<Faq>> = {
   "¿Cómo le doy acceso a mi contador?": { a: "Ve a <b>DIAN › Acceso de tu contador</b>, escribe su nombre, elige qué puede ver y hasta cuándo, y envíale el enlace. Solo puede ver, descargar los documentos y dejarte notas. Puedes quitarle el acceso cuando quieras." },

@@ -20,7 +20,7 @@ import { aporteSugerido, fijoProxIso, type PayDays } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { methodOptions, useCategories, usePaymentMethods } from "@/features/catalogs/hooks"
-import { ICON_CHOICES } from "@/features/catalogs/category-dialog"
+import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
 
 const plus12 = () => { const d = new Date(todayISO() + "T12:00:00"); d.setMonth(d.getMonth() + 12); return d.toISOString().slice(0, 10) }
 const refresh = (qc: ReturnType<typeof useQueryClient>, bookId: string) => ["goals", "emergency_funds", "fund_movements", "expenses", "fixed_expenses"].forEach((t) => invalidateBook(qc, bookId, t))
@@ -50,7 +50,7 @@ function GoalBody({ goal, onOpenChange }: { goal?: Row<"goals"> | null; onOpenCh
     <FieldGroup className="pb-2">
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField label="¿Qué quieres lograr?" htmlFor="m-n" required><Input id="m-n" className="h-11" autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Viaje a Cartagena" /></FormField>
-        <FormField label="Ícono" htmlFor="m-i"><Combobox id="m-i" value={icon} onChange={setIcon} options={["target", ...ICON_CHOICES].map((i) => ({ value: i, label: i.replace(/-/g, " "), icon: i }))} /></FormField>
+        <FormField label="Ícono" htmlFor="m-i"><Combobox id="m-i" value={icon} onChange={setIcon} options={[{ value: "target", label: "Meta", icon: "target" }, ...ICON_OPTIONS]} /></FormField>
         <FormField label="¿Cuánto necesitas?" htmlFor="m-o" required><MoneyInput id="m-o" value={objetivo} onChange={setObjetivo} /></FormField>
         <FormField label="¿Cuánto llevas ahorrado?" htmlFor="m-a"><MoneyInput id="m-a" value={ahorrado} onChange={setAhorrado} /></FormField>
         <FormField label="¿Para cuándo?" htmlFor="m-f"><DatePicker id="m-f" value={fecha} onChange={setFecha} quick="futuro" /></FormField>

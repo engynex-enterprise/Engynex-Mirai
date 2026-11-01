@@ -13,6 +13,8 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { Icon } from "@/components/mirai/icon"
 import { PageHeader } from "@/components/mirai/page-header"
+import { RatingPrompt } from "@/features/opiniones/rating-prompt"
+import { AdSlot } from "@/features/ads/ad-slot"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
@@ -178,6 +180,8 @@ export function HomeView() {
         )}
       </PageHeader>
 
+      <RatingPrompt />
+
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="grid min-w-0 gap-5">
           {/* Composer: "¿Qué gastaste hoy?" */}
@@ -202,6 +206,8 @@ export function HomeView() {
             <Story href="/le-debo" bg="bg-[linear-gradient(160deg,#4FC3D6,#13778F_60%,#1F2B4B)]" iso="le-debo" label="Cuotas de deudas al mes" value={<Money value={d.cuotas} />} sub={`Te deben ${fmtShort(d.T.xc)} en total`} />
             {d.goal && <Story href="/metas" bg="bg-[linear-gradient(160deg,#FFB3C1,#F0506E_60%,#A51E43)]" iso="metas" label={d.goal.nombre} value={`${Math.min(100, Math.round((+d.goal.ahorrado / +d.goal.objetivo) * 100))} %`} sub="de tu meta" />}
           </div>
+
+          <AdSlot slot="inicio" />
 
           {/* Quincena */}
           <Card className="appear gap-4 rounded-lg p-4 ring-0 sm:p-5">

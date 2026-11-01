@@ -65,6 +65,40 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"ad_events": {
+                  Row: {
+                    "ad_id": string,"clics": number,"dia": string,"slot": string,"vistas": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ad_id": string,"clics"?: number,"dia"?: string,"slot": string,"vistas"?: number
+                  }
+                  Update: {
+                    "ad_id"?: string,"clics"?: number,"dia"?: string,"slot"?: string,"vistas"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ad_events_ad_id_fkey"
+      columns: ["ad_id"]
+isOneToOne: false
+      referencedRelation: "ads"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"ads": {
+                  Row: {
+                    "activo": boolean,"anunciante": string,"created_at": string,"cta": string,"desde": string | null,"hasta": string | null,"id": string,"imagen": string | null,"prioridad": number,"texto": string,"titulo": string,"ubicaciones": (string)[],"updated_at": string,"url": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"anunciante"?: string,"created_at"?: string,"cta"?: string,"desde"?: string | null,"hasta"?: string | null,"id"?: string,"imagen"?: string | null,"prioridad"?: number,"texto"?: string,"titulo": string,"ubicaciones"?: (string)[],"updated_at"?: string,"url": string
+                  }
+                  Update: {
+                    "activo"?: boolean,"anunciante"?: string,"created_at"?: string,"cta"?: string,"desde"?: string | null,"hasta"?: string | null,"id"?: string,"imagen"?: string | null,"prioridad"?: number,"texto"?: string,"titulo"?: string,"ubicaciones"?: (string)[],"updated_at"?: string,"url"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"advisor_consultations": {
                   Row: {
                     "book_id": string,"contact_id": string | null,"created_at": string,"created_by": string | null,"deleted_at": string | null,"descripcion": string,"fecha": string,"id": string,"payload": NonNullable<Json>,"tipo": string,"updated_at": string,"valor": number,"veredicto": string
@@ -589,6 +623,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     },{
       foreignKeyName: "family_members_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"feedback": {
+                  Row: {
+                    "captura": string | null,"contexto": NonNullable<Json>,"created_at": string,"estado": string,"household_id": string | null,"id": string,"mensaje": string,"pagina": string | null,"rating": number | null,"respondido_at": string | null,"respondido_por": string | null,"respuesta": string | null,"tipo": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "captura"?: string | null,"contexto"?: NonNullable<Json>,"created_at"?: string,"estado"?: string,"household_id"?: string | null,"id"?: string,"mensaje"?: string,"pagina"?: string | null,"rating"?: number | null,"respondido_at"?: string | null,"respondido_por"?: string | null,"respuesta"?: string | null,"tipo": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "captura"?: string | null,"contexto"?: NonNullable<Json>,"created_at"?: string,"estado"?: string,"household_id"?: string | null,"id"?: string,"mensaje"?: string,"pagina"?: string | null,"rating"?: number | null,"respondido_at"?: string | null,"respondido_por"?: string | null,"respuesta"?: string | null,"tipo"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "feedback_household_id_fkey"
       columns: ["household_id"]
 isOneToOne: false
       referencedRelation: "households"
@@ -1187,6 +1241,100 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"plan_payments": {
+                  Row: {
+                    "created_at": string,"estado": string,"factura_ref": string | null,"household_id": string | null,"id": string,"metodo": string | null,"monto": number,"pagador": string | null,"paid_at": string | null,"periodo": string | null,"proveedor": string,"raw": NonNullable<Json>,"referencia": string,"subscription_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"estado"?: string,"factura_ref"?: string | null,"household_id"?: string | null,"id"?: string,"metodo"?: string | null,"monto": number,"pagador"?: string | null,"paid_at"?: string | null,"periodo"?: string | null,"proveedor": string,"raw"?: NonNullable<Json>,"referencia": string,"subscription_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"estado"?: string,"factura_ref"?: string | null,"household_id"?: string | null,"id"?: string,"metodo"?: string | null,"monto"?: number,"pagador"?: string | null,"paid_at"?: string | null,"periodo"?: string | null,"proveedor"?: string,"raw"?: NonNullable<Json>,"referencia"?: string,"subscription_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_payments_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_payments_subscription_id_fkey"
+      columns: ["subscription_id"]
+isOneToOne: false
+      referencedRelation: "plan_subscriptions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plan_subscriptions": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"estado": string,"household_id": string,"id": string,"nota": string | null,"periodo": string,"plan": string,"proveedor": string,"proveedor_ref": string | null,"updated_at": string,"vence_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"estado"?: string,"household_id": string,"id"?: string,"nota"?: string | null,"periodo"?: string,"plan"?: string,"proveedor": string,"proveedor_ref"?: string | null,"updated_at"?: string,"vence_at"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"estado"?: string,"household_id"?: string,"id"?: string,"nota"?: string | null,"periodo"?: string,"plan"?: string,"proveedor"?: string,"proveedor_ref"?: string | null,"updated_at"?: string,"vence_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_subscriptions_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_subscriptions_plan_fkey"
+      columns: ["plan"]
+isOneToOne: false
+      referencedRelation: "plans"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plans": {
+                  Row: {
+                    "id": string,"limites": NonNullable<Json>,"nombre": string,"precio_anio": number,"precio_mes": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id": string,"limites"?: NonNullable<Json>,"nombre": string,"precio_anio"?: number,"precio_mes"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "id"?: string,"limites"?: NonNullable<Json>,"nombre"?: string,"precio_anio"?: number,"precio_mes"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"platform_admins": {
+                  Row: {
+                    "created_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"platform_settings": {
+                  Row: {
+                    "id": boolean,"limites_db": boolean,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: boolean,"limites_db"?: boolean,"updated_at"?: string
+                  }
+                  Update: {
+                    "id"?: boolean,"limites_db"?: boolean,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"profiles": {
                   Row: {
                     "apodo": string,"avatar_url": string | null,"ciudad": string,"cobro": NonNullable<Json>,"created_at": string,"deletion_requested_at": string | null,"digitos": string,"direccion": NonNullable<Json>,"doc": string,"doc_tipo": string,"email": string | null,"id": string,"last_book_id": string | null,"nacimiento": string | null,"nombre": string,"ocupacion": string,"portada": string,"riesgo": string,"telefono": string,"trabajo": string,"updated_at": string
@@ -1594,8 +1742,14 @@ isOneToOne: false
             "accept_invitation":
 { Args: { "p_token": string }; Returns: string
                            },
+"ad_track":
+{ Args: { "p_ad": string,"p_kind": string,"p_slot": string }; Returns: undefined
+                           },
 "book_household":
 { Args: { "bk": string }; Returns: string
+                           },
+"count_orphan_households":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "create_book":
 { Args: { "p_household": string,"p_icon"?: string,"p_nombre": string,"p_tipo"?: string }; Returns: string
@@ -1603,17 +1757,31 @@ isOneToOne: false
 "create_household":
 { Args: { "p_libro"?: string,"p_nombre": string }; Returns: string
                            },
+"delete_orphan_households":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "fund_save":
 { Args: { "p_book": string,"p_fecha": string,"p_nota"?: string,"p_valor": number }; Returns: number
                            },
 "fund_use":
 { Args: { "p_book": string,"p_desc": string,"p_fecha": string,"p_medio"?: string,"p_valor": number }; Returns: Json
                            },
+"household_plan":
+{ Args: { "h": string }; Returns: string
+                           },
+"household_subscription":
+{ Args: { "h": string }; Returns: {
+              "estado": string,"id": string,"periodo": string,"plan": string,"proveedor": string,"vence_at": string
+            }[]
+                           },
 "is_book_member":
 { Args: { "bk": string,"min_role"?: string }; Returns: boolean
                            },
 "is_household_member":
 { Args: { "hh": string,"min_role"?: string }; Returns: boolean
+                           },
+"is_platform_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "mirai_schedule_notify":
 { Args: { "cron_secret": string,"site_url": string }; Returns: string

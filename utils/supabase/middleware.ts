@@ -6,7 +6,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 /** Rutas a las que se entra sin sesión. */
-const PUBLIC = ["/login", "/registro", "/recuperar", "/auth", "/contador", "/legal", "/invitacion", "/api/cron", "/api/public", "/api/telegram", "/manifest.webmanifest", "/sw.js"]
+const PUBLIC = ["/login", "/registro", "/recuperar", "/auth", "/contador", "/legal", "/invitacion", "/api/cron", "/api/public", "/api/telegram", "/api/pagos", "/manifest.webmanifest", "/sw.js"]
 
 export const updateSession = async (request: NextRequest) => {
   let supabaseResponse = NextResponse.next({ request: { headers: request.headers } })

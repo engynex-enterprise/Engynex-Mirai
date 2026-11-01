@@ -20,6 +20,7 @@ import type { Row } from "@/lib/supabase/tables"
 import { memberName, useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
 import { useBookData } from "@/features/book/use-book-data"
 import { IncomeForm } from "./income-form"
+import { AdSlot } from "@/features/ads/ad-slot"
 
 const frecText = (x: Pick<Row<"incomes">, "frec" | "dia">) =>
   ({ mensual: `Cada mes el día ${x.dia}`, quincenal: "Cada quincena (15 y 30)", semanal: "Cada semana", anual: "Una vez al año" })[x.frec] ?? x.frec
@@ -87,6 +88,7 @@ export function IncomesView() {
         </CardContent>
       </Card>
       <IncomeForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} income={editing} />
+      <AdSlot slot="lista" />
     </div>
   )
 }

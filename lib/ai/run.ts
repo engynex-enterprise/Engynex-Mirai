@@ -3,6 +3,7 @@ import { generateObject, generateText, type ModelMessage } from "ai"
 import type { z } from "zod"
 import { aiErrMsg, aiProviders, aiSettings } from "./model"
 import { getIntegration } from "@/features/integrations/store"
+import { supabaseAdmin } from "@/lib/supabase/admin"
 
 export class AiUnavailable extends Error {}
 
@@ -26,6 +27,8 @@ async function rateLimit(householdId: string) {
 }
 
 async function withFallback<T>(b: Base, fn: (model: Parameters<typeof generateText>[0]["model"]) => Promise<T>): Promise<{ result: T; provider: string }> {
+  const { data: plan } = await supabaseAdmin().rpc("household_plan", { h: b.householdId })
+  if (plan !== "premium") throw new AiUnavailable("La inteligencia artificial es parte de Mirai Premium. Conoce los planes en /planes.")
   const ia = await aiSettings(b.bookId)
   if (ia.on === false) throw new AiUnavailable("La inteligencia artificial está apagada. Actívala en Ajustes › Integraciones.")
   const list = await aiProviders(b.householdId, ia.orden)

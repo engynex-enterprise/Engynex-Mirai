@@ -60,6 +60,9 @@ export const BANNERS: Record<string, { t: BannerThemeKey; m: BannerMotif }> = {
   novedades: { t: "naranja", m: "checklist" },
   faq: { t: "verde", m: "chat" },
   manual: { t: "azul", m: "doc" },
+  opiniones: { t: "amarillo", m: "chat" },
+  planes: { t: "amarillo", m: "trophy" },
+  admin: { t: "navy", m: "dashboard" },
   perfil: { t: "lavanda", m: "toggles" },
   ajustes: { t: "azul", m: "toggles" },
 }
