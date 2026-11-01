@@ -54,6 +54,8 @@ Nunca pongas el prefijo `NEXT_PUBLIC_` a un secreto: todo lo que lo lleva se inc
 
 **Flujo:** sube los cambios a `pruebas` → revisa en la dirección de pruebas → `git checkout main && git merge pruebas && git push` para publicar.
 
+**Si producción no se actualiza** (el despliegue queda *Staged* en Vercel): revisa Settings › Build and Deployment › *Deployment Checks*. Hasta el 1 de noviembre de 2026 había un check "Deployment" que nunca corría y bloqueaba toda publicación; se quitó. Mientras tanto se puede publicar con *Promote to Production* en el despliegue.
+
 DNS: `mirai.engynex.com` es un CNAME en Hostinger hacia el valor que indica Vercel › Domains. El certificado HTTPS (Let's Encrypt) lo emite y renueva Vercel gratis.
 
 ### Separar la base de datos de pruebas (cuando haya cupo en Supabase)
