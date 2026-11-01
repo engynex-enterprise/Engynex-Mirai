@@ -87,3 +87,10 @@ sandbox de `node:vm` con "hoy" fijo y los datos de ejemplo `sample()` (familia N
 presupuesto por miembro, `reportData()`, gamificación, DIAN/renta (`s_dian.js`), OCR y reglas de IA,
 `loanParams()` del formulario (E.A. → mensual), y las mutaciones de estado (`aporteApply`, `aporteRevert`,
 pagos de fijos), que en la v5 deben ser RPC/transacciones de Postgres.
+
+## Consejero (`advisor.ts`)
+
+- `moneyIn()` de la v4 normalizaba con `FN()`, que convierte el punto en espacio: frases como
+  "arriendo de 2.300.000" no daban monto en la interpretación sin IA. En la v5 se usa `norm()` (conserva
+  el punto) y "2.300.000" se lee como 2.300.000. Es la única diferencia intencional; el resto de
+  `localInterp` y `asAnalyze` (veredicto, razones, métricas y extras) se prueba contra la v4.
