@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Money } from "@/components/mirai/money"
@@ -25,6 +26,7 @@ import { fmtDate, fmtMoney, fmtMonth, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { memberName, useCategories, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import { reviewMonthHormiga } from "@/features/ai/actions"
 import { ExpenseForm } from "./expense-form"
 import { isHormiga } from "./logic"
 
@@ -93,7 +95,10 @@ export function ExpensesView() {
       <Card className="shadow-card ring-0">
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">Gastos hormiga de {today.startsWith(mes) ? "este mes" : fmtMonth(mes)}</CardTitle>
-          {!isPending && <StatusPill tone={stats.over ? "vencido" : "pagado"}>{stats.over ? "Sobre el límite" : "En rango"}</StatusPill>}
+          <div className="flex items-center gap-2">
+            {canEdit && <ReviewAI mes={mes} />}
+            {!isPending && <StatusPill tone={stats.over ? "vencido" : "pagado"}>{stats.over ? "Sobre el límite" : "En rango"}</StatusPill>}
+          </div>
         </CardHeader>
         <CardContent className="grid gap-5">
           <div className="grid grid-cols-3 gap-3">
@@ -199,5 +204,22 @@ export function ExpensesView() {
 
       <ExpenseForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} expense={editing} />
     </div>
+  )
+}
+
+/** "Revisar con IA" los gastos del mes sin veredicto de hormiga (reviewMonth de la v4). */
+function ReviewAI({ mes }: { mes: string }) {
+  const qc = useQueryClient()
+  const bookId = useBookId()
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button size="sm" variant="soft" disabled={busy} onClick={async () => {
+      setBusy(true)
+      const t = toast.loading("La IA está revisando los gastos del mes…")
+      const r = await reviewMonthHormiga(mes).catch((e) => ({ ok: false, msg: (e as Error).message }))
+      toast[r.ok ? "success" : "error"](r.msg, { id: t })
+      qc.invalidateQueries({ queryKey: ["b", bookId] })
+      setBusy(false)
+    }}>{busy ? <Spinner /> : <Sparkles />} Revisar con IA</Button>
   )
 }

@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Sparkles } from "lucide-react"
+import { Camera } from "lucide-react"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,7 @@ import {
 } from "@/features/catalogs/hooks"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
 import { isHormiga, localCat, localHormiga } from "./logic"
+import { classifyExpenses, readInvoice } from "@/features/ai/actions"
 import { useList } from "@/hooks/use-book-data"
 
 const schema = z.object({
@@ -72,7 +73,13 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
   const [fondo, setFondo] = useState<{ activo: boolean; saldo: number } | null>(null)
   const [newCat, setNewCat] = useState<string | null>(null)
   const [catManual, setCatManual] = useState(false)
-  const [catSrc, setCatSrc] = useState<"regla" | "historial" | "palabras" | null>(null)
+  const [catSrc, setCatSrc] = useState<"regla" | "historial" | "palabras" | "ia" | null>(null)
+  const [aiH, setAiH] = useState<{ h: boolean; razon: string } | null>(null)
+  const [aiBusy, setAiBusy] = useState<"foto" | "cat" | null>(null)
+  const [fotoMsg, setFotoMsg] = useState<string | null>(null)
+  const fotoRef = useRef<HTMLInputElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const aiCache = useRef(new Map<string, { category_id: string | null; hormiga: boolean | null; razon: string }>())
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const defaults = (cfg?.defaults ?? {}) as { cat?: string; medio?: string; quien?: string }
 
@@ -99,9 +106,54 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
 
   // Categoría automática mientras escribe: regla → historial → palabras clave (si no la eligió a mano)
   const onDesc = (v: string) => {
-    if (catManual) return
-    const hit = localCat(v, { rules, expenses: history, categories: cats })
-    if (hit) { form.setValue("category_id", hit.category_id, { shouldValidate: true }); setCatSrc(hit.src) }
+    let hit: ReturnType<typeof localCat> = null
+    if (!catManual) {
+      hit = localCat(v, { rules, expenses: history, categories: cats })
+      if (hit) { form.setValue("category_id", hit.category_id, { shouldValidate: true }); setCatSrc(hit.src) }
+    }
+    askAI(v, hit?.src)
+  }
+
+  // IA (onAutoInput de la v4): 750 ms después de escribir, si falta categoría o para decidir si es hormiga.
+  const ia = (cfg?.ia ?? {}) as { on?: boolean; autocat?: boolean; hormiga?: boolean }
+  const askAI = (desc: string, localSrc?: string) => {
+    if (timer.current) clearTimeout(timer.current)
+    setAiH(null)
+    if (ia.on === false || desc.trim().length < 3) return
+    timer.current = setTimeout(async () => {
+      const valor = form.getValues("valor") || 0
+      const needCat = ia.autocat !== false && !catManual && localSrc !== "regla" && localSrc !== "historial"
+      const needH = ia.hormiga !== false && form.getValues("hormigaMode") === "auto" && valor > 0
+      if (!needCat && !needH) return
+      const key = `${desc.trim().toLowerCase()}|${Math.round(valor / 1000)}`
+      let r = aiCache.current.get(key)
+      if (!r) {
+        setAiBusy("cat")
+        const veces = history.filter((g) => g.descripcion.trim().toLowerCase() === desc.trim().toLowerCase()).length
+        const out = await classifyExpenses([{ i: 0, descripcion: desc, valor: Math.round(valor), veces_mes: veces }])
+        setAiBusy(null)
+        if (!out?.[0]) return
+        r = out[0]; aiCache.current.set(key, r)
+      }
+      if (form.getValues("descripcion") !== desc) return
+      if (needCat && r.category_id && !localSrc) { form.setValue("category_id", r.category_id, { shouldValidate: true }); setCatSrc("ia") }
+      if (needH && r.hormiga !== null) setAiH({ h: r.hormiga, razon: r.razon })
+    }, 750)
+  }
+
+  const onFoto = async (f: File | undefined) => {
+    if (!f) return
+    setAiBusy("foto"); setFotoMsg("Leyendo la factura…")
+    const fd = new FormData(); fd.append("file", f)
+    const r = await readInvoice(fd).catch((e) => ({ ok: false as const, msg: (e as Error).message }))
+    setAiBusy(null)
+    if (!r.ok) return setFotoMsg(r.msg)
+    form.setValue("descripcion", r.comercio, { shouldValidate: true })
+    if (r.valor) form.setValue("valor", r.valor, { shouldValidate: true })
+    if (r.fecha) form.setValue("fecha", r.fecha)
+    if (r.category_id) { form.setValue("category_id", r.category_id, { shouldValidate: true }); setCatManual(true); setCatSrc("ia") }
+    setFotoMsg("Listo. Revisa los datos antes de guardar.")
+    askAI(r.comercio, r.category_id ? "regla" : undefined)
   }
 
   const umbral = Number(cfg?.umbral ?? 25000)
@@ -114,9 +166,10 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
       ...(expense ? { id: expense.id } : {}),
       book_id: bookId, descripcion: v.descripcion.trim(), valor: v.valor, category_id: v.category_id, fecha: v.fecha || todayISO(),
       member_id: v.quien === "familia" ? null : v.quien, payment_method_id: v.payment_method_id || defaults.medio || methods[0]?.id || null,
-      hormiga: v.hormigaMode === "auto" ? false : v.hormigaMode === "si",
-      hormiga_src: v.hormigaMode === "auto" ? null : ("manual" as const),
-      cat_src: catManual ? ("manual" as const) : catSrc,
+      hormiga: v.hormigaMode === "auto" ? (aiH?.h ?? false) : v.hormigaMode === "si",
+      hormiga_src: v.hormigaMode === "auto" ? (aiH ? ("ia" as const) : null) : ("manual" as const),
+      hormiga_razon: v.hormigaMode === "auto" && aiH ? aiH.razon : null,
+      cat_src: catManual && catSrc !== "ia" ? ("manual" as const) : catSrc,
     }
     const { data, error } = await sb.from("expenses").upsert(row).select().single()
     if (error) return toast.error("No se pudo guardar el gasto", { description: error.message })
@@ -139,6 +192,13 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
     <>
         <form id={formId} onSubmit={form.handleSubmit(onSubmit)} noValidate aria-busy={isSubmitting}>
           <FieldGroup>
+            {ia.on !== false && !expense && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="soft" size="sm" disabled={aiBusy === "foto"} onClick={() => fotoRef.current?.click()}>{aiBusy === "foto" ? <Spinner /> : <Camera />} Leer una factura con foto</Button>
+                <input ref={fotoRef} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => { onFoto(e.target.files?.[0]); e.target.value = "" }} />
+                <span className="text-xs text-muted-foreground">{fotoMsg ?? "La IA saca el valor, el comercio y la fecha."}</span>
+              </div>
+            )}
             <div className="grid gap-5 sm:grid-cols-[1.4fr_1fr]">
               <FormField label="¿En qué gastaste?" htmlFor="g-desc" error={errors.descripcion?.message} required>
                 <Input id="g-desc" className="h-11" autoFocus placeholder="Ej. Mercado en el D1" {...form.register("descripcion", { onChange: (e) => onDesc(e.target.value) })} />
@@ -147,13 +207,13 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
                 <Controller control={form.control} name="valor" render={({ field }) => <MoneyInput id="g-valor" value={field.value} onChange={field.onChange} invalid={!!errors.valor} />} />
               </FormField>
             </div>
-            <FormField label="Categoría" htmlFor="g-cat" error={errors.category_id?.message} required hint={!catManual && catSrc && w.descripcion ? { regla: "Se puso sola por una de tus reglas.", historial: "Se puso sola: así la registraste antes.", palabras: "Se puso sola según lo que escribiste." }[catSrc] + " Puedes cambiarla." : undefined}>
+            <FormField label="Categoría" htmlFor="g-cat" error={errors.category_id?.message} required hint={!catManual && catSrc && w.descripcion ? { regla: "Se puso sola por una de tus reglas.", historial: "Se puso sola: así la registraste antes.", palabras: "Se puso sola según lo que escribiste.", ia: "Categoría sugerida por IA." }[catSrc] + " Puedes cambiarla." : undefined}>
               <Controller control={form.control} name="category_id" render={({ field }) => (
                 <Combobox id="g-cat" value={field.value} onChange={(v) => { setCatManual(true); field.onChange(v) }} options={categoryOptions(cats)} invalid={!!errors.category_id}
                   placeholder="Elige una categoría" createLabel="Crear" onCreate={(t) => setNewCat(t || " ")} />
               )} />
             </FormField>
-            <FormField label="¿Es un gasto hormiga?" hint={w.hormigaMode === "auto" ? (autoH ? "Parece hormiga: pequeño y evitable." : "Mirai lo decide solo.") : undefined}>
+            <FormField label="¿Es un gasto hormiga?" hint={w.hormigaMode === "si" ? "Lo marcaste como hormiga." : w.hormigaMode === "auto" ? (aiBusy === "cat" ? "La IA está pensando…" : aiH ? (aiH.h ? `La IA lo detecta como gasto hormiga: ${aiH.razon}` : `La IA no lo ve como hormiga: ${aiH.razon}`) : autoH ? "Parece un gasto hormiga." : "Mirai lo decide solo.") : undefined}>
               <Controller control={form.control} name="hormigaMode" render={({ field }) => (
                 <Segmented value={field.value} onChange={field.onChange} items={[{ value: "auto", label: "Que Mirai decida", icon: "sparkles" }, { value: "si", label: "Sí", icon: "coffee" }, { value: "no", label: "No" }]} />
               )} />
@@ -176,7 +236,6 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
                 Es un imprevisto. Queda separado en la categoría Imprevistos. Crea tu fondo de emergencia en Metas para pagar estos gastos sin desordenar tu mes.
               </p>
             ))}
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Pronto: foto de la factura y clasificación con IA (fase 4).</p>
           </FieldGroup>
           {isSubmitting && <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Guardando…</p>}
         </form>

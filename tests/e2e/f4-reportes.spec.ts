@@ -1,0 +1,30 @@
+import { expect, test } from "@playwright/test"
+import { login, shot, watchErrors } from "./helpers"
+
+test("reportes: balance, resultado del mes, resumen, PDF y CSV", async ({ page }, info) => {
+  test.setTimeout(240_000)
+  const errs = watchErrors(page)
+  await login(page)
+  await page.goto("/puesta")
+  await page.getByRole("button", { name: "Ver un ejemplo" }).click()
+  await expect(page.getByText("Datos de ejemplo cargados")).toBeVisible({ timeout: 60_000 })
+  await page.waitForURL(/inicio/)
+  await page.goto("/reportes")
+  await expect(page.getByText("Balance: lo que tengo y lo que debo")).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/Te sobró|Te faltó/)).toBeVisible()
+  await expect(page.getByText("Patrimonio")).toBeVisible()
+  const csv = page.waitForEvent("download")
+  await page.getByRole("button", { name: "Movimientos en Excel (CSV)" }).click()
+  expect((await csv).suggestedFilename()).toMatch(/^movimientos-\d{4}-\d{2}\.csv$/)
+  const pdf = page.waitForEvent("download", { timeout: 60_000 })
+  await page.getByRole("button", { name: "Descargar PDF" }).click()
+  expect((await pdf).suggestedFilename()).toMatch(/^reporte-\d{4}-\d{2}\.pdf$/)
+  await page.getByRole("button", { name: "Generar resumen" }).click()
+  await expect(page.getByText(/Gastaste \$|Para el próximo mes/).first()).toBeVisible({ timeout: 90_000 })
+  await shot(page, "reportes", info.project.name)
+
+  await page.goto("/gastos")
+  await page.getByRole("button", { name: "Revisar con IA" }).click()
+  await expect(page.getByText(/IA|revisados/).last()).toBeVisible({ timeout: 90_000 })
+  expect(errs, errs.join("\n")).toEqual([])
+})

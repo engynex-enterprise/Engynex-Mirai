@@ -16,7 +16,7 @@ test("gastos: registrar, hormiga, borrar y deshacer", async ({ page }, info) => 
   await page.getByRole("combobox", { name: "Categoría" }).click()
   await page.getByPlaceholder("Buscar…").fill("Café")
   await page.getByRole("option", { name: /^Café/ }).click()
-  await expect(page.getByText("Parece hormiga: pequeño y evitable.")).toBeVisible()
+  await expect(page.getByText("Parece un gasto hormiga.")).toBeVisible()
   await shot(page, "gastos-form", info.project.name)
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText("Gasto hormiga registrado")).toBeVisible()
