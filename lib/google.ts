@@ -1,10 +1,11 @@
 import "server-only"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { decrypt, encrypt } from "@/lib/crypto"
+import { siteUrl } from "@/lib/site-url"
 
 // Google OAuth en el servidor (Gmail de solo lectura y Google Calendar). Los tokens se guardan cifrados.
 export const G_SCOPES = { gmail: "https://www.googleapis.com/auth/gmail.readonly", calendar: "https://www.googleapis.com/auth/calendar.events" } as const
-export const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "")
+export { siteUrl }
 export const redirectUri = () => `${siteUrl()}/api/google/callback`
 
 type Tokens = { access_token: string; refresh_token?: string; expires_at: number; scope: string }

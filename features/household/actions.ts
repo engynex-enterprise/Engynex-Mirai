@@ -7,8 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { supabaseServer } from "@/utils/supabase/server"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
+import { siteUrl } from "@/lib/site-url"
 
-const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "")
 const Invite = z.object({ email: z.email("Escribe un correo válido"), role: z.enum(["editor", "viewer"]) })
 
 /** Crea una invitación de 7 días. Envía el correo si hay proveedor; si no, devuelve el enlace para compartir. */
@@ -22,7 +22,7 @@ export async function inviteMember(input: { email: string; role: "editor" | "vie
     household_id: ctx.household.id, email: p.data.email.toLowerCase(), role: p.data.role, token_hash: createHash("sha256").update(token).digest("hex"), invited_by: ctx.user.id,
   })
   if (error) return { ok: false, msg: error.message }
-  const url = `${SITE()}/invitacion/${token}`
+  const url = `${siteUrl()}/invitacion/${token}`
   for (const k of EMAIL_KINDS) {
     const v = await getIntegration(ctx.household.id, k)
     if (!v?.enabled) continue

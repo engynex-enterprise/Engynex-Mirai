@@ -6,8 +6,8 @@ import { getIntegration } from "@/features/integrations/store"
 import { AVISOS, avisoOf, enSilencio, onFor, type Canales, type CanalKey, type Matriz } from "./rules"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "./email"
 import { pushReady, sendPush, sendTelegram, sendWhatsApp } from "./channels"
+import { siteUrl } from "@/lib/site-url"
 
-const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "")
 const MONEY = /\$\s?[\d.]+(,\d+)?/g
 
 export type Rule = {
@@ -36,7 +36,7 @@ export function digestText(nombre: string, list: Notif[], hide: boolean) {
   const fecha = new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", weekday: "long", day: "numeric", month: "long" }).format(new Date())
   const top = list.slice(0, 15).map((n) => line(n, hide))
   const more = list.length > 15 ? `\n…y ${list.length - 15} avisos más.` : ""
-  return `Hola ${nombre.split(" ")[0] || ""}, este es tu resumen de Mirai (${fecha}):\n\n${top.join("\n")}${more}\n\nAbre Mirai para ver el detalle: ${SITE()}/inicio`
+  return `Hola ${nombre.split(" ")[0] || ""}, este es tu resumen de Mirai (${fecha}):\n\n${top.join("\n")}${more}\n\nAbre Mirai para ver el detalle: ${siteUrl()}/inicio`
 }
 
 export const digestSubject = (n: number) => `Mirai: ${n} aviso${n === 1 ? "" : "s"} para hoy`
@@ -45,7 +45,7 @@ function digestHtml(nombre: string, list: Notif[], hide: boolean) {
   const rows = list.slice(0, 15).map((n) => `<tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>${esc(n.t)}</b><br><span style="color:#616161">${esc(hide ? n.b.replace(MONEY, "").trim() : n.b)}</span></td></tr>`).join("")
   return brandEmail(`Hola ${esc(nombre.split(" ")[0] || "")}, tienes ${list.length} aviso${list.length === 1 ? "" : "s"}`,
     `<table width="100%" cellpadding="0" cellspacing="0">${rows}</table>${list.length > 15 ? `<p>…y ${list.length - 15} avisos más.</p>` : ""}
-     <p style="margin-top:20px"><a href="${SITE()}/inicio" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Abrir Mirai</a></p>`)
+     <p style="margin-top:20px"><a href="${siteUrl()}/inicio" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Abrir Mirai</a></p>`)
 }
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
 

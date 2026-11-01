@@ -7,8 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { loadRentaData, type RentaData } from "@/features/renta/data"
+import { siteUrl } from "@/lib/site-url"
 
-const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "")
 const hash = (t: string) => createHash("sha256").update(t).digest("hex")
 const New = z.object({ label: z.string().trim().min(1, "Escribe el nombre de tu contador").max(80), email: z.union([z.email("Correo inválido"), z.literal("")]), perms: z.enum(["renta", "todo"]), exp: z.enum(["30", "90", "dic", "nunca"]) })
 
@@ -36,7 +36,7 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").insert({ book_id: ctx.book.id, label: p.data.label, email: p.data.email, perms: p.data.perms, token_hash: hash(token), expires_at: expiry(p.data.exp), created_by: ctx.user.id })
   if (error) return { ok: false, msg: error.message }
-  const url = `${SITE()}/contador/${token}`
+  const url = `${siteUrl()}/contador/${token}`
   let sent = false
   if (p.data.email) { try { sent = await mail(ctx.household.id, p.data.email, ctx.user.nombre, url) } catch { sent = false } }
   return { ok: true, url, msg: sent ? `Le enviamos el enlace a ${p.data.email}.` : `Copia el enlace y envíaselo a ${p.data.label} por un medio seguro.` }
@@ -48,7 +48,7 @@ export async function rotateShare(id: string) {
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").update({ token_hash: hash(token), revoked_at: null }).eq("id", id).eq("book_id", ctx.book.id)
   if (error) throw new Error(error.message)
-  return `${SITE()}/contador/${token}`
+  return `${siteUrl()}/contador/${token}`
 }
 
 export async function revokeShare(id: string) {
