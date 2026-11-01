@@ -7,7 +7,7 @@ import { useShell } from "@/components/app/shell-store"
 import { HELP } from "@/lib/content/help"
 
 /** Encabezado de cada sección: isotipo, título, descripción, "Cómo funciona" y acciones. */
-export function PageHeader({ id, title, description, actions }: { id: string; title?: string; description?: string; actions?: React.ReactNode }) {
+export function PageHeader({ id, title, description, actions, noHelp }: { id: string; title?: string; description?: string; actions?: React.ReactNode; noHelp?: boolean }) {
   const setHelp = useShell((s) => s.setHelp)
   const help = HELP[id]
   return (
@@ -20,7 +20,7 @@ export function PageHeader({ id, title, description, actions }: { id: string; ti
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 max-sm:[&>*]:flex-1">
-        {help && (
+        {help && !noHelp && (
           <Button variant="outline" onClick={() => setHelp(id)}>
             <CircleHelp /> Cómo funciona
           </Button>

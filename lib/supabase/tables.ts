@@ -15,4 +15,4 @@ export type BookTable = {
 export const qk = (bookId: string, table: string, ...rest: unknown[]) => ["b", bookId, table, ...rest] as const
 
 /** Consultas derivadas (que leen varias tablas) que se refrescan ante cualquier cambio del libro. */
-export const DERIVED_KEYS = ["setup-progress", "search-index", "summary"] as const
+export const DERIVED_KEYS = ["setup-progress", "search-index", "summary", "renta"] as const
