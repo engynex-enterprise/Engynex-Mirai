@@ -64,7 +64,7 @@ export async function classifyExpenses(items: ClassifyItem[]): Promise<ClassifyO
     sb.from("expenses").select("descripcion,category_id").eq("book_id", ctx.book.id).is("deleted_at", null).order("created_at", { ascending: false }).limit(500),
   ])
   const umbral = +(cfg?.umbral ?? 25000)
-  const { done, pending } = routeClassify(items.slice(0, 60), { rules: rules ?? [], expenses: (hist ?? []).reverse(), categories: cats, umbral, needCat: ia.autocat !== false, needH: ia.hormiga !== false })
+  const { done, pending } = routeClassify(items.slice(0, 60), { rules: rules ?? [], expenses: (hist ?? []).reverse(), categories: cats, umbral, needCat: ia.autocat !== false, needH: ia.hormiga !== false, siempreIA: true })
   const catsTxt = `Categorías (nombre: tipo): ${cats.map((c) => `${c.nombre}: ${GRP[c.grupo] ?? "gusto"}`).join(", ")}\nHormiga suele ser de hasta $ ${(umbral * 2).toLocaleString("es-CO")}.`
   const line = (p: ClassifyItem, cat?: string, que = "") => `${p.i} | ${clip(p.descripcion, 60)} | ${Math.round(p.valor)} | ${p.veces_mes} | ${cat ?? "-"} | ${que}`
   // Lo resuelto con reglas no gasta tokens: se registra con el estimado de lo que habría costado preguntarlo.
@@ -74,7 +74,7 @@ export async function classifyExpenses(items: ClassifyItem[]): Promise<ClassifyO
     const { object } = await aiObject({
       householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "categorizar",
       schema: z.object({ items: z.array(z.object({ i: z.number(), categoria: z.string().nullable(), hormiga: z.boolean().nullable(), razon: z.string() })) }),
-      prompt: `${catsTxt}\nGASTOS (i | descripción | valor | veces en el mes | categoría ya conocida | qué decidir):\n${pending.map((p) => line(p, p.cat, [p.askCat && "categoria", p.askH && "hormiga"].filter(Boolean).join("+"))).join("\n")}`,
+      prompt: `${catsTxt}\nGASTOS (i | descripción | valor | veces en el mes | categoría probable según las reglas de la persona, úsala si encaja | qué decidir):\n${pending.map((p) => line(p, p.cat, [p.askCat && "categoria", p.askH && "hormiga"].filter(Boolean).join("+"))).join("\n")}`,
     })
     const ai = object.items.flatMap((x): ClassifyOut[] => {
       const p = pending.find((y) => y.i === x.i)

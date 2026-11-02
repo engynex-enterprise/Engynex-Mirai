@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
+import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
@@ -82,8 +83,8 @@ export function IncomeForm(props: Props) {
       description={detalle ? "Todo el cálculo de tu ingreso: descuentos, cada pago, próximas fechas y el año completo." : "A la izquierda nos cuentas cómo es tu ingreso; a la derecha ves el recibo de lo que te llega."}
       onBack={detalle ? () => setDetalle(false) : undefined}
       footer={detalle
-        ? <><Button variant="outline" onClick={() => setDetalle(false)}><ArrowLeft /> Volver</Button><Button type="submit" form={formId}>Guardar</Button></>
-        : <><Button variant="outline" onClick={() => close(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}>
+        ? <><Button variant="outline" onClick={() => setDetalle(false)}><ArrowLeft /> Volver</Button><SubmitButton form={formId} /></>
+        : <><Button variant="outline" onClick={() => close(false)}>Cancelar</Button><SubmitButton form={formId} /></>}>
       <ReadyGate><IncomeFormBody {...props} onOpenChange={close} formId={formId} detalle={detalle} onDetalle={() => setDetalle(true)} /></ReadyGate>
     </ResponsiveDialog>
   )
@@ -133,6 +134,8 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
   const verFrec = verMonto && w.mensual > 0
   const verPagos = verFrec && !!w.frec
   const plan = planIngreso({ frec: w.frec ?? "mensual", mensual: w.mensual, b1: w.b1, b2: w.b2, dias: w.dias, D: conDesc ? ded : null, ref, ded: w.ded, x1: w.ded === "pers" ? w.x1 : undefined })
+  // Guardar se activa cuando el formulario está completo y hay un valor del mes.
+  useSubmitState(formId, form, { valid: plan.mensual > 0 })
 
   // El valor del mes y los de cada pago se mueven juntos: cambiar el mes reparte de nuevo y cambiar un pago suma el mes.
   const set = (k: keyof Values, v: unknown) => form.setValue(k, v as never, { shouldDirty: true, shouldValidate: !!errors[k] })
@@ -472,7 +475,7 @@ function DetalleIngreso({ plan, tipo, w, ded, ref_, currency, cuando, reparto, e
         <div className="flex flex-wrap items-center gap-4">
           <span className="grid size-12 place-items-center rounded-2xl bg-navy text-lime"><Icon name={tipo?.icon ?? "receipt"} className="size-6" /></span>
           <div className="grid flex-1 gap-0.5">
-            <p className="text-lg font-bold">{w.concepto.trim() || tipo?.label || "Tu ingreso"}</p>
+            <p className="text-lg font-bold">{(w.concepto ?? "").trim() || tipo?.label || "Tu ingreso"}</p>
             <p className="text-sm text-muted-foreground">{[tipo?.label, cuando].filter(Boolean).join(" · ")}</p>
           </div>
           <div className="grid text-right">

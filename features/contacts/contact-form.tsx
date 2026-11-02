@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
+import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -54,7 +55,7 @@ export function ContactForm(props: Props) {
   const [formId] = useState(() => `contacto-${Math.random().toString(36).slice(2)}`)
   return (
     <ResponsiveDialog open={props.open} onOpenChange={props.onOpenChange} mdesc="contacto" title={props.contact ? "Editar contacto" : "Nuevo contacto"}
-      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}>
+      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><SubmitButton form={formId} /></>}>
       <ReadyGate><ContactFormBody {...props} formId={formId} /></ReadyGate>
     </ResponsiveDialog>
   )
@@ -72,6 +73,7 @@ function ContactFormBody({ onOpenChange, contact, onSaved, formId }: Props & { f
     },
   })
   const { errors, isSubmitting } = form.formState
+  useSubmitState(formId, form)
   const relaciones = cfg?.relaciones ?? []
 
   async function onSubmit(v: Values) {

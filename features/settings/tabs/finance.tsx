@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Combobox } from "@/components/mirai/combobox"
 import { MoneyAutosave } from "@/components/mirai/money-autosave"
@@ -11,10 +10,11 @@ import { Notice } from "@/components/mirai/notice"
 import { createClient } from "@/utils/supabase/client"
 import { categoryOptions, memberOptions, methodOptions, useCategories, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { FRECS, FSP_LEY797, SISTEMAS, smmlvFor, uvtFor, type NominaCfg } from "@/lib/domain"
-import { Plus, RotateCcw, Trash2 } from "lucide-react"
+import { Plus, RotateCcw } from "lucide-react"
+import { IconButton } from "@/components/mirai/tip"
 import { Button } from "@/components/ui/button"
 import { fmtDate } from "@/lib/format"
-import { SettingRow, SettingSection } from "../ui"
+import { SettingRow, SettingSection, SettingSkeleton, SettingStack } from "../ui"
 import { useBookSettingsSave } from "../prefs"
 
 /** Campo numérico que guarda al salir. */
@@ -50,7 +50,7 @@ export function FinanzasTab() {
   const { data: cfg } = useSettings()
   const { data: refs } = useLatestRefs()
   const save = useBookSettingsSave()
-  if (!cfg) return <Skeleton className="h-96 w-full" />
+  if (!cfg) return <SettingSkeleton sections={3} />
   const year = new Date().getFullYear()
   const pct = cfg.pct as { n: number; g: number; a: number }
   const trm = cfg.trm as Record<string, number>
@@ -59,7 +59,7 @@ export function FinanzasTab() {
   const uvt = cfg.uvt as Record<string, number>
 
   return (
-    <div className="grid gap-4">
+    <SettingStack>
       <SettingSection icon="landmark" title={`Valores oficiales ${year}`} desc="Ya vienen con los valores oficiales. Cámbialos solo si el Gobierno publica uno nuevo.">
         <SettingRow title="Salario mínimo (SMMLV)" desc="Se usa para el fondo de solidaridad y la base mínima de independientes."><div className="w-48"><MoneyAutosave value={smmlvFor(year, smmlv)} onSave={(v) => save.mutate({ smmlv: { ...smmlv, [year]: v } })} /></div></SettingRow>
         <SettingRow title="Valor de la UVT" desc="Unidad de la DIAN para topes de renta y retención."><div className="w-48"><MoneyAutosave value={uvtFor(year, uvt)} onSave={(v) => save.mutate({ uvt: { ...uvt, [year]: v } })} /></div></SettingRow>
@@ -93,7 +93,7 @@ export function FinanzasTab() {
         </SettingRow>
         <SettingRow title="Tasa de usura (% E.A.)" desc="Cambia cada mes; verifícala en la Superfinanciera."><NumBlur label="Tasa de usura" value={+cfg.usura} min={0} max={100} step={0.01} onSave={(v) => save.mutate({ usura: v, usura_auto: false })} suffix="% E.A." /></SettingRow>
       </SettingSection>
-    </div>
+    </SettingStack>
   )
 }
 
@@ -103,11 +103,11 @@ export function DefaultsTab() {
   const { data: medios } = usePaymentMethods()
   const { data: members } = useMembers()
   const save = useBookSettingsSave()
-  if (!cfg) return <Skeleton className="h-80 w-full" />
+  if (!cfg) return <SettingSkeleton />
   const d = cfg.defaults as { cat?: string; medio?: string; quien?: string; sistema?: string; frec?: string; plazo?: number }
   const set = (p: Partial<typeof d>) => save.mutate({ defaults: { ...d, ...p } })
   return (
-    <div className="grid gap-4">
+    <SettingStack>
       <SettingSection icon="receipt" title="Al registrar un gasto">
         <SettingRow title="Categoría"><div className="w-64"><Combobox value={d.cat || "auto"} onChange={(v) => set({ cat: v === "auto" ? "" : v })} options={[{ value: "auto", label: "Que se ponga sola", icon: "wand-sparkles" }, ...categoryOptions(cats)]} /></div></SettingRow>
         <SettingRow title="Medio de pago"><div className="w-64"><Combobox value={d.medio || "none"} onChange={(v) => set({ medio: v === "none" ? "" : v })} options={[{ value: "none", label: "Sin preferencia" }, ...methodOptions(medios)]} /></div></SettingRow>
@@ -120,7 +120,7 @@ export function DefaultsTab() {
         <SettingRow title="Frecuencia de pago"><div className="w-64"><Combobox value={d.frec || "mensual"} onChange={(v) => set({ frec: v })} options={Object.entries(FRECS).map(([value, f]) => ({ value, label: f.n }))} /></div></SettingRow>
         <SettingRow title="Número de cuotas"><NumBlur label="Número de cuotas" value={+(d.plazo ?? 12)} min={1} max={360} onSave={(v) => set({ plazo: v })} suffix="cuotas" /></SettingRow>
       </SettingSection>
-    </div>
+    </SettingStack>
   )
 }
 
@@ -141,7 +141,7 @@ function NominaSection({ value, onSave }: { value: NominaCfg; onSave: (v: Nomina
           {value.retModo === "proc2" && <NumBlur label="Porcentaje del procedimiento 2" value={value.retPct ?? 0} min={0} max={39} step={0.01} onSave={(v) => onSave({ ...value, retPct: v })} suffix="%" />}
         </div>
       </SettingRow>
-      <div className="grid gap-3 py-4">
+      <div className="grid gap-3 pt-4">
         <div className="grid gap-0.5">
           <p className="font-medium">Fondo de Solidaridad Pensional</p>
           <p className="text-sm text-muted-foreground">Se descuenta si ganas 4 salarios mínimos o más. {propia ? "Estás usando una tabla propia." : "Hoy se usa la tabla de la Ley 797 de 2003."} Cámbiala solo si cambia la ley (por ejemplo, con la reforma pensional) o tu desprendible muestra otro porcentaje.</p>
@@ -152,7 +152,7 @@ function NominaSection({ value, onSave }: { value: NominaCfg; onSave: (v: Nomina
               <span className="text-muted-foreground">Desde</span>
               <NumBlur label={`Desde cuántos salarios mínimos, fila ${i + 1}`} value={desde} min={0} max={100} step={0.5} onSave={(v) => setFila(i, 0, v)} suffix="salarios mínimos:" />
               <NumBlur label={`Porcentaje, fila ${i + 1}`} value={pct} min={0} max={10} step={0.1} onSave={(v) => setFila(i, 1, v)} suffix="%" />
-              <Button variant="ghost" size="icon" aria-label={`Quitar fila ${i + 1}`} onClick={() => onSave({ ...value, fsp: tabla.filter((_, k) => k !== i) })} disabled={tabla.length <= 1}><Trash2 /></Button>
+              <IconButton label={`Quitar fila ${i + 1}`} icon="trash-2" destructive onClick={() => onSave({ ...value, fsp: tabla.filter((_, k) => k !== i) })} disabled={tabla.length <= 1} />
             </div>
           ))}
         </div>

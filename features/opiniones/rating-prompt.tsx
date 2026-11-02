@@ -1,8 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { X } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/mirai/tip"
 import { Card } from "@/components/ui/card"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
@@ -35,7 +34,7 @@ export function RatingPrompt() {
         <p className="text-sm text-muted-foreground">Tu calificación nos ayuda a saber qué mejorar. Toma 10 segundos.</p>
       </div>
       <StarRating value={0} onChange={(n) => { dismiss(); open({ tipo: "calificacion", rating: n }) }} />
-      <Button size="icon-sm" variant="ghost" className="absolute top-2 right-2" aria-label="Ahora no" onClick={dismiss}><X /></Button>
+      <IconButton size="icon-sm" icon="x" label="Ahora no" className="absolute top-2 right-2" onClick={dismiss} />
     </Card>
   )
 }

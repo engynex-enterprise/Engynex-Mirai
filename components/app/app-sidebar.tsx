@@ -19,11 +19,12 @@ import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/mirai/icon"
 import { IsoIcon, hasIso } from "@/components/mirai/iso-icon"
-import { NAV, isGroup, type NavGroup, type NavLeaf } from "@/lib/nav"
+import { NAV, isGroup, navIdOf, type NavGroup, type NavLeaf } from "@/lib/nav"
 import { can, featureOfSection } from "@/lib/plans"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { useApp } from "./app-context"
+import { ROLE_INFO } from "@/lib/household/roles"
 import { useShell } from "./shell-store"
 import type { LiveStatus, PresenceUser } from "@/hooks/use-realtime"
 import { switchBook } from "./actions"
@@ -40,7 +41,7 @@ export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2
 
 export function AppSidebar({ live, online, badges, hidden = [], unread }: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; hidden?: string[]; unread: number }) {
   const path = usePathname()
-  const current = path.split("/")[1] || "inicio"
+  const current = navIdOf(path.split("/")[1] || "inicio")
   const { plan } = useApp()
   const { state, isMobile, setOpenMobile } = useSidebar()
   const collapsed = state === "collapsed" && !isMobile
@@ -297,7 +298,7 @@ function UserMenu() {
               <UserAvatar src={user.avatar} name={user.nombre} className="size-8" fallbackClassName="text-xs" />
               <div className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-medium">{user.nombre}</span>
-                <span className="truncate text-xs text-muted-foreground">{lvl ? `Nivel ${lvl.n} · ${lvl.name}` : household.nombre} · {{ owner: "Dueño", editor: "Editor", viewer: "Solo lectura" }[household.role]}</span>
+                <span className="truncate text-xs text-muted-foreground">{lvl ? `Nivel ${lvl.n} · ${lvl.name}` : household.nombre} · {ROLE_INFO[household.access].short}</span>
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>

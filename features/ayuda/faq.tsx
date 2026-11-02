@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Illustration } from "@/components/mirai/illustration"
+import { SectionTitle } from "@/components/mirai/panel"
 import { FAQ, FAQ_CATS, type Faq } from "@/lib/content/ayuda"
 import { faqId, filtrarFaq } from "@/lib/content/centro-ayuda"
 import { cn } from "@/lib/utils"
@@ -60,14 +61,14 @@ export function FaqModule({ compact = false, focusId }: { compact?: boolean; foc
       {!list.length ? (
         <Card className="items-center gap-3 p-6 text-center shadow-card ring-0">
           <Illustration k="sin-resultados" width={compact ? 150 : 200} />
-          <p>No encontramos “{q}”. Prueba con otra palabra, revisa el manual o escríbenos.</p>
+          <p className="max-w-md text-muted-foreground">No encontramos “{q}”. Prueba con otra palabra, revisa el manual o escríbenos.</p>
           <div className="flex flex-wrap justify-center gap-2"><Button variant="outline" onClick={() => go({ v: "manual" })}><BookOpen /> Ver el manual</Button><Button onClick={() => go({ v: "soporte" })}><Send /> Escríbenos</Button></div>
         </Card>
       ) : grouped ? (
         <div className="grid gap-4">
           {FAQ_CATS.map((c) => (
             <section key={c} className="grid gap-1.5">
-              <h3 className="px-1 font-semibold">{c} <span className="font-normal text-muted-foreground">· {FAQ.filter((f) => f.c === c).length}</span></h3>
+              <SectionTitle as="h3" className="px-1">{c} <span className="font-normal text-muted-foreground">· {FAQ.filter((f) => f.c === c).length}</span></SectionTitle>
               <Card className="p-1.5 shadow-card ring-0"><FaqItems list={list.filter((f) => f.c === c)} open={open} setOpen={setOpen} /></Card>
             </section>
           ))}

@@ -5,10 +5,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChartColumn, Download, FileSpreadsheet, Lightbulb, ThumbsUp, TriangleAlert, WandSparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { Combobox } from "@/components/mirai/combobox"
-import { Icon } from "@/components/mirai/icon"
+import { FormField } from "@/components/mirai/field"
+import { Kpi, KpiGrid } from "@/components/mirai/kpi"
+import { Panel } from "@/components/mirai/panel"
+import { ToneIcon, toneFor } from "@/components/mirai/tone-icon"
 import { Money } from "@/components/mirai/money"
 import { Notice } from "@/components/mirai/notice"
 import { PageHeader } from "@/components/mirai/page-header"
@@ -30,7 +32,7 @@ function months(today: string) {
 }
 
 function Row({ l, v, cls, bold }: { l: string; v: number; cls?: string; bold?: boolean }) {
-  return <tr className="border-b last:border-0"><td className={cn("py-2 pr-2", bold && "font-semibold")}>{l}</td><td className={cn("py-2 text-right tabular-nums", bold && "font-semibold", cls)}><Money value={v} /></td></tr>
+  return <tr className={cn("border-b last:border-0", bold && "bg-muted/40")}><td className={cn("py-2 pr-2 pl-1", bold && "font-semibold")}>{l}</td><td className={cn("py-2 pr-1 text-right tabular-nums", bold && "font-semibold", cls)}><Money value={v} /></td></tr>
 }
 
 function SummaryCard({ k }: { k: string }) {
@@ -44,28 +46,25 @@ function SummaryCard({ k }: { k: string }) {
   })
   const cols: [string, typeof ChartColumn, string[] | undefined][] = r ? [["En qué gastaste más", ChartColumn, r.gastaste_mas], ["Lo que mejoró", ThumbsUp, r.mejoro], ["Ojo con esto", TriangleAlert, r.alertas]] : []
   return (
-    <Card className="gap-4 p-5 shadow-card ring-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 font-semibold"><Icon name="sparkles" className="size-5 text-brand" />Resumen del mes con IA</h2>
+    <Panel title="Resumen del mes con IA" icon="sparkles" action={
         <Button variant="soft" disabled={busy || !can} onClick={async () => {
           setBusy(true)
           try { const x = await generateMonthSummary(k); qc.setQueryData(["b", book.id, "monthly_summaries", k], x); if (x.local) toast.warning("Resumen sin IA", { description: "Activa un proveedor de IA para un análisis completo." }) } catch (e) { toast.error((e as Error).message) }
           setBusy(false)
-        }}>{busy ? <Spinner /> : <WandSparkles />}{busy ? "Analizando el mes…" : r ? "Actualizar" : "Generar resumen"}</Button>
-      </div>
+        }}>{busy ? <Spinner /> : <WandSparkles />}{busy ? "Analizando el mes…" : r ? "Actualizar" : "Generar resumen"}</Button>}>
       {!r ? <p className="text-sm text-muted-foreground">La IA revisa tus gastos del mes, los compara con el mes anterior y te da una recomendación concreta.</p> : (
         <>
           <div><h3 className="text-lg font-semibold">{r.titular}</h3><p>{r.resumen}</p></div>
           <div className="grid gap-4 md:grid-cols-3">
             {cols.map(([t, I, l]) => (
-              <div key={t}><p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><I className="size-4" />{t}</p>
+              <div key={t} className="rounded-lg bg-muted/40 p-3"><p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"><I className="size-4" aria-hidden />{t}</p>
                 <ul className="list-disc space-y-1 pl-5 text-sm">{l?.length ? l.map((x) => <li key={x}>{x}</li>) : <li className="text-muted-foreground">Nada destacado</li>}</ul></div>
             ))}
           </div>
           <Notice tone="ok" title="Para el próximo mes">{r.recomendacion}</Notice>
         </>
       )}
-    </Card>
+    </Panel>
   )
 }
 
@@ -110,39 +109,45 @@ export function ReportsView() {
   return (
     <div className="grid gap-6">
       <PageHeader id="reportes" title="Reportes" description={`Tu balance y el resultado de ${fmtMonth(k)}, listos para revisar en familia o guardar en PDF.`} />
-      <Card className="flex-row flex-wrap items-end gap-3 p-4 shadow-card ring-0">
-        <div className="grid w-full gap-1 sm:w-60"><span className="text-sm font-medium">Mes</span><Combobox value={k} onChange={setK} options={months(today)} /></div>
-        <Button onClick={pdf} disabled={pdfBusy}>{pdfBusy ? <Spinner /> : <Download />} Descargar PDF</Button>
-        <Button variant="outline" onClick={csv}><FileSpreadsheet /> Movimientos en Excel (CSV)</Button>
-      </Card>
+      <Panel className="flex-row flex-wrap items-end gap-3">
+        <FormField label="Mes" htmlFor="rep-mes" tip={false} className="w-full sm:w-60"><Combobox id="rep-mes" value={k} onChange={setK} options={months(today)} /></FormField>
+        <div className="flex flex-wrap gap-2 max-sm:w-full max-sm:[&>*]:flex-1">
+          <Button className="h-11" onClick={pdf} disabled={pdfBusy}>{pdfBusy ? <Spinner /> : <Download />} Descargar PDF</Button>
+          <Button className="h-11" variant="outline" onClick={csv}><FileSpreadsheet /> Movimientos en Excel (CSV)</Button>
+        </div>
+      </Panel>
+      <KpiGrid className="xl:grid-cols-3">
+        <Kpi icon="arrow-down-to-line" tone="income" label="Ingresos del mes" value={<Money value={R.ing} />} sub={fmtMonth(k)} />
+        <Kpi icon="arrow-up-from-line" tone="expense" label="Gastos y cuotas" value={<Money value={R.grp.n + R.grp.g + R.grp.x + R.grp.a + R.cuo + R.sub} />} sub="Necesidades, gustos, cuotas y suscripciones" />
+        <Kpi icon={R.res >= 0 ? "piggy-bank" : "triangle-alert"} tone={R.res >= 0 ? "green" : "red"} label="Saldo del mes" value={<Money value={R.res} />} valueClassName={R.res >= 0 ? "text-success" : "text-danger"} sub={R.ing > 0 ? `${Math.round((R.res / R.ing) * 100)} % de tus ingresos` : "Registra tus ingresos"} />
+      </KpiGrid>
       <SummaryCard k={k} />
       <section className="grid gap-6 lg:grid-cols-2">
-        <Card className="gap-2 p-5 shadow-card ring-0">
-          <h2 className="font-semibold">Balance: lo que tengo y lo que debo</h2>
+        <Panel title="Balance: lo que tengo y lo que debo" icon="scale" className="gap-2">
           <table className="w-full text-sm"><tbody>
             {activos.map(([l, v], i) => <Row key={`a${i}`} l={l} v={v} />)}
             <Row l="Inversiones" v={R.T.xi} /><Row l="Lo que me deben" v={R.T.xc} /><Row l="Total que tengo" v={R.T.A} cls="text-success" bold />
             {pasivos.map(([l, v], i) => <Row key={`p${i}`} l={l} v={v} />)}
             <Row l="Créditos y préstamos" v={R.T.xp} /><Row l="Total que debo" v={R.T.P} cls="text-danger" bold />
           </tbody><tfoot><Row l="Patrimonio" v={R.T.pat} bold /></tfoot></table>
-        </Card>
-        <Card className="gap-2 p-5 shadow-card ring-0">
-          <h2 className="font-semibold">Resultado del mes</h2>
+        </Panel>
+        <Panel title="Resultado del mes" icon="chart-column" className="gap-2">
           <table className="w-full text-sm"><tbody>
             <Row l="Ingresos" v={R.ing} cls="text-success" /><Row l="Necesidades" v={R.grp.n} /><Row l="Gustos" v={R.grp.g} />
             <Row l="Otros gastos" v={R.grp.x + R.grp.a} /><Row l="Cuotas de créditos" v={R.cuo} /><Row l="Suscripciones" v={R.sub} />
           </tbody><tfoot><Row l={R.res >= 0 ? "Te sobró" : "Te faltó"} v={R.res} cls={R.res >= 0 ? "text-success" : "text-danger"} bold /></tfoot></table>
           {top.length > 0 && (
-            <div className="mt-3 grid gap-2">
+            <div className="mt-3 grid gap-2.5">
+              <p className="text-sm font-semibold">Dónde se fue más plata</p>
               {top.map(([c, v]) => (
                 <div key={c} className="grid gap-1">
-                  <div className="flex items-center gap-2 text-sm"><Icon name={catIcon(c)} className="size-4 text-muted-foreground" /><span className="flex-1">{catName(c)}</span><Money value={v} className="font-medium" /></div>
-                  <div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-navy dark:bg-lime" style={{ width: `${Math.max(2, (v / top[0][1]) * 100)}%` }} /></div>
+                  <div className="flex items-center gap-2 text-sm"><ToneIcon icon={catIcon(c)} tone={toneFor(catName(c))} size="sm" /><span className="min-w-0 flex-1 truncate">{catName(c)}</span><Money value={v} className="font-medium" /></div>
+                  <div className="ml-10 h-2 rounded-full bg-muted" role="presentation"><div className="h-2 rounded-full bg-navy dark:bg-lime" style={{ width: `${Math.max(2, (v / top[0][1]) * 100)}%` }} /></div>
                 </div>
               ))}
             </div>
           )}
-        </Card>
+        </Panel>
       </section>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lightbulb className="size-3.5" /> El PDF incluye además la salud financiera, los préstamos y todos los gastos por categoría.</p>
       <AdSlot slot="reportes" />

@@ -1,51 +1,30 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowUp, History, MessageCirclePlus, Sparkles, Trash2, X } from "lucide-react"
-import { toast } from "@/components/mirai/toast"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Segmented } from "@/components/mirai/choice-cards"
-import { useApp } from "@/components/app/app-context"
-import { useShell } from "@/components/app/shell-store"
-import { createClient } from "@/utils/supabase/client"
-import { cn } from "@/lib/utils"
-import { chatSend } from "./actions"
+import { History, Maximize2, MessageCircle, MessageSquarePlus, X } from "lucide-react"
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { IsoIcon } from "@/components/mirai/iso-icon"
-import { PremiumUpsell } from "@/features/planes/premium"
-import { can } from "@/lib/plans"
+import { useShell } from "@/components/app/shell-store"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { cn } from "@/lib/utils"
+import { Conversation } from "./conversation"
+import { HeaderTitle, ThreadHeaderMenu, ThreadList } from "./history"
+import { newChat, useChatHotkeys } from "./hotkeys"
+import { MiraiAvatar } from "./message"
+import { restoreChat, useChat } from "./store"
 
-type Msg = { id: string; role: string; content: string; meta?: { go?: string } }
-const CHIPS = ["¿Cómo puedo ahorrar más cada mes?", "¿Qué deuda debería pagar primero?", "¿Me conviene sacar una tarjeta de crédito?", "Explícame qué es la tasa E.A.", "¿Cuánto debería tener en el fondo de emergencia?"]
 const POS_KEY = "mirai-chat-pos"
+const noop = () => () => {}
 
-/** Markdown mínimo (mdLite de la v4): **negrita**, listas con - o • y párrafos. */
-function MdLite({ text }: { text: string }) {
-  const bold = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith("**") && p.endsWith("**") ? <b key={i}>{p.slice(2, -2)}</b> : p))
-  const blocks: React.ReactNode[] = []
-  let list: string[] = []
-  const flush = () => { if (list.length) blocks.push(<ul key={blocks.length} className="my-1 list-disc space-y-0.5 pl-5">{list.map((l, i) => <li key={i}>{bold(l)}</li>)}</ul>); list = [] }
-  for (const line of text.split("\n")) {
-    const m = line.match(/^\s*[-•*]\s+(.*)/)
-    if (m) list.push(m[1])
-    else { flush(); if (line.trim()) blocks.push(<p key={blocks.length} className="my-1">{bold(line)}</p>) }
-  }
-  flush()
-  return <>{blocks}</>
-}
-
-function group(fecha: string) {
-  const d = (Date.now() - new Date(fecha).getTime()) / 864e5
-  return d < 1 && new Date(fecha).toDateString() === new Date().toDateString() ? "Hoy" : d < 2 ? "Ayer" : d < 7 ? "Últimos 7 días" : d < 30 ? "Últimos 30 días" : "Anteriores"
-}
-
-/** Burbuja arrastrable que abre y cierra el chat. */
+/** Burbuja flotante arrastrable con el isotipo de Mirai. Se aparta al desplazar la página y avisa si hay respuesta lista. */
 function Fab({ onClick }: { onClick: () => void }) {
   const ref = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const [away, setAway] = useState(false)
+  const unread = useChat((s) => s.unread)
+  const busy = useChat((s) => s.live.status !== "idle")
   const drag = useRef<{ sx: number; sy: number; x: number; y: number; moved: boolean } | null>(null)
   // Mientras desplazas la página la burbuja se aparta para no tapar botones; vuelve al quedarte quieto.
   useEffect(() => {
@@ -59,9 +38,13 @@ function Fab({ onClick }: { onClick: () => void }) {
     const fit = () => setPos((p) => (p ? { x: Math.min(Math.max(8, p.x), innerWidth - 64), y: Math.min(Math.max(8, p.y), innerHeight - 64) } : p))
     addEventListener("resize", fit); return () => removeEventListener("resize", fit)
   }, [])
+  const left = pos ? pos.x < (typeof window === "undefined" ? 9999 : innerWidth / 2) : false
   return (
-    <button ref={ref} type="button" aria-label="Pregúntale a Mirai" title="Pregúntale a Mirai"
-      className={cn("fixed z-40 grid size-12 touch-none place-items-center rounded-full bg-navy text-lime shadow-xl ring-4 ring-background transition-all duration-300 hover:scale-105 md:size-14", !pos && "right-3 bottom-[5.5rem] md:right-5 md:bottom-6", away && "pointer-events-none translate-y-4 scale-75 opacity-0")}
+    <button ref={ref} type="button" aria-label={unread ? "Pregúntale a Mirai (tienes una respuesta lista)" : "Pregúntale a Mirai"}
+      className={cn(
+        "group fixed z-40 grid size-[52px] touch-none place-items-center rounded-full bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#24561A)] shadow-[0_10px_28px_rgba(31,43,75,.38),0_2px_6px_rgba(0,0,0,.12)] ring-4 ring-background transition-all duration-300 hover:-translate-y-0.5 hover:scale-105 md:size-[60px]",
+        !pos && "right-3 bottom-[5.5rem] md:right-6 md:bottom-6", away && "pointer-events-none translate-y-4 scale-75 opacity-0", (unread || busy) && "chat-halo",
+      )}
       style={pos ? { left: pos.x, top: pos.y } : undefined}
       onPointerDown={(e) => { const r = ref.current!.getBoundingClientRect(); drag.current = { sx: e.clientX, sy: e.clientY, x: r.left, y: r.top, moved: false }; ref.current!.setPointerCapture(e.pointerId) }}
       onPointerMove={(e) => {
@@ -72,148 +55,104 @@ function Fab({ onClick }: { onClick: () => void }) {
         setPos({ x: Math.min(Math.max(8, d.x + dx), innerWidth - 64), y: Math.min(Math.max(8, d.y + dy), innerHeight - 64) })
       }}
       onPointerUp={() => { const d = drag.current; drag.current = null; if (d?.moved) { try { localStorage.setItem(POS_KEY, JSON.stringify(pos)) } catch { /* sin almacenamiento */ } } else onClick() }}>
-      <svg viewBox="0 0 32 32" className="size-8" aria-hidden><path fill="currentColor" opacity=".18" d="M16 3C8.8 3 3 8.2 3 14.6c0 3.4 1.6 6.4 4.2 8.5L6 29l6.1-3.2c1.2.3 2.5.4 3.9.4 7.2 0 13-5.2 13-11.6S23.2 3 16 3Z" /><circle cx="10.5" cy="15" r="2" fill="currentColor" /><circle cx="16" cy="15" r="2" fill="currentColor" /><circle cx="21.5" cy="15" r="2" fill="currentColor" /></svg>
+      <IsoIcon k="mirai" size={34} className="transition-transform duration-300 group-hover:rotate-[-8deg] md:size-[38px]" />
+      <span aria-hidden className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-lime text-navy ring-[3px] ring-background md:size-6"><MessageCircle className="size-3 fill-current md:size-3.5" /></span>
+      {unread && <span aria-hidden className="absolute -top-0.5 -right-0.5 size-3.5 rounded-full bg-danger ring-2 ring-background" />}
+      <span aria-hidden className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 rounded-full bg-navy px-3 py-1.5 text-[13px] font-semibold whitespace-nowrap text-white opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 max-md:hidden", left ? "left-full ml-3" : "right-full mr-3")}>
+        {unread ? "Tu respuesta está lista" : busy ? "Mirai está respondiendo…" : "Pregúntale a Mirai"}
+      </span>
     </button>
   )
 }
 
+function HeadBtn({ label, onClick, children, className }: { label: string; onClick?: () => void; children: React.ReactNode; className?: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild><button type="button" aria-label={label} onClick={onClick} className={cn("grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-hover hover:text-foreground", className)}>{children}</button></TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** Contenido de la ventana: encabezado con avatar, historial rápido, nueva conversación y pantalla completa. */
+function Panel({ onClose, onExpand }: { onClose: () => void; onExpand: () => void }) {
+  const [view, setView] = useState<"chat" | "history">("chat")
+  const [editing, setEditing] = useState(false)
+  const busy = useChat((s) => s.live.status !== "idle")
+  useChatHotkeys({ enabled: true })
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex shrink-0 items-center gap-1 border-b border-border/70 px-2.5 py-2">
+        <MiraiAvatar size={38} live className="ml-0.5" />
+        <div className="ml-1.5 min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-[15.5px] leading-tight font-bold">Mirai <span className="rounded-full bg-brand-soft px-1.5 py-px text-[10.5px] font-bold text-link">Asesor</span></p>
+          {view === "history" ? <p className="text-[12px] text-muted-foreground">Tus conversaciones</p> : busy ? <p className="text-[12px] text-muted-foreground">Escribiendo…</p>
+            : <HeaderTitle editing={editing} onDone={() => setEditing(false)} className="text-[12px] text-muted-foreground" fallback={<p className="text-[12px] text-muted-foreground">Tu asesor financiero · en línea</p>} />}
+        </div>
+        <HeadBtn label={view === "history" ? "Volver al chat" : "Historial"} onClick={() => setView(view === "history" ? "chat" : "history")} className={cn(view === "history" && "bg-brand-soft text-link")}><History className="size-[18px]" /></HeadBtn>
+        <HeadBtn label="Nueva conversación" onClick={() => { newChat(); setView("chat") }}><MessageSquarePlus className="size-[18px]" /></HeadBtn>
+        <ThreadHeaderMenu onRename={() => { setView("chat"); setEditing(true) }} />
+        <HeadBtn label="Abrir en pantalla completa" onClick={onExpand}><Maximize2 className="size-4" /></HeadBtn>
+        <HeadBtn label="Cerrar chat" onClick={onClose}><X className="size-[18px]" /></HeadBtn>
+      </header>
+      {view === "history" ? <ThreadList className="min-h-0 flex-1" onPick={() => setView("chat")} /> : <Conversation compact autoFocus />}
+    </div>
+  )
+}
+
 export function ChatWidget() {
-  const { user, book, plan } = useApp()
-  const router = useRouter()
   const path = usePathname()
-  const qc = useQueryClient()
+  const router = useRouter()
   const open = useShell((s) => s.chat)
   const preQ = useShell((s) => s.chatQ)
   const openChat = useShell((s) => s.openChat)
   const setOpen = useShell((s) => s.setChat)
-  const [cur, setCur] = useState<string | null>(null)
-  const [side, setSide] = useState(false)
-  const [tono, setTono] = useState<"simple" | "fin">("simple")
-  const [q, setQ] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [pending, setPending] = useState<Msg[]>([])
-  const end = useRef<HTMLDivElement>(null)
-  const ta = useRef<HTMLTextAreaElement>(null)
+  const live = useIsMobile()
+  const hydrated = useSyncExternalStore(noop, () => true, () => false)
+  // Igual que ResponsiveDialog: el modo (ventana o panel inferior) queda fijo mientras está abierto.
+  const [lock, setLock] = useState<boolean | null>(null)
+  if (open && hydrated && lock === null) setLock(live)
+  if (!open && lock !== null) setLock(null)
+  const mobile = lock ?? live
+  const hidden = path.startsWith("/consejero") || path.startsWith("/sistema-diseno")
 
-  const threads = useQuery({
-    queryKey: ["chat-threads", user.id, book.id], enabled: open,
-    queryFn: async () => (await createClient().from("chat_threads").select("id,titulo,updated_at").eq("book_id", book.id).eq("user_id", user.id).is("deleted_at", null).order("updated_at", { ascending: false }).limit(50)).data ?? [],
-  })
-  const msgs = useQuery({
-    queryKey: ["chat-msgs", cur], enabled: !!cur,
-    queryFn: async () => (await createClient().from("chat_messages").select("id,role,content,meta").eq("thread_id", cur!).is("deleted_at", null).order("created_at")).data as Msg[] ?? [],
-  })
-  const list = [...(cur ? msgs.data ?? [] : []), ...pending]
-
-  useEffect(() => { if (open && innerWidth >= 900) queueMicrotask(() => setSide(true)) }, [open])
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }) }, [list.length, busy])
+  useEffect(() => { restoreChat() }, [])
+  useEffect(() => { if (open && typeof preQ === "string" && preQ) useChat.getState().setDraft(preQ) }, [open, preQ])
+  // En /consejero el chat ya ocupa la pantalla: la burbuja no se muestra.
+  useEffect(() => { if (hidden && open) setOpen(false) }, [hidden, open, setOpen])
   useEffect(() => {
-    if (open && preQ) queueMicrotask(() => { setCur(null); setQ(preQ); setTimeout(() => ta.current?.focus(), 50) })
-  }, [open, preQ])
+    if (!open || hidden) return
+    useChat.getState().setVisible(1)
+    return () => useChat.getState().setVisible(-1)
+  }, [open, hidden])
   useEffect(() => {
-    if (!open) return
-    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("[role=dialog]")) setOpen(false) }
+    if (!open || mobile) return
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("[role=menu],[role=alertdialog],[data-slot=dialog-content]")) setOpen(false) }
     addEventListener("keydown", k); return () => removeEventListener("keydown", k)
-  }, [open, setOpen])
+  }, [open, mobile, setOpen])
 
-  const goCons = (text: string) => {
-    if (innerWidth < 900) setOpen(false)
-    sessionStorage.setItem("mirai-cons-q", text)
-    router.push("/consejero?desde=chat")
+  if (hidden) return null
+  const expand = () => {
+    const id = useChat.getState().threadId
+    setOpen(false)
+    router.push(id ? `/consejero?c=${id}` : "/consejero")
   }
-  const send = async (text = q) => {
-    const t = text.trim(); if (!t || busy) return
-    setQ(""); setBusy(true); setPending([{ id: "tmp-u", role: "user", content: t }])
-    try {
-      const r = await chatSend({ threadId: cur, q: t, tono })
-      setCur(r.threadId)
-      await qc.invalidateQueries({ queryKey: ["chat-msgs", r.threadId] })
-      await qc.refetchQueries({ queryKey: ["chat-msgs", r.threadId] })
-      qc.invalidateQueries({ queryKey: ["chat-threads"] })
-      if (r.go) setTimeout(() => goCons(r.go!), 1400)
-    } catch (e) { toast.error((e as Error).message) }
-    setPending([]); setBusy(false)
-  }
-  const del = async (id: string) => {
-    await createClient().from("chat_threads").update({ deleted_at: new Date().toISOString() }).eq("id", id)
-    if (cur === id) setCur(null)
-    qc.invalidateQueries({ queryKey: ["chat-threads"] })
-  }
-  if (path.startsWith("/sistema-diseno")) return null
-  const groups = [...new Set((threads.data ?? []).map((t) => group(t.updated_at)))]
-  const title = threads.data?.find((t) => t.id === cur)?.titulo
-
   return (
     <>
       {!open && <Fab onClick={() => openChat()} />}
-      {open && (
-        <div role="dialog" aria-label="Asesor financiero" className="fixed inset-0 z-50 flex bg-background md:inset-auto md:right-5 md:bottom-5 md:h-[min(640px,calc(100dvh-40px))] md:w-[min(760px,calc(100vw-40px))] md:overflow-hidden md:rounded-xl md:border md:shadow-2xl">
-          {side && (
-            <aside className="absolute inset-0 z-10 flex w-full flex-col border-r bg-sidebar md:static md:w-60">
-              <div className="flex items-center gap-2 p-3">
-                <Button className="flex-1" variant="outline" onClick={() => { setCur(null); if (innerWidth < 700) setSide(false) }}><MessageCirclePlus /> Nueva conversación</Button>
-                <Button size="icon" variant="ghost" className="md:hidden" aria-label="Cerrar historial" onClick={() => setSide(false)}><X /></Button>
-              </div>
-              <div className="flex-1 overflow-y-auto px-2 pb-3">
-                {!threads.data?.length && <p className="p-2 text-sm text-muted-foreground">Aún no tienes conversaciones.</p>}
-                {groups.map((g) => (
-                  <div key={g} className="grid gap-0.5 pt-2">
-                    <p className="px-2 text-xs font-semibold text-muted-foreground">{g}</p>
-                    {threads.data!.filter((t) => group(t.updated_at) === g).map((t) => (
-                      <div key={t.id} className={cn("group flex items-center rounded-md hover:bg-hover", t.id === cur && "bg-brand-soft")}>
-                        <button type="button" className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm" onClick={() => { setCur(t.id); if (innerWidth < 700) setSide(false) }}>{t.titulo}</button>
-                        <button type="button" aria-label={`Borrar ${t.titulo}`} className="mr-1 grid size-7 place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-danger focus:opacity-100" onClick={() => del(t.id)}><Trash2 className="size-3.5" /></button>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </aside>
-          )}
-          <section className="flex min-w-0 flex-1 flex-col">
-            <header className="flex items-center gap-2 border-b px-3 py-2">
-              <Button size="icon" variant="ghost" aria-label="Historial" onClick={() => setSide(!side)}><History /></Button>
-              <div className="min-w-0 flex-1"><p className="font-semibold">Asesor financiero</p>{title && <p className="truncate text-xs text-muted-foreground">{title}</p>}</div>
-              <Segmented value={tono} onChange={(v) => setTono(v as "simple")} items={[{ value: "simple", label: "Sencillo" }, { value: "fin", label: "Financiero" }]} className="hidden sm:flex" />
-              <Button size="icon" variant="ghost" aria-label="Cerrar chat" onClick={() => setOpen(false)}><X /></Button>
-            </header>
-            <div className="flex-1 overflow-y-auto p-4">
-              {!can(plan, "ia") ? (
-                <div className="grid h-full content-center"><PremiumUpsell feature="ia" compact /></div>
-              ) : !list.length ? (
-                <div className="grid h-full content-center justify-items-center gap-4 text-center">
-                  <IsoIcon k="chat" size={76} />
-                  <p className="text-lg font-semibold">¿En qué te ayudo hoy?</p>
-                  <div className="flex max-w-md flex-wrap justify-center gap-2">{CHIPS.map((c) => <button key={c} type="button" className="rounded-full border px-3 py-1.5 text-sm hover:bg-hover" onClick={() => send(c)}>{c}</button>)}</div>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {list.map((m) => m.role === "user" ? (
-                    <div key={m.id} className="ml-auto max-w-[85%] rounded-[18px] rounded-br-md bg-brand px-3.5 py-2 text-sm text-white whitespace-pre-wrap">{m.content}</div>
-                  ) : (
-                    <div key={m.id} className="flex max-w-[92%] gap-2">
-                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-navy text-lime"><Sparkles className="size-3.5" /></span>
-                      <div className="rounded-[18px] rounded-tl-md bg-muted px-3.5 py-2 text-sm"><MdLite text={m.content} />
-                        {m.meta?.go && <Button size="sm" variant="soft" className="mt-2" onClick={() => goCons(m.meta!.go!)}>Abrir Consejo antes de gastar</Button>}
-                      </div>
-                    </div>
-                  ))}
-                  {busy && <div className="flex gap-2"><span className="grid size-7 place-items-center rounded-full bg-navy text-lime"><Sparkles className="size-3.5" /></span><div className="flex items-center gap-1 rounded-[18px] bg-muted px-4 py-3" aria-label="Escribiendo">{[0, 1, 2].map((i) => <span key={i} className="size-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: `${i * 0.15}s` }} />)}</div></div>}
-                  <div ref={end} />
-                </div>
-              )}
-            </div>
-            {can(plan, "ia") && <footer className="border-t p-3">
-              <Segmented value={tono} onChange={(v) => setTono(v as "simple")} items={[{ value: "simple", label: "Sencillo" }, { value: "fin", label: "Financiero" }]} className="mb-2 sm:hidden" />
-              <div className="flex items-end gap-2">
-                <Textarea ref={ta} rows={1} value={q} placeholder="Escribe tu pregunta…" aria-label="Tu pregunta" className="max-h-36 min-h-10 resize-none"
-                  onChange={(e) => { setQ(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${Math.min(140, e.target.scrollHeight)}px` }}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }} />
-                <Button size="icon-lg" aria-label="Enviar" disabled={!q.trim() || busy} onClick={() => send()}><ArrowUp /></Button>
-              </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Orientación basada en tus datos de Mirai. No reemplaza a un asesor certificado.</p>
-            </footer>}
-          </section>
+      {open && mobile && (
+        <Drawer open onOpenChange={(o) => !o && setOpen(false)} repositionInputs={false}>
+          <DrawerContent className="h-[94dvh] max-h-[94dvh]! bg-popover">
+            <DrawerTitle className="sr-only">Chat con Mirai</DrawerTitle>
+            <DrawerDescription className="sr-only">Pregúntale a Mirai sobre tu plata</DrawerDescription>
+            <div className="min-h-0 flex-1" data-vaul-no-drag><Panel onClose={() => setOpen(false)} onExpand={expand} /></div>
+          </DrawerContent>
+        </Drawer>
+      )}
+      {open && !mobile && (
+        <div role="dialog" aria-label="Chat con Mirai"
+          className="chat-pop fixed right-5 bottom-5 z-50 flex h-[min(720px,calc(100dvh-40px))] w-[min(440px,calc(100vw-40px))] flex-col overflow-hidden rounded-[22px] bg-popover text-popover-foreground shadow-[0_24px_60px_rgba(31,43,75,.28),0_4px_12px_rgba(0,0,0,.08)] ring-1 ring-black/5 dark:ring-white/10">
+          <Panel onClose={() => setOpen(false)} onExpand={expand} />
         </div>
       )}
     </>

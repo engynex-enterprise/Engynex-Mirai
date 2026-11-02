@@ -16,7 +16,28 @@ import { cn } from "@/lib/utils"
  */
 const noop = () => () => {}
 
-export function ResponsiveDialog({
+export function ResponsiveDialog(props: DialogProps) {
+  // Mientras se cierra (animación de salida) se sigue mostrando lo último que tenía abierto. Si no, la pantalla que la usa
+  // limpia el registro al cerrar (editing = null) y por un instante se veía "Agregar…" vacío: parecía que se abría otra vez.
+  const [kept, setKept] = useState(props)
+  if (props.open && kept !== props && (kept.title !== props.title || kept.children !== props.children || kept.footer !== props.footer || kept.description !== props.description || kept.onBack !== props.onBack || !kept.open))
+    setKept(props)
+  const v = props.open ? props : { ...kept, open: false, onOpenChange: props.onOpenChange }
+  return <DialogFrame {...v} />
+}
+
+type DialogProps = {
+  open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; mdesc?: string
+  footer?: React.ReactNode; children: React.ReactNode
+  /** Ventana más ancha; "xl" para formularios con panel de resumen al lado. */
+  wide?: boolean | "xl"
+  /** Escritorio ancho: alto fijo y el contenido maneja su propio desplazamiento (p. ej. formulario + panel fijo). */
+  split?: boolean
+  /** Muestra la flecha Atrás en el encabezado (vista de detalle dentro de la misma ventana, como Facebook). */
+  onBack?: () => void
+}
+
+function DialogFrame({
   open, onOpenChange, title, description, mdesc, footer, children, wide, split, onBack,
 }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; mdesc?: string

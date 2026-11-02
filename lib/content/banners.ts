@@ -35,6 +35,7 @@ export const BANNERS: Record<string, { t: BannerThemeKey; m: BannerMotif }> = {
   fijos: { t: "naranja", m: "receipt" },
   tarjetas: { t: "azul", m: "card" },
   suscripciones: { t: "morado", m: "receipt" },
+  proveedores: { t: "azul", m: "receipt" },
   correo: { t: "cyan", m: "mail" },
   importar: { t: "azul", m: "doc" },
   "me-deben": { t: "naranja", m: "people" },

@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Icon } from "@/components/mirai/icon"
+import { TONE, type IconTone } from "@/components/mirai/tone-icon"
 import { useShell } from "@/components/app/shell-store"
-import { helpKey, type HelpRoute } from "@/lib/content/centro-ayuda"
+import { helpKey, type DocKind, type HelpRoute } from "@/lib/content/centro-ayuda"
 import { cn } from "@/lib/utils"
 
 // ───────────────────────────── Navegación ─────────────────────────────
@@ -39,6 +40,11 @@ export function AppLink({ href, className, children, ...rest }: { href: string; 
 
 // ───────────────────────────── Piezas ─────────────────────────────
 
+/** Color de referencia de cada tipo de contenido del Centro de ayuda (resultados, accesos y relacionados). */
+export const DOC_TONE: Record<DocKind, IconTone> = {
+  pagina: "navy", faq: "violet", guia: "blue", glosario: "green", leccion: "amber", novedad: "brand", atajo: "gray",
+}
+
 /** Texto con <b> de los contenidos de la v4 (fuente propia, no del usuario). */
 export const Html = ({ html, className }: { html: string; className?: string }) => <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 
@@ -66,19 +72,21 @@ export function Chips<T extends string>({ value, onChange, items, label }: { val
   )
 }
 
-/** Fila tocable estilo Meta: ícono, título, detalle y flecha. */
+/** Fila tocable estilo Meta: ícono con color de referencia, título, detalle y flecha. */
 export function RowButton({ icon, title, sub, onClick, href, badge, tone = "brand", className }: {
-  icon: string; title: React.ReactNode; sub?: React.ReactNode; onClick?: () => void; href?: string; badge?: React.ReactNode; tone?: "brand" | "muted"; className?: string
+  icon: string; title: React.ReactNode; sub?: React.ReactNode; onClick?: () => void; href?: string; badge?: React.ReactNode
+  /** Color del ícono (paleta de ToneIcon); "muted" = gris. */
+  tone?: IconTone | "muted"; className?: string
 }) {
   const inner = (
     <>
-      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", tone === "brand" ? "bg-brand-soft text-brand" : "bg-secondary text-muted-foreground")}><Icon name={icon} className="size-[18px]" /></span>
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", TONE[tone === "muted" ? "gray" : tone])}><Icon name={icon} className="size-[18px]" /></span>
       <span className="min-w-0 flex-1 text-left"><span className="block text-[14.5px] leading-snug font-semibold break-words">{title}</span>{sub && <span className="block text-xs break-words text-muted-foreground">{sub}</span>}</span>
       {badge}
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
     </>
   )
-  const cls = cn("press flex w-full items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover", className)
+  const cls = cn("press flex w-full items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none", className)
   return href ? <AppLink href={href} className={cls}>{inner}</AppLink> : <button type="button" onClick={onClick} className={cls}>{inner}</button>
 }
 
@@ -104,7 +112,8 @@ export function Tips({ tips }: { tips: string[] }) {
   )
 }
 
-export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+/** Rótulo de un grupo de filas en el panel (MAYÚSCULAS pequeñas, como los paneles de Facebook). */
+export function GroupLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="flex items-center justify-between gap-2 px-1"><h3 className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">{children}</h3>{action}</div>
 }
 

@@ -38,10 +38,14 @@ export const WA_VARS = [
   { k: "monto", l: "Monto del aviso principal", ej: "$1.700.000" },
   { k: "fecha", l: "Fecha de hoy", ej: "lunes 2 de noviembre" },
   { k: "enlace", l: "Enlace a Mirai", ej: "https://mirai.engynex.com/inicio" },
+  { k: "invita", l: "Quién invita (invitaciones al hogar)", ej: "Alberto" },
+  { k: "hogar", l: "Nombre del hogar (invitaciones al hogar)", ej: "Hogar Navarro" },
 ] as const
 export type WaVar = (typeof WA_VARS)[number]["k"]
+/** Datos que solo tienen algunos casos (invitaciones): opcionales para no cambiar los demás envíos. */
+type WaOptional = "invita" | "hogar"
 /** Valores que Mirai puede poner en la plantilla. */
-export type WaValues = Record<WaVar, string>
+export type WaValues = Record<Exclude<WaVar, WaOptional>, string> & Partial<Record<WaOptional, string>>
 type Role = WaVar
 
 const EMPTY: WaValues = { nombre: "", resumen: "", cantidad: "1", titulo: "", detalle: "", monto: "", fecha: "", enlace: "" }
@@ -63,6 +67,7 @@ export const WA_CASES = [
   { k: "inversiones", n: "Inversión por vencer", d: "Cuando el resumen solo trae CDT o inversiones por vencer.", icon: "trending-up" },
   { k: "metas", n: "Metas", d: "Cuando el resumen solo trae metas cerca de su fecha.", icon: "target" },
   { k: "automatizacion", n: "Aviso de automatización", d: "Mensajes de las automatizaciones del hogar que avisan por todos los canales.", icon: "workflow" },
+  { k: "invitacion", n: "Invitación al hogar", d: "Cuando alguien invita a una persona a su hogar por celular. Variables: quién invita, el hogar y el enlace para aceptar. Si no hay una plantilla propia aprobada, la persona la envía desde su WhatsApp.", icon: "user-plus" },
   { k: "prueba", n: "Mensaje de prueba", d: "“Enviarme una prueba” en Ajustes › Alertas y “Enviar prueba” de la consola.", icon: "send" },
 ] as const
 export type WaCase = (typeof WA_CASES)[number]["k"]
@@ -79,6 +84,7 @@ export function sampleValues(caso: WaCase, base = "https://mirai.engynex.com"): 
     inversiones: { titulo: "CDT Bancolombia", detalle: "Vence el 10 nov", monto: "$5.000.000", cantidad: "1", resumen: "CDT Bancolombia $5.000.000 vence el 10 nov", enlace: `${base}/inversiones` },
     metas: { titulo: "Viaje a Cartagena", detalle: "Faltan 15 días y vas en el 70 %", monto: "$2.100.000", cantidad: "1", resumen: "Viaje a Cartagena: vas en el 70 %", enlace: `${base}/metas` },
     automatizacion: { titulo: "Gasto grande registrado", detalle: "Se registró un gasto de $850.000 en Tecnología", monto: "$850.000", cantidad: "1", resumen: "Gasto grande registrado: $850.000 en Tecnología", enlace: `${base}/automatizaciones` },
+    invitacion: { nombre: "Ana", invita: "Alberto", hogar: "Hogar Navarro", titulo: "Invitación al hogar", detalle: "Alberto te invitó a su hogar en Mirai", monto: "", cantidad: "1", resumen: "Alberto te invitó a su hogar \"Hogar Navarro\" en Mirai", enlace: `${base}/invitacion/ejemplo` },
     prueba: { titulo: "Mensaje de prueba", detalle: "Así te llegarán los avisos", monto: "", cantidad: "0", resumen: "Este es un mensaje de prueba de Mirai. Así te llegará el resumen de tus pagos y cobros", enlace: `${base}/inicio` },
   }
   return { ...ej, enlace: `${base}/inicio`, ...by[caso] }
@@ -160,6 +166,8 @@ export function templateSlots(t: MetaTemplate): Slot[] {
 export function roleOf(name: string, before = ""): Role | null {
   const n = name.toLowerCase()
   if (!/^\d+$/.test(n)) {
+    if (/^invita$|quien_?invita|invitador|invitante|anfitri|host|sender/.test(n)) return "invita"
+    if (/hogar|household|familia|home/.test(n)) return "hogar"
     if (/nombre|name|usuario|cliente/.test(n)) return "nombre"
     if (/monto|valor|amount|precio/.test(n)) return "monto"
     if (/cant|num|total|count|avisos?$/.test(n)) return "cantidad"

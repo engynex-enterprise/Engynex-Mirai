@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { ImagePlus, Send, X } from "lucide-react"
+import { ImagePlus, Send } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
-import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { SubmitButton } from "@/components/mirai/submit-button"
+import { IconButton } from "@/components/mirai/tip"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { FormField } from "@/components/mirai/field"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
@@ -67,9 +68,11 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
     setFile(f)
   }
 
+  // Calificar pide las estrellas (el comentario es opcional); los demás tipos piden un mensaje de al menos 3 letras.
+  const falta = tipo === "calificacion" ? (!rating ? "Elige de 1 a 5 estrellas" : null) : mensaje.trim().length < 3 ? "Cuéntanos un poco más (al menos 3 letras)" : null
+
   const send = async () => {
-    if (tipo === "calificacion" && !rating) return toast.error("Elige de 1 a 5 estrellas")
-    if (tipo !== "calificacion" && mensaje.trim().length < 3) return toast.error("Cuéntanos un poco más")
+    if (falta || busy) return
     setBusy(true)
     const sb = createClient()
     let captura: string | null = null
@@ -104,7 +107,10 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
         </div>
       )}
       <FormField label={t.pregunta} htmlFor="fb-msg" required={tipo !== "calificacion"} tip={false}>
-        <Textarea id="fb-msg" rows={4} maxLength={4000} placeholder={t.placeholder} value={mensaje} onChange={(e) => setMensaje(e.target.value)} />
+        <Textarea id="fb-msg" rows={4} maxLength={4000} placeholder={t.placeholder} value={mensaje} onChange={(e) => setMensaje(e.target.value)} aria-describedby="fb-msg-hint" />
+        <p id="fb-msg-hint" className="flex justify-between gap-2 text-[12.5px] text-muted-foreground">
+          <span>{tipo !== "calificacion" && falta ? falta : ""}</span><span className="tabular-nums">{mensaje.length.toLocaleString("es-CO")}/4.000</span>
+        </p>
       </FormField>
       {(tipo === "error" || tipo === "sugerencia" || tipo === "funcion") && (
         <div className="grid gap-2">
@@ -114,7 +120,7 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview ?? ""} alt="Captura adjunta" className="size-14 rounded-md object-cover" />
               <p className="min-w-0 flex-1 truncate text-sm">{file.name}</p>
-              <Button size="icon-sm" variant="ghost" aria-label="Quitar la captura" onClick={() => setFile(null)}><X /></Button>
+              <IconButton size="icon-sm" icon="x" label="Quitar la captura" onClick={() => setFile(null)} destructive />
             </div>
           ) : (
             <Button type="button" variant="outline" className="w-fit" onClick={() => input.current?.click()}><ImagePlus /> Adjuntar una captura (opcional)</Button>
@@ -128,7 +134,7 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
       <p className="text-xs text-muted-foreground">También incluimos la versión de Mirai y tu tipo de pantalla. Nunca enviamos tus montos ni tus datos financieros.</p>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onDone}>Cancelar</Button>
-        <Button onClick={send} disabled={busy}>{busy ? <Spinner /> : <Send />} Enviar</Button>
+        <SubmitButton disabled={!!falta} loading={busy} loadingText="Enviando…" onClick={send} hint={falta ?? undefined}><Send /> Enviar</SubmitButton>
       </div>
     </FieldGroup>
   )

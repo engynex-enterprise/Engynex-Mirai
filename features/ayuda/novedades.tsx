@@ -5,19 +5,20 @@ import { CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { Icon } from "@/components/mirai/icon"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { Tip } from "@/components/mirai/tip"
+import { ToneIcon, type IconTone } from "@/components/mirai/tone-icon"
 import { APP_VER, RELEASES, type ReleaseItem } from "@/lib/content/ayuda"
 import { filtrarNovedades, releaseKey, type KindFilter } from "@/lib/content/centro-ayuda"
 import { cn } from "@/lib/utils"
 import { AppLink, Chips, Empty, ListSkeleton, SearchBox } from "./ui"
 import { useAyuda, useMarcarVersionVista } from "./use-ayuda"
 
-export const KIND: Record<ReleaseItem[0], { icon: string; label: string; plural: string; tone: "pagado" | "info" | "porVencer" }> = {
-  new: { icon: "sparkles", label: "Nuevo", plural: "nuevos", tone: "pagado" },
-  imp: { icon: "trending-up", label: "Mejora", plural: "mejoras", tone: "info" },
-  fix: { icon: "wrench", label: "Corrección", plural: "correcciones", tone: "porVencer" },
+export const KIND: Record<ReleaseItem[0], { icon: string; label: string; plural: string; tone: "pagado" | "info" | "porVencer"; color: IconTone; desc: string }> = {
+  new: { icon: "sparkles", label: "Nuevo", plural: "nuevos", tone: "pagado", color: "green", desc: "Algo que antes no existía en Mirai" },
+  imp: { icon: "trending-up", label: "Mejora", plural: "mejoras", tone: "info", color: "blue", desc: "Algo que ya existía y ahora funciona mejor" },
+  fix: { icon: "wrench", label: "Corrección", plural: "correcciones", tone: "porVencer", color: "amber", desc: "Un error que arreglamos" },
 }
 
 /** Novedades por versión: etiquetas, filtro, marcar como leído y contador de no leídas. `compact` = panel. */
@@ -86,12 +87,12 @@ export function NovedadesModule({ compact = false }: { compact?: boolean }) {
                     const isNew = unread.has(key)
                     return (
                       <li key={t} className="flex gap-3">
-                        <span className="relative grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-                          <Icon name={KIND[k].icon} className="size-4" />
+                        <span className="relative shrink-0">
+                          <ToneIcon icon={KIND[k].icon} tone={KIND[k].color} size="sm" />
                           {isNew && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-expense ring-2 ring-card" aria-hidden />}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className={cn("font-medium break-words", !isNew && ready && "text-foreground/90")}>{t} <StatusPill tone={KIND[k].tone} className="ml-1 h-5 align-middle">{KIND[k].label}</StatusPill>{isNew && <span className="sr-only"> (sin leer)</span>}</p>
+                          <p className={cn("font-medium break-words", !isNew && ready && "text-foreground/90")}>{t} <Tip label={KIND[k].desc}><span className="ml-1 inline-flex align-middle"><StatusPill tone={KIND[k].tone} className="h-5">{KIND[k].label}</StatusPill></span></Tip>{isNew && <span className="sr-only"> (sin leer)</span>}</p>
                           <p className="text-sm break-words text-muted-foreground">{d}</p>
                           {isNew && <Button size="xs" variant="link" className="h-6 px-0" onClick={() => marcarLeidas([key])} aria-label={`Marcar como leída: ${t}`}>Marcar como leída</Button>}
                         </div>

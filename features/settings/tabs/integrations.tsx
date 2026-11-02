@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { CircleCheck, CircleX, ExternalLink, FlaskConical, Settings2, Trash2 } from "lucide-react"
+import { CircleCheck, CircleX, ExternalLink, FlaskConical, Lock, Settings2, Trash2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -17,7 +17,13 @@ import { BrandLogo } from "@/components/mirai/brand-logo"
 import { Icon } from "@/components/mirai/icon"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { SubmitButton } from "@/components/mirai/submit-button"
+import { Tip } from "@/components/mirai/tip"
+import { ToneIcon } from "@/components/mirai/tone-icon"
+import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
+import { Notice } from "@/components/mirai/notice"
 import { useApp } from "@/components/app/app-context"
+import { can } from "@/lib/household/roles"
 import { createClient } from "@/utils/supabase/client"
 import { CATS, CLIENT_INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
 import { deleteIntegration, listModels, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/actions"
@@ -27,6 +33,11 @@ import { cn } from "@/lib/utils"
 
 type Pub = { kind: string; enabled: boolean; config: Record<string, unknown>; meta: Record<string, unknown> }
 const FREE = { gratis: ["pagado", "Gratis"], "plan-gratis": ["estimado", "Plan gratis"], pago: ["gray", "De pago"] } as const
+const FREE_TIP = {
+  gratis: "No cuesta nada usarlo.",
+  "plan-gratis": "Tiene un plan gratis con un límite de uso; si lo pasas, el proveedor puede cobrar.",
+  pago: "El proveedor cobra por uso en tu cuenta con él.",
+} as const
 
 /** Integraciones que ofrece la plataforma (sin secretos). */
 function useGlobalIntegrations() {
@@ -61,7 +72,18 @@ function useModels(kind: string, typedKey: string, hasSaved: boolean) {
   return { ...q, ready, loading: ready && q.isFetching }
 }
 
-function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef; cur?: Pub; onClose: () => void }) {
+/** Campos obligatorios que aún faltan (una clave guardada cuenta como llena). */
+function missingFields(def: IntegrationDef, vals: Record<string, string | number | boolean>, cur: Pub | undefined, modelVal: string) {
+  return def.fields.filter((f) => {
+    if (!f.required || f.type === "boolean") return false
+    if (f.type === "secret") return !String(vals[f.k] ?? "").trim() && !cur?.meta?.[f.k]
+    if (f.type === "model") return !modelVal
+    const x = f.k in vals ? vals[f.k] : (cur?.config?.[f.k] as string | undefined) ?? f.def ?? ""
+    return !String(x).trim()
+  })
+}
+
+function ConfigDialog({ def, cur, open, onOpenChange }: { def: IntegrationDef; cur?: Pub; open: boolean; onOpenChange: (o: boolean) => void }) {
   const { household } = useApp()
   const qc = useQueryClient()
   const [vals, setVals] = useState<Record<string, string | number | boolean>>({})
@@ -73,14 +95,19 @@ function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef; cur?: Pub; o
   const list = models.data?.ok ? models.data.models : []
   const savedModel = String(v("model", def.fields.find((f) => f.k === "model")?.def))
   const modelVal = "model" in vals || !list.length || list.some((m) => m.value === savedModel) ? savedModel : models.data?.rec ?? savedModel
-  const save = (enabled: boolean) => start(async () => {
-    try { await saveIntegration(def.kind, hasModel ? { ...vals, model: modelVal } : vals, enabled); toast.success(`${def.n} guardado`); qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] }); onClose() }
+  const missing = missingFields(def, vals, cur, modelVal)
+  const close = () => onOpenChange(false)
+  const save = () => start(async () => {
+    try { await saveIntegration(def.kind, hasModel ? { ...vals, model: modelVal } : vals, true); toast.success(`${def.n} guardado`); qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] }); close() }
     catch (e) { toast.error("No se pudo guardar", { description: (e as Error).message }) }
   })
   return (
-    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} title={`Configurar ${def.n}`} description={def.d}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={`Configurar ${def.n}`} description={def.d}
+      footer={<><Button variant="outline" onClick={close}>Cancelar</Button>
+        <SubmitButton onClick={save} disabled={missing.length > 0} loading={pending} hint={missing.length ? `Falta: ${missing.map((f) => f.l).join(", ")}` : undefined}>Guardar y activar</SubmitButton></>}>
+      <form className="contents" onSubmit={(e) => { e.preventDefault(); if (!missing.length && !pending) save() }}>
       <FieldGroup className="pb-2">
-        {def.url && <a href={def.url} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-sm text-link underline">Dónde obtener los datos <ExternalLink className="size-3.5" /></a>}
+        {def.url && <a href={def.url} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-sm text-link underline">Dónde obtener los datos <ExternalLink className="size-3.5" /><span className="sr-only">(se abre en otra pestaña)</span></a>}
         {!def.fields.length && <p className="text-sm text-muted-foreground">No necesita datos: solo actívala.</p>}
         {def.fields.map((f) => (
           <FormField key={f.k} label={f.l} htmlFor={`int-${f.k}`} tip={f.help ?? false} required={f.required}>
@@ -101,73 +128,103 @@ function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef; cur?: Pub; o
                   value={f.type === "secret" ? String(vals[f.k] ?? "") : String(v(f.k, f.def))} onChange={(e) => setVals({ ...vals, [f.k]: f.type === "number" ? +e.target.value : e.target.value })} />}
           </FormField>
         ))}
-        <p className="text-xs text-muted-foreground">Las claves se guardan cifradas en el servidor; nunca quedan en tu navegador.</p>
-        <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={() => save(true)} disabled={pending}>{pending && <Spinner />} Guardar y activar</Button></div>
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground"><Lock className="mt-px size-3.5 shrink-0" aria-hidden /> Las claves se guardan cifradas en el servidor; nunca quedan en tu navegador.</p>
       </FieldGroup>
+      </form>
     </ResponsiveDialog>
   )
 }
+
+type Row = { def: IntegrationDef; cur?: Pub; on: boolean; offered: boolean; locked: boolean; usesMirai: boolean; modo?: string }
+const FILTERS: ListFilter<Row>[] = [
+  { value: "todos", label: "Todos" },
+  { value: "activos", label: "Activos", match: (r) => r.on },
+  { value: "gratis", label: "Gratis o con plan gratis", match: (r) => r.def.free !== "pago" },
+]
+const SEARCH = (r: Row) => `${r.def.n} ${r.def.d}`
 
 /** Proveedores que el hogar puede configurar: solo IA (el resto lo administra Mirai en la consola). */
 export function IntegrationsTab({ only = ["ia"] }: { only?: IntegrationCategory[] }) {
   const { household, plan } = useApp()
   const qc = useQueryClient()
-  const isOwner = household.role === "owner"
+  const isOwner = can(household.access, "ajustes")
   const { data: state, isPending } = useIntegrations()
   const { data: globals } = useGlobalIntegrations()
-  const [editing, setEditing] = useState<IntegrationDef | null>(null)
+  // La ventana se cierra con su animación sin perder lo que mostraba; `n` la reinicia cada vez que se abre.
+  const [editing, setEditing] = useState<{ def: IntegrationDef; open: boolean; n: number } | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
   const refresh = () => qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] })
-  if (isPending) return <div className="grid gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
-  const cats = only.filter((c) => CLIENT_INTEGRATIONS.some((i) => i.cat === c))
+  const edit = (def: IntegrationDef) => setEditing((e) => ({ def, open: true, n: (e?.n ?? 0) + 1 }))
+  const rows = useMemo<Row[]>(() => CLIENT_INTEGRATIONS.filter((i) => only.includes(i.cat)).map((def) => {
+    const cur = state?.[def.kind]
+    const g = globals?.[def.kind]
+    const offered = !!g && g.modo !== "apagada" && (!g.planes?.length || g.planes.includes(plan.id))
+    const locked = offered && g!.modo === "obligatoria"
+    const usesMirai = offered && (locked || (g!.modo === "por_defecto" && !cur) || cur?.config?.usa_plataforma === true)
+    const on = locked || (cur ? !!cur.enabled : offered && g!.modo === "por_defecto")
+    return { def, cur, on, offered, locked, usesMirai, modo: g?.modo }
+  }), [only, state, globals, plan.id])
+  const c = useListControls(rows, { text: SEARCH, filters: FILTERS })
+  if (isPending) return <div className="grid gap-3 xl:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)}</div>
+  const cats = only.filter((x) => CLIENT_INTEGRATIONS.some((i) => i.cat === x))
 
   return (
     <div className="grid gap-6">
-      {!isOwner && <p className="rounded-lg bg-muted p-3 text-sm">Solo el dueño del hogar puede cambiar los proveedores de IA.</p>}
-      {cats.map((c) => (
-        <section key={c} className="grid gap-3">
-          <div><h3 className="flex items-center gap-2 font-semibold"><Icon name={CATS[c].icon} className="size-5 text-brand" />{CATS[c].n}</h3><p className="text-sm text-muted-foreground">{CATS[c].d}</p></div>
+      {!isOwner && <Notice tone="info" title="Solo el dueño del hogar puede cambiar los proveedores de IA">Puedes ver cuáles están activos; para cambiarlos, pídeselo a quien administra el hogar.</Notice>}
+      {rows.length > 4 && <ListToolbar c={c} placeholder="Buscar proveedor" filters={FILTERS} />}
+      {cats.map((cat) => {
+        const list = c.rows.filter((r) => r.def.cat === cat)
+        return (
+        <section key={cat} className="grid gap-3" aria-labelledby={`int-cat-${cat}`}>
+          <div className="flex items-start gap-3">
+            <ToneIcon icon={CATS[cat].icon} tone="brand" />
+            <div className="grid gap-0.5"><h3 id={`int-cat-${cat}`} className="text-[17px] leading-6 font-semibold">{CATS[cat].n}</h3><p className="text-sm text-muted-foreground">{CATS[cat].d}</p></div>
+          </div>
+          {!list.length ? <NoResults c={c} /> : (
           <div className="grid gap-3 xl:grid-cols-2">
-            {CLIENT_INTEGRATIONS.filter((i) => i.cat === c).map((def) => {
-              const cur = state?.[def.kind]
+            {list.map(({ def, cur, on, offered, locked, usesMirai, modo }) => {
               const meta = (cur?.meta ?? {}) as { lastOk?: boolean; lastMsg?: string }
-              const g = globals?.[def.kind]
-              const offered = !!g && g.modo !== "apagada" && (!g.planes?.length || g.planes.includes(plan.id))
-              const locked = offered && g!.modo === "obligatoria"
-              const usesMirai = offered && (locked || (g!.modo === "por_defecto" && !cur) || cur?.config?.usa_plataforma === true)
-              const on = locked || (cur ? !!cur.enabled : offered && g!.modo === "por_defecto")
+              const brand = integrationBrand(def.kind, cur?.config)
               return (
-                <Card key={def.kind} className={cn("gap-3 p-4 shadow-card ring-0", on && "ring-1 ring-brand")}>
+                <Card key={def.kind} className={cn("h-full gap-3 p-4 shadow-card ring-0", on && "ring-1 ring-brand")}>
                   <div className="flex items-start gap-3">
-                    {integrationBrand(def.kind, cur?.config) ? <BrandLogo k={integrationBrand(def.kind, cur?.config)!} size={40} className={cn(!on && "opacity-80 grayscale-[.35]")} /> : <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", on ? "bg-brand-soft text-brand" : "bg-muted text-muted-foreground")}><Icon name={def.icon} className="size-5" /></span>}
-                    <div className="grid flex-1 gap-1">
-                      <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={FREE[def.free][0]}>{FREE[def.free][1]}</StatusPill>{def.scope === "platform" && <StatusPill tone="info">Del despliegue</StatusPill>}{offered && <StatusPill tone="pagado">{locked ? "Incluida por Mirai · obligatoria" : "Incluida por Mirai"}</StatusPill>}</p>
+                    {brand ? <BrandLogo k={brand} size={40} className={cn(!on && "opacity-80 grayscale-[.35]")} /> : <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", on ? "bg-brand-soft text-brand" : "bg-muted text-muted-foreground")}><Icon name={def.icon} className="size-5" /></span>}
+                    <div className="grid min-w-0 flex-1 gap-1">
+                      <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}
+                        <Tip label={FREE_TIP[def.free]}><span><StatusPill tone={FREE[def.free][0]}>{FREE[def.free][1]}</StatusPill></span></Tip>
+                        {def.scope === "platform" && <Tip label="La configura quien administra Mirai para todos"><span><StatusPill tone="info">Del despliegue</StatusPill></span></Tip>}
+                        {offered && <Tip label={locked ? "Mirai la deja siempre activa para tu plan" : "Mirai la incluye: no necesitas clave propia"}><span><StatusPill tone="pagado">{locked ? "Incluida por Mirai · obligatoria" : "Incluida por Mirai"}</StatusPill></span></Tip>}
+                      </p>
                       <p className="text-sm text-muted-foreground">{def.d}</p>
                       {usesMirai && on && <p className="text-xs font-medium text-success">Usas el servicio de Mirai: no tienes que configurar nada.</p>}
-                      {offered && !usesMirai && g!.modo === "opcional" && !on && <p className="text-xs text-muted-foreground">Mirai la ofrece: actívala y listo, sin claves.</p>}
+                      {offered && !usesMirai && modo === "opcional" && !on && <p className="text-xs text-muted-foreground">Mirai la ofrece: actívala y listo, sin claves.</p>}
                     </div>
                     <Switch checked={on} disabled={!isOwner || locked} aria-label={`Activar ${def.n}`} onCheckedChange={async (v) => {
-                      if (v && !offered && def.fields.some((f) => f.required) && !cur?.config) return setEditing(def)
-                      try { await toggleIntegration(def.kind, v); toast(v ? `${def.n} activado` : `${def.n} apagado`); refresh() } catch (e) { toast.error((e as Error).message); setEditing(def) }
+                      if (v && !offered && def.fields.some((f) => f.required) && !cur?.config) return edit(def)
+                      try { await toggleIntegration(def.kind, v); toast(v ? `${def.n} activado` : `${def.n} apagado`); refresh() } catch (e) { toast.error((e as Error).message); edit(def) }
                     }} />
                   </div>
-                  {meta.lastMsg && <p className={cn("flex items-start gap-1.5 text-xs", meta.lastOk ? "text-success" : "text-danger")}>{meta.lastOk ? <CircleCheck className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0" />}{meta.lastMsg}</p>}
+                  {meta.lastMsg && <p role="status" className={cn("flex items-start gap-1.5 text-xs", meta.lastOk ? "text-success" : "text-danger")}>{meta.lastOk ? <CircleCheck className="size-3.5 shrink-0" aria-hidden /> : <CircleX className="size-3.5 shrink-0" aria-hidden />}{meta.lastMsg}</p>}
                   {isOwner && (
-                    <div className="flex flex-wrap gap-2">
-                      {def.fields.length > 0 && !locked && <Button size="sm" variant="outline" onClick={() => setEditing(def)}><Settings2 /> {offered ? "Usar mi propia cuenta" : "Configurar"}</Button>}
+                    <div className="mt-auto flex flex-wrap gap-2">
+                      {def.fields.length > 0 && !locked && <Button size="sm" variant="outline" onClick={() => edit(def)}><Settings2 /> {offered ? "Usar mi propia cuenta" : "Configurar"}</Button>}
                       {def.testable && on && <Button size="sm" variant="soft" disabled={testing === def.kind} onClick={async () => {
                         setTesting(def.kind); const r = await testIntegration(def.kind); setTesting(null); toast[r.ok ? "success" : "error"](r.ok ? "Conexión exitosa" : "La prueba falló", { description: r.msg }); refresh()
-                      }}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar</Button>}
-                      {cur && def.fields.length > 0 && <Button size="sm" variant="ghost" className="text-danger" onClick={async () => { await deleteIntegration(def.kind); toast("Datos borrados"); refresh() }}><Trash2 /> Borrar datos</Button>}
+                      }}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar conexión</Button>}
+                      {cur && def.fields.length > 0 && <Button size="sm" variant="ghost" className="text-danger" onClick={async () => {
+                        try { await deleteIntegration(def.kind); toast("Datos borrados"); refresh() } catch (e) { toast.error("No se pudieron borrar", { description: (e as Error).message }) }
+                      }}><Trash2 /> Borrar datos</Button>}
                     </div>
                   )}
                 </Card>
               )
             })}
           </div>
+          )}
         </section>
-      ))}
-      {editing && <ConfigDialog key={editing.kind} def={editing} cur={state?.[editing.kind]} onClose={() => setEditing(null)} />}
+        )
+      })}
+      {editing && <ConfigDialog key={`${editing.def.kind}-${editing.n}`} def={editing.def} cur={state?.[editing.def.kind]} open={editing.open} onOpenChange={(o) => setEditing((e) => (e ? { ...e, open: o } : e))} />}
     </div>
   )
 }

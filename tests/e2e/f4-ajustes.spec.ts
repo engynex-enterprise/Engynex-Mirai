@@ -67,7 +67,8 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
   await expect(page.getByText("Orden de los proveedores")).toBeVisible()
 
   await tab("hogar")
-  await expect(page.getByRole("heading", { name: "Personas con acceso" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "¿Quiénes hacen parte de tu hogar?" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Agregar persona" })).toBeVisible()
   await expect(page.getByText("(tú)")).toBeVisible()
 
   await tab("respaldo")

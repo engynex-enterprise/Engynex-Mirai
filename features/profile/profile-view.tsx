@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowDownToLine, ArrowRight, Cake, Camera, CircleCheck, CircleDashed, Flame, Gift, Mail, Medal, Palette, Pencil, Plus, Sparkles, Trash2 } from "lucide-react"
+import { ArrowDownToLine, ArrowRight, Cake, Camera, CircleCheck, CircleDashed, Flame, Medal, Palette, Pencil, Sparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -20,27 +20,27 @@ import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { Combobox } from "@/components/mirai/combobox"
 import { DatePicker } from "@/components/mirai/date-picker"
 import { FormField } from "@/components/mirai/field"
-import { Icon } from "@/components/mirai/icon"
 import { Money } from "@/components/mirai/money"
-import { MoneyInput } from "@/components/mirai/money-input"
-import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { UserAvatar } from "@/components/mirai/user-avatar"
+import { Panel, SectionTitle } from "@/components/mirai/panel"
+import { Tip } from "@/components/mirai/tip"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { ingresoMensual, totales } from "@/lib/domain"
 import { digitosDian, edad, monthName, proxCumple, todayISO } from "@/lib/format"
 import { BANNER_THEMES, type BannerThemeKey } from "@/lib/content/banners"
-import PARENT_IC from "@/lib/data/legacy-parent_ic.json"
 import { useBookData } from "@/features/book/use-book-data"
 import { useMembers, useSettings } from "@/features/catalogs/hooks"
 import { useBookSettingsSave } from "@/features/settings/prefs"
 import { useGami } from "@/features/gami/use-gami"
 import type { Row } from "@/lib/supabase/tables"
-import { CobroCard, type Cobro } from "./cobro-card"
+import { normalizarCobros } from "@/lib/domain/cobros"
+import { CobroCard } from "./cobro-card"
+import { HouseholdPeople } from "@/features/household/people"
 
-const PARENTESCOS = Object.entries(PARENT_IC as Record<string, string>).filter(([k]) => k !== "Cónyuge" && k !== "Hijo/a")
 const DOCS = [{ value: "CC", label: "Cédula de ciudadanía" }, { value: "CE", label: "Cédula de extranjería" }, { value: "PA", label: "Pasaporte" }, { value: "PPT", label: "Permiso por protección temporal" }]
 const TRABAJO = [
   { value: "empleado", label: "Empleado (con contrato)", icon: "briefcase" }, { value: "independiente", label: "Independiente o por prestación de servicios", icon: "laptop" },
@@ -56,55 +56,6 @@ function Blur({ id, value, onSave, ...rest }: { id: string; value: string; onSav
   const [prev, setPrev] = useState(value)
   if (prev !== value) { setPrev(value); setV(value) }
   return <Input id={id} className="h-11" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== value && onSave(v)} {...rest} />
-}
-
-function MemberDialog({ m, onClose }: { m: Partial<Row<"family_members">> | null; onClose: () => void }) {
-  const { household } = useApp()
-  const qc = useQueryClient()
-  const [nombre, setNombre] = useState(m?.nombre ?? "")
-  const [rol, setRol] = useState(m?.rol ?? "")
-  const [avatar, setAvatar] = useState<string | null>(m?.avatar || null)
-  const [nac, setNac] = useState<string | null>(m?.nacimiento ?? null)
-  const [pick, setPick] = useState(false)
-  const [tiene, setTiene] = useState(+(m?.cupo ?? 0) > 0 ? "si" : "no")
-  const [cupo, setCupo] = useState(+(m?.cupo ?? 0))
-  const [busy, setBusy] = useState(false)
-  const opts = [...PARENTESCOS, ...(rol && !PARENTESCOS.some(([k]) => k === rol) ? [[rol, (PARENT_IC as Record<string, string>)[rol] ?? "user"]] : [])].map(([k, i]) => ({ value: k, label: k, icon: i }))
-  const save = async () => {
-    if (!nombre.trim()) return toast.error("Escribe el nombre")
-    setBusy(true)
-    const row = { nombre: nombre.trim(), rol: rol || "Otro familiar", cupo: tiene === "si" ? cupo : 0, avatar: avatar ?? "", nacimiento: nac }
-    const sb = createClient()
-    const { error } = m?.id ? await sb.from("family_members").update(row).eq("id", m.id) : await sb.from("family_members").insert({ ...row, household_id: household.id })
-    setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.message })
-    toast.success(m?.id ? `Se actualizaron los datos de ${row.nombre}.` : `${row.nombre} ya hace parte de tu familia en Mirai.`)
-    qc.invalidateQueries({ queryKey: ["h", household.id, "family_members"] })
-    onClose()
-  }
-  return (
-    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} title={m?.id ? "Editar integrante" : "Agregar integrante"} mdesc="miembro"
-      description="Agrega a las personas del hogar. Así puedes registrar quién hizo cada gasto y, si quieres, darle a cada uno un presupuesto mensual."
-      footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={save} disabled={busy}>{busy && <Spinner />}{m?.id ? "Guardar cambios" : "Agregar"}</Button></>}>
-      <FieldGroup>
-        <div className="flex items-center gap-4">
-          <button type="button" onClick={() => setPick(true)} aria-label="Elegir avatar del integrante" className="group relative rounded-[22%] outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <UserAvatar src={avatar} name={nombre || "?"} square className="size-20" fallbackClassName="text-xl" />
-            <span className="absolute -right-1 -bottom-1 grid size-7 place-items-center rounded-full bg-secondary ring-2 ring-popover"><Pencil className="size-3.5" /></span>
-          </button>
-          <p className="text-sm text-muted-foreground">Escoge un avatar para reconocer a esta persona de un vistazo.</p>
-        </div>
-        <FormField label="Nombre" htmlFor="mm-n" required tip={false}><Input id="mm-n" className="h-11" placeholder="Ej. Sofía" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus /></FormField>
-        <FormField label="¿Qué es para ti?" htmlFor="mm-rol" tip="El parentesco o la relación de esta persona contigo."><Combobox id="mm-rol" value={rol} onChange={setRol} options={opts} placeholder="Elige el parentesco" /></FormField>
-        <FormField label="Fecha de nacimiento (opcional)" htmlFor="mm-nac" tip="Te recordamos su cumpleaños con tiempo para planear el regalo."><DatePicker id="mm-nac" quick="ninguno" clearable years={[1920, new Date().getFullYear()]} startAt="2010-01-01" placeholder="Elige la fecha" value={nac} onChange={setNac} /></FormField>
-        <FormField label="¿Quieres darle un presupuesto mensual?" tip={false} hint="Si tiene un límite, Mirai te avisa cuando se acerque o se pase.">
-          <ChoiceCards value={tiene} onChange={setTiene} items={[{ value: "no", label: "No, gasta del dinero de la casa", icon: "house" }, { value: "si", label: "Sí, tiene un límite al mes", icon: "wallet" }]} />
-        </FormField>
-        {tiene === "si" && <FormField label="Presupuesto al mes" htmlFor="mm-c" tip="Lo máximo que esta persona puede gastar al mes en sus cosas. Mirai te avisa si se pasa."><MoneyInput id="mm-c" value={cupo} onChange={setCupo} /></FormField>}
-      </FieldGroup>
-      <AvatarPicker open={pick} onOpenChange={setPick} value={avatar} name={nombre || "?"} onPick={setAvatar} title={`Avatar de ${nombre || "este integrante"}`} />
-    </ResponsiveDialog>
-  )
 }
 
 /** Portada del perfil con el degradado elegido y figuras suaves (sin logos ni fotos). */
@@ -126,7 +77,7 @@ function Cover({ theme, children }: { theme: BannerThemeKey; children?: React.Re
 }
 
 export function ProfileView() {
-  const { user, household } = useApp()
+  const { user } = useApp()
   const router = useRouter()
   const bookId = useBookId()
   const canEdit = useCanEdit()
@@ -136,7 +87,6 @@ export function ProfileView() {
   const { data: cfg } = useSettings()
   const saveCfg = useBookSettingsSave()
   const gami = useGami()
-  const [edit, setEdit] = useState<Partial<Row<"family_members">> | null | undefined>(undefined)
   const [picker, setPicker] = useState(false)
   const [linking, setLinking] = useState(false)
   const key = ["profile-full", user.id]
@@ -152,11 +102,12 @@ export function ProfileView() {
   })
   if (!p || !book) return <PageSkeleton kpis={0} />
 
-  const save = async (patch: Partial<Row<"profiles">>, msg = "Guardado") => {
+  const save = async (patch: Partial<Row<"profiles">>, msg: string | false = "Guardado") => {
     qc.setQueryData(key, { ...p, ...patch })
     const { error } = await createClient().from("profiles").update(patch).eq("id", user.id)
     if (error) return toast.error("No se pudo guardar", { description: error.message })
-    toast(msg); qc.invalidateQueries({ queryKey: ["profile", user.id] })
+    if (msg) toast(msg)
+    qc.invalidateQueries({ queryKey: ["profile", user.id] })
     // El menú lateral, el saludo y la presencia leen el perfil en el servidor
     if ("avatar_url" in patch || "nombre" in patch || "apodo" in patch || "nacimiento" in patch) router.refresh()
   }
@@ -182,15 +133,15 @@ export function ProfileView() {
   // Qué tan completo está el perfil (cada dato mejora avisos, fechas DIAN o consejos)
   const checks: [boolean, string, string][] = [
     [!!p.avatar_url, "Elige tu avatar o foto", "avatar"],
-    [!!p.nombre.trim(), "Tu nombre completo", "pf-n"],
-    [!!p.apodo.trim(), "Cómo quieres que te digamos", "pf-a"],
+    [!!(p.nombre ?? "").trim(), "Tu nombre completo", "pf-n"],
+    [!!(p.apodo ?? "").trim(), "Cómo quieres que te digamos", "pf-a"],
     [!!p.nacimiento, "Tu fecha de nacimiento", "pf-nac"],
     [!!p.ciudad, "Tu ciudad", "pf-ciudad"],
     [!!p.telefono, "Tu teléfono", "pf-t"],
     [!!p.doc, "Tu número de documento", "pf-doc"],
     [/^\d{2}$/.test(p.digitos), p.doc_tipo === "CC" ? "Tu cédula (de ahí salen tus fechas DIAN)" : "Los 2 últimos dígitos de tu NIT (fechas DIAN)", p.doc_tipo === "CC" ? "pf-doc" : "pf-d"],
     [!!p.trabajo, "Tu situación laboral", "pf-tr"],
-    [(p.cobro as Cobro[]).length > 0, "Un medio para recibir pagos", "cobro"],
+    [normalizarCobros(p.cobro).length > 0, "Un medio para recibir pagos", "cobro"],
     [!!cfg?.meta, "Tu meta financiera principal", "pf-m"],
   ]
   const done = checks.filter(([ok]) => ok).length
@@ -201,12 +152,7 @@ export function ProfileView() {
     const el = document.getElementById(id) ?? document.querySelector<HTMLElement>(`[id^="${id}"]`)
     el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.focus()
   }
-  const del = async (m: Row<"family_members">) => {
-    const sb = createClient()
-    await sb.from("family_members").update({ deleted_at: new Date().toISOString() }).eq("id", m.id)
-    qc.invalidateQueries({ queryKey: ["h", household.id, "family_members"] })
-    toast("Integrante eliminado", { description: `“${m.nombre}”`, action: { label: "Deshacer", onClick: async () => { await sb.from("family_members").update({ deleted_at: null }).eq("id", m.id); qc.invalidateQueries({ queryKey: ["h", household.id, "family_members"] }) } } })
-  }
+
 
   return (
     <div className="grid gap-6">
@@ -255,8 +201,7 @@ export function ProfileView() {
         onPick={(v) => save({ avatar_url: v }, "Avatar actualizado")} />
 
       <section className="grid items-start gap-6 lg:grid-cols-[2fr_1fr]">
-        <Card className="gap-4 p-5 shadow-card ring-0">
-          <h2 className="font-semibold">Tus datos</h2>
+        <Panel title="Tus datos" icon="id-card" description="Se guardan solos al salir de cada campo." className="h-auto">
           <FieldGroup>
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField label="Nombre completo" htmlFor="pf-n" tip={false}><Blur id="pf-n" value={p.nombre} onSave={(v) => save({ nombre: v.trim() })} /></FormField>
@@ -284,19 +229,17 @@ export function ProfileView() {
             </FormField>
             <FormField label="Tu meta financiera principal" htmlFor="pf-m" tip={false}><Blur id="pf-m" disabled={!canEdit} placeholder="Ej. Comprar casa en 5 años" value={cfg?.meta ?? ""} onSave={(v) => saveCfg.mutate({ meta: v })} /></FormField>
           </FieldGroup>
-        </Card>
+        </Panel>
 
         <div className="grid gap-6">
-          <Card className="gap-3 p-5 shadow-card ring-0">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="font-semibold">Tu perfil está al {pct} %</h2>
-              <span className="text-sm text-muted-foreground">{done} de {checks.length}</span>
-            </div>
+          <Panel className="h-auto">
+            <SectionTitle icon="circle-check" action={<span className="text-sm text-muted-foreground tabular-nums">{done} de {checks.length}</span>}>Tu perfil está al {pct} %</SectionTitle>
             <Progress value={pct} className="h-2" aria-label={`Perfil completo al ${pct} %`} />
             {pct < 100 ? (
               <ul className="grid gap-0.5">
                 {checks.map(([ok, label, id]) => (
-                  <li key={id}>
+                  // Dos pasos pueden llevar al mismo campo (documento y dígitos DIAN): la clave es el texto, no el campo.
+                  <li key={`${id}-${label}`}>
                     <button type="button" disabled={ok} onClick={() => focus(id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm hover:bg-hover disabled:hover:bg-transparent">
                       {ok ? <CircleCheck className="size-4 shrink-0 text-success" /> : <CircleDashed className="size-4 shrink-0 text-muted-foreground" />}
                       <span className={ok ? "text-muted-foreground line-through" : ""}>{label}</span>
@@ -305,27 +248,25 @@ export function ProfileView() {
                 ))}
               </ul>
             ) : <p className="text-sm text-muted-foreground">¡Todo listo! Con tu perfil completo, los avisos, las fechas DIAN y los consejos son más precisos.</p>}
-          </Card>
+          </Panel>
 
-          <Card className="gap-3 p-5 shadow-card ring-0">
-            <h2 className="flex items-center gap-2 font-semibold"><Gift className="size-4 text-brand" /> Próximos cumpleaños</h2>
+          <Panel title="Próximos cumpleaños" icon="gift" className="h-auto">
             {!cumples.length ? <p className="text-sm text-muted-foreground">Agrega tu fecha de nacimiento y la de cada integrante para recordarte sus cumpleaños con tiempo.</p> : (
               <ul className="grid gap-1">
                 {cumples.slice(0, 5).map((x) => (
                   <li key={x.id} className="flex items-center gap-3 rounded-lg p-1.5">
                     <UserAvatar src={x.avatar} name={x.nombre} square className="size-10" fallbackClassName="text-xs" />
                     <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{x.nombre}</p><p className="text-xs text-muted-foreground">Cumple {x.c.años} años</p></div>
-                    <StatusPill tone={x.c.dias === 0 ? "warn" : x.c.dias <= 15 ? "info" : "gray"}>{x.c.dias === 0 ? "¡Hoy!" : x.c.dias === 1 ? "Mañana" : `En ${x.c.dias} días`}</StatusPill>
+                    <Tip label={x.nacimiento ? `Cumple el ${new Date(`${x.nacimiento}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "long" })}` : undefined}><span><StatusPill tone={x.c.dias === 0 ? "warn" : x.c.dias <= 15 ? "info" : "gray"}>{x.c.dias === 0 ? "¡Hoy!" : x.c.dias === 1 ? "Mañana" : `En ${x.c.dias} días`}</StatusPill></span></Tip>
                   </li>
                 ))}
               </ul>
             )}
-          </Card>
+          </Panel>
 
-          <Card className="gap-3 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Cuentas conectadas</h2>
+          <Panel title="Cuentas conectadas" icon="link" className="h-auto">
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-[28%] bg-secondary"><Mail className="size-5" /></span>
+              <ToneIcon icon="mail" tone="blue" className="rounded-[28%]" />
               <div className="min-w-0 flex-1"><p className="text-sm font-medium">Correo</p><p className="truncate text-xs text-muted-foreground">{user.email}</p></div>
               <StatusPill tone="ok">Activa</StatusPill>
             </div>
@@ -334,11 +275,10 @@ export function ProfileView() {
               <div className="min-w-0 flex-1"><p className="text-sm font-medium">Google</p><p className="truncate text-xs text-muted-foreground">{google ? (google.identity_data?.email as string) ?? "Conectada" : "Entra con un toque y usa tu foto de Google"}</p></div>
               {google ? <StatusPill tone="ok">Conectada</StatusPill> : <Button size="sm" variant="outline" onClick={linkGoogle} disabled={linking}>{linking && <Spinner />}Vincular</Button>}
             </div>
-            <p className="text-xs text-muted-foreground">Contraseña, verificación en dos pasos y sesiones abiertas en <Link className="underline" href="/ajustes?tab=seguridad">Ajustes › Seguridad</Link>.</p>
-          </Card>
+            <p className="text-xs text-muted-foreground">Contraseña, verificación en dos pasos y sesiones abiertas en <Link className="text-link underline" href="/ajustes?tab=seguridad">Ajustes › Seguridad</Link>.</p>
+          </Panel>
 
-          <Card className="gap-3 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Resumen</h2>
+          <Panel title="Resumen" icon="chart-pie" className="h-auto">
             <div className="grid grid-cols-2 gap-2">
               {([[<Money key="i" value={ing} className="text-success" />, "Ingreso mensual"], [<Money key="p" value={T.pat} />, "Patrimonio"], [counts?.contactos ?? "—", "Contactos"], [counts?.metas ?? "—", "Metas"]] as [React.ReactNode, string][]).map(([v, l]) => <div key={l} className="rounded-lg bg-secondary/70 p-3"><p className="text-lg font-semibold tabular-nums">{v}</p><p className="text-xs text-muted-foreground">{l}</p></div>)}
             </div>
@@ -350,44 +290,18 @@ export function ProfileView() {
               </Link>
             )}
             <Button variant="outline" asChild><Link href="/ingresos"><ArrowDownToLine /> Ver mis ingresos</Link></Button>
-          </Card>
+          </Panel>
         </div>
       </section>
 
-      <CobroCard nombre={p.nombre || user.email} items={(p.cobro as Cobro[]) ?? []} onChange={(items) => save({ cobro: items as never }, "Medios de pago actualizados")} />
+      <CobroCard nombre={p.nombre || user.email} items={normalizarCobros(p.cobro)} onChange={(items, msg) => save({ cobro: items as never }, msg ?? "Medios de pago actualizados")} />
 
       {/* Integrantes como perfiles de Netflix */}
-      <Card className="gap-5 p-5 shadow-card ring-0" id="famCard">
-        <div><h2 className="text-[17px] font-bold">¿Quiénes hacen parte de tu hogar?</h2><p className="text-sm text-muted-foreground">Las personas con las que compartes el dinero de la casa. Te sirve para saber quién gasta qué y para darle a cada uno un presupuesto.</p></div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-6 min-[480px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-          {members.map((m) => (
-            <div key={m.id} className="group relative grid justify-items-center gap-2 text-center">
-              <button type="button" disabled={!canEdit} onClick={() => setEdit(m)} aria-label={`Editar ${m.nombre}`}
-                className="rounded-[22%] outline-none transition-transform duration-200 hover:scale-[1.05] focus-visible:ring-2 focus-visible:ring-ring enabled:hover:ring-4 enabled:hover:ring-foreground/60 enabled:hover:ring-offset-2 enabled:hover:ring-offset-card">
-                <UserAvatar src={m.avatar || (m.es_titular ? p.avatar_url : null)} name={m.nombre} square className="size-24" fallbackClassName="text-2xl" />
-              </button>
-              <div className="grid gap-0.5">
-                <p className="font-semibold">{m.nombre}</p>
-                <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground"><Icon name={(PARENT_IC as Record<string, string>)[m.rol] ?? "user"} className="size-3" />{m.rol}</p>
-                <p className="text-xs text-muted-foreground">{+m.cupo > 0 ? <><Money value={+m.cupo} /> al mes</> : "Sin presupuesto propio"}</p>
-                {(() => { const c = proxCumple(m.es_titular ? p.nacimiento : m.nacimiento); return c && c.dias <= 30 ? <p className="flex items-center justify-center gap-1 text-xs font-semibold text-brand"><Cake className="size-3" />{c.dias === 0 ? "¡Cumple hoy!" : `Cumple en ${c.dias} días`}</p> : null })()}
-              </div>
-              {canEdit && !m.es_titular && (
-                <Button size="icon-sm" variant="ghost" className="absolute top-0 right-0 text-danger opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100" aria-label={`Eliminar ${m.nombre}`} onClick={() => del(m)}><Trash2 /></Button>
-              )}
-            </div>
-          ))}
-          {canEdit && (
-            <button type="button" onClick={() => setEdit(null)} className="group grid justify-items-center gap-2 text-center outline-none">
-              <span className="grid size-24 place-items-center rounded-[22%] border-2 border-dashed border-muted-foreground/40 text-muted-foreground transition group-hover:scale-[1.05] group-hover:border-foreground/60 group-hover:text-foreground group-focus-visible:ring-2 group-focus-visible:ring-ring">
-                <Plus className="size-9" />
-              </span>
-              <span className="font-semibold text-muted-foreground group-hover:text-foreground">Agregar integrante</span>
-            </button>
-          )}
-        </div>
-      </Card>
-      {edit !== undefined && <MemberDialog m={edit} onClose={() => setEdit(undefined)} />}
+      <Panel id="famCard" title="¿Quiénes hacen parte de tu hogar?" icon="users" className="h-auto gap-5"
+        description="Las personas con las que compartes el dinero de la casa. Te sirve para saber quién gasta qué y para darle a cada uno un presupuesto."
+        action={<Button variant="ghost" size="sm" asChild><Link href="/ajustes?tab=hogar">Roles e invitaciones</Link></Button>}>
+        <HouseholdPeople layout="grid" showMatrix={false} />
+      </Panel>
     </div>
   )
 }

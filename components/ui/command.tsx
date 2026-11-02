@@ -149,11 +149,16 @@ function CommandSeparator({
 function CommandItem({
   className,
   children,
+  keywords,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+}: Omit<React.ComponentProps<typeof CommandPrimitive.Item>, "keywords"> & {
+  /** Ajuste Mirai: se aceptan valores vacíos (null/undefined) y se descartan; cmdk hace .trim() a cada uno y se caía. */
+  keywords?: (string | null | undefined)[]
+}) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
+      keywords={keywords?.filter((k): k is string => typeof k === "string" && k !== "")}
       className={cn(
         "group/command-item relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-lg! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
         className

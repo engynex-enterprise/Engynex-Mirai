@@ -246,6 +246,9 @@ export const ATAJOS: Atajo[] = [
   { id: "ayuda", keys: ["?"], d: "Abrir el Centro de ayuda", donde: "Cuando no estás escribiendo en un campo" },
   { id: "menu", keys: ["Mod", "B"], d: "Contraer o expandir el menú lateral", donde: "En computador" },
   { id: "cerrar", keys: ["Esc"], d: "Cerrar la ventana, el panel o el buscador abierto", donde: "En cualquier ventana" },
+  { id: "chat-nueva", keys: ["Mod", "Shift", "O"], d: "Nueva conversación con Mirai", donde: "En el Consejero o con el chat abierto" },
+  { id: "chat-buscar", keys: ["Mod", "K"], d: "Buscar en tus conversaciones (presiónalo otra vez para buscar en todo Mirai)", donde: "En el Consejero" },
+  { id: "chat-historial", keys: ["↑", "↓", "Enter"], d: "Moverte por el historial de conversaciones y abrir una (tecla de menú o clic derecho para sus opciones)", donde: "En el historial del Consejero" },
   { id: "resultados", keys: ["↑", "↓", "Enter"], d: "Moverte entre los resultados del buscador y abrir uno", donde: "En el buscador" },
   { id: "campos", keys: ["Tab"], d: "Pasar al siguiente campo de un formulario (Shift + Tab para volver)", donde: "En formularios" },
 ]

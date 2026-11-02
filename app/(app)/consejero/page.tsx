@@ -1,10 +1,10 @@
 import { Suspense } from "react"
-import { PageSkeleton } from "@/components/skeletons/page-skeleton"
-import { PremiumGate } from "@/features/planes/premium"
-import { AdvisorView } from "@/features/advisor/advisor-view"
+import { AdvisorSkeleton, AdvisorView } from "@/features/advisor/advisor-view"
 
 export const metadata = { title: "Consejero" }
 
+// El chat funciona en todos los planes: en Gratis responde con los datos del libro (algoritmos) y muestra una invitación
+// a Premium para lo que necesita IA (features/advisor/advisor-view.tsx › FreeBanner y app/api/chat).
 export default function Page() {
-  return <Suspense fallback={<PageSkeleton kpis={0} />}><PremiumGate feature="ia" section="consejero" title="Consejero IA"><AdvisorView /></PremiumGate></Suspense>
+  return <Suspense fallback={<AdvisorSkeleton />}><AdvisorView /></Suspense>
 }

@@ -5,6 +5,7 @@ import { Compass, Receipt, ShieldCheck, Users, X } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { WelcomeArt } from "@/components/mirai/welcome-art"
+import { Tip } from "@/components/mirai/tip"
 import { useApp } from "@/components/app/app-context"
 import { usePrefs } from "@/features/settings/prefs"
 
@@ -57,7 +58,9 @@ export function WelcomeDialog() {
           </div>
           <div className="relative order-1 h-56 md:order-2 md:h-auto md:min-h-[640px]">
             <WelcomeArt className="absolute inset-0 size-full" />
-            <Button size="icon" variant="outline" aria-label="Cerrar" className="absolute top-4 right-4 size-11 rounded-xl bg-white text-meta-text shadow-sm hover:bg-white" onClick={() => done()}><X className="size-6" /></Button>
+            <Tip label="Cerrar" side="left">
+              <Button size="icon" variant="outline" aria-label="Cerrar" className="absolute top-4 right-4 size-11 rounded-xl bg-white text-meta-text shadow-sm hover:bg-white" onClick={() => done()}><X className="size-6" /></Button>
+            </Tip>
           </div>
         </div>
       </DialogContent>

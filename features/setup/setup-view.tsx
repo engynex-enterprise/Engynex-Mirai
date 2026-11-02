@@ -8,10 +8,11 @@ import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Skeleton } from "@/components/ui/skeleton"
+import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
@@ -31,14 +32,7 @@ export function SetupView() {
     if (msg) toast(msg)
   }
 
-  if (isPending || !data)
-    return (
-      <div className="grid gap-6" aria-busy>
-        <Skeleton className="h-44 w-full rounded-xl" />
-        <Skeleton className="h-28 w-full rounded-xl" />
-        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
-      </div>
-    )
+  if (isPending || !data) return <PageSkeleton kpis={0} rows={9} />
 
   const { steps, done, total, next, setup } = data
   return (
@@ -54,7 +48,7 @@ export function SetupView() {
 
       {next ? (
         <div className="rounded-xl bg-[linear-gradient(135deg,#1F2B4B,#9EDB4E)] p-[1.5px] shadow-card">
-        <Card className="flex-col items-start gap-4 rounded-[calc(var(--radius-xl)-1px)] bg-popover p-5 ring-0 sm:flex-row sm:items-center">
+        <Card className="flex-col items-start gap-4 rounded-[calc(var(--radius-xl)-1px)] bg-popover p-5 shadow-none ring-0 sm:flex-row sm:items-center">
           <IsoIcon k={next.iso} size={56} />
           <div className="grid flex-1 gap-1">
             <span className="text-xs font-semibold tracking-wide text-link uppercase">Siguiente paso</span>
@@ -109,6 +103,7 @@ export function SetupView() {
       </ol>
 
       <Card className="flex-col items-start gap-3 p-5 shadow-card ring-0 sm:flex-row sm:items-center">
+        <ToneIcon icon="sparkles" tone="violet" className="max-sm:hidden" />
         <p className="flex-1 text-sm text-muted-foreground">¿Quieres ver primero cómo se ve un libro lleno? Cargamos un ejemplo en un libro aparte, sin tocar tus datos.</p>
         <SampleButton />
         <Button variant="outline" onClick={async () => { await saveSetup({ ...setup, dismissed: true }, "Puedes volver a la guía desde el menú de tu perfil"); router.push("/inicio") }}>Ocultar esta guía</Button>

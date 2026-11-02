@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { FileUp, History, Sparkles, Upload } from "lucide-react"
@@ -23,9 +23,10 @@ import { qk } from "@/lib/supabase/tables"
 import { localCat, localHormiga, parseCSV, type CsvRow } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, useSettings } from "@/features/catalogs/hooks"
+import { classifyBatch } from "@/features/expenses/use-ai-category"
 import { importV4Backup } from "./actions"
 
-type Row = CsvRow & { hormiga: boolean; dup: boolean }
+type Row = CsvRow & { hormiga: boolean; dup: boolean; manual?: boolean; src?: "ia" | null }
 
 /** Extracto de ejemplo (los 8 movimientos de SAMPLE_CSV de la v4) con fechas recientes. */
 function sampleCsv() {
@@ -70,6 +71,7 @@ export function ImportView() {
   const [err, setErr] = useState<string | null>(null)
   const [quien, setQuien] = useState("familia")
   const [busy, setBusy] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
   const [v4Pending, startV4] = useTransition()
   const umbral = Number(cfg?.umbral ?? 25000)
 
@@ -80,10 +82,31 @@ export function ImportView() {
     const key = (f: string, d: string, v: number) => `${f}|${d.toLowerCase().trim()}|${Math.round(v)}`
     const seen = new Set(history.map((g) => key(g.fecha, g.descripcion, Number(g.valor))))
     setSkipped(r.skipped ?? 0)
-    setRows(r.rows.map((x) => {
+    const base: Row[] = r.rows.map((x) => {
       const cat = x.category_id ?? localCat(x.descripcion, { rules, expenses: history, categories: cats })?.category_id ?? null
       const dup = seen.has(key(x.fecha, x.descripcion, x.valor))
       return { ...x, category_id: cat, incl: x.incl && !dup, dup, hormiga: localHormiga({ descripcion: x.descripcion, valor: x.valor, category_id: cat, fixed_expense_id: null } as never, cats, umbral) }
+    })
+    setRows(base)
+    void categorizeAI(base)
+  }
+
+  // La IA decide siempre la categoría (lo local va como "categoría probable"); respeta lo que la persona cambió a mano.
+  // Sin IA (apagada o plan Gratis) queda la categoría local.
+  const run = useRef(0)
+  const categorizeAI = async (base: Row[]) => {
+    const id = ++run.current
+    const todo = base.map((x, i) => ({ x, i })).filter(({ x }) => !x.dup)
+    if (!todo.length) return
+    setAiBusy(true)
+    const ai = await classifyBatch(todo.map(({ x }) => ({ descripcion: x.descripcion, valor: x.valor })), history)
+    if (id !== run.current) return
+    setAiBusy(false)
+    if (!ai) return
+    setRows((rs) => rs && rs.map((x, j) => {
+      const k = todo.findIndex((t) => t.i === j)
+      const a = k >= 0 ? ai.find((y) => y.i === k) : undefined
+      return a && !x.manual ? { ...x, category_id: a.category_id ?? x.category_id, hormiga: a.hormiga ?? x.hormiga, src: a.category_id ? "ia" : x.src } : x
     }))
   }
 
@@ -134,7 +157,7 @@ export function ImportView() {
         <Card className="shadow-card ring-0">
           <CardHeader>
             <CardTitle className="text-base">Revisa antes de importar</CardTitle>
-            <CardDescription>{sel.length} de {rows.length} seleccionados · {skipped} líneas ignoradas{rows.some((r) => r.dup) && ` · ${rows.filter((r) => r.dup).length} ya estaban registrados (desmarcados)`}</CardDescription>
+            <CardDescription>{sel.length} de {rows.length} seleccionados · {skipped} líneas ignoradas{rows.some((r) => r.dup) && ` · ${rows.filter((r) => r.dup).length} ya estaban registrados (desmarcados)`}{aiBusy && " · categorizando con IA…"}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
             <div className="hidden overflow-x-auto md:block">
@@ -147,7 +170,7 @@ export function ImportView() {
                       <TableCell>{fmtDate(r.fecha)}</TableCell>
                       <TableCell className="font-medium">{r.descripcion}{r.dup && <span className="ml-2 text-xs text-warning">ya registrado</span>}</TableCell>
                       <TableCell className="text-right"><Money value={r.valor} /></TableCell>
-                      <TableCell><Combobox value={r.category_id} onChange={(v) => set(i, { category_id: v })} options={categoryOptions(cats)} className="h-9" /></TableCell>
+                      <TableCell><Combobox value={r.category_id} onChange={(v) => set(i, { category_id: v, manual: true, src: null })} options={categoryOptions(cats)} className="h-9" /></TableCell>
                       <TableCell><Checkbox checked={r.hormiga} onCheckedChange={(c) => set(i, { hormiga: c === true })} aria-label={`Hormiga ${r.descripcion}`} /></TableCell>
                     </TableRow>
                   ))}
@@ -162,7 +185,7 @@ export function ImportView() {
                     <span className="grid flex-1"><b>{r.descripcion}</b><span className="text-xs text-muted-foreground">{fmtDate(r.fecha)}{r.dup && " · ya registrado"}</span></span>
                     <Money value={r.valor} className="font-bold" />
                   </label>
-                  <Combobox value={r.category_id} onChange={(v) => set(i, { category_id: v })} options={categoryOptions(cats)} className="h-9" />
+                  <Combobox value={r.category_id} onChange={(v) => set(i, { category_id: v, manual: true, src: null })} options={categoryOptions(cats)} className="h-9" />
                   <label className="flex items-center gap-2 text-sm"><Checkbox checked={r.hormiga} onCheckedChange={(c) => set(i, { hormiga: c === true })} /> Es gasto hormiga</label>
                 </li>
               ))}

@@ -21,7 +21,8 @@ test("registro muestra medidor y exige aceptar la política", async ({ page }) =
   await page.goto("/registro")
   await page.getByLabel("Contraseña", { exact: true }).fill("abc")
   await expect(page.getByText("Muy débil").or(page.getByText("Débil"))).toBeVisible()
-  await page.getByRole("button", { name: "Crear mi cuenta" }).click()
+  // El botón queda inactivo hasta que todo esté bien (contraseña segura y política aceptada).
+  await expect(page.getByRole("button", { name: "Crear mi cuenta" })).toBeDisabled()
   await expect(page.getByText("Debes aceptar para crear tu cuenta")).toBeVisible()
   await page.screenshot({ path: `tests/.out/registro-${test.info().project.name}.png`, fullPage: true })
 })

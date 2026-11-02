@@ -33,7 +33,8 @@ test("capturas: ilustraciones y estados vacíos", async ({ page }, info) => {
 test("capturas: banner de cada módulo", async ({ page }, info) => {
   test.setTimeout(900_000)
   await login(page)
-  const ids = ["puesta", "inicio", "consejero", "balance", "ingresos", "gastos", "fijos", "tarjetas", "suscripciones", "correo", "importar",
+  // /consejero es un chat a pantalla completa (sin banner): sus capturas están en f14-chat.spec.ts.
+  const ids = ["puesta", "inicio", "balance", "ingresos", "gastos", "fijos", "tarjetas", "suscripciones", "correo", "importar",
     "me-deben", "le-debo", "contactos", "estrategia", "presupuesto", "flujo", "metas", "retos", "logros", "primas", "familia", "mesadas",
     "compartidos", "inversiones", "renta", "calendario", "contador", "recordatorios", "indicadores", "reportes", "novedades", "faq", "manual", "ajustes"]
   for (const id of ids) {

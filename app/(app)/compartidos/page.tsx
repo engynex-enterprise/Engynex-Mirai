@@ -6,5 +6,5 @@ import { CompartidosView } from "@/features/extras/compartidos-view"
 export const metadata = { title: "Gastos compartidos" }
 
 export default function Page() {
-  return <Suspense fallback={<PageSkeleton kpis={0} />}><PremiumGate feature="familia" section="compartidos" title="Gastos compartidos"><CompartidosView /></PremiumGate></Suspense>
+  return <Suspense fallback={<PageSkeleton kpis={3} />}><PremiumGate feature="familia" section="compartidos" title="Gastos compartidos"><CompartidosView /></PremiumGate></Suspense>
 }

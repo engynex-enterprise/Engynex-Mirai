@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useEffect, useMemo } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useBookRealtime } from "@/hooks/use-realtime"
+import { useIdlePrefetchBook } from "@/hooks/use-prefetch-book"
 import type { AppContext } from "@/lib/dal"
 import { AppContextProvider, useApp } from "./app-context"
 import { AppSidebar } from "./app-sidebar"
@@ -24,6 +25,7 @@ import { applyPrivacy } from "./privacy"
 import { useNavBadges } from "./nav-badges"
 import { ApplyPrefs } from "@/features/settings/prefs"
 import { ChatWidget } from "@/features/chat/chat-widget"
+import { ChatBoundary } from "@/features/chat/chat-boundary"
 import { Tour } from "./tour"
 import { GamiCheck } from "@/features/gami/gami-check"
 import { NotifPopups } from "@/features/notify/popups"
@@ -44,6 +46,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const ctx = useApp()
   const me = useMemo(() => ({ id: ctx.user.id, nombre: ctx.user.nombre, avatar: ctx.user.avatar }), [ctx.user])
   const { status, online } = useBookRealtime(ctx.book.id, me, path)
+  useIdlePrefetchBook(ctx.book.id)
   const setOnline = useShell((s) => s.setOnline)
   useEffect(() => { setOnline(online.map((o) => ({ id: o.id, nombre: o.nombre, avatar: o.avatar }))) }, [online, setOnline])
   const { data: notifs } = useNotifications()
@@ -70,7 +73,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <WelcomeDialog />
       <NewBookDialog />
       <ApplyPrefs />
-      <ChatWidget />
+      <ChatBoundary resetKey={path}><ChatWidget /></ChatBoundary>
       <GamiCheck />
       <NotifPopups />
       <AutomationRunner />

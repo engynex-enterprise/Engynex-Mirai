@@ -27,5 +27,5 @@ export const useShell = create<Shell>((set) => ({
   help: null, setHelp: (help) => set({ help }),
   online: [], setOnline: (online) => set({ online }),
   feedback: null, openFeedback: (d) => set({ feedback: d ?? {} }), closeFeedback: () => set({ feedback: null }),
-  chat: false, chatQ: null, openChat: (q) => set({ chat: true, chatQ: q ?? null }), setChat: (chat) => set({ chat, ...(chat ? {} : { chatQ: null }) }),
+  chat: false, chatQ: null, openChat: (q) => set({ chat: true, chatQ: typeof q === "string" ? q : null }), setChat: (chat) => set({ chat, ...(chat ? {} : { chatQ: null }) }),
 }))

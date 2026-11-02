@@ -1,15 +1,14 @@
 "use client"
 
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Bar, BarChart, Cell, XAxis } from "recharts"
 import { BellRing, ChevronDown, FileText, Gem, Phone, Plus, Trash2, TrendingDown, Undo2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -30,6 +29,9 @@ import { avatarTone } from "@/features/contacts/contacts-view"
 import { DOC_TIPOS, toAddress } from "@/features/contacts/contact-form"
 import { PayLoanDialog } from "./pay-loan-dialog"
 import { ReminderDialog } from "./reminder-dialog"
+
+// recharts sale del JS inicial de Le debo / Me deben: el gráfico de cuotas llega justo después.
+const LoanChart = dynamic(() => import("./loan-chart"), { ssr: false, loading: () => <div className="h-36 w-full" aria-hidden /> })
 
 export type LoanRow = LoanIn & { id: string; payments: (Row<"loan_payments">)[] } & Row<"loans">
 const daysBetween = (a: string, b: string) => Math.round((new Date(b + "T12:00:00").getTime() - new Date(a + "T12:00:00").getTime()) / 864e5)
@@ -192,15 +194,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
               </ul>
             </CollapsibleContent>
           </Collapsible>
-          <ChartContainer config={{ cap: { label: "Abono", color: COL.cap(isC) }, int: { label: "Interés", color: COL.int }, extra: { label: "Seguros", color: COL.extra } }} className="h-36 w-full">
-            <BarChart data={chart} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-              <XAxis dataKey="l" tickLine={false} axisLine={false} fontSize={10} interval="preserveStartEnd" />
-              <ChartTooltip content={<ChartTooltipContent formatter={(v, n) => `${n === "cap" ? "Abono" : n === "int" ? "Interés" : "Seguros"}: ${fmtMoney(Number(v))}`} />} />
-              {(["cap", "int", "extra"] as const).map((k) => (
-                <Bar key={k} dataKey={k} stackId="a" fill={k === "cap" ? COL.cap(isC) : COL[k]}>{chart.map((c, i) => <Cell key={i} fillOpacity={c.paid ? 0.45 : 1} />)}</Bar>
-              ))}
-            </BarChart>
-          </ChartContainer>
+          <LoanChart data={chart} colors={{ cap: COL.cap(isC), int: COL.int, extra: COL.extra }} />
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Fecha de pago</TableHead><TableHead className="text-right">Valor de la cuota</TableHead><TableHead className="text-right max-sm:hidden">Abono a la deuda</TableHead><TableHead className="text-right max-sm:hidden">Interés</TableHead>{Number(loan.extra) > 0 && <TableHead className="text-right max-sm:hidden">Seguros</TableHead>}<TableHead className="text-right">Queda debiendo</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader>

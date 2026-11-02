@@ -7,6 +7,7 @@ import { z } from "zod"
 import { toast } from "@/components/mirai/toast"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
@@ -20,12 +21,17 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
-import { FFREC, FSTEP, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
+import { FFREC, FSTEP, categoriaSugerida, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
-import { categoryOptions, methodOptions, useCategories, useKeywordRules, usePaymentMethods } from "@/features/catalogs/hooks"
+import { categoryOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods } from "@/features/catalogs/hooks"
+import { UserAvatar } from "@/components/mirai/user-avatar"
+import { Check, Users } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useList, invalidateBook } from "@/hooks/use-book-data"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
+import { ProviderSelect } from "@/features/providers/provider-select"
+import { useAICategory } from "@/features/expenses/use-ai-category"
 
 export type FixedRow = Row<"fixed_expenses"> & { payments: Row<"fixed_expense_payments">[] }
 
@@ -40,6 +46,9 @@ const schema = z.object({
   fecha: z.string(),
   medio: z.string().nullable(),
   proveedor: z.string(),
+  provider_id: z.string().nullable(),
+  /** Para quién es el gasto: vacío = toda la familia (general); una o varias personas (se reparte en partes iguales). */
+  personas: z.array(z.string()),
   yaPagoQ: z.enum(["no", "q1", "q2", "ambas"]), yaPagoM: z.enum(["no", "si"]),
   fpag: z.string(), vpag: z.number(),
   repQ: z.enum(["igual", "distinto"]), q1: z.number(), q2: z.number(),
@@ -52,7 +61,7 @@ export function FixedForm(props: Props) {
   return (
     <ResponsiveDialog open={props.open} onOpenChange={props.onOpenChange} title={props.fixed ? "Editar gasto fijo" : "Agregar gasto fijo"} mdesc="fijo"
       description="Los pagos que se repiten (arriendo, servicios, colegio, planes de celular). Te recordamos antes de cada fecha y los restamos de tu dinero disponible."
-      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}>
+      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><SubmitButton form={formId} /></>}>
       <ReadyGate><FixedFormBody {...props} formId={formId} /></ReadyGate>
     </ResponsiveDialog>
   )
@@ -66,10 +75,12 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
   const today = todayISO()
   const { data: cats = [] } = useCategories()
   const { data: methods = [] } = usePaymentMethods()
+  const { data: members = [] } = useMembers()
   const { data: rules = [] } = useKeywordRules()
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const [catManual, setCatManual] = useState(!!fixed)
   const [newCat, setNewCat] = useState<string | null>(null)
+  const ai = useAICategory({ manual: catManual, onCategory: (id) => form.setValue("category_id", id) })
   const plus7 = new Date(new Date(today + "T12:00:00").getTime() + 7 * 864e5).toISOString().slice(0, 10)
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -78,12 +89,14 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
       tipoValor: fixed?.variable ? "rango" : "fijo", valor: Number(fixed?.valor ?? 0), vmin: Number(fixed?.vmin ?? 0), vmax: Number(fixed?.vmax ?? 0),
       frec: fixed?.frec ?? "mensual", prox: fixed ? fijoProxIso(toIn(fixed), today) : fijoProxIso(null, today),
       diaQ1: fixed?.frec === "quincenal" ? Math.min(15, fixed.dia) : 15, dia2: fixed?.dia2 ?? 30,
-      fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? "",
+      fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? "", provider_id: fixed?.provider_id ?? null,
+      personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
     },
   })
   const { errors, isSubmitting } = form.formState
+  useSubmitState(formId, form)
   const w = form.watch()
   const step = FSTEP[w.frec]
 
@@ -107,7 +120,9 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
       dia: v.frec === "quincenal" ? Math.min(15, Math.max(1, Math.round(v.diaQ1 || 15))) : step ? prox.getDate() : 1,
       dia2: v.frec === "quincenal" ? Math.min(31, Math.max(16, Math.round(v.dia2 || 30))) : null,
       mes: step ? prox.getMonth() + 1 : null, fecha_unica: v.frec === "unico" ? v.fecha : null,
-      payment_method_id: v.medio, proveedor: v.proveedor.trim(), reparto,
+      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, reparto,
+      // La base sincroniza member_id (la persona si es una sola) para lo que solo conoce una persona.
+      member_ids: v.personas.length ? v.personas : null, member_id: v.personas.length === 1 ? v.personas[0] : null,
     }
     const desde = step && v.prox ? v.prox.slice(0, 7) : today.slice(0, 7)
     const inicio = step && v.prox ? v.prox : today
@@ -147,10 +162,11 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
           <div className="grid gap-5 sm:grid-cols-2">
             <FormField label="Nombre" htmlFor="f-nombre" error={errors.nombre?.message} required>
               <Input id="f-nombre" className="h-11" autoFocus placeholder="Ej. Arriendo, Energía, Internet" {...form.register("nombre", {
-                onChange: (e) => { if (catManual) return; const hit = localCat(e.target.value, { rules, expenses: history, categories: cats }); if (hit) form.setValue("category_id", hit.category_id) },
+                // Categoría local al instante (reglas, historial, palabras) y luego la de la IA.
+                onChange: (e) => { if (catManual) return; const hit = localCat(e.target.value, { rules, expenses: history, categories: cats }); if (hit) form.setValue("category_id", hit.category_id); ai.ask(e.target.value, form.getValues("valor") || form.getValues("vmax")) },
               })} />
             </FormField>
-            <FormField label="Categoría" htmlFor="f-cat">
+            <FormField label="Categoría" htmlFor="f-cat" hint={ai.hint}>
               <Controller control={form.control} name="category_id" render={({ field }) => (
                 <Combobox id="f-cat" value={field.value} onChange={(v) => { setCatManual(true); field.onChange(v) }} options={categoryOptions(cats)} onCreate={(t) => setNewCat(t || " ")} />
               )} />
@@ -199,8 +215,32 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
                 <FormField label="Día 2ª quincena" htmlFor="f-d2" error={errors.dia2 ? "Entre 16 y 31" : undefined}><Input id="f-d2" className="h-11" type="number" min={16} max={31} {...form.register("dia2", { valueAsNumber: true })} /></FormField>
               </div>
             )}
+            <FormField label="¿Para quién es este gasto?" tip="Escoge una o varias personas si el gasto es solo de ellas (el colegio de un hijo, el celular de tu pareja). Si es de toda la casa, deja «Toda la familia». Cuando lo pagues, el gasto queda a su nombre y lo ves en Por miembro; si son varias, se reparte en partes iguales."
+              hint={w.personas.length > 1 && (w.valor || w.vmax) ? `Se reparte entre ${w.personas.length}: ${fmtMoney(Math.round((w.tipoValor === "rango" ? (w.vmin + w.vmax) / 2 : w.valor) / w.personas.length))} para cada una.` : undefined}>
+              <Controller control={form.control} name="personas" render={({ field }) => (
+                <div role="group" aria-label="Personas del gasto" className="flex flex-wrap gap-1.5">
+                  <PersonaChip on={!field.value.length} onClick={() => field.onChange([])} label="Toda la familia" icon={<Users className="size-4" />} />
+                  {members.map((m) => (
+                    <PersonaChip key={m.id} on={field.value.includes(m.id)} label={m.nombre}
+                      icon={<UserAvatar src={m.avatar} name={m.nombre} className="size-5" fallbackClassName="text-[9px]" />}
+                      onClick={() => field.onChange(field.value.includes(m.id) ? field.value.filter((x) => x !== m.id) : [...field.value, m.id])} />
+                  ))}
+                </div>
+              )} />
+            </FormField>
             <FormField label="Medio de pago" htmlFor="f-medio"><Controller control={form.control} name="medio" render={({ field }) => <Combobox id="f-medio" value={field.value} onChange={field.onChange} options={methodOptions(methods)} />} /></FormField>
-            <FormField label="Proveedor" htmlFor="f-prov" tip="A quién le pagas: la inmobiliaria, Enel, el colegio…"><Input id="f-prov" className="h-11" {...form.register("proveedor")} /></FormField>
+            <FormField label="Proveedor" htmlFor="f-prov" tip="A quién le pagas: la inmobiliaria, Enel, el colegio… Elígelo de tu lista o escribe el nombre para agregarlo.">
+              <Controller control={form.control} name="provider_id" render={({ field }) => (
+                <ProviderSelect id="f-prov" value={field.value} fallbackName={w.proveedor} onChange={(id, p) => {
+                  field.onChange(id)
+                  form.setValue("proveedor", p?.nombre ?? "")
+                  if (p && !form.getValues("nombre").trim()) form.setValue("nombre", p.nombre, { shouldValidate: true })
+                  // Categoría por defecto del proveedor si aún no la escogió a mano.
+                  const c = categoriaSugerida(p, cats)
+                  if (c && (!catManual || !form.getValues("category_id"))) form.setValue("category_id", c)
+                }} />
+              )} />
+            </FormField>
           </div>
           {!fixed && w.frec === "quincenal" && (
             <FormField label="¿Ya pagaste este mes?">
@@ -233,4 +273,20 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
 /** Monta el formulario cuando los catálogos ya cargaron (skeleton mientras tanto). */
 function ReadyGate({ children }: { children: React.ReactNode }) {
   return useCatalogsReady() ? <>{children}</> : <FormSkeleton />
+}
+
+/** Personas guardadas en un gasto fijo (lista nueva o la persona única de antes). */
+function personasDe(f: FixedRow | null | undefined): string[] {
+  const x = f as { member_ids?: string[] | null; member_id?: string | null } | null | undefined
+  return x?.member_ids?.length ? x.member_ids : x?.member_id ? [x.member_id] : []
+}
+
+/** Ficha para marcar una persona (o toda la familia) en "¿Para quién es este gasto?". */
+function PersonaChip({ on, onClick, label, icon }: { on: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
+  return (
+    <button type="button" aria-pressed={on} onClick={onClick}
+      className={cn("flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors", on ? "bg-brand-soft text-foreground ring-2 ring-brand/50" : "bg-secondary text-muted-foreground hover:bg-secondary-hover hover:text-foreground")}>
+      {icon}{label}{on && <Check className="size-3.5 text-brand" aria-hidden />}
+    </button>
+  )
 }

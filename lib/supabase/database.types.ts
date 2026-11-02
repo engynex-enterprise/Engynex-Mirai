@@ -577,14 +577,14 @@ isOneToOne: false
                   ]
                 },"chat_messages": {
                   Row: {
-                    "book_id": string,"content": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"id": string,"meta": NonNullable<Json>,"role": string,"thread_id": string,"updated_at": string
+                    "adjuntos": NonNullable<Json>,"book_id": string,"content": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"feedback": number | null,"id": string,"meta": NonNullable<Json>,"role": string,"thread_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"content"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"id"?: string,"meta"?: NonNullable<Json>,"role": string,"thread_id": string,"updated_at"?: string
+                    "adjuntos"?: NonNullable<Json>,"book_id": string,"content"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"feedback"?: number | null,"id"?: string,"meta"?: NonNullable<Json>,"role": string,"thread_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "book_id"?: string,"content"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"id"?: string,"meta"?: NonNullable<Json>,"role"?: string,"thread_id"?: string,"updated_at"?: string
+                    "adjuntos"?: NonNullable<Json>,"book_id"?: string,"content"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"feedback"?: number | null,"id"?: string,"meta"?: NonNullable<Json>,"role"?: string,"thread_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -603,14 +603,14 @@ isOneToOne: false
                   ]
                 },"chat_threads": {
                   Row: {
-                    "book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"id": string,"titulo": string,"updated_at": string,"user_id": string
+                    "archivado": boolean,"book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"fijado": boolean,"id": string,"titulo": string,"titulo_auto": boolean,"ultimo": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"id"?: string,"titulo"?: string,"updated_at"?: string,"user_id"?: string
+                    "archivado"?: boolean,"book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"fijado"?: boolean,"id"?: string,"titulo"?: string,"titulo_auto"?: boolean,"ultimo"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"id"?: string,"titulo"?: string,"updated_at"?: string,"user_id"?: string
+                    "archivado"?: boolean,"book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"fijado"?: boolean,"id"?: string,"titulo"?: string,"titulo_auto"?: boolean,"ultimo"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -737,14 +737,14 @@ isOneToOne: false
                   ]
                 },"expenses": {
                   Row: {
-                    "aporte": Json | null,"book_id": string,"cat_src": string | null,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"updated_at": string,"valor": number
+                    "aporte": Json | null,"book_id": string,"cat_src": string | null,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"member_ids": (string)[] | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"provider_id": string | null,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "aporte"?: Json | null,"book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"updated_at"?: string,"valor"?: number
+                    "aporte"?: Json | null,"book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "aporte"?: Json | null,"book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"updated_at"?: string,"valor"?: number
+                    "aporte"?: Json | null,"book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -776,6 +776,12 @@ isOneToOne: false
       columns: ["payment_method_id"]
 isOneToOne: false
       referencedRelation: "payment_methods"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "expenses_provider_id_fkey"
+      columns: ["provider_id"]
+isOneToOne: false
+      referencedRelation: "providers"
       referencedColumns: ["id"]
     }
                   ]
@@ -897,14 +903,14 @@ isOneToOne: false
                   ]
                 },"fixed_expenses": {
                   Row: {
-                    "book_id": string,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"desde": string,"dia": number,"dia2": number | null,"fecha_unica": string | null,"frec": string,"id": string,"inicio": string | null,"link_id": string | null,"link_type": string | null,"logo_path": string | null,"mes": number | null,"nombre": string,"payment_method_id": string | null,"proveedor": string,"reparto": Json | null,"updated_at": string,"valor": number,"variable": boolean,"vmax": number | null,"vmin": number | null
+                    "book_id": string,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"desde": string,"dia": number,"dia2": number | null,"fecha_unica": string | null,"frec": string,"id": string,"inicio": string | null,"link_id": string | null,"link_type": string | null,"logo_path": string | null,"member_id": string | null,"member_ids": (string)[] | null,"mes": number | null,"nombre": string,"payment_method_id": string | null,"proveedor": string,"provider_id": string | null,"reparto": Json | null,"updated_at": string,"valor": number,"variable": boolean,"vmax": number | null,"vmin": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"mes"?: number | null,"nombre": string,"payment_method_id"?: string | null,"proveedor"?: string,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
+                    "book_id": string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"member_id"?: string | null,"member_ids"?: (string)[] | null,"mes"?: number | null,"nombre": string,"payment_method_id"?: string | null,"proveedor"?: string,"provider_id"?: string | null,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
                   }
                   Update: {
-                    "book_id"?: string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"mes"?: number | null,"nombre"?: string,"payment_method_id"?: string | null,"proveedor"?: string,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
+                    "book_id"?: string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"member_id"?: string | null,"member_ids"?: (string)[] | null,"mes"?: number | null,"nombre"?: string,"payment_method_id"?: string | null,"proveedor"?: string,"provider_id"?: string | null,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
                   }
                   Relationships: [
                     {
@@ -920,10 +926,22 @@ isOneToOne: false
       referencedRelation: "categories"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "fixed_expenses_member_id_fkey"
+      columns: ["member_id"]
+isOneToOne: false
+      referencedRelation: "family_members"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "fixed_expenses_payment_method_id_fkey"
       columns: ["payment_method_id"]
 isOneToOne: false
       referencedRelation: "payment_methods"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fixed_expenses_provider_id_fkey"
+      columns: ["provider_id"]
+isOneToOne: false
+      referencedRelation: "providers"
       referencedColumns: ["id"]
     }
                   ]
@@ -1089,17 +1107,23 @@ isOneToOne: false
                   ]
                 },"household_invitations": {
                   Row: {
-                    "accepted_at": string | null,"created_at": string,"email": string,"expires_at": string,"household_id": string,"id": string,"invited_by": string | null,"role": string,"token_hash": string
+                    "accepted_at": string | null,"accepted_by": string | null,"access_role": string | null,"canceled_at": string | null,"canceled_by": string | null,"created_at": string,"dest_key": string | null,"email": string | null,"expires_at": string,"family_member_id": string | null,"household_id": string,"id": string,"invited_by": string | null,"last_result": NonNullable<Json>,"last_sent_at": string | null,"nombre": string | null,"parentesco": string | null,"phone": string | null,"role": string,"sends_day": string | null,"sends_today": number,"sent_count": number,"token_enc": string | null,"token_hash": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accepted_at"?: string | null,"created_at"?: string,"email": string,"expires_at"?: string,"household_id": string,"id"?: string,"invited_by"?: string | null,"role"?: string,"token_hash": string
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"access_role"?: string | null,"canceled_at"?: string | null,"canceled_by"?: string | null,"created_at"?: string,"dest_key"?: never,"email"?: string | null,"expires_at"?: string,"family_member_id"?: string | null,"household_id": string,"id"?: string,"invited_by"?: string | null,"last_result"?: NonNullable<Json>,"last_sent_at"?: string | null,"nombre"?: string | null,"parentesco"?: string | null,"phone"?: string | null,"role"?: string,"sends_day"?: string | null,"sends_today"?: number,"sent_count"?: number,"token_enc"?: string | null,"token_hash": string
                   }
                   Update: {
-                    "accepted_at"?: string | null,"created_at"?: string,"email"?: string,"expires_at"?: string,"household_id"?: string,"id"?: string,"invited_by"?: string | null,"role"?: string,"token_hash"?: string
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"access_role"?: string | null,"canceled_at"?: string | null,"canceled_by"?: string | null,"created_at"?: string,"dest_key"?: never,"email"?: string | null,"expires_at"?: string,"family_member_id"?: string | null,"household_id"?: string,"id"?: string,"invited_by"?: string | null,"last_result"?: NonNullable<Json>,"last_sent_at"?: string | null,"nombre"?: string | null,"parentesco"?: string | null,"phone"?: string | null,"role"?: string,"sends_day"?: string | null,"sends_today"?: number,"sent_count"?: number,"token_enc"?: string | null,"token_hash"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "household_invitations_family_member_id_fkey"
+      columns: ["family_member_id"]
+isOneToOne: false
+      referencedRelation: "family_members"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "household_invitations_household_id_fkey"
       columns: ["household_id"]
 isOneToOne: false
@@ -1109,14 +1133,14 @@ isOneToOne: false
                   ]
                 },"household_members": {
                   Row: {
-                    "created_at": string,"household_id": string,"role": string,"user_id": string
+                    "access_role": string | null,"created_at": string,"household_id": string,"role": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"household_id": string,"role"?: string,"user_id": string
+                    "access_role"?: string | null,"created_at"?: string,"household_id": string,"role"?: string,"user_id": string
                   }
                   Update: {
-                    "created_at"?: string,"household_id"?: string,"role"?: string,"user_id"?: string
+                    "access_role"?: string | null,"created_at"?: string,"household_id"?: string,"role"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -1617,6 +1641,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"providers": {
+                  Row: {
+                    "activo": boolean,"book_id": string,"brand": string | null,"category_id": string | null,"correo": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"icon": string | null,"id": string,"nit": string,"nombre": string,"notas": string,"referencia": string,"sitio_web": string,"telefono": string,"tipo": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"book_id": string,"brand"?: string | null,"category_id"?: string | null,"correo"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"icon"?: string | null,"id"?: string,"nit"?: string,"nombre": string,"notas"?: string,"referencia"?: string,"sitio_web"?: string,"telefono"?: string,"tipo"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "activo"?: boolean,"book_id"?: string,"brand"?: string | null,"category_id"?: string | null,"correo"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"icon"?: string | null,"id"?: string,"nit"?: string,"nombre"?: string,"notas"?: string,"referencia"?: string,"sitio_web"?: string,"telefono"?: string,"tipo"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "providers_book_id_fkey"
+      columns: ["book_id"]
+isOneToOne: false
+      referencedRelation: "books"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "providers_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "categories"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"push_subscriptions": {
                   Row: {
                     "auth": string,"created_at": string,"endpoint": string,"id": string,"p256dh": string,"user_agent": string | null,"user_id": string
@@ -1879,14 +1929,14 @@ isOneToOne: false
                   ]
                 },"subscriptions": {
                   Row: {
-                    "activa": boolean,"book_id": string,"category_id": string | null,"ciclo": string,"comparte": number,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"id": string,"logo_path": string | null,"nombre": string,"payment_method_id": string | null,"proximo": string | null,"updated_at": string,"valor": number
+                    "activa": boolean,"book_id": string,"category_id": string | null,"ciclo": string,"comparte": number,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"id": string,"logo_path": string | null,"nombre": string,"payment_method_id": string | null,"provider_id": string | null,"proximo": string | null,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "activa"?: boolean,"book_id": string,"category_id"?: string | null,"ciclo"?: string,"comparte"?: number,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"id"?: string,"logo_path"?: string | null,"nombre": string,"payment_method_id"?: string | null,"proximo"?: string | null,"updated_at"?: string,"valor"?: number
+                    "activa"?: boolean,"book_id": string,"category_id"?: string | null,"ciclo"?: string,"comparte"?: number,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"id"?: string,"logo_path"?: string | null,"nombre": string,"payment_method_id"?: string | null,"provider_id"?: string | null,"proximo"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "activa"?: boolean,"book_id"?: string,"category_id"?: string | null,"ciclo"?: string,"comparte"?: number,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"id"?: string,"logo_path"?: string | null,"nombre"?: string,"payment_method_id"?: string | null,"proximo"?: string | null,"updated_at"?: string,"valor"?: number
+                    "activa"?: boolean,"book_id"?: string,"category_id"?: string | null,"ciclo"?: string,"comparte"?: number,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"id"?: string,"logo_path"?: string | null,"nombre"?: string,"payment_method_id"?: string | null,"provider_id"?: string | null,"proximo"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -1906,6 +1956,12 @@ isOneToOne: false
       columns: ["payment_method_id"]
 isOneToOne: false
       referencedRelation: "payment_methods"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "subscriptions_provider_id_fkey"
+      columns: ["provider_id"]
+isOneToOne: false
+      referencedRelation: "providers"
       referencedColumns: ["id"]
     }
                   ]
@@ -2122,6 +2178,12 @@ isOneToOne: false
               "estado": string,"id": string,"periodo": string,"plan": string,"proveedor": string,"vence_at": string
             }[]
                            },
+"invitation_dest_key":
+{ Args: { "p_email": string,"p_phone": string }; Returns: string
+                           },
+"invitation_info":
+{ Args: { "p_token": string }; Returns: Json
+                           },
 "is_book_member":
 { Args: { "bk": string,"min_role"?: string }; Returns: boolean
                            },
@@ -2131,20 +2193,50 @@ isOneToOne: false
 "is_platform_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"join_from_invitation":
+{ Args: { "p_inv": string,"p_uid": string }; Returns: string
+                           },
+"legacy_role":
+{ Args: { "r": string }; Returns: string
+                           },
+"link_family_member":
+{ Args: { "p_family": string,"p_household": string,"p_user": string }; Returns: undefined
+                           },
+"member_access":
+{ Args: { "p_household": string,"p_user": string }; Returns: string
+                           },
+"mirai_app_context":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "mirai_schedule_notify":
 { Args: { "cron_secret": string,"site_url": string }; Returns: string
                            },
 "pay_fixed_expense":
 { Args: { "p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json
                            },
+"provider_norm":
+{ Args: { "s": string }; Returns: string
+                           },
+"provider_tipo":
+{ Args: { "s": string }; Returns: string
+                           },
 "registro_abierto":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"remove_household_member":
+{ Args: { "p_household": string,"p_user": string }; Returns: undefined
                            },
 "role_rank":
 { Args: { "r": string }; Returns: number
                            },
 "seed_book_defaults":
 { Args: { "bk": string }; Returns: undefined
+                           },
+"set_member_access":
+{ Args: { "p_access": string,"p_household": string,"p_user": string }; Returns: undefined
+                           },
+"transfer_household":
+{ Args: { "p_household": string,"p_user": string }; Returns: undefined
                            },
 "try_uuid":
 { Args: { "t": string }; Returns: string

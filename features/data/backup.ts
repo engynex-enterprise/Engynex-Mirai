@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 
 /** Tablas del libro en orden de inserción (padres antes que hijos). */
 export const BOOK_TABLES = [
-  "categories", "income_categories", "entities", "payment_methods", "contacts",
+  "categories", "income_categories", "entities", "payment_methods", "contacts", "providers",
   "keyword_rules", "incomes", "extra_incomes", "fixed_expenses", "subscriptions", "credit_cards", "loans",
   "assets", "liabilities", "investments", "goals", "emergency_funds", "calendar_events", "shared_groups",
   "allowances", "savings_challenges", "tax_years", "advisor_consultations", "monthly_summaries",

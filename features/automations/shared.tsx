@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Icon } from "@/components/mirai/icon"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { EmptyState } from "@/components/mirai/empty-state"
+import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
+import { Tip } from "@/components/mirai/tip"
 import { useSave } from "@/hooks/use-book-data"
 import { CATALOG, GROUPS } from "@/lib/automations/catalog"
 import { automationFromTemplate, type Template } from "@/lib/automations/templates"
@@ -37,7 +39,9 @@ export function FlowChips({ graph, max = 4 }: { graph: Graph; max?: number }) {
       {ordered.slice(0, max).map((n, i) => (
         <span key={n.id} className="flex items-center gap-1">
           {i > 0 && <span className="text-muted-foreground" aria-hidden>→</span>}
-          <span title={CATALOG[n.kind].label} className={cn("grid size-7 place-items-center rounded-lg", GROUP_STYLE[CATALOG[n.kind].group].tile)}><Icon name={CATALOG[n.kind].icon} className="size-3.5" /></span>
+          <Tip label={`${GROUPS[CATALOG[n.kind].group].label}: ${CATALOG[n.kind].label}`}>
+            <span role="img" aria-label={CATALOG[n.kind].label} className={cn("grid size-7 place-items-center rounded-lg", GROUP_STYLE[CATALOG[n.kind].group].tile)}><Icon name={CATALOG[n.kind].icon} className="size-3.5" /></span>
+          </Tip>
         </span>
       ))}
       {ordered.length > max && <span className="text-xs text-muted-foreground">+{ordered.length - max}</span>}
@@ -61,12 +65,12 @@ export function useCreateAutomation() {
 
 export function TemplateCard({ t, onUse, disabled }: { t: Template; onUse: () => void; disabled?: boolean }) {
   return (
-    <Card className="lift gap-3 p-4 shadow-card ring-0" data-testid="plantilla">
+    <Card className="lift h-full gap-3 p-4 shadow-card ring-0" data-testid="plantilla">
       <div className="flex items-start gap-3">
         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-lime text-navy"><Icon name={t.icon} className="size-5" /></span>
         <div className="grid min-w-0 gap-1">
           <p className="leading-snug font-semibold">{t.nombre}</p>
-          {t.premium && <Badge variant="secondary" className="w-fit">Premium</Badge>}
+          {t.premium && <Tip label="Usa la IA: necesita el plan Premium."><Badge variant="secondary" className="w-fit">Premium</Badge></Tip>}
         </div>
       </div>
       <p className="text-sm text-muted-foreground">{t.descripcion}</p>
@@ -100,21 +104,34 @@ export function StepList({ steps }: { steps: StepResult[] }) {
   )
 }
 
-/** Historial de ejecuciones con el detalle desplegable. */
-export function RunsList({ runs, loading, names }: { runs: AutomationRun[] | undefined; loading?: boolean; names?: Record<string, string> }) {
+const RUN_FILTROS: ListFilter<AutomationRun>[] = [
+  { value: "todas", label: "Todas" },
+  { value: "ok", label: "Bien", match: (r) => r.estado === "ok" },
+  { value: "error", label: "Con error", match: (r) => r.estado === "error" },
+  { value: "esperando", label: "Esperando", match: (r) => r.estado === "esperando" },
+  { value: "omitida", label: "Omitidas", match: (r) => r.estado === "omitida" },
+]
+
+/** Historial de ejecuciones con el detalle desplegable. Con `filterable`, buscador y filtro por estado. */
+export function RunsList({ runs, loading, names, filterable }: { runs: AutomationRun[] | undefined; loading?: boolean; names?: Record<string, string>; filterable?: boolean }) {
   const [open, setOpen] = useState<string | null>(null)
+  const ctl = useListControls(runs, { text: (r) => `${names?.[r.automation_id] ?? ""} ${CATALOG[r.disparador as keyof typeof CATALOG]?.label ?? ""} ${((r.evento ?? {}) as { data?: { descripcion?: string } }).data?.descripcion ?? ""}`, filters: RUN_FILTROS })
   if (loading) return <div className="grid gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14" />)}</div>
   if (!runs?.length) return <EmptyState iso="calendario" title="Todavía no hay ejecuciones" description="Cuando una automatización activa se dispare, aquí verás qué hizo." />
+  const list = filterable ? ctl.rows : runs
   return (
+    <div className="grid gap-3">
+    {filterable && runs.length > 3 && <ListToolbar c={ctl} placeholder="Buscar ejecución" filters={RUN_FILTROS.filter((f) => !f.match || runs.some(f.match))} />}
+    {!list.length && <NoResults c={ctl} />}
     <ul className="grid gap-2" data-testid="historial">
-      {runs.map((r) => {
+      {list.map((r) => {
         const st = ESTADOS[r.estado] ?? ESTADOS.ok
         const steps = Array.isArray(r.pasos) ? (r.pasos as unknown as StepResult[]) : []
         const ev = (r.evento ?? {}) as { data?: { descripcion?: string } }
         const isOpen = open === r.id
         return (
           <li key={r.id} className="rounded-xl border bg-card">
-            <button type="button" className="flex w-full items-center gap-3 p-3 text-left" onClick={() => setOpen(isOpen ? null : r.id)} aria-expanded={isOpen}>
+            <button type="button" className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-hover focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none" onClick={() => setOpen(isOpen ? null : r.id)} aria-expanded={isOpen}>
               <StepIcon kind={(CATALOG[r.disparador as keyof typeof CATALOG] ? r.disparador : "gasto") as keyof typeof CATALOG} className="size-8" />
               <div className="grid min-w-0 flex-1 gap-0.5">
                 <span className="truncate text-sm font-semibold">{names?.[r.automation_id] ?? CATALOG[r.disparador as keyof typeof CATALOG]?.label ?? "Ejecución"}</span>
@@ -134,5 +151,6 @@ export function RunsList({ runs, loading, names }: { runs: AutomationRun[] | und
         )
       })}
     </ul>
+    </div>
   )
 }

@@ -10,6 +10,7 @@
  */
 export const AI_FEATURES = {
   chat: { label: "Chat con el asesor", icon: "message-circle", tier: "razonamiento", maxOut: 1200, cacheH: 0 },
+  chat_titulo: { label: "Chat: título de la conversación", icon: "pencil", tier: "simple", maxOut: 60, cacheH: 24 * 7 },
   consejero_interpretar: { label: "Consejero: entender la decisión", icon: "scale", tier: "simple", maxOut: 800, cacheH: 24 },
   consejero_analizar: { label: "Consejero: análisis", icon: "scale", tier: "razonamiento", maxOut: 2000, cacheH: 12 },
   categorizar: { label: "Categoría y gasto hormiga", icon: "tag", tier: "simple", maxOut: 2000, cacheH: 24 * 7 },

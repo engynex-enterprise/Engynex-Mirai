@@ -9,13 +9,15 @@ import { Card } from "@/components/ui/card"
 import { Icon } from "@/components/mirai/icon"
 import { IsoIcon, hasIso } from "@/components/mirai/iso-icon"
 import { Segmented } from "@/components/mirai/choice-cards"
+import { SectionTitle } from "@/components/mirai/panel"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { GUIDES, type Guide } from "@/lib/content/ayuda"
 import { HELP } from "@/lib/content/help"
 import { faqId, manualSecciones, normText, pageHref, relacionados, tokens } from "@/lib/content/centro-ayuda"
 import { GLOSARIO_CATS } from "@/lib/content/glosario"
 import { pageById } from "@/lib/nav"
 import { cn } from "@/lib/utils"
-import { AppLink, Empty, Html, RowButton, SearchBox, SectionTitle, Steps, Tips, useHelpNav } from "./ui"
+import { AppLink, DOC_TONE, Empty, GroupLabel, Html, RowButton, SearchBox, Steps, Tips, useHelpNav } from "./ui"
 
 const guideHref = (g: Guide) => `/${g.go}`
 const filtrarGuias = (q: string) => { const ws = q.trim() ? tokens(q) : []; return GUIDES.filter((g) => ws.every((w) => normText(`${g.t} ${g.s.join(" ")} ${g.tip ?? ""}`).includes(w))) }
@@ -44,11 +46,11 @@ export function PaginaHelp({ id }: { id: string }) {
       {page && !here && <Button asChild className="w-fit"><AppLink href={href}>Ir a {page.label} <ArrowRight /></AppLink></Button>}
       {(rel.guias.length > 0 || rel.faqs.length > 0 || rel.lecciones.length > 0 || rel.terminos.length > 0) && (
         <section className="grid gap-1">
-          <SectionTitle>Relacionado</SectionTitle>
-          {rel.guias.map((g) => <RowButton key={g.id} icon="list-checks" title={g.t} sub={`Guía · ${g.s.length} pasos · ${g.min} min`} onClick={() => go({ v: "guia", id: g.id })} />)}
-          {rel.faqs.slice(0, 5).map((f) => <RowButton key={f.q} icon="circle-help" title={f.q} sub={`Pregunta frecuente · ${f.c}`} onClick={() => go({ v: "faq", id: faqId(f) })} />)}
-          {rel.lecciones.map((l) => <RowButton key={l.id} icon="graduation-cap" title={l.titulo} sub={`Academia · ${l.minutos} min`} onClick={() => go({ v: "leccion", id: l.id })} />)}
-          {rel.terminos.slice(0, 4).map((t) => <RowButton key={t.id} icon="library" title={t.t} sub={`Glosario · ${GLOSARIO_CATS[t.cat].label}`} onClick={() => go({ v: "glosario", id: t.id })} />)}
+          <GroupLabel>Relacionado</GroupLabel>
+          {rel.guias.map((g) => <RowButton key={g.id} icon="list-checks" tone={DOC_TONE.guia} title={g.t} sub={`Guía · ${g.s.length} pasos · ${g.min} min`} onClick={() => go({ v: "guia", id: g.id })} />)}
+          {rel.faqs.slice(0, 5).map((f) => <RowButton key={f.q} icon="circle-help" tone={DOC_TONE.faq} title={f.q} sub={`Pregunta frecuente · ${f.c}`} onClick={() => go({ v: "faq", id: faqId(f) })} />)}
+          {rel.lecciones.map((l) => <RowButton key={l.id} icon="graduation-cap" tone={DOC_TONE.leccion} title={l.titulo} sub={`Academia · ${l.minutos} min`} onClick={() => go({ v: "leccion", id: l.id })} />)}
+          {rel.terminos.slice(0, 4).map((t) => <RowButton key={t.id} icon="library" tone={DOC_TONE.glosario} title={t.t} sub={`Glosario · ${GLOSARIO_CATS[t.cat].label}`} onClick={() => go({ v: "glosario", id: t.id })} />)}
         </section>
       )}
     </article>
@@ -93,7 +95,7 @@ export function GuiasList() {
     <div className="grid gap-3">
       <SearchBox value={q} onChange={setQ} placeholder="¿Qué quieres hacer? Ej. nómina, empeño…" label="Buscar guías" />
       {!list.length ? <Empty>No encontramos guías con “{q}”.</Empty> : (
-        <div className="grid gap-1">{list.map((g) => <RowButton key={g.id} icon={g.icon} title={g.t} sub={`${g.s.length} pasos · ${g.min} min`} onClick={() => go({ v: "guia", id: g.id })} />)}</div>
+        <div className="grid gap-1">{list.map((g) => <RowButton key={g.id} icon={g.icon} tone={DOC_TONE.guia} title={g.t} sub={`${g.s.length} pasos · ${g.min} min`} onClick={() => go({ v: "guia", id: g.id })} />)}</div>
       )}
     </div>
   )
@@ -109,7 +111,7 @@ export function ManualToc() {
       <SearchBox value={q} onChange={setQ} placeholder="Busca una pantalla o una tarea…" label="Buscar en el manual" />
       {!secs.length ? <Empty>No encontramos “{q}” en el manual.</Empty> : secs.map((s) => (
         <section key={s.sec} className="grid gap-1">
-          <SectionTitle>{s.sec}</SectionTitle>
+          <GroupLabel>{s.sec}</GroupLabel>
           {s.items.map((i) => <RowButton key={i.id} icon={i.icon} title={i.label} sub={i.group ?? i.help.i} onClick={() => go({ v: "pagina", id: i.id })} />)}
         </section>
       ))}
@@ -165,14 +167,14 @@ export function ManualModule() {
           <div className="grid min-w-0 gap-8">
             {secs.map((s) => (
               <section key={s.sec} id={`man-${s.sec}`} className="grid scroll-mt-4 gap-3">
-                <h2 className="text-lg font-semibold">{s.sec}</h2>
+                <SectionTitle description={`${s.items.length} ${s.items.length === 1 ? "pantalla" : "pantallas"}`}>{s.sec}</SectionTitle>
                 <div className="grid gap-4 xl:grid-cols-2">
                   {s.items.map((p) => (
-                    <Card key={p.id} id={`man-${p.id}`} className="scroll-mt-4 gap-3 p-5 shadow-card ring-0">
-                      <div className="flex items-center gap-3">{hasIso(p.id) ? <IsoIcon k={p.id} size={36} /> : <Icon name={p.icon} className="size-6 text-brand" />}<div className="min-w-0"><h3 className="font-semibold break-words">{p.help.t}</h3><p className="text-sm text-muted-foreground">{p.help.i}</p></div></div>
+                    <Card key={p.id} id={`man-${p.id}`} className="h-full scroll-mt-4 gap-4 p-5 shadow-card ring-0">
+                      <div className="flex items-center gap-3">{hasIso(p.id) ? <IsoIcon k={p.id} size={40} /> : <ToneIcon icon={p.icon} />}<div className="min-w-0"><h3 className="text-[15px] font-semibold break-words">{p.help.t}</h3><p className="text-sm text-muted-foreground">{p.help.i}</p></div></div>
                       <Steps steps={p.help.p} className="text-sm" />
                       {!!p.help.tips?.length && <Tips tips={p.help.tips} />}
-                      <div className="flex flex-wrap gap-2"><Button size="sm" variant="soft" asChild><AppLink href={p.href}>Ir a {p.label}</AppLink></Button><Button size="sm" variant="ghost" onClick={() => go({ v: "pagina", id: p.id })}><CircleHelp /> Ver en el Centro de ayuda</Button></div>
+                      <div className="mt-auto flex flex-wrap gap-2 pt-1"><Button size="sm" variant="soft" asChild><AppLink href={p.href}>Ir a {p.label}</AppLink></Button><Button size="sm" variant="ghost" onClick={() => go({ v: "pagina", id: p.id })}><CircleHelp /> Ver en el Centro de ayuda</Button></div>
                     </Card>
                   ))}
                 </div>

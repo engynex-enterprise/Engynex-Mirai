@@ -9,21 +9,24 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { SubmitButton } from "@/components/mirai/submit-button"
+import { Tip } from "@/components/mirai/tip"
 import { useApp } from "@/components/app/app-context"
 import { usePlatformNotice } from "@/components/app/platform-notice"
 import { FeedbackForm, feedbackContexto, useMyFeedback } from "@/features/opiniones/feedback-dialog"
 import { Stars } from "@/features/opiniones/stars"
+import { TIPO_TONE } from "@/features/opiniones/tones"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { createClient } from "@/utils/supabase/client"
 import { APP_VER, RELEASES } from "@/lib/content/ayuda"
 import { ATAJOS, keyLabel } from "@/lib/content/centro-ayuda"
 import { ESTADOS, SOPORTE_TEMAS, TIPOS, casoNumero, type FeedbackEstado, type FeedbackTipo, type SoporteCtx, type SoporteTema } from "@/lib/content/opiniones"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { AppLink, Chips, Empty, ListSkeleton, RowButton, SectionTitle, useHelpNav } from "./ui"
+import { AppLink, Chips, Empty, ListSkeleton, RowButton, GroupLabel, useHelpNav } from "./ui"
 
 type Fb = NonNullable<ReturnType<typeof useMyFeedback>["data"]>[number]
 
@@ -54,7 +57,9 @@ export function AtajosModule() {
 function Estado({ ok, label, detail, children }: { ok: boolean | null; label: string; detail: React.ReactNode; children?: React.ReactNode }) {
   return (
     <li className="flex items-start gap-3 p-3">
-      <span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", ok === null ? "animate-pulse bg-warning" : ok ? "bg-success" : "bg-danger")} aria-hidden />
+      <Tip label={ok === null ? "Revisando" : ok ? "Todo bien" : "Hay un problema"}>
+        <span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", ok === null ? "animate-pulse bg-warning" : ok ? "bg-success" : "bg-danger")} role="img" aria-label={ok === null ? "Revisando" : ok ? "Todo bien" : "Hay un problema"} />
+      </Tip>
       <div className="min-w-0 flex-1"><p className="font-medium">{label}</p><div className="text-sm break-words text-muted-foreground">{detail}</div>{children}</div>
     </li>
   )
@@ -117,6 +122,7 @@ function HistorialItem({ f }: { f: Fb }) {
   return (
     <li className="grid gap-2 rounded-xl bg-secondary/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
+        <ToneIcon icon={t.icon} tone={TIPO_TONE[(f.tipo as FeedbackTipo) in TIPOS ? (f.tipo as FeedbackTipo) : "otro"]} size="sm" />
         <p className="min-w-0 flex-1 text-sm font-semibold break-words">{titulo}</p>
         <StatusPill tone={e.tone}>{e.label}</StatusPill>
       </div>
@@ -137,7 +143,7 @@ function Historial({ soporte, max = 5 }: { soporte: boolean; max?: number }) {
   const list = (data ?? []).filter((f) => (f.tipo === "soporte") === soporte)
   return (
     <section className="grid gap-2">
-      <SectionTitle action={list.length > max ? <AppLink href="/opiniones" className="text-xs font-semibold text-link">Ver todo</AppLink> : undefined}>{soporte ? "Tus casos" : "Lo que nos has enviado"}</SectionTitle>
+      <GroupLabel action={list.length > max ? <AppLink href="/opiniones" className="text-xs font-semibold text-link">Ver todo</AppLink> : undefined}>{soporte ? "Tus casos" : "Lo que nos has enviado"}</GroupLabel>
       {isPending ? <ListSkeleton rows={2} /> : !list.length ? <Empty>{soporte ? "Aún no has abierto casos de soporte." : "Todavía no nos has enviado nada."}</Empty> : (
         <ul className="grid gap-2">{list.slice(0, max).map((f) => <HistorialItem key={f.id} f={f} />)}</ul>
       )}
@@ -172,9 +178,12 @@ export function SoporteModule() {
   const [busy, setBusy] = useState(false)
   const [enviado, setEnviado] = useState<string | null>(null)
 
+  const asuntoOk = asunto.trim().length >= 4
+  const detalleOk = detalle.trim().length >= 10
+  const falta = !asuntoOk ? "Escribe un asunto corto, por ejemplo: No puedo entrar" : !detalleOk ? "Cuéntanos un poco más para poder ayudarte (al menos 10 letras)" : null
+
   const send = async () => {
-    if (asunto.trim().length < 4) return toast.error("Escribe un asunto corto, por ejemplo: No puedo entrar")
-    if (detalle.trim().length < 10) return toast.error("Cuéntanos un poco más para poder ayudarte")
+    if (falta || busy) return
     setBusy(true)
     const soporte: SoporteCtx = { tema, asunto: asunto.trim().slice(0, 120) }
     const { data, error } = await createClient().from("feedback").insert({
@@ -213,17 +222,19 @@ export function SoporteModule() {
           <Chips label="Tema del caso" value={tema} onChange={setTema} items={SOPORTE_TEMAS.map((t) => ({ value: t.value, label: t.label }))} />
         </div>
         <label className="grid gap-1.5 text-sm font-semibold" htmlFor="sop-asunto">Asunto
-          <Input id="sop-asunto" maxLength={120} placeholder="Ej.: No me llega el correo para cambiar la contraseña" value={asunto} onChange={(e) => setAsunto(e.target.value)} className="font-normal" />
+          <Input id="sop-asunto" maxLength={120} placeholder="Ej.: No me llega el correo para cambiar la contraseña" value={asunto} onChange={(e) => setAsunto(e.target.value)} className="font-normal" aria-describedby="sop-asunto-hint" />
+          {!asuntoOk && <span id="sop-asunto-hint" className="text-[12.5px] font-normal text-muted-foreground">Escribe un asunto corto, por ejemplo: No puedo entrar.</span>}
         </label>
         <label className="grid gap-1.5 text-sm font-semibold" htmlFor="sop-detalle">Cuéntanos qué pasa
           <Textarea id="sop-detalle" rows={5} maxLength={3800} placeholder="Qué estabas haciendo, qué esperabas y qué pasó. Si viste un mensaje de error, cópialo aquí." value={detalle} onChange={(e) => setDetalle(e.target.value)} className="font-normal" />
+          <span className="flex justify-between gap-2 text-[12.5px] font-normal text-muted-foreground"><span>{asuntoOk && !detalleOk ? "Cuéntanos un poco más (al menos 10 letras)." : ""}</span><span className="tabular-nums">{detalle.length.toLocaleString("es-CO")}/3.800</span></span>
         </label>
         <label className="flex items-start gap-3 text-sm">
           <Switch checked={conPagina} onCheckedChange={setConPagina} aria-label="Incluir la página donde estás" className="mt-0.5" />
           <span className="min-w-0"><span className="block font-medium">Incluir la página donde estás</span><span className="block break-all text-xs text-muted-foreground">{pathname}</span></span>
         </label>
         <p className="text-xs text-muted-foreground">Incluimos la versión de Mirai y tu tipo de pantalla. Nunca enviamos tus montos ni tus datos financieros.</p>
-        <Button onClick={send} disabled={busy} className="w-fit">{busy ? <Spinner /> : <Send />} Enviar caso</Button>
+        <SubmitButton className="w-fit" disabled={!!falta} loading={busy} loadingText="Enviando…" onClick={send} hint={falta ?? undefined}><Send /> Enviar caso</SubmitButton>
       </div>
       <Historial soporte />
     </div>

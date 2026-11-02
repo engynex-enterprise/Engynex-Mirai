@@ -27,7 +27,7 @@ export async function backupUrl(id: string) {
 }
 
 export async function restoreBackup(id: string) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   const db = supabaseAdmin()
   const { data } = await db.from("backups").select("path").eq("id", id).eq("book_id", ctx.book.id).single()
   if (!data) throw new Error("Respaldo no encontrado")
@@ -37,14 +37,14 @@ export async function restoreBackup(id: string) {
 }
 
 export async function restoreFromJson(json: string) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   let dump: BookDump
   try { dump = JSON.parse(json) } catch { throw new Error("El archivo no es un JSON válido") }
   await restoreDump(ctx.book.id, dump, ctx.user.id)
 }
 
 export async function deleteBackup(id: string) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   const db = supabaseAdmin()
   const { data } = await db.from("backups").select("path").eq("id", id).eq("book_id", ctx.book.id).single()
   if (data) await db.storage.from("backups").remove([data.path])
@@ -60,7 +60,7 @@ const BLOCKS: Record<string, string[]> = {
 /** "Formatear" por bloques: envía a la papelera (borrado lógico) lo elegido. Requiere escribir BORRAR. */
 export async function formatBlocks(blocks: string[], confirm: string) {
   if (confirm.trim().toUpperCase() !== "BORRAR") throw new Error("Escribe BORRAR para confirmar")
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   await saveBackup(ctx.book.id, "antes_restaurar", ctx.user.id)
   const db = supabaseAdmin()
   const now = new Date().toISOString()

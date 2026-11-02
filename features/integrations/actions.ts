@@ -15,7 +15,7 @@ const ADMIN_MSG = "Esta integración la administra Mirai. Los avisos se eligen e
 
 /** Guarda la configuración (los secretos vacíos conservan los guardados) y la activa. */
 export async function saveIntegration(kind: string, values: Record<string, string | number | boolean>, enabled = true) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   const def = integrationByKind(kind)
   if (!def) throw new Error("Integración desconocida")
   if (isAdminOnly(def)) throw new Error(ADMIN_MSG)
@@ -40,7 +40,7 @@ export async function saveIntegration(kind: string, values: Record<string, strin
 }
 
 export async function toggleIntegration(kind: string, enabled: boolean) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   const def = integrationByKind(kind)
   if (isAdminOnly(def)) throw new Error(ADMIN_MSG)
   const own = await getOwnIntegration(ctx.household.id, kind)
@@ -55,7 +55,7 @@ export async function toggleIntegration(kind: string, enabled: boolean) {
 }
 
 export async function deleteIntegration(kind: string) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   if (isAdminOnly(kind)) throw new Error(ADMIN_MSG)
   await supabaseAdmin().from("integrations").delete().eq("household_id", ctx.household.id).eq("kind", kind)
 }
@@ -87,7 +87,7 @@ export async function testIntegration(kind: string): Promise<{ ok: boolean; msg:
  * o, si está vacía, la guardada (o la del despliegue para el AI Gateway).
  */
 export async function listModels(kind: string, apiKey?: string): Promise<{ ok: boolean; models: ModelOption[]; rec?: string; msg?: string }> {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   const src = MODEL_LIST[kind]
   if (!src) return { ok: false, models: [], msg: "Este proveedor no tiene lista de modelos." }
   const saved = await getIntegration(ctx.household.id, kind)

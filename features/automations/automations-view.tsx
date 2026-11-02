@@ -7,7 +7,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Plus, Sparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { DataTable, type DTColumn } from "@/components/mirai/data-table"
@@ -17,13 +16,18 @@ import { PageHeader } from "@/components/mirai/page-header"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Segmented } from "@/components/mirai/choice-cards"
+import { FormField } from "@/components/mirai/field"
+import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
+import { Panel } from "@/components/mirai/panel"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { qk } from "@/lib/supabase/tables"
+import { cn } from "@/lib/utils"
 import { canUseAi } from "@/lib/automations/limits"
-import { CATALOG, summarize } from "@/lib/automations/catalog"
+import { CATALOG, KINDS_BY_GROUP, summarize } from "@/lib/automations/catalog"
 import { parseGraph, triggerOf, validateGraph } from "@/lib/automations/schema"
-import { TEMPLATES } from "@/lib/automations/templates"
+import { TEMPLATES, type Template } from "@/lib/automations/templates"
 import { ensureDefaultAutomations } from "./actions"
 import { ESTADOS, fechaHora, useActiveLimit, useAutomations, useRefs, useRuns, type Automation } from "./hooks"
 import { FlowChips, RunsList, StepIcon, TemplateCard, useCreateAutomation } from "./shared"
@@ -51,23 +55,45 @@ export function useDuplicate() {
   return (a: Automation) => save.mutate({ nombre: `Copia de ${a.nombre}`.slice(0, 80), descripcion: a.descripcion, icon: a.icon, disparador: a.disparador, grafo: a.grafo, activo: false, plantilla: null } as never)
 }
 
+const TPL_FILTROS: ListFilter<Template>[] = [
+  { value: "todas", label: "Todas" },
+  { value: "gratis", label: "Para todos", match: (t) => !t.premium },
+  { value: "premium", label: "Premium", match: (t) => !!t.premium },
+]
+const tplText = (t: Template) => `${t.nombre} ${t.descripcion}`
+
+/** Galería de plantillas con buscador (en la página y en la ventana de Nueva). */
+function TemplateGallery({ disabled, onUse, cols = "md:grid-cols-2 xl:grid-cols-3" }: { disabled: (t: Template) => boolean; onUse: (t: Template) => void; cols?: string }) {
+  const ctl = useListControls(TEMPLATES, { text: tplText, filters: TPL_FILTROS })
+  return (
+    <div className="grid gap-4">
+      <ListToolbar c={ctl} placeholder="Buscar plantilla" filters={TPL_FILTROS} />
+      {!ctl.rows.length ? <NoResults c={ctl} /> : (
+        <div className={cn("grid gap-4", cols)}>
+          {ctl.rows.map((t) => <TemplateCard key={t.key} t={t} disabled={disabled(t)} onUse={() => onUse(t)} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function NewDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { plan } = useApp()
   const { create, pending } = useCreateAutomation()
   const [nombre, setNombre] = useState("")
+  const crear = () => { if (nombre.trim() && !pending) void create(null, nombre.trim()) }
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} wide title="Nueva automatización" description="Empieza con una plantilla (la puedes cambiar toda) o desde cero.">
       <div className="grid gap-5">
-        <Card className="gap-3 p-4 shadow-none">
-          <p className="font-semibold">Desde cero</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input className="h-11" aria-label="Nombre de la automatización" placeholder="Ej. Avísame de los domicilios" maxLength={80} value={nombre} onChange={(e) => setNombre(e.target.value)} />
-            <Button className="h-11" onClick={() => create(null, nombre.trim())} disabled={pending}><Plus /> Crear y abrir el editor</Button>
+        <Panel title="Desde cero" icon="workflow" as="h3" className="gap-3 bg-secondary/40 p-4 shadow-none">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <FormField label="Nombre de la automatización" htmlFor="auto-nombre" tip={false} className="flex-1">
+              <Input id="auto-nombre" className="h-11" placeholder="Ej. Avísame de los domicilios" maxLength={80} value={nombre} onChange={(e) => setNombre(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") crear() }} />
+            </FormField>
+            <SubmitButton className="h-11" disabled={!nombre.trim()} loading={pending} loadingText="Creando…" hint="Escribe un nombre para crearla" onClick={crear}><Plus /> Crear y abrir el editor</SubmitButton>
           </div>
-        </Card>
-        <div className="grid gap-3 md:grid-cols-2">
-          {TEMPLATES.map((t) => <TemplateCard key={t.key} t={t} disabled={pending || (t.premium && !canUseAi(plan))} onUse={() => create(t)} />)}
-        </div>
+        </Panel>
+        <TemplateGallery cols="md:grid-cols-2" disabled={(t) => pending || (!!t.premium && !canUseAi(plan))} onUse={(t) => create(t)} />
       </div>
     </ResponsiveDialog>
   )
@@ -99,6 +125,13 @@ export function AutomationsView() {
     ensureDefaultAutomations().then((r) => { if (r.creadas) qc.invalidateQueries({ queryKey: qk(bookId, "automations") }) })
   }, [can, bookId, qc])
 
+  const filtros = useMemo(() => {
+    const kinds = [...new Set((data ?? []).map((a) => triggerOf(parseGraph(a.grafo))?.kind).filter((k): k is NonNullable<typeof k> => !!k && KINDS_BY_GROUP.trigger.includes(k)))]
+    return [
+      { id: "estado", label: "Estado", options: [{ value: "on", label: "Activas" }, { value: "off", label: "Pausadas" }, { value: "revisar", label: "Por revisar" }], match: (a: Automation, v: string) => (v === "on" ? a.activo : v === "off" ? !a.activo : !validateGraph(parseGraph(a.grafo)).ok) },
+      ...(kinds.length > 1 ? [{ id: "disparador", label: "Cuándo corre", options: kinds.map((k) => ({ value: k, label: CATALOG[k].label })), match: (a: Automation, v: string) => triggerOf(parseGraph(a.grafo))?.kind === v }] : []),
+    ]
+  }, [data])
   const names = useMemo(() => Object.fromEntries((data ?? []).map((a) => [a.id, a.nombre])), [data])
   const ejecuciones = (data ?? []).reduce((t, a) => t + (a.ejecuciones ?? 0), 0)
   const ultima = [...(data ?? [])].filter((a) => a.ultima_ejecucion).sort((a, b) => (a.ultima_ejecucion! < b.ultima_ejecucion! ? 1 : -1))[0]
@@ -171,7 +204,7 @@ export function AutomationsView() {
       {tab === "mias" && (
         <DataTable title="Tus automatizaciones" info="Toca una para abrir su diagrama. Usa el interruptor para activarla o pausarla." data={data} loading={isPending} columns={columns} rowKey={(a) => a.id}
           search={{ placeholder: "Buscar automatización", text: (a) => `${a.nombre} ${a.descripcion}` }}
-          filters={[{ id: "estado", label: "Estado", options: [{ value: "on", label: "Activas" }, { value: "off", label: "Pausadas" }], match: (a, v) => (v === "on" ? a.activo : !a.activo) }]}
+          filters={filtros}
           create={can ? { label: "Nueva", onClick: () => setNuevo(true) } : undefined}
           exportName="automatizaciones"
           details={(a) => `/automatizaciones/${a.id}`}
@@ -185,19 +218,16 @@ export function AutomationsView() {
       )}
 
       {tab === "plantillas" && (
-        <section className="grid gap-3" aria-label="Plantillas">
+        <section className="grid gap-4" aria-label="Plantillas">
           <p className="text-muted-foreground">Toca <b>Usar</b> y se crea una copia en pausa que puedes cambiar a tu gusto.</p>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {TEMPLATES.map((t) => <TemplateCard key={t.key} t={t} disabled={!can || pending || (t.premium && !canUseAi(plan))} onUse={() => create(t)} />)}
-          </div>
+          <TemplateGallery disabled={(t) => !can || pending || (!!t.premium && !canUseAi(plan))} onUse={(t) => create(t)} />
         </section>
       )}
 
       {tab === "historial" && (
-        <Card className="gap-3 p-4 shadow-card ring-0 sm:p-6">
-          <h2 className="text-lg font-semibold">Últimas ejecuciones</h2>
-          <RunsList runs={runs.data} loading={runs.isPending} names={names} />
-        </Card>
+        <Panel title="Últimas ejecuciones" icon="history" description="Toca una ejecución para ver qué hizo paso a paso.">
+          <RunsList runs={runs.data} loading={runs.isPending} names={names} filterable />
+        </Panel>
       )}
 
       <NewDialog open={nuevo} onOpenChange={setNuevo} />

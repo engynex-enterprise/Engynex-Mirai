@@ -1,12 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { useMemo } from "react"
 import { ArrowRight, Camera, CircleCheck, Flame, HandCoins, MessageCircleQuestion, Receipt } from "lucide-react"
-import { Bar, BarChart, Cell, XAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Progress } from "@/components/ui/progress"
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
@@ -28,7 +27,11 @@ import { useMembers } from "@/features/catalogs/hooks"
 import { useSetupProgress } from "@/features/setup/use-setup"
 import { useGami } from "@/features/gami/use-gami"
 import { QuickEntry } from "./quick-entry"
-import { Illustration } from "@/components/mirai/illustration"
+import { EmptyState } from "@/components/mirai/empty-state"
+import { Panel, SectionTitle } from "@/components/mirai/panel"
+
+// recharts (~100 KB comprimido) sale del JS inicial de Inicio: el gráfico pequeño llega después de pintar.
+const HormigaChart = dynamic(() => import("./hormiga-chart"), { ssr: false, loading: () => <div className="h-24 w-full" aria-hidden /> })
 
 const DOT = { bad: "vencido", warn: "porVencer", ok: "gray" } as const
 
@@ -76,13 +79,9 @@ function AgendaRow({ x }: { x: AgendaItem }) {
   )
 }
 
-function RailCard({ title, action, children, className }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
-  return (
-    <Card className={cn("appear gap-2 rounded-lg p-4 ring-0", className)}>
-      <div className="flex items-center justify-between"><h2 className="text-[17px] font-bold">{title}</h2>{action}</div>
-      {children}
-    </Card>
-  )
+/** Tarjeta de Inicio: el mismo encabezado (SectionTitle) y padding que el resto de la app. */
+function RailCard({ title, icon, action, children, className }: { title: string; icon?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return <Panel title={title} icon={icon} action={action} className={cn("appear gap-3", className)}>{children}</Panel>
 }
 
 const relDay = (fecha: string, today: string) => {
@@ -123,7 +122,6 @@ export function HomeView() {
   }, [book, today])
 
   if (isPending || !d || !book) return <PageSkeleton kpis={4} />
-  const chartCfg = { v: { label: "Gasto hormiga", color: "#F7B928" } }
   const memberName = (id: string | null) => (id ? members.find((m) => m.id === id)?.nombre : null) ?? "La familia"
   const memberAvatar = (id: string | null) => { const m = id ? members.find((x) => x.id === id) : null; return m ? m.avatar || (m.es_titular ? user.avatar : null) : null }
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Bogota", hour: "numeric", hourCycle: "h23" }).format(new Date()))
@@ -143,14 +141,14 @@ export function HomeView() {
           <p className="relative mt-1.5 text-xs text-white/75">{Math.round(gami.X.total).toLocaleString("es-CO")} puntos{gami.L.next ? ` · faltan ${Math.round(gami.L.next - gami.X.total).toLocaleString("es-CO")} para ${gami.L.nextName}` : ""}</p>
         </Link>
       )}
-      <RailCard title="Próximos 15 días" action={<Button variant="link" size="sm" asChild><Link href="/recordatorios">Ver todo <ArrowRight /></Link></Button>}>
+      <RailCard title="Próximos 15 días" icon="calendar-days" action={<Button variant="link" size="sm" asChild><Link href="/recordatorios">Ver todo <ArrowRight /></Link></Button>}>
         {!d.ag.length ? <p className="text-sm text-muted-foreground">Nada pendiente en los próximos 15 días.</p> : <ul className="-mx-2 grid">{d.ag.map((x) => <AgendaRow key={`${x.k}-${x.id}-${x.fecha}`} x={x} />)}</ul>}
       </RailCard>
-      <RailCard title="Tu familia" action={<Button variant="link" size="sm" asChild><Link href="/perfil">Ver <ArrowRight /></Link></Button>}>
+      <RailCard title="Tu familia" icon="users" action={<Button variant="link" size="sm" asChild><Link href="/perfil">Ver <ArrowRight /></Link></Button>}>
         <ul className="-mx-2 grid">
           {[{ id: user.id, nombre: user.nombre, avatar: user.avatar, rol: "Tú", on: true }, ...online.filter((o) => o.id !== user.id).map((o) => ({ id: o.id, nombre: o.nombre, avatar: o.avatar, rol: "En línea", on: true })), ...members.filter((m) => !m.user_id && !m.es_titular).slice(0, 5).map((m) => ({ id: m.id, nombre: m.nombre, avatar: m.avatar || null, rol: m.rol, on: false }))].map((p) => (
             <li key={p.id} className="flex items-center gap-3 rounded-xl p-2 hover:bg-hover">
-              <span className="relative"><UserAvatar src={p.avatar} name={p.nombre} className="size-9" fallbackClassName="text-xs" />{p.on && <span className="absolute right-0 bottom-0 size-3 rounded-full bg-[#31A24C] ring-2 ring-card" aria-label="En línea" />}</span>
+              <span className="relative"><UserAvatar src={p.avatar} name={p.nombre} className="size-9" fallbackClassName="text-xs" />{p.on && <span className="absolute right-0 bottom-0 size-3 rounded-full bg-[#31A24C] ring-2 ring-card" role="img" aria-label="En línea" />}</span>
               <span className="grid min-w-0"><span className="truncate text-[14px] font-semibold">{p.nombre}</span><span className="text-xs text-muted-foreground">{p.rol}</span></span>
             </li>
           ))}
@@ -168,7 +166,7 @@ export function HomeView() {
   )
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       <PageHeader id="inicio" title={cumple ? `¡Feliz cumpleaños, ${first}!` : `${saludo}, ${first}`} description={cumple ? "Hoy es tu día. Date un gusto que quepa en tu presupuesto: así se celebra sin culpa." : "Así van las finanzas de tu hogar hoy."}>
         {setup && !setup.finished && (
           <div className="mt-1 flex w-full max-w-xl items-center gap-3 rounded-2xl bg-white/75 px-3 py-2.5 text-[14px] text-meta-text backdrop-blur dark:bg-white/10">
@@ -184,8 +182,8 @@ export function HomeView() {
 
       <RatingPrompt />
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="grid min-w-0 gap-5">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid min-w-0 gap-6">
           {/* Composer: "¿Qué gastaste hoy?" */}
           <Card className="appear gap-3 rounded-lg p-4 ring-0">
             <QuickEntry />
@@ -215,11 +213,10 @@ export function HomeView() {
           <HallazgosCard />
 
           {/* Quincena */}
-          <Card className="appear gap-4 rounded-lg p-4 ring-0 sm:p-5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[17px] font-bold">{d.which === "q1" ? "Primera" : "Segunda"} quincena de {d.mesName}</h2>
-              <Button variant="link" size="sm" asChild><Link href={`/balance?tab=${d.which}`}>Ver detalle <ArrowRight /></Link></Button>
-            </div>
+          <Card className="appear gap-4 p-5 shadow-card ring-0">
+            <SectionTitle icon="calendar-range" action={<Button variant="link" size="sm" asChild><Link href={`/balance?tab=${d.which}`}>Ver detalle <ArrowRight /></Link></Button>}>
+              {d.which === "q1" ? "Primera" : "Segunda"} quincena de {d.mesName}
+            </SectionTitle>
             <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
               {([["Entra", d.q.ent, "text-success"], ["Sale", d.q.sal, "text-danger"]] as const).map(([t, list, c]) => (
                 <div key={t} className="grid content-start gap-0.5">
@@ -242,8 +239,8 @@ export function HomeView() {
 
           {/* Avisos */}
           {d.N.length > 0 && (
-            <Card className="appear gap-2 rounded-lg p-4 ring-0">
-              <div className="flex items-center justify-between"><h2 className="text-[17px] font-bold">Avisos</h2><Button variant="link" size="sm" onClick={() => setBell(true)}>Ver todos</Button></div>
+            <Card className="appear gap-3 p-5 shadow-card ring-0">
+              <SectionTitle icon="bell" action={<Button variant="link" size="sm" onClick={() => setBell(true)}>Ver todos</Button>}>Avisos</SectionTitle>
               {d.N.map((n) => (
                 <Link key={n.id} href={`/${n.go}`} className="flex items-start gap-3 rounded-xl p-2 hover:bg-hover">
                   <span className={cn("grid size-10 shrink-0 place-items-center rounded-full text-white", n.lvl === "bad" ? "bg-[linear-gradient(135deg,#FF8A9B,#D0243F)]" : n.lvl === "warn" ? "bg-[linear-gradient(135deg,#FFD36B,#E08A00)]" : "bg-[linear-gradient(135deg,#5AA9FF,#1B5FA8)]")}><Icon name={n.icon} className="size-5" /></span>
@@ -255,8 +252,8 @@ export function HomeView() {
 
           {/* Actividad reciente (feed) */}
           <section className="grid gap-3">
-            <h2 className="px-1 text-[17px] font-bold">Actividad reciente</h2>
-            {!d.feed.length && <Card className="items-center gap-2 rounded-lg p-6 text-center text-sm text-muted-foreground ring-0"><Illustration k="vacio" width={180} /><p className="text-[15px] font-semibold text-foreground">Aún no hay movimientos</p><p>Escribe arriba tu primer gasto y aparecerá aquí.</p></Card>}
+            <SectionTitle icon="activity" className="px-1">Actividad reciente</SectionTitle>
+            {!d.feed.length && <Card className="shadow-card ring-0"><EmptyState art="vacio" title="Aún no hay movimientos" description="Escribe arriba tu primer gasto y aparecerá aquí." action={<Button variant="outline" asChild><Link href="/gastos?nuevo=1">Agregar un gasto</Link></Button>} /></Card>}
             {d.feed.map((x) => (
               <Card key={`${x.k}-${x.id}`} className="appear gap-3 rounded-lg p-4 ring-0">
                 <div className="flex items-center gap-3">
@@ -277,9 +274,9 @@ export function HomeView() {
           </section>
 
           {/* Metas, hormiga y préstamos */}
-          <div className="grid gap-5 md:grid-cols-2">
-            <RailCard title="Metas y gasto hormiga">
-              {!book.goals.length ? <p className="text-sm text-muted-foreground">Aún no tienes metas.</p> : book.goals.slice(0, 4).map((g) => {
+          <div className="grid gap-6 md:grid-cols-2">
+            <RailCard title="Metas y gasto hormiga" icon="target" action={<Button variant="link" size="sm" asChild><Link href="/metas">Ver <ArrowRight /></Link></Button>}>
+              {!book.goals.length ? <p className="text-sm text-muted-foreground">Aún no tienes metas. <Link href="/metas?nuevo=1" className="font-semibold text-link hover:underline">Crea la primera</Link></p> : book.goals.slice(0, 4).map((g) => {
                 const p = Math.min(100, (Number(g.ahorrado) / Math.max(1, Number(g.objetivo))) * 100)
                 return (
                   <div key={g.id} className="grid gap-1.5">
@@ -288,15 +285,10 @@ export function HomeView() {
                   </div>
                 )
               })}
-              <ChartContainer config={chartCfg} className="mt-2 h-24 w-full">
-                <BarChart data={d.H.meses} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="l" tickLine={false} axisLine={false} fontSize={11} />
-                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => fmtShort(Number(v))} hideIndicator />} />
-                  <Bar dataKey="v" radius={6}>{d.H.meses.map((_, i) => <Cell key={i} fill={i === d.H.meses.length - 1 ? "#F7B928" : "var(--secondary)"} />)}</Bar>
-                </BarChart>
-              </ChartContainer>
+              <p className="mt-auto pt-1 text-xs font-semibold text-muted-foreground">Gasto hormiga de los últimos meses</p>
+              <HormigaChart meses={d.H.meses} totalMes={d.H.totalMes} />
             </RailCard>
-            <RailCard title="Préstamos">
+            <RailCard title="Préstamos" icon="hand-coins" action={<Button variant="link" size="sm" asChild><Link href="/le-debo">Ver <ArrowRight /></Link></Button>}>
               {!d.loans.length ? <p className="text-sm text-muted-foreground">Sin préstamos registrados.</p> : d.loans.slice(0, 5).map(({ L, e, prog }) => (
                 <Link key={L.id} href={`/${L.kind === "cobrar" ? "me-deben" : "le-debo"}?id=${L.id}`} className="grid gap-1.5 rounded-xl p-2 hover:bg-hover">
                   <div className="flex items-center justify-between gap-2 text-[14px]">
@@ -312,7 +304,7 @@ export function HomeView() {
         </div>
 
         {/* Columna derecha (en celular va debajo) */}
-        <aside className="grid gap-5 xl:sticky xl:top-4">{rail}</aside>
+        <aside className="grid gap-6 xl:sticky xl:top-4" aria-label="Resumen lateral">{rail}</aside>
       </div>
     </div>
   )

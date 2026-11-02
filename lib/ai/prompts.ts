@@ -41,17 +41,22 @@ export const BASE_SYSTEM_SHORT = `Eres el motor de datos de Mirai, una app de fi
 
 /** Instrucciones por tarea (se agregan al prompt base). */
 const TASK: Record<AiFeature, string> = {
-  chat: `TAREA: conversas con la persona sobre su dinero usando el resumen de sus números (DATOS) y la conversación.
-- Decide la acción: "consejero" si el último mensaje describe una decisión concreta que quiere evaluar ANTES de hacerla (comprar, endeudarse, sacar tarjeta o crédito, prestar, invertir, abonar, empeñar, asumir un gasto fijo nuevo). En cualquier otro caso, "responder".
-- "respuesta": máximo 180 palabras; puedes usar **negritas** y listas con guiones. Si la acción es "consejero", una sola frase diciendo que lo vas a analizar con sus números.
+  chat: `TAREA: conversas con la persona sobre su dinero, como un asesor cercano. Tienes un resumen de sus números (DATOS) y la conversación.
+- HERRAMIENTAS de consulta (gastos, tarjetas, deudas, metas, proximos_pagos): úsalas cuando la pregunta pida cifras o detalles que no estén en DATOS. Nunca inventes cifras.
+- HERRAMIENTAS "proponer_…" (gasto, ingreso, meta, recordatorio): solo preparan una tarjeta que la persona debe tocar en Confirmar; nunca digas que ya quedó guardado. Si falta un dato obligatorio (valor, nombre, fecha del recordatorio), pregúntalo antes. Si no tienes esas herramientas, explica que con su rol solo puede consultar.
+- Si describe una decisión concreta sin el valor (comprar, endeudarse, prestar, invertir), pídele el valor y las cuotas para analizarla con sus números.
+- Formato Markdown: primero la respuesta, luego máximo 3 pasos con cifras. Usa **negritas** para las cifras clave, listas con guiones y una tabla corta si comparas opciones. Títulos (###) solo si la respuesta es larga. Máximo 220 palabras salvo que pida más detalle.
 - Si la pregunta no es de finanzas personales, responde en una frase y vuelve al tema del dinero.`,
+  chat_titulo: `TAREA: escribe un título de 2 a 6 palabras, en español de Colombia, que resuma la conversación (por ejemplo: "Gastos de noviembre", "Comprar moto a cuotas"). Solo el título: sin comillas, sin punto final y sin la palabra "conversación".`,
   consejero_interpretar: `TAREA: entender una decisión de dinero que la persona describe y extraer sus datos.
 Tipos: comprar (de contado, a cuotas o con tarjeta) · tarjeta (sacar una tarjeta de crédito nueva) · credito (pedir un préstamo) · prestar (prestarle a otra persona) · fijo (asumir un gasto mensual nuevo) · invertir (CDT, ahorro, inversión) · abonar (pagar antes una deuda) · empeno (empeñar un objeto).
 "valor" según el tipo: comprar=precio total; tarjeta=cupo; credito/empeno=monto prestado; prestar=monto; fijo=valor mensual; invertir=monto; abonar=valor del abono.
 "desc": 3 a 8 palabras. "dudas": 1 a 3 preguntas cortas y sencillas sobre los datos que faltan. Usa null en lo que no aparezca.`,
   consejero_analizar: `TAREA: dar un concepto sobre una decisión de dinero con los números reales (DATOS). Los cálculos y el "veredicto_reglas" ya los hizo Mirai.
 - Respeta el veredicto de las reglas salvo una razón clara (y explícala).
-- "titular": máx 12 palabras. "explicacion": 2-3 frases sencillas. "razones": 3 a 5, con cifras ($ 1.234.567). "alternativas": 2 a 4 prácticas. "plan": 3 pasos si decide hacerlo. "pregunta": una para reflexionar.
+- "explicacion": 2-3 frases cálidas que contesten directamente lo que preguntó, con SUS palabras en segunda persona (si escribió "darle a mi mujer para sus cosas", di "darle a tu esposa $ 100.000 al mes para sus cosas…") y la cifra que más importa. Sin tecnicismos ni frases genéricas; varía la forma de empezar.
+- "titular": máx 12 palabras. "razones": 2 a 4, concretas y con cifras ($ 1.234.567). "alternativas": 2 a 3 prácticas. "plan": 1 a 3 pasos (qué te recomiendo hacer). "pregunta": una para reflexionar.
+- Si "finanzas.disponible_hoy" es 0 y no hay cuentas registradas, NO digas que no tiene plata: di que aún no registra sus cuentas o fondo de emergencia. Escribe los decimales con coma (0,4 días; 1,5 %).
 - "tecnico": para alguien que sabe de finanzas (flujo de caja, endeudamiento DTI, liquidez, costo financiero, TEA); "resumen" 3-4 frases, "recomendacion" 1-2 frases.`,
   categorizar: `TAREA: clasificar gastos de una familia. Para cada gasto devuelve "categoria" (nombre EXACTO de la lista, o null), "hormiga" (true/false, o null si no se pidió) y "razon" (máx 8 palabras).
 Gasto hormiga: pequeño, frecuente o impulsivo, no esencial y fácil de evitar (tinto, snacks, gaseosas, domicilios, propinas, taxis cortos, antojos, retiros con comisión, apps). NO son hormiga: arriendo, servicios públicos, mercado grande, salud, educación, cuotas de créditos ni gastos grandes. Si se repite mucho en el mes ("veces"), es más probable que sea hormiga.`,

@@ -4,7 +4,9 @@ import { Sparkles } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { improveCobro } from "@/features/ai/actions"
 import { useState } from "react"
-import { Copy, Mail, MessageCircle } from "lucide-react"
+import Link from "next/link"
+import { useQuery } from "@tanstack/react-query"
+import { Copy, KeyRound, Mail, MessageCircle } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,8 +16,11 @@ import { useApp } from "@/components/app/app-context"
 import type { LoanEngine } from "@/lib/domain"
 import { fmtDate, fmtMoney } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
+import { cobroTexto, normalizarCobros } from "@/lib/domain/cobros"
+import { createClient } from "@/utils/supabase/client"
 
 type Tono = "amable" | "directo" | "firme"
+type Pago = "no" | "principal" | "todas"
 
 /** cobroMsg de la v4 (plantillas sin IA). */
 export function cobroMsg(e: LoanEngine, concepto: string, contacto: string, yo: string, tono: Tono) {
@@ -36,8 +41,16 @@ export function ReminderDialog({ open, onOpenChange, engine, concepto, contact }
   const [tono, setTono] = useState<Tono>(engine.mora > 0 ? "firme" : "amable")
   const [msg, setMsg] = useState(() => cobroMsg(engine, concepto, contact?.nombre ?? "", user.nombre, engine.mora > 0 ? "firme" : "amable"))
   const [improving, setImproving] = useState(false)
+  // Tus llaves y cuentas de Perfil › Recibe pagos (la principal por defecto) van al final del mensaje
+  const { data: cobros = [] } = useQuery({
+    queryKey: ["profile", user.id, "cobro"], enabled: open,
+    queryFn: async () => normalizarCobros((await createClient().from("profiles").select("cobro").eq("id", user.id).single()).data?.cobro),
+  })
+  const [pago, setPago] = useState<Pago>("principal")
+  const bloque = cobros.length && pago !== "no" ? cobroTexto(user.nombre, cobros, cobros.length > 1 ? pago : "todas", "Me puedes pagar aquí:") : ""
+  const full = bloque ? `${msg.trimEnd()}\n\n${bloque}` : msg
   const tel = (contact?.telefono ?? "").replace(/\D/g, "")
-  const wa = tel ? `https://wa.me/${tel.length === 10 ? "57" + tel : tel}?text=${encodeURIComponent(msg)}` : null
+  const wa = tel ? `https://wa.me/${tel.length === 10 ? "57" + tel : tel}?text=${encodeURIComponent(full)}` : null
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} mdesc="cobro" title={`Recordarle a ${contact?.nombre ?? "tu contacto"}`}>
       <div className="grid gap-4 pb-2">
@@ -45,10 +58,20 @@ export function ReminderDialog({ open, onOpenChange, engine, concepto, contact }
         <Segmented value={tono} onChange={(v) => { setTono(v as Tono); setMsg(cobroMsg(engine, concepto, contact?.nombre ?? "", user.nombre, v as Tono)) }}
           items={[{ value: "amable", label: "Amable" }, { value: "directo", label: "Directo" }, { value: "firme", label: "Firme" }]} />
         <Textarea rows={6} value={msg} onChange={(e) => setMsg(e.target.value)} aria-label="Mensaje" />
+        {cobros.length > 0 ? (
+          <div className="grid gap-2 rounded-xl bg-secondary/60 p-3">
+            <p className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="size-4 text-muted-foreground" aria-hidden /> Cómo pagarte</p>
+            <Segmented value={pago} onChange={(v) => setPago(v as Pago)}
+              items={[{ value: "principal", label: cobros.length > 1 ? "La principal" : "Incluir" }, ...(cobros.length > 1 ? [{ value: "todas", label: "Todas" }] : []), { value: "no", label: "No incluir" }]} />
+            {bloque && <pre className="text-[13px] whitespace-pre-wrap break-words text-muted-foreground" data-money aria-label="Datos de pago que se agregan">{bloque}</pre>}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">¿Quieres que vea dónde pagarte? <Link href="/perfil#cobro" className="font-semibold text-link hover:underline">Agrega tus llaves o cuentas en tu perfil</Link>.</p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button variant="soft" disabled={improving} onClick={async () => { setImproving(true); const r = await improveCobro(msg, tono); setImproving(false); if (r.ok) setMsg(r.text); else toast.error(r.text) }}>{improving ? <Spinner /> : <Sparkles />} Mejorar con IA</Button>
-          <Button variant="outline" onClick={() => navigator.clipboard.writeText(msg).then(() => toast("Copiado"))}><Copy /> Copiar</Button>
-          {contact?.email && <Button variant="outline" asChild><a href={`mailto:${contact.email}?subject=${encodeURIComponent("Recordatorio de pago")}&body=${encodeURIComponent(msg)}`}><Mail /> Enviar por correo</a></Button>}
+          <Button variant="outline" onClick={() => navigator.clipboard.writeText(full).then(() => toast("Copiado"))}><Copy /> Copiar</Button>
+          {contact?.email && <Button variant="outline" asChild><a href={`mailto:${contact.email}?subject=${encodeURIComponent("Recordatorio de pago")}&body=${encodeURIComponent(full)}`}><Mail /> Enviar por correo</a></Button>}
           {wa ? <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5a]"><a href={wa} target="_blank" rel="noreferrer"><MessageCircle /> Abrir WhatsApp</a></Button>
             : <p className="text-sm text-muted-foreground">Agrega el celular del contacto para enviar por WhatsApp.</p>}
         </div>

@@ -8,6 +8,8 @@ test("ingresos: salario bruto con descuentos de nómina", async ({ page }, info)
   const concepto = `Salario ${info.project.name}`
   // Paso a paso: nada viene marcado y cada pregunta aparece al responder la anterior.
   await expect(page.getByRole("radio", { name: "Salario" })).not.toBeChecked()
+  // Guardar empieza inactivo: se activa cuando el formulario está completo.
+  await expect(page.getByRole("button", { name: "Guardar" })).toBeDisabled()
   await expect(page.getByRole("textbox", { name: "Concepto" })).toHaveCount(0)
   await page.getByRole("radio", { name: "Salario" }).click()
   await page.getByRole("textbox", { name: "Concepto" }).fill(concepto)
@@ -20,6 +22,7 @@ test("ingresos: salario bruto con descuentos de nómina", async ({ page }, info)
   await expect(page.getByText("− Pensión")).toBeVisible()
   await page.getByRole("radio", { name: "Cada quincena" }).click()
   await expect(page.getByRole("textbox", { name: "1ª quincena" })).toHaveValue("4.750.000")
+  await expect(page.getByRole("button", { name: "Guardar" })).toBeEnabled()
   await shot(page, "ingreso-form", info.project.name)
   // "Más detalle" cambia la ventana a la vista completa; Atrás vuelve al formulario con lo escrito.
   await page.getByRole("button", { name: /Más detalle/ }).click()

@@ -7,7 +7,7 @@ import { Icon } from "@/components/mirai/icon"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { normText, tokens } from "@/lib/content/centro-ayuda"
 import { GLOSARIO, GLOSARIO_CATS, glosarioById, type GlosarioCat, type Termino } from "@/lib/content/glosario"
-import { AppLink, Chips, Empty, RowButton, SearchBox, SectionTitle, useHelpNav } from "./ui"
+import { AppLink, Chips, DOC_TONE, Empty, GroupLabel, RowButton, SearchBox, useHelpNav } from "./ui"
 
 const CATS = Object.keys(GLOSARIO_CATS) as GlosarioCat[]
 
@@ -29,9 +29,9 @@ export function GlosarioList() {
       <Chips label="Temas del glosario" value={cat} onChange={setCat} items={[{ value: "todas", label: "Todos", n: GLOSARIO.length }, ...CATS.map((c) => ({ value: c, label: GLOSARIO_CATS[c].label, n: GLOSARIO.filter((t) => t.cat === c).length }))]} />
       {!list.length ? <Empty>No encontramos “{q}”. Prueba con otra palabra o pregúntale al Consejero IA.</Empty> : letras.map((l) => (
         <section key={l} className="grid gap-0.5">
-          <SectionTitle>{l}</SectionTitle>
+          <GroupLabel>{l}</GroupLabel>
           {list.filter((t) => (normText(t.t)[0]?.toUpperCase() ?? "#") === l).map((t) => (
-            <RowButton key={t.id} icon={GLOSARIO_CATS[t.cat].icon} title={t.t} sub={t.sigla ?? GLOSARIO_CATS[t.cat].label} onClick={() => go({ v: "glosario", id: t.id })} />
+            <RowButton key={t.id} icon={GLOSARIO_CATS[t.cat].icon} tone={DOC_TONE.glosario} title={t.t} sub={t.sigla ?? GLOSARIO_CATS[t.cat].label} onClick={() => go({ v: "glosario", id: t.id })} />
           ))}
         </section>
       ))}
@@ -60,8 +60,8 @@ export function TerminoDetail({ id }: { id: string }) {
       {t.ir && <Button asChild className="w-fit"><AppLink href={t.ir.href}>{t.ir.label} <ArrowRight /></AppLink></Button>}
       {ver.length > 0 && (
         <section className="grid gap-1">
-          <SectionTitle>Mira también</SectionTitle>
-          {ver.map((v) => <RowButton key={v.id} icon={GLOSARIO_CATS[v.cat].icon} title={v.t} sub={v.sigla ?? GLOSARIO_CATS[v.cat].label} onClick={() => go({ v: "glosario", id: v.id })} />)}
+          <GroupLabel>Mira también</GroupLabel>
+          {ver.map((v) => <RowButton key={v.id} icon={GLOSARIO_CATS[v.cat].icon} tone={DOC_TONE.glosario} title={v.t} sub={v.sigla ?? GLOSARIO_CATS[v.cat].label} onClick={() => go({ v: "glosario", id: v.id })} />)}
         </section>
       )}
     </article>

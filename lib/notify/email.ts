@@ -38,14 +38,14 @@ export async function sendEmail(v: IntegrationValue, m: Mail): Promise<string | 
 
 export { EMAIL_KINDS } from "./email-kinds"
 
-/** Plantilla HTML con la marca Mirai para todos los correos. */
-export function brandEmail(title: string, bodyHtml: string) {
+/** Plantilla HTML con la marca Mirai para todos los correos. `footer` cambia el pie (p. ej. en las invitaciones). */
+export function brandEmail(title: string, bodyHtml: string, o: { footer?: string } = {}) {
   return `<!doctype html><html lang="es"><body style="margin:0;background:#F5F5F5;font-family:Segoe UI,Arial,sans-serif;color:#242424">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:12px;overflow:hidden">
 <tr><td style="background:#1F2B4B;padding:20px 24px;color:#fff;font-size:20px;font-weight:600">Mirai <span style="font-weight:400;opacity:.7;font-size:13px">· Tu futuro financiero</span></td></tr>
 <tr><td style="height:4px;background:#9EDB4E"></td></tr>
 <tr><td style="padding:24px"><h1 style="font-size:18px;margin:0 0 12px">${title}</h1>${bodyHtml}</td></tr>
-<tr><td style="padding:16px 24px;font-size:12px;color:#616161;border-top:1px solid #E0E0E0">Recibes este correo porque activaste los avisos en Mirai › Ajustes. Puedes apagarlos cuando quieras.</td></tr>
+<tr><td style="padding:16px 24px;font-size:12px;color:#616161;border-top:1px solid #E0E0E0">${o.footer ?? "Recibes este correo porque activaste los avisos en Mirai › Ajustes. Puedes apagarlos cuando quieras."}</td></tr>
 </table></td></tr></table></body></html>`
 }

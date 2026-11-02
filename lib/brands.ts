@@ -12,7 +12,16 @@ const MATCHERS = Object.entries(BRANDS).map(([k, b]) => [k, new RegExp(b.kw)] as
 export function brandFor(text: string | null | undefined): string | null {
   if (!text) return null
   const t = norm(text)
-  return MATCHERS.find(([, re]) => re.test(t))?.[0] ?? null
+  // Gana la primera marca del JSON, salvo que una posterior coincida con un texto que contiene al de la primera
+  // ("google one" contiene "google"; "visa" y "bancolombia" no se contienen: gana el orden).
+  let best: string | null = null, at = -1, end = -1
+  for (const [k, re] of MATCHERS) {
+    const m = re.exec(t)
+    if (!m) continue
+    const a0 = m.index, a1 = m.index + m[0].length
+    if (best === null || (a0 <= at && a1 >= end && a1 - a0 > end - at)) { best = k; at = a0; end = a1 }
+  }
+  return best
 }
 
 /** Suscripciones populares en Colombia para escoger con un toque. */

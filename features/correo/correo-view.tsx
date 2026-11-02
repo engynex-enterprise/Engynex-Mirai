@@ -25,11 +25,11 @@ import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtDate } from "@/lib/format"
 import { categoryOptions, useCategories, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
-import { classifyExpenses } from "@/features/ai/actions"
+import { classifyBatch } from "@/features/expenses/use-ai-category"
 import { googleDisconnect, scanMail, type MailRow } from "./actions"
 import { MAILQ_DEFAULT } from "./query"
 
-type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null }
+type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null; manual?: boolean }
 
 export function CorreoView() {
   const bookId = useBookId()
@@ -45,6 +45,7 @@ export function CorreoView() {
   const [msg, setMsg] = useState("")
   const [rows, setRows] = useState<Row[]>([])
   const [saving, setSaving] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
   const { data: conn, isPending } = useQuery({ queryKey: ["google-conn"], queryFn: async () => (await createClient().from("google_connections_public").select("email,scopes").maybeSingle()).data })
   const gmail = !!conn?.scopes?.some((s) => s.includes("gmail"))
 
@@ -63,8 +64,12 @@ export function CorreoView() {
     const umbral = +(cfg?.umbral ?? 25000)
     const base: Row[] = r.rows.map((x) => { const hit = localCat(x.comercio, { rules, expenses: history, categories: cats }); return { ...x, incl: true, category_id: hit?.category_id ?? null, src: hit?.src === "regla" ? "regla" : null, hormiga: localHormiga({ descripcion: x.comercio, valor: x.valor, category_id: hit?.category_id ?? null }, cats, umbral) } })
     setRows(base); setState("ok")
-    const ai = await classifyExpenses(base.map((x, i) => ({ i, descripcion: x.comercio, valor: x.valor, veces_mes: 0 })))
-    if (ai) setRows((rs) => rs.map((x, i) => { const a = ai.find((y) => y.i === i); return a ? { ...x, category_id: x.src === "regla" ? x.category_id : a.category_id ?? x.category_id, hormiga: a.hormiga ?? x.hormiga, src: x.src ?? "ia" } : x }))
+    // La IA decide siempre la categoría (lo de las reglas va como "categoría probable"), salvo en las filas que la
+    // persona ya cambió a mano mientras respondía. Sin IA (apagada o plan Gratis) queda lo local.
+    setAiBusy(true)
+    const ai = await classifyBatch(base.map((x) => ({ descripcion: x.comercio, valor: x.valor })), history)
+    setAiBusy(false)
+    if (ai) setRows((rs) => rs.map((x, i) => { const a = ai.find((y) => y.i === i); return a && !x.manual ? { ...x, category_id: a.category_id ?? x.category_id, hormiga: a.hormiga ?? x.hormiga, src: a.category_id ? "ia" : x.src } : x }))
   }
   const save = async () => {
     const sel = rows.filter((r) => r.incl)
@@ -106,7 +111,7 @@ export function CorreoView() {
           {state === "error" && <Notice tone="bad" title="Hubo un problema al leer el correo">{msg}</Notice>}
           {state === "ok" && (
             <Card className="gap-3 p-5 shadow-card ring-0">
-              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Revisa antes de guardar ({rows.filter((r) => r.incl).length} de {rows.length})</h2><Button onClick={save} disabled={saving}>{saving && <Spinner />} Guardar seleccionados</Button></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold">Revisa antes de guardar ({rows.filter((r) => r.incl).length} de {rows.length}){aiBusy && <span className="flex items-center gap-1 text-sm font-normal text-muted-foreground"><Spinner /> Categorizando con IA…</span>}</h2><Button onClick={save} disabled={saving}>{saving && <Spinner />} Guardar seleccionados</Button></div>
               <div className="overflow-x-auto"><table className="w-full min-w-[40rem] text-sm">
                 <thead><tr className="border-b text-left text-muted-foreground"><th className="w-8 py-2" /><th className="font-medium">Fecha</th><th className="font-medium">Comercio</th><th className="font-medium">Categoría</th><th className="text-right font-medium">Valor</th></tr></thead>
                 <tbody>{rows.map((r, i) => (
@@ -114,7 +119,7 @@ export function CorreoView() {
                     <td className="py-2"><Checkbox checked={r.incl} onCheckedChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, incl: v === true } : x)))} aria-label={`Incluir ${r.comercio}`} /></td>
                     <td className="whitespace-nowrap">{fmtDate(r.fecha)}</td>
                     <td><p className="font-medium">{r.comercio}</p><p className="max-w-64 truncate text-xs text-muted-foreground">{r.asunto}</p>{r.hormiga && <StatusPill tone="porVencer" className="mt-1 h-5">hormiga</StatusPill>}</td>
-                    <td className="min-w-48"><Combobox value={r.category_id ?? ""} onChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, category_id: v, src: null } : x)))} options={categoryOptions(cats)} placeholder="Elige" /></td>
+                    <td className="min-w-48"><Combobox value={r.category_id ?? ""} onChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, category_id: v, src: null, manual: true } : x)))} options={categoryOptions(cats)} placeholder="Elige" /></td>
                     <td className="text-right font-medium tabular-nums"><Money value={r.valor} /></td>
                   </tr>
                 ))}</tbody>

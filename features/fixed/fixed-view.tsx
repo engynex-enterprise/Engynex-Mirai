@@ -1,30 +1,32 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Plus } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { EmptyState } from "@/components/mirai/empty-state"
+import { EntityLogo } from "@/components/mirai/entity-logo"
 import { ListRow } from "@/components/mirai/list-row"
+import { DataTable, catalogMatch, catalogOptions, type DTColumn } from "@/components/mirai/data-table"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useSoftDelete } from "@/hooks/use-book-data"
 import { useIdParam, useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { FFREC, fijoStatus, fijoValor, fijosMes, fixedReparto, relTime, toDay, type FixedExpenseIn } from "@/lib/domain"
+import { FFREC, fijoStatus, fijoValor, fijosMes, fixedReparto, relTime, toDay, type FixedExpenseIn, type FixedStatus } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
+import { DUE_HINT, daysBetween } from "@/lib/list-helpers"
 import { useBookData } from "@/features/book/use-book-data"
-import { useCategories, usePaymentMethods } from "@/features/catalogs/hooks"
+import { memberName, useCategories, useMembers, usePaymentMethods, useProviders } from "@/features/catalogs/hooks"
 import { FixedForm, type FixedRow } from "./fixed-form"
 import { PayFixedDialog } from "./pay-fixed-dialog"
 
-const days = (a: string, b: string) => Math.round((new Date(b + "T12:00:00").getTime() - new Date(a + "T12:00:00").getTime()) / 864e5)
+type R = { f: FixedRow; st: FixedStatus; next: FixedStatus["prox"]; estado: "vencido" | "pronto" | "luego" | "aldia" }
+type Pago = { f: FixedRow; p: FixedRow["payments"][number] }
 
 export function FixedView() {
   const bookId = useBookId()
@@ -38,19 +40,27 @@ export function FixedView() {
   const { data: book, isPending } = useBookData()
   const { data: cats = [] } = useCategories()
   const { data: methods = [] } = usePaymentMethods()
+  const { data: members = [] } = useMembers()
+  const { data: providers = [] } = useProviders()
   const del = useSoftDelete("fixed_expenses", "Gasto fijo eliminado")
   const fixed = (book?.fixedExpenses ?? []) as unknown as FixedRow[]
   const anticipo = book?.settings.anticipo ?? 5
-
-  const rows = useMemo(() => fixed.map((f) => ({ f, st: fijoStatus(f as unknown as FixedExpenseIn, today) })), [fixed, today])
   const mes = today.slice(0, 7)
-  const k = useMemo(() => {
+
+  // Sin useMemo: el React Compiler memoiza solo (con useMemo no podía conservar la memoización).
+  const rows: R[] = fixed.map((f) => {
+    const st = fijoStatus(f as unknown as FixedExpenseIn, today)
+    const next = st.venc[0] ?? st.prox
+    const estado = st.venc.length ? "vencido" : !next ? "aldia" : daysBetween(today, next.due) <= anticipo ? "pronto" : "luego"
+    return { f, st, next, estado }
+  })
+  const k = (() => {
     const pend = rows.flatMap(({ f, st }) => st.periods.filter((p) => !p.pago && p.due.startsWith(mes)).map((p) => fijoValor(f, p.per))).reduce((a, b) => a + b, 0)
     const pagado = rows.flatMap(({ f }) => f.payments.filter((p) => p.fecha.startsWith(mes))).reduce((a, p) => a + Number(p.valor), 0)
     const venc = rows.reduce((a, { st }) => a + st.venc.length, 0)
-    return { total: fijosMes(fixed as unknown as FixedExpenseIn[]), pend, pagado, venc }
-  }, [rows, fixed, mes])
-  const paidThisMonth = fixed.flatMap((f) => f.payments.filter((p) => p.fecha.startsWith(mes)).map((p) => ({ f, p }))).sort((a, b) => b.p.fecha.localeCompare(a.p.fecha))
+    return { total: fijosMes(fixed as unknown as FixedExpenseIn[]), pend, pagado, venc, pronto: rows.filter((r) => r.estado === "pronto").length }
+  })()
+  const paidThisMonth: Pago[] = fixed.flatMap((f) => f.payments.filter((p) => p.fecha.startsWith(mes)).map((p) => ({ f, p }))).sort((a, b) => b.p.fecha.localeCompare(a.p.fecha))
 
   const unpay = async (paymentId: string) => {
     const { error } = await createClient().rpc("unpay_fixed_expense", { p_payment: paymentId })
@@ -59,67 +69,113 @@ export function FixedView() {
     invalidateBook(qc, bookId, "fixed_expenses"); invalidateBook(qc, bookId, "expenses")
   }
 
+  const catOf = (f: FixedRow) => cats.find((c) => c.id === f.category_id)
+  const provOf = (f: FixedRow) => providers.find((p) => p.id === f.provider_id)
+  const pick = { cat: (r: R) => r.f.category_id, method: (r: R) => r.f.payment_method_id, prov: (r: R) => r.f.provider_id }
+  const columns: DTColumn<R>[] = [
+    { id: "nombre", header: "Nombre", sort: (r) => r.f.nombre.toLowerCase(), csv: (r) => r.f.nombre },
+    { id: "proximo", header: "Próximo pago", sort: (r) => r.next?.due ?? "9999", csv: (r) => r.next?.due ?? "" },
+    { id: "valor", header: "Valor", sort: (r) => Number(r.f.valor), csv: (r) => Number(r.f.valor) },
+    { id: "mensual", header: "Al mes", sort: (r) => r.st.mensual, csv: (r) => Math.round(r.st.mensual) },
+    { id: "categoria", header: "Categoría", sort: (r) => catOf(r.f)?.nombre ?? "~", csv: (r) => catOf(r.f)?.nombre ?? "" },
+    { id: "frec", header: "Frecuencia", csv: (r) => FFREC[r.f.frec] },
+    { id: "proveedor", header: "Proveedor", csv: (r) => provOf(r.f)?.nombre ?? r.f.proveedor ?? "" },
+    { id: "medio", header: "Medio de pago", csv: (r) => methods.find((m) => m.id === r.f.payment_method_id)?.nombre ?? "" },
+    { id: "estado", header: "Estado", csv: (r) => ({ vencido: "Vencido", pronto: "Por vencer", luego: "Pendiente", aldia: "Al día" })[r.estado] },
+  ]
+
   return (
     <div className="grid gap-6">
       <PageHeader id="fijos" description="Arriendo, servicios, administración, colegio… lo que pagas cada mes. Te avisamos antes de cada fecha y, al pagar, queda registrado en tus gastos."
         actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar gasto fijo</Button>} />
-      <KpiGrid className="xl:grid-cols-3">
-        <Kpi icon="house" tone="blue" label="Total al mes" loading={isPending} value={<Money value={k.total} />} />
+      <KpiGrid cols={3}>
+        <Kpi icon="house" tone="blue" label="Total al mes" loading={isPending} value={<Money value={k.total} />} sub={`${fixed.length} gasto${fixed.length === 1 ? "" : "s"} fijo${fixed.length === 1 ? "" : "s"}`}
+          info="Lo que suman tus gastos fijos en un mes. Los bimestrales, trimestrales o anuales se reparten por mes." />
         <Kpi icon="hourglass" tone="amber" label="Falta pagar este mes" loading={isPending} value={<Money value={k.pend} />} sub={<>Ya pagaste <Money value={k.pagado} /></>} />
-        <Kpi icon="circle-alert" tone={k.venc ? "red" : "green"} label="Vencidos" loading={isPending} value={k.venc} valueClassName={k.venc ? "text-danger" : "text-success"} sub={k.venc ? "Págalos cuanto antes" : "Todo al día"} />
+        <Kpi icon="circle-alert" tone={k.venc ? "red" : "green"} label="Vencidos" loading={isPending} value={k.venc} valueClassName={k.venc ? "text-danger" : "text-success"} sub={k.venc ? "Págalos cuanto antes" : k.pronto ? `${k.pronto} por vencer pronto` : "Todo al día"} />
       </KpiGrid>
-      <Card className="shadow-card ring-0">
-        <CardContent>
-          {isPending ? (
-            Array.from({ length: 4 }).map((_, i) => <div key={i} className="flex items-center gap-3 py-3"><Skeleton className="size-10 rounded-full" /><div className="grid flex-1 gap-1.5"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/2" /></div><Skeleton className="h-8 w-20" /></div>)
-          ) : !rows.length ? (
-            <EmptyState iso="fijos" title="Aún no tienes gastos fijos" description="Empieza por el arriendo y los servicios." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar gasto fijo</Button>} />
-          ) : (
-            <ul className="-mx-2 grid">
-              {rows.map(({ f, st }) => {
-                const cat = cats.find((c) => c.id === f.category_id)
-                const next = st.venc[0] ?? st.prox
-                const q = next?.per.endsWith("Q1") ? " (1ª quinc.)" : next?.per.endsWith("Q2") ? " (2ª quinc.)" : ""
-                const pill = st.venc.length ? <StatusPill tone="vencido">Vencido hace {days(st.venc[0].due, today)} días</StatusPill>
-                  : !next ? <StatusPill tone="pagado" check>Al día</StatusPill>
-                  : days(today, next.due) <= anticipo ? <StatusPill tone="porVencer">{relTime(toDay(next.due), today)}</StatusPill>
-                  : <StatusPill tone="gray">{relTime(toDay(next.due), today)}</StatusPill>
-                return (
-                  <ListRow key={f.id} icon={cat?.icon ?? "house"} iconClassName={st.venc.length ? "bg-danger-soft text-danger" : undefined}
-                    title={f.nombre} badges={<>{f.variable && <StatusPill tone="info">varía según consumo</StatusPill>}{f.link_type && <StatusPill tone="estimado">aporte</StatusPill>}{pill}</>}
-                    subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor].filter(Boolean).join(" · ")}
-                    value={f.variable && f.vmin ? <span className="grid text-right"><span className="font-bold"><Money value={Number(f.vmin)} short /> – <Money value={Number(f.vmax)} short /></span><span className="text-xs text-muted-foreground">promedio <Money value={Number(f.valor)} /></span></span> : fixedReparto(f).modo === "distinto" && f.frec === "quincenal"
-                      ? <span className="grid text-right"><Money value={next ? fijoValor(f, next.per) : Number(f.valor)} className="font-bold" /><span className="text-xs text-muted-foreground"><Money value={fijoValor(f, "Q1")} short /> + <Money value={fijoValor(f, "Q2")} short /> al mes</span></span>
-                      : <Money value={Number(f.valor)} className="font-bold" />}
-                    onClick={canEdit ? () => setEditing(f) : undefined}
-                    actions={canEdit ? [
-                      ...(next ? [{ label: `Pagar ${f.nombre}`, icon: "circle-check", onClick: () => setPaying(f), className: st.venc.length ? "text-danger" : "text-success" }] : []),
-                      { label: `Editar ${f.nombre}`, icon: "pencil", onClick: () => setEditing(f) },
-                      { label: `Eliminar ${f.nombre}`, icon: "trash-2", onClick: () => del.mutate(f), destructive: true },
-                    ] : []} />
-                )
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-      <Card className="shadow-card ring-0">
-        <CardHeader><CardTitle className="text-base">Pagos registrados este mes</CardTitle></CardHeader>
-        <CardContent>
-          {!paidThisMonth.length ? <p className="text-sm text-muted-foreground">Aún no registras pagos este mes.</p> : (
-            <ul className="-mx-2 grid">
-              {paidThisMonth.map(({ f, p }) => (
-                <ListRow key={p.id} icon="circle-check" iconClassName="bg-success-soft text-success" title={f.nombre}
-                  subtitle={`Pagado el ${fmtDate(p.fecha)}${methods.find((m) => m.id === p.payment_method_id) ? ` · ${methods.find((m) => m.id === p.payment_method_id)!.nombre}` : ""}`}
-                  value={<Money value={Number(p.valor)} className="font-bold" />}
-                  actions={canEdit ? [{ label: "Deshacer pago", icon: "undo-2", onClick: () => unpay(p.id) }] : []} />
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+
+      <DataTable<R>
+        title="Tus gastos fijos" info="Lo que pagas cada mes o cada cierto tiempo. Toca uno para editarlo o usa el botón verde para registrar el pago."
+        data={rows} loading={isPending} columns={columns} rowKey={(r) => r.f.id} noun={["gasto fijo", "gastos fijos"]} exportName="gastos-fijos"
+        total={{ value: (r) => r.st.mensual, label: "suman al mes" }} initialSort={{ id: "proximo", dir: "asc" }}
+        search={{ placeholder: "Buscar gasto fijo", text: (r) => `${r.f.nombre} ${catOf(r.f)?.nombre ?? ""} ${provOf(r.f)?.nombre ?? r.f.proveedor ?? ""} ${FFREC[r.f.frec]}` }}
+        views={[
+          { id: "todos", label: "Todos" },
+          { id: "pend", label: "Pendientes este mes", match: (r) => r.st.periods.some((p) => !p.pago && p.due.startsWith(mes)) || r.st.venc.length > 0 },
+          { id: "venc", label: "Vencidos", match: (r) => r.estado === "vencido", hint: DUE_HINT.vencido },
+          { id: "aldia", label: "Pagados este mes", match: (r) => r.f.payments.some((p) => p.fecha.startsWith(mes)) },
+        ]}
+        filters={[
+          { id: "cat", label: "Categoría", options: catalogOptions(rows, cats, pick.cat, "Sin categoría"), match: catalogMatch(pick.cat) },
+          { id: "frec", label: "Frecuencia", options: Object.entries(FFREC).filter(([v]) => rows.some((r) => r.f.frec === v)).map(([value, label]) => ({ value, label })), match: (r, v) => r.f.frec === v },
+          { id: "tipo", label: "Valor", options: [{ value: "fijo", label: "Siempre igual" }, { value: "var", label: "Varía según consumo" }], match: (r, v) => (v === "var") === !!r.f.variable },
+          { id: "medio", label: "Medio de pago", options: catalogOptions(rows, methods, pick.method, "Sin medio de pago"), match: catalogMatch(pick.method) },
+          { id: "prov", label: "Proveedor", options: catalogOptions(rows, providers, pick.prov, "Sin proveedor"), match: catalogMatch(pick.prov) },
+          { id: "proximo", label: "Próximo pago", kind: "dates", value: (r) => r.next?.due },
+          { id: "valor", label: "Valor", kind: "range", money: true, value: (r) => Number(r.f.valor) },
+        ]}
+        emptyState={<EmptyState iso="fijos" title="Aún no tienes gastos fijos" description="Empieza por el arriendo y los servicios." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar gasto fijo</Button>} />}
+        item={({ f, st, next, estado }) => {
+          const cat = catOf(f)
+          const q = next?.per.endsWith("Q1") ? " (1ª quinc.)" : next?.per.endsWith("Q2") ? " (2ª quinc.)" : ""
+          const pill = estado === "vencido" ? <StatusPill tone="vencido" hint={`${DUE_HINT.vencido} Venció el ${fmtDate(st.venc[0].due)}${st.venc.length > 1 ? ` y hay ${st.venc.length} periodos sin pagar` : ""}.`}>Vencido hace {daysBetween(st.venc[0].due, today)} días</StatusPill>
+            : !next ? <StatusPill tone="pagado" check hint="No tiene pagos pendientes.">Al día</StatusPill>
+            : <StatusPill tone={estado === "pronto" ? "porVencer" : "gray"} hint={`${DUE_HINT[estado === "pronto" ? "pronto" : "luego"]} Fecha: ${fmtDate(next.due)}.`}>{relTime(toDay(next.due), today)}</StatusPill>
+          return (
+            <ListRow key={f.id} icon={cat?.icon ?? "house"}
+              media={<EntityLogo name={f.nombre} provider={provOf(f)} icon={cat?.icon ?? "house"} seed={cat?.id} tone={estado === "vencido" ? "danger" : undefined} />}
+              title={f.nombre}
+              badges={<>
+                {f.variable && <StatusPill tone="info" hint="El valor cambia cada mes (agua, luz, gas…). Mirai usa el promedio entre lo mínimo y lo máximo.">varía según consumo</StatusPill>}
+                {f.link_type && <StatusPill tone="estimado" hint="Aporte programado a una meta o al fondo de emergencia.">aporte</StatusPill>}
+                {pill}
+              </>}
+              subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor, paraQuien(f, members)].filter(Boolean).join(" · ")}
+              value={f.variable && f.vmin ? <span className="grid text-right"><span className="font-bold"><Money value={Number(f.vmin)} short /> – <Money value={Number(f.vmax)} short /></span><span className="text-xs text-muted-foreground">promedio <Money value={Number(f.valor)} /></span></span> : fixedReparto(f).modo === "distinto" && f.frec === "quincenal"
+                ? <span className="grid text-right"><Money value={next ? fijoValor(f, next.per) : Number(f.valor)} className="font-bold" /><span className="text-xs text-muted-foreground"><Money value={fijoValor(f, "Q1")} short /> + <Money value={fijoValor(f, "Q2")} short /> al mes</span></span>
+                : <Money value={Number(f.valor)} className="font-bold" />}
+              onClick={canEdit ? () => setEditing(f) : undefined}
+              actions={canEdit ? [
+                ...(next ? [{ label: `Pagar ${f.nombre}`, tip: "Registrar el pago", icon: "circle-check", onClick: () => setPaying(f), className: estado === "vencido" ? "text-danger" : "text-success" }] : []),
+                { label: `Editar ${f.nombre}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(f) },
+                { label: `Eliminar ${f.nombre}`, tip: "Eliminar", icon: "trash-2", onClick: () => del.mutate(f), destructive: true },
+              ] : []} />
+          )
+        }}
+      />
+
+      <DataTable<Pago>
+        title="Pagos registrados este mes" data={paidThisMonth} loading={isPending} rowKey={(x) => x.p.id} noun={["pago", "pagos"]} exportName={`pagos-fijos-${mes}`}
+        total={{ value: (x) => Number(x.p.valor) }}
+        columns={[
+          { id: "fecha", header: "Fecha", sort: (x) => x.p.fecha, csv: (x) => x.p.fecha },
+          { id: "nombre", header: "Gasto fijo", sort: (x) => x.f.nombre.toLowerCase(), csv: (x) => x.f.nombre },
+          { id: "valor", header: "Valor", sort: (x) => Number(x.p.valor), csv: (x) => Number(x.p.valor) },
+        ]}
+        initialSort={{ id: "fecha", dir: "desc" }}
+        emptyState={<p className="px-5 pb-6 text-sm text-muted-foreground sm:px-7">Aún no registras pagos este mes.</p>}
+        item={({ f, p }) => {
+          const m = methods.find((x) => x.id === p.payment_method_id)
+          return (
+            <ListRow key={p.id} icon="circle-check" media={<EntityLogo name={f.nombre} provider={provOf(f)} icon="circle-check" tone="success" />} title={f.nombre}
+              subtitle={`Pagado el ${fmtDate(p.fecha)}${m ? ` · ${m.nombre}` : ""}`}
+              value={<Money value={Number(p.valor)} className="font-bold" />}
+              actions={canEdit ? [{ label: "Deshacer pago", icon: "undo-2", onClick: () => unpay(p.id) }] : []} />
+          )
+        }}
+      />
       <FixedForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null); setId(null) } }} fixed={editing} />
       <PayFixedDialog fixed={paying} onOpenChange={(o) => !o && setPaying(null)} onReschedule={(f) => setEditing(f)} />
     </div>
   )
+}
+
+/** "para Ana" o "para Ana y Luis" (una o varias personas del gasto fijo); nada si es de toda la familia. */
+function paraQuien(f: FixedRow, members: Parameters<typeof memberName>[1]) {
+  const x = f as { member_ids?: string[] | null; member_id?: string | null }
+  const ids = x.member_ids?.length ? x.member_ids : x.member_id ? [x.member_id] : []
+  if (!ids.length) return null
+  const n = ids.map((id) => memberName(id, members))
+  return `para ${n.length > 1 ? `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}` : n[0]}`
 }

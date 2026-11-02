@@ -1,6 +1,7 @@
 "use server"
 
 import { z } from "zod"
+import { ROLE_INFO, toAccess } from "@/lib/household/roles"
 import { requirePlatformAdmin } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { supabaseServer } from "@/utils/supabase/server"
@@ -61,7 +62,7 @@ export async function adminClients() {
   const [users, { data: profiles }, { data: members }, { data: audit }, { data: subs }, { data: admins }] = await Promise.all([
     allUsers(),
     db.from("profiles").select("id,nombre,avatar_url,telefono"),
-    db.from("household_members").select("user_id,role,household_id,households(nombre)"),
+    db.from("household_members").select("user_id,role,access_role,household_id,households(nombre)"),
     db.from("audit_log").select("actor").gte("created_at", ago(30)).limit(50000),
     db.from("plan_subscriptions").select("household_id,estado,proveedor,vence_at").in("estado", ["activa", "cancelada", "cortesia"]),
     db.from("platform_admins").select("user_id"),
@@ -81,7 +82,7 @@ export async function adminClients() {
       return {
         id: u.id, email: u.email ?? "", nombre: p?.nombre || "", avatar: p?.avatar_url ?? null, telefono: p?.telefono ?? "",
         creado: u.created_at, ultimoIngreso: u.last_sign_in_at ?? null, acceso: u.app_metadata.providers?.join(", ") || u.app_metadata.provider || "email",
-        hogares: hs.map((m) => `${(m.households as { nombre: string } | null)?.nombre ?? "Hogar"}${m.role === "owner" ? "" : ` (${m.role === "editor" ? "editor" : "lector"})`}`),
+        hogares: hs.map((m) => `${(m.households as { nombre: string } | null)?.nombre ?? "Hogar"}${m.role === "owner" ? "" : ` (${ROLE_INFO[toAccess(m.access_role, m.role)].label.toLowerCase()})`}`),
         plan: premium ? ("Premium" as const) : ("Gratis" as const), premiumHasta: vence, hogarPropio: own?.household_id ?? null, acciones30: acts[u.id] ?? 0,
       }
     })

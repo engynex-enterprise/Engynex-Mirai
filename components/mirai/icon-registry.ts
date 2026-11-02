@@ -1,5 +1,5 @@
 // Generado por scripts/gen-icons.mjs — no editar a mano. Solo los íconos que usa Mirai.
-import { Activity, Apple, Armchair, ArrowDownToLine, ArrowLeft, ArrowLeftRight, ArrowRight, ArrowUpFromLine, Baby, Badge, BadgeCheck, BadgeDollarSign, BadgePercent, Ban, Banknote, Bell, BellRing, Bike, Bitcoin, Bold, Book, BookOpen, BookOpenCheck, BookPlus, Bot, Brain, Briefcase, Bug, BugOff, Building2, Bus, Calculator, Calendar, CalendarCheck, CalendarClock, CalendarCog, CalendarDays, CalendarHeart, CalendarPlus, CalendarRange, Camera, Can, Car, Cat, CatIcon, ChartCandlestick, ChartColumn, ChartLine, ChartNoAxesCombined, ChartPie, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Circle, CircleAlert, CircleCheck, CircleCheckBig, CircleDashed, CircleDollarSign, CircleEllipsis, CircleHelp, CirclePlus, CircleX, Clock, Cloud, CloudOff, Code, Coffee, Coins, Columns3, Command, Cookie, Copy, Cpu, CreditCard, Crown, Currency, Database, DatabaseZap, Dog, DollarSign, Dot, Download, Droplets, Dumbbell, Engine, Equal, Eraser, Euro, Eye, EyeOff, File, FileCheck, FileSignature, FileText, FileUp, Film, Flag, Flame, FlameKindling, Flower2, Focus, FolderCheck, Form, Fuel, Gamepad2, Gauge, Gem, Ghost, Gift, Globe, GraduationCap, Grid, Group, HandCoins, Handshake, Heart, HeartPulse, History, Home, Hourglass, House, IdCard, Image, ImagePlus, Info, Key, KeyRound, Landmark, Laptop, Layers, LayoutDashboard, Leaf, Library, LifeBuoy, Lightbulb, Link, Link2, List, ListChecks, ListOrdered, Loader, Lock, LogOut, Mail, MailPlus, MailSearch, Map, MapPin, Medal, Megaphone, Menu, MessageCircle, MessageCircleQuestion, MessageSquare, MessageSquareHeart, MessageSquareText, Minus, Monitor, Moon, Mouse, MousePointerClick, Move, Network, Option, Palette, PanelLeft, PanelLeftClose, PanelLeftOpen, PartyPopper, PawPrint, Pen, Pencil, Percent, Phone, PiggyBank, Pin, Plane, Play, Plug, PlugZap, Plus, Presentation, Printer, Radio, Receipt, ReceiptText, RefreshCw, Repeat, Rocket, Route, Rows3, Save, Scale, ScanEye, ScanText, Scroll, ScrollText, Search, Send, Server, Settings, Sheet, Shell, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Shrub, Sidebar, Siren, SlidersHorizontal, Smartphone, Smile, Sparkles, Split, Sprout, Square, SquarePen, Star, Store, Summary, Sun, Swords, Table, Tag, Target, Text, ThumbsDown, ThumbsUp, TicketPercent, Trash2, TreeDeciduous, TreePine, Trees, TrendingDown, TrendingUp, TriangleAlert, Trophy, Tv, Type, Umbrella, Underline, Undo, Undo2, Unplug, Upload, User, UserCheck, UserPlus, UserRound, UserRoundCheck, UserX, Users, Utensils, Variable, Verified, Video, Wallet, WandSparkles, Wifi, Workflow, Wrench, X, Zap, ZapOff } from "lucide-react"
+import { Activity, Apple, Armchair, ArrowDownToLine, ArrowLeft, ArrowLeftRight, ArrowRight, ArrowUpFromLine, Baby, Badge, BadgeCheck, BadgeDollarSign, BadgePercent, Ban, Banknote, Bell, BellRing, Bike, Bitcoin, Bold, Book, BookOpen, BookOpenCheck, BookPlus, Bot, Brain, Briefcase, Bug, BugOff, Building2, Bus, Calculator, Calendar, CalendarCheck, CalendarClock, CalendarCog, CalendarDays, CalendarHeart, CalendarPlus, CalendarRange, Camera, Can, Car, Cat, CatIcon, ChartCandlestick, ChartColumn, ChartLine, ChartNoAxesCombined, ChartPie, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Circle, CircleAlert, CircleCheck, CircleCheckBig, CircleDashed, CircleDollarSign, CircleDot, CircleEllipsis, CircleHelp, CirclePlus, CircleX, Clock, Cloud, CloudOff, Code, Coffee, Coins, Columns3, Command, Cookie, Copy, Cpu, CreditCard, Crown, Currency, Database, DatabaseZap, Dog, DollarSign, Dot, Download, Droplets, Dumbbell, Engine, Equal, Eraser, Euro, Eye, EyeOff, File, FileCheck, FileSignature, FileText, FileUp, Film, Flag, Flame, FlameKindling, Flower2, Focus, FolderCheck, Form, Fuel, Gamepad2, Gauge, Gem, Ghost, Gift, Globe, GraduationCap, Grid, Group, HandCoins, Handshake, Heart, HeartPulse, History, Home, Hourglass, House, IdCard, Image, ImagePlus, Info, Key, KeyRound, Landmark, Laptop, Layers, LayoutDashboard, Leaf, Library, LifeBuoy, Lightbulb, Link, Link2, List, ListChecks, ListOrdered, Loader, Lock, LogOut, Mail, MailSearch, Map, MapPin, Medal, Megaphone, Menu, MessageCircle, MessageCircleQuestion, MessageSquare, MessageSquareHeart, MessageSquareText, Minus, Monitor, Moon, Mouse, MousePointerClick, Move, Network, Option, Palette, PanelLeft, PanelLeftClose, PanelLeftOpen, PartyPopper, PawPrint, Pen, Pencil, Percent, Phone, PiggyBank, Pin, Plane, Play, Plug, PlugZap, Plus, Presentation, Printer, Quote, Radio, Receipt, ReceiptText, RefreshCw, Repeat, Rocket, Route, Rows3, Save, Scale, ScanEye, ScanText, Scroll, ScrollText, Search, Send, Server, Settings, Share, Sheet, Shell, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Shrub, Sidebar, Siren, SlidersHorizontal, Smartphone, Smile, Sparkles, Split, Sprout, Square, SquarePen, Star, Store, Summary, Sun, Swords, Table, Tag, Target, Text, ThumbsDown, ThumbsUp, TicketPercent, Trash2, TreeDeciduous, TreePine, Trees, TrendingDown, TrendingUp, TriangleAlert, Trophy, Tv, Type, Umbrella, Underline, Undo, Undo2, Unplug, Upload, User, UserCheck, UserPlus, UserRound, UserRoundCheck, UserX, Users, Utensils, Variable, Verified, Video, Wallet, WandSparkles, Wifi, Workflow, Wrench, X, Zap, ZapOff } from "lucide-react"
 import type { LucideProps } from "lucide-react"
 
 export const ICONS: Record<string, React.ComponentType<LucideProps>> = {
@@ -66,6 +66,7 @@ export const ICONS: Record<string, React.ComponentType<LucideProps>> = {
   "circle-check-big": CircleCheckBig,
   "circle-dashed": CircleDashed,
   "circle-dollar-sign": CircleDollarSign,
+  "circle-dot": CircleDot,
   "circle-ellipsis": CircleEllipsis,
   "circle-help": CircleHelp,
   "circle-plus": CirclePlus,
@@ -152,7 +153,6 @@ export const ICONS: Record<string, React.ComponentType<LucideProps>> = {
   "lock": Lock,
   "log-out": LogOut,
   "mail": Mail,
-  "mail-plus": MailPlus,
   "mail-search": MailSearch,
   "map": Map,
   "map-pin": MapPin,
@@ -191,6 +191,7 @@ export const ICONS: Record<string, React.ComponentType<LucideProps>> = {
   "plus": Plus,
   "presentation": Presentation,
   "printer": Printer,
+  "quote": Quote,
   "radio": Radio,
   "receipt": Receipt,
   "receipt-text": ReceiptText,
@@ -209,6 +210,7 @@ export const ICONS: Record<string, React.ComponentType<LucideProps>> = {
   "send": Send,
   "server": Server,
   "settings": Settings,
+  "share": Share,
   "sheet": Sheet,
   "shell": Shell,
   "shield-check": ShieldCheck,

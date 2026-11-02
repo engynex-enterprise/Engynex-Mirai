@@ -8,6 +8,7 @@ import { Camera } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -29,6 +30,8 @@ import {
   categoryOptions, memberOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings,
 } from "@/features/catalogs/hooks"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
+import { ProviderSelect } from "@/features/providers/provider-select"
+import { categoriaSugerida } from "@/lib/domain"
 import { isHormiga, localCat, localHormiga } from "./logic"
 import { classifyExpenses, readInvoice } from "@/features/ai/actions"
 import { useList } from "@/hooks/use-book-data"
@@ -41,6 +44,7 @@ const schema = z.object({
   fecha: z.string(),
   quien: z.string(),
   payment_method_id: z.string().nullable(),
+  provider_id: z.string().nullable(),
   usarFondo: z.boolean(),
 })
 type Values = z.infer<typeof schema>
@@ -54,7 +58,7 @@ export function ExpenseForm(props: Props) {
     <ResponsiveDialog
       open={props.open} onOpenChange={props.onOpenChange} mdesc="gasto"
       title={props.expense ? "Editar gasto" : "Registrar gasto"}
-      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}
+      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><SubmitButton form={formId} /></>}
     >
       <ReadyGate><ExpenseFormBody {...props} formId={formId} /></ReadyGate>
     </ResponsiveDialog>
@@ -73,6 +77,9 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
   const [fondo, setFondo] = useState<{ activo: boolean; saldo: number } | null>(null)
   const [newCat, setNewCat] = useState<string | null>(null)
   const [catManual, setCatManual] = useState(false)
+  // La respuesta de la IA llega después: si mientras tanto la persona escogió la categoría, se respeta la suya.
+  const catManualRef = useRef(false)
+  useEffect(() => { catManualRef.current = catManual }, [catManual])
   const [catSrc, setCatSrc] = useState<"regla" | "historial" | "palabras" | "ia" | null>(null)
   const [aiH, setAiH] = useState<{ h: boolean; razon: string } | null>(null)
   const [aiBusy, setAiBusy] = useState<"foto" | "cat" | null>(null)
@@ -89,14 +96,15 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
       ? {
           descripcion: expense.descripcion, valor: Number(expense.valor), category_id: expense.category_id ?? "",
           hormigaMode: expense.hormiga_src === "manual" ? (expense.hormiga ? "si" : "no") : "auto",
-          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, usarFondo: false,
+          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, usarFondo: false,
         }
       : {
           descripcion: "", valor: 0, category_id: defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
-          quien: defaults.quien || "familia", payment_method_id: defaults.medio || methods[0]?.id || null, usarFondo: true,
+          quien: defaults.quien || "familia", payment_method_id: defaults.medio || methods[0]?.id || null, provider_id: null, usarFondo: true,
         },
   })
   const { errors, isSubmitting } = form.formState
+  useSubmitState(formId, form)
   const w = form.watch()
 
   useEffect(() => {
@@ -122,21 +130,22 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
     if (ia.on === false || desc.trim().length < 3) return
     timer.current = setTimeout(async () => {
       const valor = form.getValues("valor") || 0
-      const needCat = ia.autocat !== false && !catManual && localSrc !== "regla" && localSrc !== "historial"
+      // La IA decide siempre la categoría (lo de las reglas ya quedó puesto como sugerencia mientras responde).
+      const needCat = ia.autocat !== false && !catManual
       const needH = ia.hormiga !== false && form.getValues("hormigaMode") === "auto" && valor > 0
       if (!needCat && !needH) return
       const key = `${desc.trim().toLowerCase()}|${Math.round(valor / 1000)}`
       let r = aiCache.current.get(key)
       if (!r) {
         setAiBusy("cat")
-        const veces = history.filter((g) => g.descripcion.trim().toLowerCase() === desc.trim().toLowerCase()).length
+        const veces = history.filter((g) => (g.descripcion ?? "").trim().toLowerCase() === desc.trim().toLowerCase()).length
         const out = await classifyExpenses([{ i: 0, descripcion: desc, valor: Math.round(valor), veces_mes: veces }])
         setAiBusy(null)
         if (!out?.[0]) return
         r = out[0]; aiCache.current.set(key, r)
       }
       if (form.getValues("descripcion") !== desc) return
-      if (needCat && r.category_id && !localSrc) { form.setValue("category_id", r.category_id, { shouldValidate: true }); setCatSrc("ia") }
+      if (needCat && r.category_id && !catManualRef.current) { form.setValue("category_id", r.category_id, { shouldValidate: true }); setCatSrc("ia") }
       if (needH && r.hormiga !== null) setAiH({ h: r.hormiga, razon: r.razon })
     }, 750)
   }
@@ -170,6 +179,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
       hormiga_src: v.hormigaMode === "auto" ? (aiH ? ("ia" as const) : null) : ("manual" as const),
       hormiga_razon: v.hormigaMode === "auto" && aiH ? aiH.razon : null,
       cat_src: catManual && catSrc !== "ia" ? ("manual" as const) : catSrc,
+      provider_id: v.provider_id,
     }
     const { data, error } = await sb.from("expenses").upsert(row).select().single()
     if (error) return toast.error("No se pudo guardar el gasto", { description: error.message })
@@ -218,10 +228,20 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
                 <Segmented value={field.value} onChange={field.onChange} items={[{ value: "auto", label: "Que Mirai decida", icon: "sparkles" }, { value: "si", label: "Sí", icon: "coffee" }, { value: "no", label: "No" }]} />
               )} />
             </FormField>
-            <div className="grid gap-5 sm:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2">
               <FormField label="Fecha" htmlFor="g-fecha"><Controller control={form.control} name="fecha" render={({ field }) => <DatePicker id="g-fecha" value={field.value} onChange={(v) => field.onChange(v ?? todayISO())} />} /></FormField>
               <FormField label="¿Quién gastó?" htmlFor="g-quien"><Controller control={form.control} name="quien" render={({ field }) => <Combobox id="g-quien" value={field.value} onChange={field.onChange} options={memberOptions(members)} />} /></FormField>
               <FormField label="Medio de pago" htmlFor="g-medio"><Controller control={form.control} name="payment_method_id" render={({ field }) => <Combobox id="g-medio" value={field.value} onChange={field.onChange} options={methodOptions(methods)} />} /></FormField>
+              <FormField label="Proveedor (opcional)" htmlFor="g-prov" tip="A quién le pagaste: Enel, el colegio, el Éxito… Elígelo de tu lista o escribe el nombre para agregarlo.">
+                <Controller control={form.control} name="provider_id" render={({ field }) => (
+                  <ProviderSelect id="g-prov" value={field.value} onChange={(id, p) => {
+                    field.onChange(id)
+                    // Categoría por defecto del proveedor si aún no hay una o no la escogió a mano.
+                    const c = categoriaSugerida(p, cats)
+                    if (c && (!catManual || !form.getValues("category_id"))) { form.setValue("category_id", c, { shouldValidate: true }); setCatSrc(null) }
+                  }} />
+                )} />
+              </FormField>
             </div>
             {isImprevisto && !expense && (fondo?.activo && fondo.saldo > 0 ? (
               <label className="flex items-start gap-3 rounded-lg border border-dashed p-3">

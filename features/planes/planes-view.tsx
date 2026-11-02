@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { Check, CreditCard, Crown, Smartphone, TicketPercent } from "lucide-react"
+import { Check, CreditCard, Crown, Smartphone, TicketPercent, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -13,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Icon } from "@/components/mirai/icon"
 import { PageHeader } from "@/components/mirai/page-header"
+import { Panel } from "@/components/mirai/panel"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
@@ -46,6 +48,13 @@ export function CheckoutButtons({ plan, periodo, cupon }: { plan: string; period
   )
 }
 
+const PREGUNTAS = [
+  ["¿Puedo cancelar?", "Sí, cuando quieras desde Ajustes › Mi plan. Sigues con tu plan hasta que termine lo que pagaste."],
+  ["¿Qué pasa con mis datos si vuelvo a Gratis?", "No se borra nada. Las funciones de pago se pausan y tus libros extra quedan guardados."],
+  ["¿Hay derecho de retracto?", "Sí: puedes pedir la devolución dentro de los 5 días hábiles siguientes al pago (Ley 1480), escribiéndonos desde Tu opinión."],
+  ["¿Me dan factura?", "Sí, te llega la factura electrónica al correo de tu cuenta."],
+] as const
+
 function Incluye({ p }: { p: PlanRow }) {
   const free = !p.precio_mes
   return (
@@ -69,10 +78,13 @@ export function PlanesView() {
   const [periodo, setPeriodo] = useState<"mes" | "anio">("anio")
   const [code, setCode] = useState("")
   const [cupon, setCupon] = useState<{ code: string; plan: string; monto: number; msg: string } | null>(null)
+  const [probando, setProbando] = useState<string | null>(null)
   const list = data?.list ?? []
   const maxAhorro = Math.max(0, ...list.filter((p) => p.precio_mes).map((p) => ahorroAnual(p.precio_mes, p.precio_anio).meses))
   const tryCoupon = async (p: PlanRow) => {
-    const r = await previewCoupon(code, p.id, periodo)
+    if (!code.trim() || probando) return
+    setProbando(p.id)
+    const r = await previewCoupon(code, p.id, periodo).finally(() => setProbando(null))
     if (!r.ok) { setCupon(null); return toast.error(r.msg) }
     setCupon({ code: code.trim().toUpperCase(), plan: p.id, monto: r.monto!, msg: r.msg }); toast.success(r.msg)
   }
@@ -82,8 +94,8 @@ export function PlanesView() {
       <div className="flex justify-center">
         <Segmented value={periodo} onChange={(v) => { setPeriodo(v as "mes" | "anio"); setCupon(null) }} items={[{ value: "mes", label: "Mensual" }, { value: "anio", label: maxAhorro ? `Anual · hasta ${maxAhorro} meses gratis` : "Anual" }]} />
       </div>
-      {isPending ? <Skeleton className="h-96" /> : (
-        <div className={cn("grid items-start gap-5", list.length >= 3 ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
+      {isPending ? <div className="grid gap-6 lg:grid-cols-3" aria-busy="true" aria-label="Cargando">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[520px] rounded-lg" />)}</div> : (
+        <div className={cn("grid gap-6", list.length >= 3 ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
           {list.map((p) => {
             const actual = plan.id === p.id
             const precioBase = periodo === "anio" ? p.precio_anio : p.precio_mes
@@ -91,7 +103,7 @@ export function PlanesView() {
             const conCupon = cupon?.plan === p.id ? cupon : null
             const resaltar = p.destacado || (focus && p.funciones.includes(focus))
             return (
-              <Card key={p.id} className={cn("gap-4 p-6 shadow-card", resaltar ? "ring-2 ring-amber-400" : "ring-0")} data-testid={`plan-${p.id}`}>
+              <Card key={p.id} className={cn("h-full gap-4 p-6 shadow-card", resaltar ? "ring-2 ring-amber-400" : "ring-0")} data-testid={`plan-${p.id}`}>
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="flex items-center gap-2 text-xl font-semibold">{p.precio_mes > 0 && <Crown className="size-5 text-amber-500" />}{p.nombre}</h2>
                   {actual ? <StatusPill tone="pagado">Tu plan actual</StatusPill> : p.destacado ? <PremiumBadge label="Recomendado" /> : null}
@@ -106,28 +118,33 @@ export function PlanesView() {
                   ) : <p className="text-3xl font-bold">$0 <span className="text-base font-normal text-muted-foreground">para siempre</span></p>}
                 </div>
                 <Incluye p={p} />
+                {/* Lo de pagar queda abajo en todas las tarjetas: así se alinean aunque cada plan incluya distinto. */}
                 {p.precio_mes > 0 && !actual && (
-                  <>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1"><TicketPercent className="absolute top-3 left-3 size-4 text-muted-foreground" /><Input className="h-10 pl-9 uppercase" placeholder="¿Tienes un cupón?" value={code} onChange={(e) => setCode(e.target.value)} aria-label={`Cupón para ${p.nombre}`} /></div>
-                      <Button variant="outline" className="h-10" disabled={!code.trim()} onClick={() => tryCoupon(p)}>Aplicar</Button>
-                    </div>
+                  <div className="mt-auto grid gap-4 border-t pt-4">
+                    <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); tryCoupon(p) }}>
+                      <div className="relative flex-1"><TicketPercent className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" aria-hidden /><Input className="h-10 pl-9 uppercase" placeholder="¿Tienes un cupón?" value={code} onChange={(e) => setCode(e.target.value)} aria-label={`Cupón para ${p.nombre}`} /></div>
+                      <SubmitButton className="h-10" disabled={!code.trim()} loading={probando === p.id} loadingText="Revisando…" onClick={() => tryCoupon(p)} hint="Escribe el código del cupón">Aplicar</SubmitButton>
+                    </form>
+                    {conCupon && (
+                      <p className="flex items-center gap-2 rounded-lg bg-success-soft p-2.5 text-sm text-success" role="status">
+                        <Check className="size-4 shrink-0" /><span className="min-w-0 flex-1">Cupón <b>{conCupon.code}</b>: {conCupon.msg}</span>
+                        <Button type="button" size="icon-xs" variant="ghost" aria-label="Quitar el cupón" title="Quitar el cupón" onClick={() => setCupon(null)}><X /></Button>
+                      </p>
+                    )}
                     <CheckoutButtons plan={p.id} periodo={periodo} cupon={conCupon?.code} />
-                  </>
+                  </div>
                 )}
-                {actual && p.precio_mes > 0 && <p className="rounded-lg bg-brand-soft p-3 text-sm">Revisa tu plan y tus pagos en <Link className="font-semibold text-link underline" href="/ajustes?tab=plan">Ajustes › Mi plan</Link>.</p>}
+                {actual && p.precio_mes > 0 && <p className="mt-auto rounded-lg bg-brand-soft p-3 text-sm">Revisa tu plan y tus pagos en <Link className="font-semibold text-link underline" href="/ajustes?tab=plan">Ajustes › Mi plan</Link>.</p>}
               </Card>
             )
           })}
         </div>
       )}
-      <Card className="gap-2 p-5 text-sm shadow-card ring-0">
-        <h2 className="font-semibold">Preguntas rápidas</h2>
-        <p><b>¿Puedo cancelar?</b> Sí, cuando quieras desde Ajustes › Mi plan. Sigues con tu plan hasta que termine lo que pagaste.</p>
-        <p><b>¿Qué pasa con mis datos si vuelvo a Gratis?</b> No se borra nada. Las funciones de pago se pausan y tus libros extra quedan guardados.</p>
-        <p><b>¿Hay derecho de retracto?</b> Sí: puedes pedir la devolución dentro de los 5 días hábiles siguientes al pago (Ley 1480), escribiéndonos desde Tu opinión.</p>
-        <p><b>¿Me dan factura?</b> Sí, te llega la factura electrónica al correo de tu cuenta.</p>
-      </Card>
+      <Panel title="Preguntas rápidas" icon="circle-help">
+        <dl className="grid gap-x-8 gap-y-4 text-sm md:grid-cols-2">
+          {PREGUNTAS.map(([q, a]) => <div key={q} className="grid gap-1"><dt className="font-semibold">{q}</dt><dd className="text-muted-foreground">{a}</dd></div>)}
+        </dl>
+      </Panel>
     </div>
   )
 }

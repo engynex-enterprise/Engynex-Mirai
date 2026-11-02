@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { EmptyState } from "@/components/mirai/empty-state"
 import { Notice } from "@/components/mirai/notice"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Crumbs } from "@/components/mirai/crumbs"
@@ -320,7 +321,7 @@ function Editor({ a, list }: { a: Automation; list: Automation[] | undefined }) 
         </>}
         {canEdit && !mobile && <Button variant="soft" className="lg:hidden" onClick={() => setMDialog("agregar")}><Plus /> Agregar paso</Button>}
         <Button variant="outline" onClick={openTest}><Play /> Probar</Button>
-        {canEdit && <Button onClick={() => doSave()} disabled={!dirty || save.isPending} className="relative"><Save /> Guardar{dirty && <span className="absolute -top-1 -right-1 size-2.5 rounded-full bg-lime ring-2 ring-card" aria-label="Cambios sin guardar" />}</Button>}
+        {canEdit && <SubmitButton onClick={() => void doSave()} disabled={!dirty} loading={save.isPending} hint="No hay cambios por guardar" className="relative"><Save /> Guardar{dirty && <span className="absolute -top-1 -right-1 size-2.5 rounded-full bg-lime ring-2 ring-card" aria-hidden /> }{dirty && <span className="sr-only">(hay cambios sin guardar)</span>}</SubmitButton>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Más opciones"><MoreHorizontal /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -390,11 +391,11 @@ function Editor({ a, list }: { a: Automation; list: Automation[] | undefined }) 
           </ol>
         )}
         {canEdit && <Button variant="soft" className="h-11" onClick={() => setMDialog("agregar")}><Plus /> Agregar paso</Button>}
-        {canEdit && dirty && <Button className="h-11" onClick={() => doSave()} disabled={save.isPending}><Save /> Guardar cambios</Button>}
+        {canEdit && dirty && <SubmitButton className="h-11" onClick={() => void doSave()} loading={save.isPending}><Save /> Guardar cambios</SubmitButton>}
 
         {addDialog}
         <ResponsiveDialog open={mDialog === "paso" && !!selNode} onOpenChange={(o) => { if (!o) setMDialog(null) }} title={selNode ? CATALOG[selNode.kind].label : "Paso"}
-          footer={<><Button variant="outline" onClick={() => setMDialog(null)}>Cerrar</Button>{canEdit && <Button onClick={() => { setMDialog(null); void doSave() }} disabled={!dirty}>Guardar</Button>}</>}>
+          footer={<><Button variant="outline" onClick={() => setMDialog(null)}>Cerrar</Button>{canEdit && <SubmitButton onClick={() => { setMDialog(null); void doSave() }} disabled={!dirty} loading={save.isPending} hint="Cambia algo del paso para guardar" />}</>}>
           {props}
         </ResponsiveDialog>
         <ResponsiveDialog open={mDialog === "probar"} onOpenChange={(o) => setMDialog(o ? "probar" : null)} title="Probar la automatización">

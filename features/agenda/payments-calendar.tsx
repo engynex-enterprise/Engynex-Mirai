@@ -19,6 +19,11 @@ import { Notice } from "@/components/mirai/notice"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { Icon } from "@/components/mirai/icon"
+import { EmptyState } from "@/components/mirai/empty-state"
+import { Kpi, KpiGrid } from "@/components/mirai/kpi"
+import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
+import { SectionTitle } from "@/components/mirai/panel"
+import { IconButton } from "@/components/mirai/tip"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
 import { iso } from "@/lib/domain"
@@ -32,6 +37,13 @@ const KEY = "mirai-calp"
 const load = (): { v: View; off: ECatKey[] } => { try { return { v: "mes", off: [], ...JSON.parse(localStorage.getItem(KEY) ?? "{}") } } catch { return { v: "mes", off: [] } } }
 const add = (s: string, n: number) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return iso(d) }
 const DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
+const ST = { ok: { tone: "pagado", label: "Hecho", tip: "Ya quedó registrado." }, bad: { tone: "vencido", label: "Vencido", tip: "La fecha ya pasó y no está registrado." }, pend: { tone: "gray", label: "Pendiente", tip: "Aún no llega la fecha." } } as const
+const FILTROS: ListFilter<CalEvent>[] = [
+  { value: "todos", label: "Todos" },
+  { value: "pend", label: "Pendientes", match: (e) => e.st === "pend" },
+  { value: "bad", label: "Vencidos", match: (e) => e.st === "bad" },
+  { value: "ok", label: "Hechos", match: (e) => e.st === "ok" },
+]
 const rel = (d: string, t: string) => { const n = Math.round((new Date(d + "T12:00:00").getTime() - new Date(t + "T12:00:00").getTime()) / 864e5); return n === 0 ? "Hoy" : n === 1 ? "Mañana" : n === -1 ? "Ayer" : n > 0 ? `En ${n} días` : `Hace ${-n} días` }
 
 function range(v: View, d: string): [string, string] {
@@ -64,9 +76,9 @@ function EventPopover({ e, today }: { e: CalEvent; today: string }) {
         <p className="flex items-center gap-2 font-semibold"><span className="grid size-7 place-items-center rounded-full text-white" style={{ background: c.color }}><Icon name={c.icon} className="size-4" /></span>{e.titulo}</p>
         <p className="text-sm text-muted-foreground">{fmtDate(e.fecha, { long: true })} · {rel(e.fecha, today)}</p>
         <p className="text-sm">{c.n}{e.sub ? ` · ${e.sub}` : ""}</p>
-        <p className={cn("text-xl font-bold", e.dir === "cobrar" && "text-success")}>{e.dir === "cobrar" ? "+" : ""}<Money value={e.monto} /></p>
+        <p className={cn("text-xl font-bold", e.dir === "cobrar" && "text-success")}><Money value={e.monto} sign={e.dir === "cobrar"} /></p>
         {e.rng && <p className="text-xs text-muted-foreground">Normalmente {e.rng}</p>}
-        <StatusPill tone={e.st === "ok" ? "pagado" : e.st === "bad" ? "vencido" : "gray"} className="w-fit">{e.st === "ok" ? "Hecho" : e.st === "bad" ? "Vencido" : "Pendiente"}</StatusPill>
+        <StatusPill tone={ST[e.st].tone} className="w-fit">{ST[e.st].label}</StatusPill>
         <div className="flex gap-2 pt-1">
           {act && <Button size="sm" asChild><Link href={`/${e.go}${e.refId ? `?id=${e.refId}` : ""}`}>{e.dir === "cobrar" ? "Registrar cobro" : "Pagar"}</Link></Button>}
           <Button size="sm" variant="outline" asChild><Link href={`/${e.go}${e.refId ? `?id=${e.refId}` : ""}`}>Ver detalle</Link></Button>
@@ -85,12 +97,15 @@ export function PaymentsCalendar() {
   const [a, z] = range(prefs.v, d)
   const ev = useMemo(() => (book ? calEvents(book, a, z, today, prefs.off) : []), [book, a, z, today, prefs.off])
   const monthEv = useMemo(() => (book ? calEvents(book, d.slice(0, 7) + "-01", add(d.slice(0, 7) + "-01", 41), today, prefs.off).filter((e) => e.fecha.startsWith(d.slice(0, 7))) : []), [book, d, today, prefs.off])
-  if (isPending || !book) return <PageSkeleton kpis={0} />
+  const ctl = useListControls(ev, { text: (e) => `${e.titulo} ${e.sub ?? ""} ${ECAT[e.k].n}`, filters: FILTROS })
+  if (isPending || !book) return <PageSkeleton kpis={3} />
   const venc = ev.filter((e) => e.st === "bad" && e.dir === "pagar")
   const byDay = (x: string) => ev.filter((e) => e.fecha === x)
   const move = (n: number) => { if (prefs.v === "mes") { const x = new Date(d + "T12:00:00"); x.setMonth(x.getMonth() + n, 1); setD(iso(x)) } else setD(add(d, prefs.v === "semana" ? 7 * n : 30 * n)) }
   const title = prefs.v === "mes" ? `${monthName(+d.slice(5, 7))} ${d.slice(0, 4)}` : prefs.v === "semana" ? `${fmtDate(a, { year: false })} – ${fmtDate(z)}` : `Desde ${fmtDate(a)}`
   const sum = (dir: "pagar" | "cobrar") => (prefs.v === "mes" ? monthEv : ev).filter((e) => e.dir === dir && e.st !== "ok").reduce((s, e) => s + e.monto, 0)
+  const periodo = prefs.v === "mes" ? "este mes" : "en el periodo"
+  const agendaDays = [...new Set(ctl.rows.map((e) => e.fecha))]
   const ics = () => {
     const all = calEvents(book, add(today, -30), add(today, 365), today, prefs.off)
     const blob = new Blob([calIcs(all)], { type: "text/calendar" }), url = URL.createObjectURL(blob), el = document.createElement("a")
@@ -111,21 +126,26 @@ export function PaymentsCalendar() {
           </DropdownMenuContent>
         </DropdownMenu>
       </>} />
+      <KpiGrid className="xl:grid-cols-3">
+        <Kpi icon="arrow-up-from-line" tone="expense" label={`Por pagar ${periodo}`} value={<Money value={sum("pagar")} />} sub="Lo que falta por pagar" />
+        <Kpi icon="arrow-down-to-line" tone="income" label="Entradas y cobros" value={<Money value={sum("cobrar")} />} sub={`Lo que te entra ${periodo}`} />
+        <Kpi icon="calendar-clock" tone={venc.length ? "red" : "green"} label="Pagos vencidos" value={venc.length ? <Money value={venc.reduce((s, e) => s + e.monto, 0)} /> : "Ninguno"} sub={venc.length ? `${venc.length} pago${venc.length > 1 ? "s" : ""} sin registrar` : "Vas al día"} />
+      </KpiGrid>
       {venc.length > 0 && <Notice tone="bad" title={`Tienes ${venc.length} pago${venc.length > 1 ? "s" : ""} vencido${venc.length > 1 ? "s" : ""} por ${fmtShort(venc.reduce((s, e) => s + e.monto, 0))}`} action={<Button size="sm" variant="outline" onClick={() => save({ ...prefs, v: "agenda" })}>Verlos</Button>} />}
       <div className="grid gap-6 xl:grid-cols-[18rem_1fr]">
         <div className="grid content-start gap-4 max-xl:order-2 md:grid-cols-2 xl:grid-cols-1">
           <Card className="items-center p-2 shadow-card ring-0">
             <Calendar mode="single" locale={es} selected={new Date(d + "T12:00:00")} month={new Date(d + "T12:00:00")} onMonthChange={(m) => setD(iso(m))}
-              onSelect={(x) => x && setD(iso(x))} modifiers={{ ev: monthEv.map((e) => new Date(e.fecha + "T12:00:00")) }} modifiersClassNames={{ ev: "font-bold underline decoration-brand decoration-2 underline-offset-4" }} />
+              onSelect={(x) => x && setD(iso(x))} modifiers={{ ev: monthEv.map((e) => new Date(e.fecha + "T12:00:00")) }}
+              className="p-1 [--cell-size:--spacing(9)]"
+              modifiersClassNames={{ ev: "font-bold [&>button]:after:absolute [&>button]:after:bottom-1 [&>button]:after:left-1/2 [&>button]:after:size-1 [&>button]:after:-translate-x-1/2 [&>button]:after:rounded-full [&>button]:after:bg-brand [&>button[data-selected-single=true]]:after:bg-white" }} />
           </Card>
-          <Card className="gap-3 p-4 shadow-card ring-0">
-            <div className="flex justify-between text-sm"><span>Por pagar {prefs.v === "mes" ? "este mes" : "en el periodo"}</span><Money value={sum("pagar")} className="font-bold text-danger" /></div>
-            <div className="flex justify-between text-sm"><span>Entradas y cobros</span><Money value={sum("cobrar")} className="font-bold text-success" /></div>
-            <p className="pt-2 text-sm font-semibold">Mis calendarios</p>
+          <Card className="gap-2 p-4 shadow-card ring-0">
+            <SectionTitle as="h3" icon="layers" info="Apaga un calendario para ocultar sus eventos.">Mis calendarios</SectionTitle>
             {(Object.keys(ECAT) as ECatKey[]).map((k) => (
-              <label key={k} className="flex items-center gap-2 text-sm">
+              <label key={k} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-hover">
                 <Checkbox checked={!prefs.off.includes(k)} onCheckedChange={(c) => save({ ...prefs, off: c === true ? prefs.off.filter((x) => x !== k) : [...prefs.off, k] })} style={{ ["--color-primary" as string]: ECAT[k].color }} />
-                <span className="size-2.5 rounded-full" style={{ background: ECAT[k].color }} />{ECAT[k].n}
+                <span className="grid size-6 place-items-center rounded-full text-white" style={{ background: ECAT[k].color }} aria-hidden><Icon name={ECAT[k].icon} className="size-3.5" /></span>{ECAT[k].n}
               </label>
             ))}
           </Card>
@@ -133,8 +153,8 @@ export function PaymentsCalendar() {
         <Card className="min-w-0 gap-3 p-3 shadow-card ring-0 sm:p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setD(today)}>Hoy</Button>
-            <Button variant="ghost" size="icon" aria-label="Anterior" onClick={() => move(-1)}><ChevronLeft /></Button>
-            <Button variant="ghost" size="icon" aria-label="Siguiente" onClick={() => move(1)}><ChevronRight /></Button>
+            <IconButton icon={<ChevronLeft />} label={prefs.v === "mes" ? "Mes anterior" : "Anterior"} onClick={() => move(-1)} />
+            <IconButton icon={<ChevronRight />} label={prefs.v === "mes" ? "Mes siguiente" : "Siguiente"} onClick={() => move(1)} />
             <h2 className="text-lg font-semibold capitalize">{title}</h2>
             <Segmented className="ml-auto" value={prefs.v} onChange={(v) => save({ ...prefs, v: v as View })} items={[{ value: "agenda", label: "Agenda" }, { value: "semana", label: "Semana" }, { value: "mes", label: "Mes" }]} />
           </div>
@@ -173,20 +193,21 @@ export function PaymentsCalendar() {
               })}
             </div>
           )}
+          {prefs.v === "agenda" && ev.length > 0 && <ListToolbar c={ctl} placeholder="Buscar pago o cobro" filters={FILTROS} />}
           {prefs.v === "agenda" && (
             <ul className="grid divide-y">
-              {[...new Set(ev.map((e) => e.fecha))].map((x) => (
+              {agendaDays.map((x) => (
                 <li key={x} className="flex gap-4 py-3">
                   <div className="w-16 shrink-0 text-center"><p className={cn("text-2xl font-semibold", x === today && "text-brand")}>{+x.slice(8)}</p><p className="text-xs text-muted-foreground capitalize">{DIAS[(new Date(x + "T12:00:00").getDay() + 6) % 7]} · {monthName(+x.slice(5, 7), false)}</p><p className="text-[10px] text-muted-foreground">{rel(x, today)}</p></div>
                   <div className="grid flex-1 gap-1.5">
-                    {byDay(x).map((e) => (
+                    {ctl.rows.filter((e) => e.fecha === x).map((e) => (
                       <Popover key={e.id}>
                         <PopoverTrigger asChild>
-                          <button type="button" className="flex items-center gap-2 rounded-md p-1.5 text-left hover:bg-hover">
-                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: ECAT[e.k].color }} />
+                          <button type="button" className="flex items-center gap-2.5 rounded-md p-1.5 text-left hover:bg-hover max-sm:flex-wrap">
+                            <span className="grid size-8 shrink-0 place-items-center rounded-full text-white" style={{ background: ECAT[e.k].color }} aria-hidden><Icon name={ECAT[e.k].icon} className="size-4" /></span>
                             <span className="grid min-w-0 flex-1"><span className="truncate text-sm font-medium">{e.titulo}</span><span className="truncate text-xs text-muted-foreground">{[ECAT[e.k].n, e.sub, e.rng].filter(Boolean).join(" · ")}</span></span>
-                            <span className={cn("text-sm font-semibold", e.dir === "cobrar" && "text-success")}>{e.dir === "cobrar" ? "+" : ""}<Money value={e.monto} /></span>
-                            <StatusPill tone={e.st === "ok" ? "pagado" : e.st === "bad" ? "vencido" : "gray"}>{e.st === "ok" ? "Hecho" : e.st === "bad" ? "Vencido" : "Pendiente"}</StatusPill>
+                            <span className={cn("ml-auto text-sm font-semibold", e.dir === "cobrar" && "text-success")}><Money value={e.monto} sign={e.dir === "cobrar"} /></span>
+                            <StatusPill tone={ST[e.st].tone} title={ST[e.st].tip} className="shrink-0">{ST[e.st].label}</StatusPill>
                           </button>
                         </PopoverTrigger>
                         <EventPopover e={e} today={today} />
@@ -195,9 +216,12 @@ export function PaymentsCalendar() {
                   </div>
                 </li>
               ))}
-              {!ev.length && <p className="py-8 text-center text-sm text-muted-foreground">Nada en este periodo.</p>}
             </ul>
           )}
+          {prefs.v === "agenda" && (!ev.length ? (
+            <EmptyState art="todo-al-dia" title="Nada en este periodo" description="No tienes pagos ni cobros en estas fechas. Agrega tus gastos fijos, suscripciones o deudas y aparecerán aquí."
+              action={<Button asChild variant="outline"><Link href="/fijos?nuevo=1"><Plus /> Agregar gasto fijo</Link></Button>} />
+          ) : !ctl.rows.length && <NoResults c={ctl} />)}
         </Card>
       </div>
     </div>

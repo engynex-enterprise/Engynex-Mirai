@@ -1,5 +1,5 @@
 // Menú efectivo de Mirai 4.0 (inventario-1 §4.2) llevado a rutas de Next.js.
-export type NavLeaf = { id: string; label: string; icon: string; href: string }
+export type NavLeaf = { id: string; label: string; icon: string; href: string; /** Otras páginas que se muestran dentro de esta (pestañas). */ alias?: string[] }
 export type NavGroup = { g: string; label: string; icon: string; iso: string; items: NavLeaf[] }
 export type NavSection = { sec: string; entries: (NavLeaf | NavGroup)[] }
 
@@ -12,8 +12,8 @@ export const NAV: NavSection[] = [
     entries: [
       { g: "dinero", label: "Mi dinero", icon: "wallet", iso: "ingresos", items: [
         leaf("balance", "Balance y quincenas", "scale"), leaf("ingresos", "Ingresos", "arrow-down-to-line"),
-        leaf("gastos", "Gastos y hormiga", "receipt"), leaf("fijos", "Gastos fijos", "house"),
-        leaf("tarjetas", "Tarjetas de crédito", "credit-card"), leaf("suscripciones", "Suscripciones", "repeat"),
+        { ...leaf("gastos", "Gastos", "receipt"), alias: ["fijos", "suscripciones", "tarjetas"] },
+        leaf("proveedores", "Proveedores", "store"),
         leaf("correo", "Correo del banco", "mail"), leaf("importar", "Importar extractos", "file-up"),
       ] },
       { g: "prestamos", label: "Préstamos y deudas", icon: "handshake", iso: "me-deben", items: [
@@ -56,10 +56,41 @@ export const NAV: NavSection[] = [
 
 export const isGroup = (e: NavLeaf | NavGroup): e is NavGroup => "g" in e
 
+/**
+ * Páginas que no salen en el menú porque viven como pestaña de otra (`alias`), pero siguen teniendo ruta, migas y
+ * entrada en ⌘K: grupo y sección donde se muestran.
+ */
+const EN_PESTANAS: { leaf: NavLeaf; g: string }[] = [
+  { leaf: leaf("fijos", "Gastos fijos", "house"), g: "dinero" },
+  { leaf: leaf("suscripciones", "Suscripciones", "repeat"), g: "dinero" },
+  { leaf: leaf("tarjetas", "Tarjetas de crédito", "credit-card"), g: "dinero" },
+]
+
 /** Lista plana de páginas: buscador ⌘K, selector de vista inicial, migas. */
-export const PAGES: (NavLeaf & { section: string; group?: NavGroup })[] = NAV.flatMap((s) =>
-  s.entries.flatMap((e) => (isGroup(e) ? e.items.map((i) => ({ ...i, section: s.sec, group: e })) : [{ ...e, section: s.sec }])),
-)
+export const PAGES: (NavLeaf & { section: string; group?: NavGroup })[] = [
+  ...NAV.flatMap((s) =>
+    s.entries.flatMap((e) => (isGroup(e) ? e.items.map((i) => ({ ...i, section: s.sec, group: e })) : [{ ...e, section: s.sec }])),
+  ),
+  ...EN_PESTANAS.flatMap(({ leaf: l, g }) => {
+    const s = NAV.find((x) => x.entries.some((e) => isGroup(e) && e.g === g))
+    const group = s?.entries.find((e) => isGroup(e) && e.g === g) as NavGroup | undefined
+    return s ? [{ ...l, section: s.sec, group }] : []
+  }),
+]
+
+/** Página del menú que muestra a `id` (la misma o la que la tiene como pestaña). */
+export const navIdOf = (id: string) => PAGES.find((p) => p.alias?.includes(id))?.id ?? id
+
+/** Pestañas de las páginas que agrupan varias (Gastos: del día a día y fijos). */
+export const PAGE_TABS: Record<string, { id: string; label: string; icon: string; desc: string }[]> = (() => {
+  const gastos = [
+    { id: "gastos", label: "Del día a día", icon: "receipt", desc: "Mercado, salidas, transporte y gastos hormiga" },
+    { id: "fijos", label: "Fijos", icon: "house", desc: "Arriendo, servicios, cuotas: se repiten cada mes" },
+    { id: "suscripciones", label: "Suscripciones", icon: "repeat", desc: "Netflix, Spotify, apps: se cobran solas" },
+    { id: "tarjetas", label: "Tarjetas", icon: "credit-card", desc: "Compras con tarjeta, cuotas y el pago del mes" },
+  ]
+  return { gastos, fijos: gastos, suscripciones: gastos, tarjetas: gastos }
+})()
 
 export const pageById = (id: string) => PAGES.find((p) => p.id === id)
 

@@ -14,6 +14,7 @@ import { UserAvatar } from "@/components/mirai/user-avatar"
 import { AppContextProvider, useApp } from "@/components/app/app-context"
 import { ADMIN_NAV, adminPage } from "@/lib/admin-nav"
 import { Crumbs } from "@/components/mirai/crumbs"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import type { AppContext } from "@/lib/dal"
 
 function Nav() {
@@ -56,7 +57,7 @@ function Nav() {
       <SidebarFooter className="gap-1 pb-3">
         <SidebarMenu>
           <SidebarMenuItem><SidebarMenuButton asChild tooltip="Volver a Mirai"><Link href="/inicio"><ArrowLeft /><span>Volver a Mirai</span></Link></SidebarMenuButton></SidebarMenuItem>
-          <SidebarMenuItem><SidebarMenuButton tooltip="Tema" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>{resolvedTheme === "dark" ? <Sun /> : <Moon />}<span>{resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"}</span></SidebarMenuButton></SidebarMenuItem>
+          <SidebarMenuItem><SidebarMenuButton tooltip={resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"} onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>{resolvedTheme === "dark" ? <Sun /> : <Moon />}<span>{resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"}</span></SidebarMenuButton></SidebarMenuItem>
           <SidebarMenuItem><div className="flex items-center gap-2 p-2"><UserAvatar src={user.avatar} name={user.nombre} className="size-7" /><span className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden"><span className="truncate text-sm font-medium">{user.nombre}</span><span className="truncate text-xs text-muted-foreground">{user.email}</span></span></div></SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
@@ -73,31 +74,39 @@ export function AdminShell({ ctx, children, sidebarOpen = true }: { ctx: AppCont
         <Nav />
         <SidebarInset className="min-w-0 bg-transparent">
           <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/80 px-3 py-2 backdrop-blur md:hidden">
-            <SidebarTrigger aria-label="Menú de la consola" />
+            <SidebarTrigger aria-label="Abrir el menú de la consola" />
             <span className="font-semibold">Mirai Admin</span>
             <Button size="sm" variant="ghost" className="ml-auto" asChild><Link href="/inicio">Volver a Mirai</Link></Button>
           </div>
-          <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-16 sm:px-6 lg:px-8">{children}</main>
+          <main id="main" className="mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 pt-4 pb-16 sm:px-6 sm:pt-6 lg:px-8">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </AppContextProvider>
   )
 }
 
-/** Encabezado de cada vista de la consola. */
-export function AdminHeader({ title, desc, actions, back }: { title?: string; desc?: string; actions?: React.ReactNode; back?: { href: string; label: string } }) {
+/**
+ * Encabezado de cada vista de la consola (el mismo en todas): migas, ícono de la sección con su color, título,
+ * descripción y acciones a la derecha. En celular las acciones bajan y ocupan el ancho.
+ */
+export function AdminHeader({ title, desc, actions, back, media }: { title?: string; desc?: string; actions?: React.ReactNode; back?: { href: string; label: string }; media?: React.ReactNode }) {
   const path = usePathname()
   const p = adminPage(path)
   const sec = ADMIN_NAV.find((s) => s.items.some((i) => i.href === p.href))
   const crumbs = [{ label: "Consola", href: "/admin" }, ...(sec && sec.sec !== "General" ? [{ label: sec.sec, href: sec.items[0].href }] : []), ...(back ? [{ label: back.label, href: back.href }] : [])]
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div className="grid gap-1">
+    <header className="appear flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+      <div className="grid min-w-0 gap-1.5">
         <Crumbs items={path === "/admin" ? [] : crumbs} />
-        <h1 className="text-[26px] leading-tight font-bold tracking-tight">{title ?? p.label}</h1>
-        <p className="text-muted-foreground">{desc ?? p.desc}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          {media ?? <ToneIcon icon={p.icon} tone="brand" size="lg" />}
+          <div className="grid min-w-0 gap-0.5">
+            <h1 className="text-[24px] leading-tight font-bold tracking-tight break-words sm:text-[26px]">{title ?? p.label}</h1>
+            <p className="text-[15px] text-muted-foreground">{desc ?? p.desc}</p>
+          </div>
+        </div>
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2 max-sm:w-full max-sm:[&>*]:flex-1">{actions}</div>}
     </header>
   )
 }

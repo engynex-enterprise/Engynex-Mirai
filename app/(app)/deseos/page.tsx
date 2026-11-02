@@ -5,5 +5,5 @@ import { DeseosView } from "@/features/deseos/deseos-view"
 export const metadata = { title: "Lista de deseos" }
 
 export default function Page() {
-  return <Suspense fallback={<PageSkeleton kpis={0} />}><DeseosView /></Suspense>
+  return <Suspense fallback={<PageSkeleton kpis={3} />}><DeseosView /></Suspense>
 }

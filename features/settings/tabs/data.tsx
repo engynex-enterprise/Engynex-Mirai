@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
-import { ArchiveRestore, Download, FileUp, History, Save, ShieldAlert, Trash2, UserX } from "lucide-react"
+import { ArchiveRestore, Download, FileUp, Save, ShieldAlert, UserX } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
@@ -16,14 +16,28 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { EmptyState } from "@/components/mirai/empty-state"
+import { IconButton } from "@/components/mirai/tip"
+import { ToneIcon, type IconTone } from "@/components/mirai/tone-icon"
+import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
 import { useApp } from "@/components/app/app-context"
+import { can } from "@/lib/household/roles"
 import { createClient } from "@/utils/supabase/client"
 import { SampleButton } from "@/features/setup/sample-button"
 import { backupUrl, createBackup, deleteAccount, deleteBackup, exportBookJson, exportMyData, formatBlocks, restoreBackup, restoreFromJson } from "@/features/data/actions"
-import { SettingRow, SettingSection } from "../ui"
+import { SettingRow, SettingSection, SettingStack } from "../ui"
 
 const TIPO = { auto: "Automático", manual: "Manual", antes_restaurar: "Antes de restaurar", importado: "Importado" } as Record<string, string>
 const ACC = { crear: ["Creó", "pagado"], editar: ["Editó", "info"], borrar: ["Borró", "vencido"], restaurar: ["Recuperó", "estimado"] } as const
+const ACC_ICON: Record<string, [string, IconTone]> = { crear: ["circle-plus", "green"], editar: ["pencil", "blue"], borrar: ["trash-2", "red"], restaurar: ["undo-2", "violet"] }
+type AuditRow = { id: string; tabla: string; accion: string; resumen: string | null; created_at: string; quien: string }
+const AUDIT_FILTERS: ListFilter<AuditRow>[] = [
+  { value: "todo", label: "Todo" },
+  { value: "crear", label: "Creó", match: (r) => r.accion === "crear" },
+  { value: "editar", label: "Editó", match: (r) => r.accion === "editar" },
+  { value: "borrar", label: "Borró", match: (r) => r.accion === "borrar" },
+]
+const auditText = (r: AuditRow) => `${r.quien} ${TABLA[r.tabla] ?? r.tabla} ${r.resumen ?? ""}`
 const TABLA: Record<string, string> = { expenses: "gasto", incomes: "ingreso", extra_incomes: "ingreso extra", fixed_expenses: "gasto fijo", subscriptions: "suscripción", credit_cards: "tarjeta", card_purchases: "compra con tarjeta", loans: "préstamo", loan_payments: "pago de préstamo", contacts: "contacto", goals: "meta", investments: "inversión", assets: "bien", liabilities: "deuda", categories: "categoría", book_settings: "ajustes", family_members: "integrante", household_members: "persona del hogar", books: "libro" }
 const BLOCKS = [["gastos", "Gastos"], ["ingresos", "Ingresos"], ["fijos", "Gastos fijos y suscripciones"], ["prestamos", "Préstamos"], ["contactos", "Contactos"], ["inversiones", "Inversiones"], ["balance", "Balance y tarjetas"], ["metas", "Metas y retos"], ["consejos", "Consultas del consejero"], ["calendario", "Recordatorios"]] as const
 
@@ -38,7 +52,7 @@ function Backups() {
   const { book, household } = useApp()
   const qc = useQueryClient()
   const router = useRouter()
-  const owner = household.role === "owner"
+  const owner = can(household.access, "ajustes")
   const file = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [restore, setRestore] = useState<string | null>(null)
@@ -53,7 +67,7 @@ function Backups() {
 
   return (
     <SettingSection icon="database" title="Respaldos del libro" desc={`Copias de “${book.nombre}”. Mirai también guarda una copia antes de restaurar o formatear.`}>
-      <div className="flex flex-wrap gap-2 pb-3">
+      <div className="flex flex-wrap gap-2 pb-4">
         <Button disabled={!!busy} onClick={() => act("new", createBackup, "Respaldo guardado")}>{busy === "new" ? <Spinner /> : <Save />} Crear respaldo ahora</Button>
         <Button variant="outline" disabled={!!busy} onClick={() => act("dl", async () => download(`mirai-${stamp}.json`, await exportBookJson()), "Copia descargada")}>{busy === "dl" ? <Spinner /> : <Download />} Descargar copia</Button>
         {owner && <Button variant="outline" disabled={!!busy} onClick={() => file.current?.click()}>{busy === "up" ? <Spinner /> : <FileUp />} Restaurar desde archivo</Button>}
@@ -62,14 +76,17 @@ function Backups() {
           if (f) await act("up", async () => restoreFromJson(await f.text()), "Libro restaurado", true)
         }} />
       </div>
-      {isPending ? <Skeleton className="h-24" /> : !data?.length ? <p className="py-2 text-sm text-muted-foreground">Aún no hay respaldos guardados.</p> : (
-        <ul className="grid">
+      {isPending ? <Skeleton className="h-24" /> : !data?.length ? <p className="rounded-lg bg-secondary/60 p-4 text-sm text-muted-foreground">Aún no hay respaldos guardados. Crea uno ahora: queda en tu cuenta y lo puedes descargar cuando quieras.</p> : (
+        <ul className="grid" aria-label="Respaldos guardados">
           {data.map((b) => (
-            <li key={b.id} className="flex flex-wrap items-center gap-2 border-t py-2">
+            <li key={b.id} className="flex flex-wrap items-center gap-3 border-t py-2.5">
+              <ToneIcon icon={b.tipo === "manual" ? "save" : b.tipo === "importado" ? "file-up" : "database"} tone={b.tipo === "manual" ? "brand" : "gray"} size="sm" />
               <div className="min-w-0 flex-1"><p className="text-sm font-medium">{new Date(b.created_at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}</p><p className="text-xs text-muted-foreground">{TIPO[b.tipo]} · {kb(b.size)}</p></div>
-              <Button size="sm" variant="ghost" onClick={async () => { const u = await backupUrl(b.id); if (u) window.location.href = u }}><Download /> Descargar</Button>
-              {owner && <Button size="sm" variant="ghost" onClick={() => setRestore(b.id)}><ArchiveRestore /> Restaurar</Button>}
-              {owner && <Button size="icon-sm" variant="ghost" className="text-danger" aria-label="Borrar respaldo" onClick={() => act(b.id, () => deleteBackup(b.id), "Respaldo borrado")}><Trash2 /></Button>}
+              <div className="flex flex-wrap items-center gap-1 max-sm:w-full max-sm:justify-end">
+                <Button size="sm" variant="ghost" onClick={async () => { const u = await backupUrl(b.id); if (u) window.location.href = u }}><Download /> Descargar</Button>
+                {owner && <Button size="sm" variant="ghost" onClick={() => setRestore(b.id)}><ArchiveRestore /> Restaurar</Button>}
+                {owner && <IconButton size="icon-sm" icon="trash-2" destructive label="Borrar respaldo" disabled={busy === b.id} onClick={() => act(b.id, () => deleteBackup(b.id), "Respaldo borrado")} />}
+              </div>
             </li>
           ))}
         </ul>
@@ -91,33 +108,40 @@ function AuditLog() {
   const [n, setN] = useState(25)
   const { data, isPending } = useQuery({
     queryKey: ["audit", book.id, n],
-    queryFn: async () => {
+    queryFn: async (): Promise<AuditRow[]> => {
       const sb = createClient()
       const { data } = await sb.from("audit_log").select("id,tabla,accion,actor,resumen,created_at").eq("book_id", book.id).order("created_at", { ascending: false }).limit(n)
       const ids = [...new Set((data ?? []).map((r) => r.actor).filter(Boolean))] as string[]
       const { data: ps } = ids.length ? await sb.from("profiles").select("id,nombre,email").in("id", ids) : { data: [] }
       const pm = new Map((ps ?? []).map((p) => [p.id, p.nombre || p.email]))
-      return (data ?? []).map((r) => ({ ...r, quien: (r.actor && pm.get(r.actor)) || "Sistema" }))
+      return (data ?? []).map((r) => ({ ...r, id: String(r.id), quien: (r.actor && pm.get(r.actor)) || "Sistema" }))
     },
   })
+  const c = useListControls(data, { text: auditText, filters: AUDIT_FILTERS })
   return (
     <SettingSection icon="history" title="Historial de cambios" desc="Quién creó, cambió o borró algo en este libro.">
-      {isPending ? <Skeleton className="h-40" /> : !data?.length ? <p className="text-sm text-muted-foreground">Aún no hay cambios registrados.</p> : (
-        <ul className="grid">
-          {data.map((r) => {
-            const [verb, tone] = ACC[r.accion as keyof typeof ACC] ?? ["Cambió", "gray"]
-            return (
-              <li key={r.id} className="flex items-start gap-3 border-t py-2 text-sm">
-                <History className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1"><p><b>{r.quien}</b> {verb.toLowerCase()} {TABLA[r.tabla] ?? r.tabla}{r.resumen ? <>: <span className="text-muted-foreground">{r.resumen}</span></> : null}</p>
-                  <p className="text-xs text-muted-foreground">{formatDistanceToNowStrict(new Date(r.created_at), { locale: es, addSuffix: true })}</p></div>
-                <StatusPill tone={tone}>{verb}</StatusPill>
-              </li>
-            )
-          })}
-        </ul>
+      {isPending ? <Skeleton className="h-40" /> : !data?.length ? <EmptyState iso="ajustes" title="Aún no hay cambios registrados" description="Cuando alguien del hogar cree, cambie o borre algo, lo verás aquí." /> : (
+        <div className="grid gap-3">
+          <ListToolbar c={c} placeholder="Buscar por persona o dato" filters={AUDIT_FILTERS} />
+          {!c.rows.length ? <NoResults c={c} /> : (
+            <ul className="grid" aria-label="Cambios del libro">
+              {c.rows.map((r) => {
+                const [verb, tone] = ACC[r.accion as keyof typeof ACC] ?? ["Cambió", "gray"]
+                const [icon, itone] = ACC_ICON[r.accion] ?? ["history", "gray"]
+                return (
+                  <li key={r.id} className="flex items-start gap-3 border-t py-2.5 text-sm">
+                    <ToneIcon icon={icon} tone={itone} size="sm" />
+                    <div className="min-w-0 flex-1"><p className="break-words"><b>{r.quien}</b> {verb.toLowerCase()} {TABLA[r.tabla] ?? r.tabla}{r.resumen ? <>: <span className="text-muted-foreground">{r.resumen}</span></> : null}</p>
+                      <p className="text-xs text-muted-foreground"><time dateTime={r.created_at} title={new Date(r.created_at).toLocaleString("es-CO")}>{formatDistanceToNowStrict(new Date(r.created_at), { locale: es, addSuffix: true })}</time></p></div>
+                    <StatusPill tone={tone} className="max-sm:hidden">{verb}</StatusPill>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
       )}
-      {data && data.length >= n && <Button variant="ghost" size="sm" className="mt-2 w-fit" onClick={() => setN(n + 50)}>Ver más</Button>}
+      {data && data.length >= n && <Button variant="outline" size="sm" className="mt-3 w-fit" onClick={() => setN(n + 50)}>Ver más cambios</Button>}
     </SettingSection>
   )
 }
@@ -130,13 +154,13 @@ function Formatear() {
   const [busy, setBusy] = useState(false)
   return (
     <SettingSection icon="eraser" title="Formatear datos" desc="Envía a la papelera los bloques que elijas. Antes guardamos un respaldo automático.">
-      <div className="grid gap-2 py-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         {BLOCKS.map(([k, l]) => (
-          <Label key={k} className="flex items-center gap-2 font-normal"><Checkbox checked={sel.includes(k)} onCheckedChange={(v) => setSel(v ? [...sel, k] : sel.filter((x) => x !== k))} />{l}</Label>
+          <Label key={k} className="flex cursor-pointer items-center gap-2 rounded-md p-1 font-normal hover:bg-hover"><Checkbox checked={sel.includes(k)} onCheckedChange={(v) => setSel(v ? [...sel, k] : sel.filter((x) => x !== k))} />{l}</Label>
         ))}
       </div>
       {sel.length > 0 && (
-        <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+        <div className="flex flex-col gap-2 pt-4 sm:flex-row">
           <Input className="h-10 sm:w-60" placeholder="Escribe BORRAR" value={conf} onChange={(e) => setConf(e.target.value)} aria-label="Confirmación" />
           <Button variant="destructive" className="h-10" disabled={busy || conf.trim().toUpperCase() !== "BORRAR"} onClick={async () => {
             setBusy(true)
@@ -185,7 +209,7 @@ function Cuenta() {
 
 export function DatosTab() {
   return (
-    <div className="grid gap-4">
+    <SettingStack>
       <Backups />
       <SettingSection icon="file-up" title="Traer datos" desc="Extractos del banco (CSV o Excel), respaldos de la versión anterior de Mirai o un ejemplo para explorar.">
         <div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link href="/importar"><FileUp /> Importar datos</Link></Button><SampleButton /></div>
@@ -193,6 +217,6 @@ export function DatosTab() {
       <AuditLog />
       <Formatear />
       <Cuenta />
-    </div>
+    </SettingStack>
   )
 }

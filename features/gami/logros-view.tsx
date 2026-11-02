@@ -10,6 +10,10 @@ import { Switch } from "@/components/ui/switch"
 import { Icon } from "@/components/mirai/icon"
 import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { EmptyState } from "@/components/mirai/empty-state"
+import { Panel } from "@/components/mirai/panel"
+import { Tip } from "@/components/mirai/tip"
+import { Button } from "@/components/ui/button"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
@@ -69,7 +73,7 @@ export function LogrosView() {
     <div className="grid gap-6">
       <PageHeader id="logros" title="Logros y nivel" description="Ganas puntos por usar Mirai y cuidar tu plata. No compites con nadie: solo contigo."
         actions={<label className="flex items-center gap-2 text-sm font-medium">Mostrar logros<Switch checked={st.on} disabled={!canEdit} onCheckedChange={toggle} aria-label="Mostrar logros" /></label>} />
-      {!st.on ? <Card className="items-center p-8 text-center shadow-card ring-0"><p className="text-muted-foreground">Los logros están ocultos. Actívalos con el interruptor.</p></Card> : <>
+      {!st.on ? <Card className="shadow-card ring-0"><EmptyState iso="logros" title="Los logros están ocultos" description="Actívalos para ganar puntos, subir de nivel y cumplir misiones cada semana." action={canEdit && <Button onClick={() => toggle(true)}>Mostrar logros</Button>} /></Card> : <>
         <Card className="flex-row flex-wrap items-center gap-6 p-6 shadow-card ring-0">
           <Ring p={L.prog} size={148}><div className="grid justify-items-center"><Icon name={L.icon} className="size-8 text-brand" /><p className="text-2xl font-semibold">{L.n}</p></div></Ring>
           <div className="grid min-w-56 flex-1 gap-2">
@@ -83,15 +87,14 @@ export function LogrosView() {
           </div>
         </Card>
         <section className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
-          <Card className="gap-3 p-5 shadow-card ring-0"><h2 className="font-semibold">Misiones de la semana</h2><MissionList M={g.M} today={g.today} /></Card>
-          <Card className="gap-3 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Insignias</h2>
+          <Panel title="Misiones de la semana" icon="target"><MissionList M={g.M} today={g.today} /></Panel>
+          <Panel title="Insignias" icon="medal" description={`Llevas ${nb} de ${GBADGES.length}. Pasa el mouse o toca una para ver cómo ganarla.`}>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
               {GBADGES.map((b) => {
                 const at = st.unl[b.id]
                 return (
-                  <div key={b.id} className="grid justify-items-center gap-1 text-center" title={b.d}>
-                    <BadgeArt id={b.id} tier={b.tier} icon={b.icon} locked={!at} size={76} />
+                  <div key={b.id} className="grid content-start justify-items-center gap-1 text-center">
+                    <Tip label={at ? `Ganada el ${fmtDate(at)}` : `Cómo ganarla: ${b.d}`}><span tabIndex={0} className="rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" aria-label={`${b.n}: ${at ? "ganada" : "por ganar"}`}><BadgeArt id={b.id} tier={b.tier} icon={b.icon} locked={!at} size={76} /></span></Tip>
                     <p className="text-sm font-medium">{b.n}</p>
                     <p className="text-xs text-muted-foreground">{b.d}</p>
                     <StatusPill tone={at ? "pagado" : "gray"} className="h-5">{GTIER[b.tier][0]}{at ? ` · ${fmtDate(at)}` : ""}</StatusPill>
@@ -99,19 +102,17 @@ export function LogrosView() {
                 )
               })}
             </div>
-          </Card>
+          </Panel>
         </section>
         <section className="grid gap-6 lg:grid-cols-2">
-          <Card className="gap-1 p-5 shadow-card ring-0">
-            <h2 className="mb-2 font-semibold">De dónde vienen tus puntos</h2>
+          <Panel title="De dónde vienen tus puntos" icon="chart-pie" className="gap-2">
             {[...X.parts].sort((a, b) => b.v - a.v).map((p) => <div key={p.k} className="flex items-center gap-3 border-b py-2 text-sm last:border-0"><Icon name={p.icon} className="size-4 text-muted-foreground" /><span className="flex-1">{p.l} <span className="text-muted-foreground">· {p.n} {p.n === 1 ? "vez" : "veces"}</span></span><b>{fnum(p.v)}</b></div>)}
             {!X.parts.length && <p className="text-sm text-muted-foreground">Registra tu primer gasto para empezar a sumar.</p>}
-          </Card>
-          <Card className="gap-1 p-5 shadow-card ring-0">
-            <h2 className="mb-2 font-semibold">Cómo ganar puntos</h2>
+          </Panel>
+          <Panel title="Cómo ganar puntos" icon="lightbulb" className="gap-2">
             {COMO.map(([l, v]) => <div key={l} className="flex justify-between border-b py-2 text-sm last:border-0"><span>{l}</span><b>{v}</b></div>)}
-            <p className="pt-2 text-xs text-muted-foreground">Los puntos salen de lo que ya registras. No compiten con nadie. <Link href="/retos" className="underline">Ver retos de ahorro</Link></p>
-          </Card>
+            <p className="pt-2 text-xs text-muted-foreground">Los puntos salen de lo que ya registras. No compiten con nadie. <Link href="/retos" className="font-semibold text-link hover:underline">Ver retos de ahorro</Link></p>
+          </Panel>
         </section>
       </>}
     </div>

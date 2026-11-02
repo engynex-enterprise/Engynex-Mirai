@@ -6,5 +6,5 @@ import { FamilyView } from "@/features/planning/family-view"
 export const metadata = { title: "Por miembro" }
 
 export default function Page() {
-  return <Suspense fallback={<PageSkeleton kpis={0} />}><PremiumGate feature="familia" section="familia" title="Por miembro"><FamilyView /></PremiumGate></Suspense>
+  return <Suspense fallback={<PageSkeleton kpis={3} />}><PremiumGate feature="familia" section="familia" title="Por miembro"><FamilyView /></PremiumGate></Suspense>
 }

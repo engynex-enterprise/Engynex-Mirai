@@ -15,6 +15,7 @@ export const usePaymentMethods = () => useList("payment_methods", { order: { col
 export const useEntities = () => useList("entities", { order: { column: "nombre" } })
 export const useContacts = () => useList("contacts", { order: { column: "nombre" } })
 export const useKeywordRules = () => useList("keyword_rules")
+export const useProviders = () => useList("providers", { order: { column: "nombre" } })
 
 /** Ajustes del libro (cfg de la v4). */
 export function useSettings() {

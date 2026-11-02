@@ -1,6 +1,6 @@
 import "server-only"
 import { createHash } from "node:crypto"
-import { generateObject, generateText, type LanguageModelUsage, type ModelMessage } from "ai"
+import { generateObject, generateText, isStepCount, streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from "ai"
 import type { z } from "zod"
 import { aiErrMsg, aiSettings, modelFrom, modelIdOf } from "./model"
 import { enabledOf, getIntegration, type IntegrationValue } from "@/features/integrations/store"
@@ -77,7 +77,7 @@ const usageOf = (u: LanguageModelUsage | undefined) => ({ input: u?.inputTokens 
 
 type Raw = { usage?: LanguageModelUsage; providerMetadata?: unknown; response?: { modelId?: string } }
 
-async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; system: string; messages: ModelMessage[]; providerOptions?: ProviderOptions; maxOutputTokens: number; anthropicCache: boolean }) => Promise<Raw & { value: T }>): Promise<{ value: T; provider: string; fuente: "ia" | "cache" }> {
+async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; system: string; messages: ModelMessage[]; providerOptions?: ProviderOptions; maxOutputTokens: number; anthropicCache: boolean }) => Promise<Raw & { value: T }>): Promise<{ value: T; provider: string; fuente: "ia" | "cache"; creditos: number }> {
   const feature: AiFeature = b.feature ?? "otro"
   const f = AI_FEATURES[feature]
   const [plan, ia, s] = await Promise.all([planOf(b.householdId), aiSettings(b.bookId), aiPlatformSettings()])
@@ -94,7 +94,7 @@ async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; 
     : null
   if (key) {
     const hit = await cacheGet<T>(key)
-    if (hit) { await logUsage({ ...who, fuente: "cache", evitados: hit.tokens }); return { value: hit.result, provider: "Respuesta guardada", fuente: "cache" } }
+    if (hit) { await logUsage({ ...who, fuente: "cache", evitados: hit.tokens }); return { value: hit.result, provider: "Respuesta guardada", fuente: "cache", creditos: 0 } }
   }
 
   // Proveedores y cupo: si el hogar agotó sus créditos, solo quedan los proveedores con su propia clave.
@@ -127,9 +127,10 @@ async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; 
       const modelId = r.response?.modelId || a.model
       const real = costFromMetadata(r.providerMetadata)
       const usd = real ?? costUSD(u, modelId, s.precios)
-      await logUsage({ ...who, fuente: "ia", provider: a.v.kind, model: modelId, dePlataforma, ...u, usd, real: real !== null, creditos: creditsFor(usd, s.creditUsd, dePlataforma), ms: Date.now() - t0 })
+      const creditos = creditsFor(usd, s.creditUsd, dePlataforma)
+      await logUsage({ ...who, fuente: "ia", provider: a.v.kind, model: modelId, dePlataforma, ...u, usd, real: real !== null, creditos, ms: Date.now() - t0 })
       if (key) await cacheSet(key, { householdId: b.householdId, feature, result: r.value, tokens: u.input + u.output, ttlHours: ttl })
-      return { value: r.value, provider, fuente: "ia" }
+      return { value: r.value, provider, fuente: "ia", creditos }
     } catch (e) {
       last = e
       await logUsage({ ...who, fuente: "ia", provider: a.v.kind, model: a.model, dePlataforma, ms: Date.now() - t0, ok: false, error: aiErrMsg(e) })
@@ -150,7 +151,7 @@ export async function aiText(b: Base) {
     const x = await generateText({ model, ...withSystem(system, messages, anthropicCache), providerOptions, maxOutputTokens })
     return { value: x.text, usage: x.usage, providerMetadata: x.providerMetadata, response: x.response }
   })
-  return { text: r.value, provider: r.provider, fuente: r.fuente }
+  return { text: r.value, provider: r.provider, fuente: r.fuente, creditos: r.creditos }
 }
 
 /** Objeto validado con zod (equivale a .json() de la v4) con respaldo entre proveedores. */
@@ -159,7 +160,38 @@ export async function aiObject<S extends z.ZodType>(b: Base & { schema: S }) {
     const x = await generateObject({ model, ...withSystem(system, messages, anthropicCache), schema: b.schema, providerOptions, maxOutputTokens })
     return { value: x.object as z.infer<S>, usage: x.usage, providerMetadata: x.providerMetadata, response: x.response }
   })
-  return { object: r.value, provider: r.provider, fuente: r.fuente }
+  return { object: r.value, provider: r.provider, fuente: r.fuente, creditos: r.creditos }
+}
+
+/**
+ * Texto en streaming (chat), con herramientas y el mismo respaldo entre proveedores, créditos, límites y registro de uso
+ * que aiText. Si un proveedor falla ANTES de mostrar algo, se prueba el siguiente; si falla a mitad de la respuesta, se
+ * devuelve lo que alcanzó a llegar (no se repite el texto con otro proveedor). `shown()` dice si las herramientas ya
+ * mostraron algo (p. ej. una tarjeta para confirmar) y por eso tampoco se debe reintentar.
+ */
+export async function aiStream(b: Base & { tools?: ToolSet; maxSteps?: number; abortSignal?: AbortSignal; onDelta: (text: string) => void; shown?: () => boolean }) {
+  let emitted = false
+  const r = await run(b, async ({ model, system, messages, providerOptions, maxOutputTokens, anthropicCache }) => {
+    let text = ""
+    let err: unknown = null
+    const s = streamText({
+      model, ...withSystem(system, messages, anthropicCache), ...(anthropicCache ? { allowSystemInMessages: true } : {}),
+      providerOptions, maxOutputTokens, tools: b.tools, stopWhen: isStepCount(b.maxSteps ?? 4), abortSignal: b.abortSignal,
+    })
+    try {
+      for await (const p of s.fullStream) {
+        if (p.type === "text-delta" && p.text) { text += p.text; emitted = true; b.onDelta(p.text) }
+        else if (p.type === "error") { err = p.error; break }
+        else if (p.type === "abort") break
+      }
+    } catch (e) { err = e }
+    if (err && !emitted && !b.shown?.() && !b.abortSignal?.aborted) throw err
+    // Uso real del proveedor (si lo informa a tiempo); si no, run() lo estima.
+    const settle = <T,>(x: PromiseLike<T>) => Promise.race([Promise.resolve(x), new Promise<undefined>((ok) => setTimeout(() => ok(undefined), 1500))]).catch(() => undefined)
+    const [usage, providerMetadata, response] = await Promise.all([settle(s.totalUsage), settle(s.providerMetadata), settle(s.response)])
+    return { value: text, usage: usage ?? undefined, providerMetadata, response: response ? { modelId: response.modelId } : undefined }
+  })
+  return { text: r.value, provider: r.provider, creditos: r.creditos }
 }
 
 /** Tokens que se ahorran al resolver algo sin IA: el prompt que se habría enviado + una respuesta típica. */

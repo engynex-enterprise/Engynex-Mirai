@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { Skeleton } from "@/components/ui/skeleton"
+import { AdminSkeleton } from "@/features/admin/ui"
 import { AdminHeader } from "@/components/admin/admin-shell"
 import { HogaresPanel } from "@/features/admin/console-negocio"
 
@@ -7,9 +7,9 @@ export const metadata = { title: "Hogares" }
 
 export default function Page() {
   return (
-    <>
+    <div className="grid gap-6">
       <AdminHeader />
-      <Suspense fallback={<Skeleton className="h-96" />}><HogaresPanel /></Suspense>
-    </>
+      <Suspense fallback={<AdminSkeleton kind="table" />}><HogaresPanel /></Suspense>
+    </div>
   )
 }

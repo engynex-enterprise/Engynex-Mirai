@@ -6,9 +6,11 @@ import { IsoDefs } from "@/components/mirai/iso-icon"
 import "./globals.css"
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" })
-const mono = Geist_Mono({ variable: "--font-mono-app", subsets: ["latin"], display: "swap" })
+// Mono y tirilla solo aparecen en pantallas puntuales: sin preload, el navegador no las descarga en cada página
+// (antes eran 3 archivos de letra extra en cada carga) y las pide cuando algún texto las usa.
+const mono = Geist_Mono({ variable: "--font-mono-app", subsets: ["latin"], display: "swap", preload: false })
 // Letra de tirilla para los recibos (resumen de Agregar ingreso).
-const receipt = Courier_Prime({ variable: "--font-receipt-app", subsets: ["latin"], weight: ["400", "700"], display: "swap" })
+const receipt = Courier_Prime({ variable: "--font-receipt-app", subsets: ["latin"], weight: ["400", "700"], display: "swap", preload: false })
 
 export const metadata: Metadata = {
   title: { default: "Mirai · Tu futuro financiero", template: "%s · Mirai" },

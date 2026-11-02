@@ -61,8 +61,9 @@ test("opiniones: calificar, reportar un error y recibir respuesta del administra
   // Reportar un error desde el atajo
   await page.getByRole("button", { name: /Algo no funciona/ }).click()
   await expect(page.getByRole("dialog").getByRole("radio", { name: /Algo no funciona/ })).toBeChecked()
-  await page.getByRole("dialog").getByRole("button", { name: "Enviar" }).click()
-  await expect(page.getByText("Cuéntanos un poco más")).toBeVisible()
+  // Sin mensaje, Enviar queda inactivo y explica qué falta.
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Enviar" })).toBeDisabled()
+  await expect(page.getByRole("dialog").getByText("Cuéntanos un poco más")).toBeVisible()
   await page.getByRole("dialog").getByRole("textbox").fill(`El botón de guardar no responde (${tag})`)
   await page.getByRole("dialog").getByRole("button", { name: "Enviar" }).click()
   await expect(page.getByText(`El botón de guardar no responde (${tag})`)).toBeVisible()

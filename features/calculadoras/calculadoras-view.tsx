@@ -8,14 +8,18 @@ import { Switch } from "@/components/ui/switch"
 import { FormField } from "@/components/mirai/field"
 import { MoneyInput } from "@/components/mirai/money-input"
 import { PageHeader } from "@/components/mirai/page-header"
+import { Panel } from "@/components/mirai/panel"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { createClient } from "@/utils/supabase/client"
 import { ahorro, aporteParaMeta, cdt, credito, gmf, inflacion } from "@/lib/domain/calculadoras"
 
 const $ = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`
 const TABS = [
-  { value: "cdt", label: "CDT", icon: "landmark" }, { value: "credito", label: "Crédito", icon: "credit-card" }, { value: "ahorro", label: "Ahorro y metas", icon: "piggy-bank" },
-  { value: "gmf", label: "4×1000", icon: "percent" }, { value: "inflacion", label: "Inflación", icon: "trending-up" },
+  { value: "cdt", label: "CDT", icon: "landmark", t: "¿Cuánto rinde un CDT?", d: "Lo que ganas al vencimiento, después de la retención en la fuente." },
+  { value: "credito", label: "Crédito", icon: "credit-card", t: "¿Cuánto pagas de verdad por un crédito?", d: "La cuota, el total y cuánto se va en intereses." },
+  { value: "ahorro", label: "Ahorro y metas", icon: "piggy-bank", t: "¿Cuánto tendrás o cuánto ahorrar?", d: "Con interés compuesto, mes a mes." },
+  { value: "gmf", label: "4×1000", icon: "percent", t: "¿Cuánto pagas de 4×1000?", d: "El gravamen a los movimientos financieros y cuánto te ahorras con una cuenta exenta." },
+  { value: "inflacion", label: "Inflación", icon: "trending-up", t: "¿Cuánto pierde tu plata con la inflación?", d: "Lo que costarán las cosas y lo que valdrá tu dinero guardado." },
 ]
 
 function Num({ id, label, value, onChange, suffix, min = 0, max, step = 1, hint }: { id: string; label: string; value: number; onChange: (n: number) => void; suffix?: string; min?: number; max?: number; step?: number; hint?: string }) {
@@ -28,7 +32,7 @@ function Num({ id, label, value, onChange, suffix, min = 0, max, step = 1, hint 
 
 function Result({ items, nota }: { items: { k: string; v: string; strong?: boolean }[]; nota?: string }) {
   return (
-    <Card className="gap-3 bg-brand-soft/60 p-5 shadow-none ring-0">
+    <Card className="h-fit gap-3 bg-brand-soft/60 p-5 shadow-none ring-0" aria-live="polite">
       {items.map((x) => <div key={x.k} className="flex items-baseline justify-between gap-3"><span className="text-sm text-muted-foreground">{x.k}</span><span className={x.strong ? "text-2xl font-bold tabular-nums" : "font-semibold tabular-nums"} data-money>{x.v}</span></div>)}
       {nota && <p className="text-xs text-muted-foreground">{nota}</p>}
     </Card>
@@ -125,11 +129,12 @@ function Inflacion() {
 /** Calculadoras financieras para Colombia: CDT, crédito, ahorro y metas, 4×1000 e inflación. */
 export function CalculadorasView() {
   const [tab, setTab] = useState("cdt")
+  const cur = TABS.find((t) => t.value === tab) ?? TABS[0]
   return (
     <div className="grid gap-6">
       <PageHeader id="calculadoras" title="Calculadoras" description="Haz cuentas antes de decidir: cuánto rinde un CDT, cuánto pagas de verdad por un crédito, cuánto ahorrar para una meta, el 4×1000 y la inflación." />
       <Segmented value={tab} onChange={setTab} items={TABS} />
-      <Card className="p-5 shadow-card ring-0 sm:p-6">{tab === "cdt" ? <Cdt /> : tab === "credito" ? <Credito /> : tab === "ahorro" ? <Ahorro /> : tab === "gmf" ? <Gmf /> : <Inflacion />}</Card>
+      <Panel title={cur.t} icon={cur.icon} description={cur.d}>{tab === "cdt" ? <Cdt /> : tab === "credito" ? <Credito /> : tab === "ahorro" ? <Ahorro /> : tab === "gmf" ? <Gmf /> : <Inflacion />}</Panel>
     </div>
   )
 }

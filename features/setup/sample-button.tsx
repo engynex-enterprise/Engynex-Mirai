@@ -15,7 +15,7 @@ export function SampleButton() {
   const router = useRouter()
   const qc = useQueryClient()
   return (
-    <Button variant="soft" disabled={pending} onClick={() => start(async () => {
+    <Button variant="soft" disabled={pending} aria-busy={pending || undefined} onClick={() => start(async () => {
       try {
         await loadSampleBook()
         qc.clear()
@@ -24,7 +24,7 @@ export function SampleButton() {
         router.refresh()
       } catch (e) { toast.error("No se pudo cargar el ejemplo", { description: (e as Error).message }) }
     })}>
-      {pending ? <Spinner /> : <Sparkles />} Ver un ejemplo
+      {pending ? <><Spinner /> Cargando el ejemplo…</> : <><Sparkles /> Ver un ejemplo</>}
     </Button>
   )
 }

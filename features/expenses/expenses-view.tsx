@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { parseAsString, useQueryState } from "nuqs"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Coffee, Pencil, Plus, Sparkles, Trash2 } from "lucide-react"
+import { Pencil, Plus, Sparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,49 +11,56 @@ import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { PageHeader } from "@/components/mirai/page-header"
+import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Notice } from "@/components/mirai/notice"
 import { EmptyState } from "@/components/mirai/empty-state"
-import { Icon } from "@/components/mirai/icon"
-import { useBookId, useCanEdit } from "@/components/app/app-context"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { ListRow } from "@/components/mirai/list-row"
+import { DataTable, catalogMatch, catalogOptions, type DTColumn } from "@/components/mirai/data-table"
+import { useBookId, useCanEdit, useCanEditRow, useCanRecord } from "@/components/app/app-context"
 import { useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { fmtDate, fmtMoney, fmtMonth, todayISO } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { fmtMoney, fmtMonth, todayISO } from "@/lib/format"
+import { dayHeading, lastMonths } from "@/lib/list-helpers"
 import type { Row } from "@/lib/supabase/tables"
-import { memberName, useCategories, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import { memberName, useCategories, useMembers, usePaymentMethods, useProviders, useSettings } from "@/features/catalogs/hooks"
 import { reviewMonthHormiga } from "@/features/ai/actions"
 import { ExpenseForm } from "./expense-form"
 import { isHormiga } from "./logic"
 import { AdSlot } from "@/features/ads/ad-slot"
 
-const lastMonths = (n: number) => {
-  const [y, m] = todayISO().split("-").map(Number)
-  return Array.from({ length: n }, (_, i) => { const d = new Date(y, m - 1 - i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` })
-}
+type G = Row<"expenses">
+const ORIGEN: Record<string, string> = { manual: "Registrado a mano", tarjeta: "Compra con tarjeta", correo: "Desde el correo", importar: "Extracto importado", fijo: "Pago de un gasto fijo" }
+const origenDe = (g: G) => (g.fixed_expense_id ? "fijo" : (g as { origen?: string | null }).origen || "manual")
+const HORMIGA_HINT = { ia: "La IA lo vio como gasto hormiga: pequeño, frecuente y evitable.", manual: "Lo marcaste tú como gasto hormiga.", auto: "Gasto pequeño y frecuente que se puede evitar. Juntos suman mucho." }
 
 export function ExpensesView() {
   const bookId = useBookId()
   const canEdit = useCanEdit()
+  // "Registra sus gastos" agrega y edita solo los suyos
+  const canAdd = useCanRecord()
+  const canRow = useCanEditRow()
   const qc = useQueryClient()
-  const [mes, setMes] = useQueryState("mes", parseAsString.withDefault(todayISO().slice(0, 7)))
+  const today = todayISO()
+  const [mes, setMes] = useQueryState("mes", parseAsString.withDefault(today.slice(0, 7)))
   const [nuevo, setNuevo] = useNewParam()
-  const [editing, setEditing] = useState<Row<"expenses"> | null>(null)
+  const [editing, setEditing] = useState<G | null>(null)
   const { data: all, isPending } = useList("expenses", { order: { column: "fecha", ascending: false } })
   const { data: cats = [] } = useCategories()
   const { data: methods = [] } = usePaymentMethods()
   const { data: members = [] } = useMembers()
+  const { data: providers = [] } = useProviders()
   const { data: cfg } = useSettings()
   const del = useSoftDelete("expenses", "Gasto eliminado")
   const umbral = Number(cfg?.umbral ?? 25000)
   const limite = Number(cfg?.limite ?? 250000)
 
   const toggleH = useMutation({
-    mutationFn: async (g: Row<"expenses">) => {
+    mutationFn: async (g: G) => {
       const next = !isHormiga(g, cats, umbral)
       const { error } = await createClient().from("expenses").update({ hormiga: next, hormiga_src: "manual", hormiga_razon: null }).eq("id", g.id)
       if (error) throw new Error(error.message)
@@ -63,9 +70,9 @@ export function ExpensesView() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["b", bookId, "expenses"] }),
   })
 
-  const rows = useMemo(() => (all ?? []).filter((g) => g.fecha.startsWith(mes)), [all, mes])
+  // Del mes elegido; el mismo día, lo último registrado arriba.
+  const rows = useMemo(() => (all ?? []).filter((g) => g.fecha.startsWith(mes)).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.created_at ?? "").localeCompare(a.created_at ?? "")), [all, mes])
   const stats = useMemo(() => {
-    const today = todayISO()
     const [y, m] = mes.split("-").map(Number)
     const dim = new Date(y, m, 0).getDate()
     const isCurrent = today.startsWith(mes)
@@ -76,37 +83,57 @@ export function ExpensesView() {
     const byCat = new Map<string, { n: number; v: number }>()
     for (const g of h) { const k = cats.find((c) => c.id === g.category_id)?.nombre ?? "Otros"; const e = byCat.get(k) ?? { n: 0, v: 0 }; byCat.set(k, { n: e.n + 1, v: e.v + Number(g.valor) }) }
     const cat = [...byCat.entries()].sort((a, b) => b[1].v - a[1].v)
-    return { llevas, proy, anio: proy * 12, over: proy > limite, cat, elapsed, total: rows.reduce((s, g) => s + Number(g.valor), 0) }
-  }, [rows, cats, umbral, limite, mes])
-
-  const days = useMemo(() => {
-    const map = new Map<string, Row<"expenses">[]>()
-    for (const g of rows) map.set(g.fecha, [...(map.get(g.fecha) ?? []), g])
-    return [...map.entries()]
-  }, [rows])
-  const today = todayISO()
-  const yest = new Date(new Date(today + "T12:00:00").getTime() - 864e5).toISOString().slice(0, 10)
+    const total = rows.reduce((s, g) => s + Number(g.valor), 0)
+    const top = rows.reduce<G | null>((a, g) => (!a || Number(g.valor) > Number(a.valor) ? g : a), null)
+    return { llevas, proy, anio: proy * 12, over: proy > limite, cat, elapsed, total, diario: total / Math.max(1, elapsed), top, nh: h.length }
+  }, [rows, cats, umbral, limite, mes, today])
   const maxCat = Math.max(1, ...stats.cat.map(([, v]) => v.v))
+
+  const catOf = (g: G) => cats.find((c) => c.id === g.category_id)
+  const methodOf = (g: G) => methods.find((x) => x.id === g.payment_method_id)
+  const provOf = (g: G) => providers.find((p) => p.id === g.provider_id)
+  const pick = {
+    cat: (g: G) => g.category_id, member: (g: G) => g.member_id, method: (g: G) => g.payment_method_id, prov: (g: G) => g.provider_id,
+  }
+  const columns: DTColumn<G>[] = [
+    { id: "fecha", header: "Fecha", sort: (g) => `${g.fecha}${g.created_at ?? ""}`, csv: (g) => g.fecha },
+    { id: "descripcion", header: "Descripción", sort: (g) => (g.descripcion ?? "").toLowerCase(), csv: (g) => g.descripcion },
+    { id: "valor", header: "Valor", sort: (g) => Number(g.valor), csv: (g) => Number(g.valor) },
+    { id: "categoria", header: "Categoría", sort: (g) => catOf(g)?.nombre ?? "~", csv: (g) => catOf(g)?.nombre ?? "Sin categoría" },
+    { id: "persona", header: "Persona", csv: (g) => memberName(g.member_id, members) },
+    { id: "medio", header: "Medio de pago", csv: (g) => methodOf(g)?.nombre ?? "" },
+    { id: "proveedor", header: "Proveedor", csv: (g) => provOf(g)?.nombre ?? "" },
+    { id: "hormiga", header: "Hormiga", csv: (g) => (isHormiga(g, cats, umbral) ? "Sí" : "No") },
+    { id: "origen", header: "Origen", csv: (g) => ORIGEN[origenDe(g)] },
+  ]
 
   return (
     <div className="grid gap-6">
       <PageHeader id="gastos" description="Todo lo que gastas. Mirai detecta los gastos “hormiga”: pequeños, frecuentes y evitables, que juntos suman mucho. También puedes marcarlos tú con la taza."
-        actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Registrar gasto</Button>} />
+        actions={canAdd && <Button onClick={() => setNuevo(true)}><Plus /> Registrar gasto</Button>} />
+
+      <KpiGrid>
+        <Kpi icon="receipt" tone="expense" label={today.startsWith(mes) ? "Gastaste este mes" : `Gastaste en ${fmtMonth(mes)}`} loading={isPending} value={<Money value={stats.total} />} sub={`${rows.length} gasto${rows.length === 1 ? "" : "s"}`} />
+        <Kpi icon="coffee" tone="amber" label="Gastos hormiga" loading={isPending} value={<Money value={stats.llevas} />} sub={<>Proyección del mes <Money value={stats.proy} short /></>}
+          info="Gastos pequeños, frecuentes y evitables (un tinto, un domicilio, un snack). Juntos suman mucho al año." />
+        <Kpi icon="calendar-days" tone="blue" label="Promedio por día" loading={isPending} value={<Money value={stats.diario} />} sub={`En ${stats.elapsed} día${stats.elapsed === 1 ? "" : "s"}`} />
+        <Kpi icon="trending-up" tone="violet" label="Gasto más alto" loading={isPending} value={<Money value={stats.top ? Number(stats.top.valor) : 0} />} sub={stats.top?.descripcion || "—"} />
+      </KpiGrid>
 
       <Card className="shadow-card ring-0">
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">Gastos hormiga de {today.startsWith(mes) ? "este mes" : fmtMonth(mes)}</CardTitle>
           <div className="flex items-center gap-2">
             {canEdit && <ReviewAI mes={mes} />}
-            {!isPending && <StatusPill tone={stats.over ? "vencido" : "pagado"}>{stats.over ? "Sobre el límite" : "En rango"}</StatusPill>}
+            {!isPending && <StatusPill tone={stats.over ? "vencido" : "pagado"} hint={`Tu límite de gastos hormiga es ${fmtMoney(limite)} al mes. Lo cambias en Ajustes.`}>{stats.over ? "Sobre el límite" : "En rango"}</StatusPill>}
           </div>
         </CardHeader>
         <CardContent className="grid gap-5">
           <div className="grid grid-cols-3 gap-3">
-            {[["Llevas", stats.llevas], ["Proyección del mes", stats.proy], ["En un año", stats.anio]].map(([l, v]) => (
-              <div key={l as string} className="rounded-md bg-muted p-3">
+            {([["Llevas", stats.llevas], ["Proyección del mes", stats.proy], ["En un año", stats.anio]] as const).map(([l, v]) => (
+              <div key={l} className="rounded-md bg-muted p-3">
                 <p className="text-xs text-muted-foreground">{l}</p>
-                {isPending ? <Skeleton className="mt-1 h-5 w-20" /> : <Money value={v as number} className="text-base font-semibold" />}
+                {isPending ? <Skeleton className="mt-1 h-5 w-20" /> : <Money value={v} className="text-base font-semibold" />}
               </div>
             ))}
           </div>
@@ -136,72 +163,57 @@ export function ExpensesView() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-card ring-0">
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">Movimientos</CardTitle>
-            <p className="text-sm text-muted-foreground">{rows.length} gastos · <Money value={stats.total} /></p>
-          </div>
+      <DataTable<G>
+        title="Movimientos" info="Todos tus gastos del mes. Búscalos, fíltralos por categoría, persona o medio de pago, y exporta lo que ves."
+        data={rows} loading={isPending} columns={columns} rowKey={(g) => g.id} noun={["gasto", "gastos"]} exportName={`gastos-${mes}`}
+        total={{ value: (g) => Number(g.valor) }}
+        initialSort={{ id: "fecha", dir: "desc" }}
+        group={{ by: (g) => g.fecha, sorts: ["fecha"], label: (d, gs) => <><span>{dayHeading(d, today)}</span><Money value={gs.reduce((a, g) => a + Number(g.valor), 0)} className="font-semibold normal-case" /></> }}
+        search={{ placeholder: "Buscar gasto", text: (g) => `${g.descripcion} ${catOf(g)?.nombre ?? ""} ${methodOf(g)?.nombre ?? ""} ${provOf(g)?.nombre ?? ""} ${memberName(g.member_id, members)}` }}
+        toolbar={
           <Select value={mes} onValueChange={setMes}>
-            <SelectTrigger className="w-48" aria-label="Mes"><SelectValue /></SelectTrigger>
-            <SelectContent>{lastMonths(12).map((m) => <SelectItem key={m} value={m} className="capitalize">{fmtMonth(m)}</SelectItem>)}</SelectContent>
+            <SelectTrigger className="h-10 w-44 rounded-lg" aria-label="Mes"><SelectValue /></SelectTrigger>
+            <SelectContent>{lastMonths(12, today).map((m) => <SelectItem key={m} value={m} className="capitalize">{fmtMonth(m)}</SelectItem>)}</SelectContent>
           </Select>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {isPending ? (
-            Array.from({ length: 5 }).map((_, i) => <div key={i} className="flex items-center gap-3"><Skeleton className="size-10 rounded-full" /><div className="grid flex-1 gap-1.5"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/4" /></div><Skeleton className="h-5 w-20" /></div>)
-          ) : !rows.length ? (
-            <EmptyState iso="gastos" title="No hay gastos en este mes" description="Registra lo que pagas y Mirai te ayuda a ver en qué se va tu plata." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Registrar gasto</Button>} />
-          ) : (
-            days.map(([d, list]) => (
-              <section key={d} className="grid gap-1">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase">
-                  {d === today ? "Hoy · " : d === yest ? "Ayer · " : ""}{fmtDate(d, { long: true })}
-                </h3>
-                <ul className="-mx-2 grid">
-                  {list.map((g) => {
-                    const cat = cats.find((c) => c.id === g.category_id)
-                    const h = isHormiga(g, cats, umbral)
-                    return (
-                      <li key={g.id} className="group flex items-center gap-3 rounded-md px-2 py-2 hover:bg-hover">
-                        <span className={cn("grid size-10 shrink-0 place-items-center rounded-full", h ? "bg-warning-soft text-warning" : "bg-muted text-muted-foreground")}>
-                          <Icon name={cat?.icon ?? "receipt"} className="size-5" />
-                        </span>
-                        <button type="button" className="grid min-w-0 flex-1 text-left" onClick={() => canEdit && setEditing(g)} disabled={!canEdit}>
-                          <span className="flex flex-wrap items-center gap-1.5 font-semibold">
-                            <span className="truncate">{g.descripcion || "Gasto"}</span>
-                            {h && <StatusPill tone="porVencer" title={g.hormiga_razon ?? undefined}>{g.hormiga_src === "ia" ? <Sparkles className="size-3" /> : g.hormiga_src === "manual" ? <Pencil className="size-3" /> : null}hormiga</StatusPill>}
-                            {g.fixed_expense_id && <StatusPill tone="info">fijo</StatusPill>}
-                          </span>
-                          <span className="truncate text-[13px] text-muted-foreground">
-                            {[cat?.nombre ?? "Sin categoría", memberName(g.member_id, members), methods.find((x) => x.id === g.payment_method_id)?.nombre].filter(Boolean).join(" · ")}
-                          </span>
-                        </button>
-                        <Money value={Number(g.valor)} className="font-bold" />
-                        {canEdit && (
-                          <div className="flex shrink-0 gap-0.5">
-                            {!g.fixed_expense_id && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" aria-label={h ? "Quitar de hormiga" : "Marcar como hormiga"} onClick={() => toggleH.mutate(g)} className={cn(h && "text-[#D98300]")}>
-                                    <Coffee />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{h ? "Quitar de hormiga" : "Marcar como hormiga"}</TooltipContent>
-                              </Tooltip>
-                            )}
-                            <Button variant="ghost" size="icon" aria-label="Eliminar gasto" onClick={() => del.mutate(g)}><Trash2 /></Button>
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            ))
-          )}
-        </CardContent>
-      </Card>
+        }
+        views={[
+          { id: "todos", label: "Todos" },
+          { id: "hormiga", label: "Hormiga", match: (g) => isHormiga(g, cats, umbral), hint: HORMIGA_HINT.auto },
+          { id: "fijos", label: "De gastos fijos", match: (g) => !!g.fixed_expense_id, hint: "Pagos que registraste desde Gastos fijos." },
+        ]}
+        filters={[
+          { id: "cat", label: "Categoría", options: catalogOptions(rows, cats, pick.cat, "Sin categoría"), match: catalogMatch(pick.cat) },
+          { id: "persona", label: "Persona", options: [...(rows.some((g) => !g.member_id) ? [{ value: "__none", label: "Familia" }] : []), ...catalogOptions(rows, members, pick.member)], match: catalogMatch(pick.member) },
+          { id: "medio", label: "Medio de pago", options: catalogOptions(rows, methods, pick.method, "Sin medio de pago"), match: catalogMatch(pick.method) },
+          { id: "prov", label: "Proveedor", options: catalogOptions(rows, providers, pick.prov), match: catalogMatch(pick.prov) },
+          { id: "origen", label: "Origen", options: Object.entries(ORIGEN).filter(([k]) => rows.some((g) => origenDe(g) === k)).map(([value, label]) => ({ value, label })), match: (g, v) => origenDe(g) === v },
+          { id: "fecha", label: "Fecha", kind: "dates", value: (g) => g.fecha },
+          { id: "valor", label: "Valor", kind: "range", money: true, value: (g) => Number(g.valor) },
+        ]}
+        emptyState={<EmptyState iso="gastos" title="No hay gastos en este mes" description="Registra lo que pagas y Mirai te ayuda a ver en qué se va tu plata." action={canAdd && <Button onClick={() => setNuevo(true)}><Plus /> Registrar gasto</Button>} />}
+        item={(g) => {
+          const cat = catOf(g)
+          const h = isHormiga(g, cats, umbral)
+          const can = canRow(g)
+          return (
+            <ListRow key={g.id} icon="receipt"
+              media={<EntityLogo name={g.descripcion} provider={provOf(g)} icon={cat?.icon ?? "receipt"} seed={cat?.id} tone={h ? "warning" : undefined} />}
+              title={g.descripcion || "Gasto"}
+              badges={<>
+                {h && <StatusPill tone="porVencer" hint={g.hormiga_razon || HORMIGA_HINT[g.hormiga_src === "ia" ? "ia" : g.hormiga_src === "manual" ? "manual" : "auto"]}>{g.hormiga_src === "ia" ? <Sparkles /> : g.hormiga_src === "manual" ? <Pencil /> : null}hormiga</StatusPill>}
+                {g.fixed_expense_id && <StatusPill tone="info" hint="Viene del pago de un gasto fijo.">fijo</StatusPill>}
+              </>}
+              subtitle={[cat?.nombre ?? "Sin categoría", memberName(g.member_id, members), methodOf(g)?.nombre, provOf(g)?.nombre].filter(Boolean).join(" · ")}
+              value={<Money value={Number(g.valor)} className="font-bold" />}
+              onClick={can ? () => setEditing(g) : undefined}
+              actions={can ? [
+                ...(!g.fixed_expense_id ? [{ label: h ? "Quitar de hormiga" : "Marcar como hormiga", icon: "coffee", inline: true, onClick: () => toggleH.mutate(g), className: h ? "text-[#D98300]" : undefined }] : []),
+                { label: "Editar gasto", icon: "pencil", hideOnMobile: true, onClick: () => setEditing(g) },
+                { label: "Eliminar gasto", icon: "trash-2", inline: true, destructive: true, onClick: () => del.mutate(g) },
+              ] : []} />
+          )
+        }}
+      />
 
       <ExpenseForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} expense={editing} />
       <AdSlot slot="lista" />

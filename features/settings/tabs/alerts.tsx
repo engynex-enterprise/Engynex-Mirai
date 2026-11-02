@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Combobox } from "@/components/mirai/combobox"
@@ -24,7 +23,7 @@ import { currentPush, disablePush, enablePush, pushSupported } from "@/features/
 import { AVISOS, CANALES, defaultMatriz, onFor, type CanalKey, type Canales, type Matriz } from "@/lib/notify/rules"
 import { formatCoPhone, normalizeCoPhone } from "@/lib/notify/whatsapp"
 import { cn } from "@/lib/utils"
-import { SettingRow, SettingSection } from "../ui"
+import { SettingRow, SettingSection, SettingSkeleton, SettingStack } from "../ui"
 import { useBookSettingsSave } from "../prefs"
 
 const HORAS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h === 0 ? 12 : h > 12 ? h - 12 : h}:00 ${h < 12 ? "a. m." : "p. m."}` }))
@@ -69,7 +68,7 @@ function SendNow({ canal, digest = true }: { canal: Exclude<CanalKey, "app">; di
 }
 
 /** Canal que Mirai aún no ofrece (lo activa el administrador). */
-const NoDisponible = ({ que }: { que: string }) => <p className="py-2 text-sm text-muted-foreground">Mirai todavía no envía avisos por {que}. Cuando esté disponible podrás activarlo aquí.</p>
+const NoDisponible = ({ que }: { que: string }) => <p className="pt-3 text-sm text-muted-foreground">Mirai todavía no envía avisos por {que}. Cuando esté disponible podrás activarlo aquí.</p>
 
 function TelegramLink() {
   const { user } = useApp()
@@ -124,7 +123,7 @@ export function AlertasTab() {
   const { user } = useApp()
   const [email, setEmail] = useState<string | null>(null)
   const [wa, setWa] = useState<string | null>(null)
-  if (!rule || !cfg) return <div className="grid gap-4"><Skeleton className="h-48" /><Skeleton className="h-64" /></div>
+  if (!rule || !cfg) return <SettingSkeleton sections={3} rows={4} />
 
   const notif = (cfg.notif ?? {}) as Record<string, boolean>
   const matriz = Object.keys(rule.matriz ?? {}).length ? rule.matriz : defaultMatriz()
@@ -138,7 +137,7 @@ export function AlertasTab() {
   const waBad = !!(wa ?? rule.whatsapp_to) && !waNum
 
   return (
-    <div className="grid gap-4">
+    <SettingStack>
       {notReady.length > 0 && (
         <Notice tone="warn" title="Por ahora no podemos enviarte por ese medio">
           Activaste {notReady.map((c) => CANALES.find((x) => x.k === c)!.t).join(", ")}, pero Mirai todavía no tiene ese servicio disponible. Te seguimos avisando en la app.
@@ -146,7 +145,7 @@ export function AlertasTab() {
       )}
 
       <SettingSection icon="table" title="¿Qué te avisamos y por dónde?" desc="Apaga un aviso con su interruptor o elige por qué canal te llega.">
-        <div className="-mx-2 overflow-x-auto">
+        <div className="-mx-2 overflow-x-auto" role="region" aria-label="Avisos por canal" tabIndex={0}>
           <table className="w-full min-w-[34rem] text-sm">
             <thead><tr className="text-left text-muted-foreground">
               <th className="px-2 py-2 font-medium">Aviso</th>
@@ -201,22 +200,22 @@ export function AlertasTab() {
         {!ok("email") && <NoDisponible que="correo" />}
         {can.email && ok("email") && <>
           <SettingRow title="Enviar a" desc="Si lo dejas vacío usamos el correo de tu cuenta.">
-            <Input type="email" className="h-10 w-72" placeholder={user.email} value={email ?? rule.email_to ?? ""} onChange={(e) => setEmail(e.target.value)} onBlur={() => email !== null && save({ email_to: email.trim() || null })} aria-label="Correo para avisos" />
+            <Input type="email" className="h-10 w-72 max-sm:w-full" placeholder={user.email} value={email ?? rule.email_to ?? ""} onChange={(e) => setEmail(e.target.value)} onBlur={() => email !== null && save({ email_to: email.trim() || null })} aria-label="Correo para avisos" />
           </SettingRow>
-          <div className="flex flex-wrap items-center gap-3 py-3"><SendNow canal="email" />{rule.last_sent?.email && <span className="text-xs text-muted-foreground">Último resumen: {rule.last_sent.email}</span>}</div>
+          <div className="flex flex-wrap items-center gap-3 pt-4"><SendNow canal="email" />{rule.last_sent?.email && <span className="text-xs text-muted-foreground">Último resumen: {rule.last_sent.email}</span>}</div>
         </>}
       </SettingSection>
 
       <SettingSection icon="send" title="Telegram" desc="100 % gratis. Recomendado para recibir los avisos en el celular.">
         <SettingRow title="Enviar resumen por Telegram"><Switch checked={!!can.telegram} disabled={!can.telegram && !ok("telegram")} onCheckedChange={(v) => setCan("telegram", v)} aria-label="Enviar resumen por Telegram" /></SettingRow>
         {!ok("telegram") && <NoDisponible que="Telegram" />}
-        {can.telegram && ok("telegram") && <div className="grid gap-3 py-3"><TelegramLink /><SendNow canal="telegram" /></div>}
+        {can.telegram && ok("telegram") && <div className="grid gap-3 pt-4"><TelegramLink /><SendNow canal="telegram" /></div>}
       </SettingSection>
 
       <SettingSection icon="bell-ring" title="Notificaciones push" desc="Avisos en este celular o computador, como los de cualquier app.">
         <SettingRow title="Enviar avisos push"><Switch checked={!!can.push} disabled={!can.push && !ok("push")} onCheckedChange={(v) => setCan("push", v)} aria-label="Enviar avisos push" /></SettingRow>
         {!ok("push") && <NoDisponible que="notificaciones push" />}
-        {can.push && ok("push") && <div className="grid gap-3 py-3"><PushDevice /><SendNow canal="push" digest={false} /></div>}
+        {can.push && ok("push") && <div className="grid gap-3 pt-4"><PushDevice /><SendNow canal="push" digest={false} /></div>}
       </SettingSection>
 
       <SettingSection icon="message-circle" title="WhatsApp" desc="Te enviamos el resumen al WhatsApp desde el número oficial de Mirai.">
@@ -225,7 +224,7 @@ export function AlertasTab() {
         {can.whatsapp && ok("whatsapp") && <>
           <SettingRow title="Tu número" desc={waBad ? undefined : waNum ? `Te escribimos al ${formatCoPhone(waNum)}.` : "Tu celular de Colombia (10 dígitos)."}>
             <div className="grid gap-1">
-              <InputGroup className="h-10 w-60"><InputGroupAddon><InputGroupText>+57</InputGroupText></InputGroupAddon>
+              <InputGroup className="h-10 w-60 max-sm:w-full"><InputGroupAddon><InputGroupText>+57</InputGroupText></InputGroupAddon>
                 <InputGroupInput inputMode="numeric" placeholder="300 123 4567" value={wa ?? rule.whatsapp_to ?? ""} aria-invalid={waBad || undefined} onChange={(e) => setWa(e.target.value.replace(/\D/g, "").slice(0, 12))} onBlur={() => {
                   if (wa === null) return
                   const n = normalizeCoPhone(wa)
@@ -236,7 +235,7 @@ export function AlertasTab() {
               {waBad && <p className="text-xs text-danger">Debe ser un celular de 10 dígitos que empiece por 3.</p>}
             </div>
           </SettingRow>
-          {waNum && !waBad && <div className="py-3"><SendNow canal="whatsapp" /></div>}
+          {waNum && !waBad && <div className="pt-4"><SendNow canal="whatsapp" /></div>}
         </>}
       </SettingSection>
 
@@ -246,6 +245,6 @@ export function AlertasTab() {
         <SettingRow title="Límite de gastos hormiga al mes"><div className="w-48"><MoneyAutosave value={+cfg.limite} onSave={(v) => saveCfg.mutate({ limite: v })} /></div></SettingRow>
         <SettingRow title="Valor de referencia de un gasto hormiga" desc="Los gastos por debajo de este valor pueden contarse como hormiga."><div className="w-48"><MoneyAutosave value={+cfg.umbral} onSave={(v) => saveCfg.mutate({ umbral: v })} /></div></SettingRow>
       </SettingSection>
-    </div>
+    </SettingStack>
   )
 }

@@ -14,6 +14,7 @@ import { DatePicker } from "@/components/mirai/date-picker"
 import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { FormSkeleton } from "@/components/skeletons/form-skeleton"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
@@ -21,6 +22,7 @@ import { annuity, localCat } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { categoryOptions, entityOptions, useCatalogsReady, useCategories, useEntities, useKeywordRules, usePaymentMethods } from "@/features/catalogs/hooks"
+import { useAICategory } from "@/features/expenses/use-ai-category"
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, Math.round(v)))
 
@@ -41,9 +43,9 @@ function CardBody({ card, onOpenChange, onSaved }: { card?: Row<"credit_cards"> 
   const [corte, setCorte] = useState(String(card?.corte ?? 25))
   const [pago, setPago] = useState(String(card?.pago ?? 10))
   const [tasa, setTasa] = useState(String(card?.tasa ?? 2.1).replace(".", ","))
+  const valido = !!nombre.trim() && cupo > 0
   const submit = async () => {
-    if (!nombre.trim()) return toast.error("Escribe el nombre de la tarjeta")
-    if (!cupo) return toast.error("Escribe el cupo")
+    if (!valido) return
     const row = await save.mutateAsync({
       ...(card ? { id: card.id } : {}), nombre: nombre.trim(), entity_id: entity, cupo,
       corte: clamp(+corte || 25, 1, 31), pago: clamp(+pago || 10, 1, 31), tasa: +tasa.replace(",", ".") || 0,
@@ -62,7 +64,7 @@ function CardBody({ card, onOpenChange, onSaved }: { card?: Row<"credit_cards"> 
         <FormField label="Día de corte" htmlFor="t-corte" tip="El día en que el banco cierra la cuenta del mes. Las compras después de esa fecha pasan al mes siguiente."><Input id="t-corte" className="h-11" type="number" min={1} max={31} value={corte} onChange={(e) => setCorte(e.target.value)} /></FormField>
         <FormField label="Día límite de pago" htmlFor="t-pago" tip="Hasta ese día puedes pagar sin intereses de mora."><Input id="t-pago" className="h-11" type="number" min={1} max={31} value={pago} onChange={(e) => setPago(e.target.value)} /></FormField>
       </div>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={save.isPending}>Guardar</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!valido} loading={save.isPending} onClick={submit} /></div>
     </FieldGroup>
   )
 }
@@ -92,12 +94,13 @@ function PurchaseBody({ card, onOpenChange }: { card: Row<"credit_cards">; onOpe
   const [catManual, setCatManual] = useState(false)
   const [comoGasto, setComoGasto] = useState(true)
   const [busy, setBusy] = useState(false)
+  const ai = useAICategory({ manual: catManual, onCategory: setCat })
   const n = Math.max(1, +cuotas || 1)
   const cuota = annuity(valor, n > 1 ? Number(card.tasa) / 100 : 0, n)
+  const valido = !!desc.trim() && valor > 0
 
   const submit = async () => {
-    if (!desc.trim()) return toast.error("Escribe qué compraste")
-    if (!valor) return toast.error("Escribe el valor")
+    if (!valido) return
     setBusy(true)
     const sb = createClient()
     const category = cat ?? cats.find((c) => c.nombre === "Otros")?.id ?? null
@@ -121,11 +124,15 @@ function PurchaseBody({ card, onOpenChange }: { card: Row<"credit_cards">; onOpe
     <FieldGroup className="pb-2">
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField label="¿Qué compraste?" htmlFor="cp-desc" required>
-          <Input id="cp-desc" className="h-11" autoFocus value={desc} onChange={(e) => { setDesc(e.target.value); if (!catManual) { const h = localCat(e.target.value, { rules, expenses: history, categories: cats }); if (h) setCat(h.category_id) } }} placeholder="Ej. Nevera" />
+          <Input id="cp-desc" className="h-11" autoFocus value={desc} placeholder="Ej. Nevera" onChange={(e) => {
+            setDesc(e.target.value)
+            // Categoría local al instante y luego la de la IA (si no la eligió a mano).
+            if (!catManual) { const h = localCat(e.target.value, { rules, expenses: history, categories: cats }); if (h) setCat(h.category_id); ai.ask(e.target.value, valor) }
+          }} />
         </FormField>
         <FormField label="Valor" htmlFor="cp-valor" required><MoneyInput id="cp-valor" value={valor} onChange={setValor} /></FormField>
         <FormField label="Fecha" htmlFor="cp-fecha"><DatePicker id="cp-fecha" value={fecha} onChange={(v) => setFecha(v ?? today)} /></FormField>
-        <FormField label="Categoría" htmlFor="cp-cat"><Combobox id="cp-cat" value={cat} onChange={(v) => { setCatManual(true); setCat(v) }} options={categoryOptions(cats)} /></FormField>
+        <FormField label="Categoría" htmlFor="cp-cat" hint={ai.hint}><Combobox id="cp-cat" value={cat} onChange={(v) => { setCatManual(true); setCat(v) }} options={categoryOptions(cats)} /></FormField>
       </div>
       <FormField label="¿A cuántas cuotas?" hint={valor > 0 ? (n > 1 ? `Cuota de ${fmtMoney(cuota)} · intereses ${fmtMoney(cuota * n - valor)}` : "A una cuota no pagas intereses si pagas a tiempo.") : undefined}>
         <Segmented value={cuotas} onChange={setCuotas} items={[1, 3, 6, 12, 24, 36].map((x) => ({ value: String(x), label: String(x) }))} />
@@ -134,7 +141,7 @@ function PurchaseBody({ card, onOpenChange }: { card: Row<"credit_cards">; onOpe
         <Checkbox checked={comoGasto} onCheckedChange={(c) => setComoGasto(c === true)} className="mt-0.5" />
         <span><b>Registrarla también en mis gastos</b><br /><span className="text-muted-foreground">Así aparece en tu presupuesto de este mes.</span></span>
       </label>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={busy}>Guardar compra</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!valido} loading={busy} onClick={submit}>Guardar compra</SubmitButton></div>
     </FieldGroup>
   )
 }

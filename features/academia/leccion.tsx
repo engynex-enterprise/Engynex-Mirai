@@ -5,9 +5,14 @@ import { Check, Clock, X } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Icon } from "@/components/mirai/icon"
 import { StatusPill } from "@/components/mirai/status-pill"
-import { LECCIONES, NIVELES, avance, insignias, nivelDe, type Leccion } from "@/lib/content/academia"
+import { Tip } from "@/components/mirai/tip"
+import type { IconTone } from "@/components/mirai/tone-icon"
+import { LECCIONES, NIVELES, avance, insignias, nivelDe, type Leccion, type Nivel } from "@/lib/content/academia"
 import { glosarioById, type Termino } from "@/lib/content/glosario"
 import { cn } from "@/lib/utils"
+
+/** Color de referencia de cada nivel (el mismo en la página y en el Centro de ayuda). */
+export const NIVEL_TONE: Record<Nivel, IconTone> = { basico: "green", intermedio: "blue", avanzado: "violet" }
 
 /** Contenido de una lección: puntos, términos del glosario y pregunta de repaso. `onCorrecta` al acertar. */
 export function LeccionBody({ l, onCorrecta, onTermino }: { l: Leccion; onCorrecta?: () => void; onTermino?: (id: string) => void }) {
@@ -51,11 +56,13 @@ export function AvanceAcademia({ hechas, compact = false }: { hechas: string[]; 
       {pct === 100 && <p className="text-sm font-medium text-success">¡Terminaste la Academia! Ya tienes las bases para manejar tu plata con confianza.</p>}
       <ul className={cn("grid gap-2", compact ? "grid-cols-5" : "grid-cols-5 sm:gap-3")} aria-label="Insignias">
         {ins.map((b) => (
-          <li key={b.id} title={`${b.label}: ${b.desc}`} className="grid justify-items-center gap-1 text-center">
-            <span className={cn("grid place-items-center rounded-full", compact ? "size-10" : "size-12", b.ok ? "bg-brand-gradient text-white shadow-card" : "bg-secondary text-muted-foreground/60")}><Icon name={b.icon} className={compact ? "size-4" : "size-5"} /></span>
-            <span className={cn("text-[11px] leading-tight", b.ok ? "font-semibold" : "text-muted-foreground")}>{b.label}</span>
-            <span className="sr-only">{b.ok ? "ganada" : "por ganar"}: {b.desc}</span>
-          </li>
+          <Tip key={b.id} label={<><b>{b.label}</b> · {b.ok ? "Ganada" : "Por ganar"}: {b.desc}</>}>
+            <li tabIndex={0} className="grid justify-items-center gap-1 rounded-lg text-center outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <span className={cn("grid place-items-center rounded-full", compact ? "size-10" : "size-12", b.ok ? "bg-brand-gradient text-white shadow-card" : "bg-secondary text-muted-foreground/60")}><Icon name={b.icon} className={compact ? "size-4" : "size-5"} /></span>
+              <span className={cn("text-[11px] leading-tight", b.ok ? "font-semibold" : "text-muted-foreground")}>{b.label}</span>
+              <span className="sr-only">{b.ok ? "ganada" : "por ganar"}: {b.desc}</span>
+            </li>
+          </Tip>
         ))}
       </ul>
     </div>

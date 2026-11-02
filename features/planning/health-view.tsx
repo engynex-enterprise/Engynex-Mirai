@@ -3,11 +3,15 @@
 import Link from "next/link"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Icon } from "@/components/mirai/icon"
+import { Panel } from "@/components/mirai/panel"
+import { Tip } from "@/components/mirai/tip"
+import { ToneIcon } from "@/components/mirai/tone-icon"
+import { Segmented } from "@/components/mirai/choice-cards"
+import { useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { healthScore, indicadores } from "@/lib/domain"
 import { todayISO } from "@/lib/format"
@@ -16,18 +20,29 @@ import { useBookData } from "@/features/book/use-book-data"
 
 const COLOR = { ok: "#9EDB4E", warn: "#E08A00", bad: "#C8213B" }
 const LBL = { ok: ["pagado", "Sano"], warn: ["porVencer", "Vigilar"], bad: ["vencido", "En riesgo"] } as const
+const TIP = { ok: "Está dentro de lo recomendado.", warn: "Está cerca del límite: vale la pena revisarlo.", bad: "Está fuera de lo recomendado: empieza por aquí." } as const
+const TONE = { ok: "green", warn: "amber", bad: "red" } as const
+type Ind = ReturnType<typeof indicadores>[number]
+const FILTROS: ListFilter<Ind>[] = [
+  { value: "todos", label: "Todos" },
+  { value: "bad", label: "En riesgo", match: (i) => i.ok && i.st === "bad" },
+  { value: "warn", label: "Vigilar", match: (i) => i.ok && i.st === "warn" },
+  { value: "ok", label: "Sanos", match: (i) => i.ok && i.st === "ok" },
+  { value: "falta", label: "Faltan datos", match: (i) => !i.ok },
+]
 
 export function HealthView() {
   const today = todayISO()
   const { data: book, isPending } = useBookData()
   const d = useMemo(() => { if (!book) return null; const I = indicadores(book, today); return { I, H: healthScore(I) } }, [book, today])
+  const ctl = useListControls<Ind>(d?.I, { filters: FILTROS })
   if (isPending || !d) return <PageSkeleton kpis={0} />
   const { I, H } = d
   const n = I.filter((i) => i.ok).length
   return (
     <div className="grid gap-6">
       <PageHeader id="indicadores" description="Seis preguntas que se hacen los asesores para saber si las finanzas de un hogar están sanas. Solo mostramos un resultado cuando tienes los datos necesarios para que sea exacto." />
-      <Card className="flex-col items-center gap-6 p-6 shadow-card ring-0 sm:flex-row">
+      <Panel className="flex-col items-center gap-6 p-6 sm:flex-row">
         {H.visible ? (
           <>
             <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90" role="img" aria-label={`Puntaje ${H.sc} de 100`}>
@@ -49,29 +64,31 @@ export function HealthView() {
             <ul className="ml-5 list-disc text-sm">{[...new Set(I.filter((i) => !i.ok).flatMap((i) => i.falta))].map((f) => <li key={f}>{f}</li>)}</ul>
           </div>
         )}
-      </Card>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {I.map((i) => (
-          <Card key={i.k} className={cn("gap-3 p-5 shadow-card ring-0", !i.ok && "border border-dashed shadow-none")}>
+      </Panel>
+      <Segmented value={ctl.filter} onChange={ctl.setFilter} items={FILTROS.map((f) => ({ value: f.value, label: `${f.label} (${ctl.counts[f.value] ?? 0})` }))} />
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {ctl.rows.map((i) => (
+          <Panel key={i.k} className={cn("gap-3", !i.ok && "border border-dashed shadow-none")}>
             <div className="flex items-center justify-between gap-2">
-              <span className={cn("grid size-10 place-items-center rounded-full", i.ok ? (i.st === "ok" ? "bg-success-soft text-success" : i.st === "warn" ? "bg-warning-soft text-warning" : "bg-danger-soft text-danger") : "bg-muted text-muted-foreground")}><Icon name={i.icon} className="size-5" /></span>
-              {i.ok ? <StatusPill tone={LBL[i.st][0]}>{LBL[i.st][1]}</StatusPill> : <StatusPill tone="gray">Faltan datos</StatusPill>}
+              <ToneIcon icon={i.icon} tone={i.ok ? TONE[i.st] : "gray"} />
+              {i.ok ? <Tip label={TIP[i.st]}><span><StatusPill tone={LBL[i.st][0]}>{LBL[i.st][1]}</StatusPill></span></Tip> : <Tip label="Registra los datos que faltan para calcularlo."><span><StatusPill tone="gray">Faltan datos</StatusPill></span></Tip>}
             </div>
-            <p className="font-semibold">{i.k}</p>
+            <h2 className="font-semibold">{i.k}</h2>
             {i.ok ? (
               <>
-                <p className="text-[22px] font-semibold">{i.v.replace(/(\d)\.(\d)/, "$1,$2")}</p>
+                <p className="text-[24px] leading-[30px] font-bold tracking-tight">{i.v.replace(/(\d)\.(\d)/, "$1,$2")}</p>
                 <Progress value={Math.min(100, (i.r / (i.max || 1)) * 100)} className="h-2" />
                 <p className="text-sm text-muted-foreground"><b className="text-foreground">{i.meta}.</b> {i.d}</p>
               </>
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">Para calcularlo con exactitud necesito {i.falta.join(" y ")}.</p>
-                {i.go && <Button variant="soft" size="sm" className="w-fit" asChild><Link href={`/${i.go}`}>Completar</Link></Button>}
+                {i.go && <Button variant="soft" size="sm" className="mt-auto w-fit" asChild><Link href={`/${i.go}`}>Completar datos</Link></Button>}
               </>
             )}
-          </Card>
+          </Panel>
         ))}
+        {!ctl.rows.length && <p className="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Ningún indicador está en este grupo. ¡Buena señal!</p>}
       </div>
     </div>
   )

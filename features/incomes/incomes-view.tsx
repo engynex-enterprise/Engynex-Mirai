@@ -11,7 +11,7 @@ import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { EmptyState } from "@/components/mirai/empty-state"
 import { ListRow } from "@/components/mirai/list-row"
-import { useCanEdit } from "@/components/app/app-context"
+import { useCanEditRow, useCanRecord } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { incomeCuando, incomeReparto, ingresoBrutoMensual, ingresoMensual, quincena, type Deducciones } from "@/lib/domain"
@@ -42,7 +42,9 @@ const dedLine = (x: Row<"incomes">) => {
 }
 
 export function IncomesView() {
-  const canEdit = useCanEdit()
+  // "Registra sus gastos" agrega y edita solo sus ingresos
+  const canEdit = useCanRecord()
+  const canRow = useCanEditRow()
   const [nuevo, setNuevo] = useNewParam()
   const [editing, setEditing] = useState<Row<"incomes"> | null>(null)
   const { data: book, isPending } = useBookData()
@@ -90,8 +92,8 @@ export function IncomesView() {
                     value={quincLine(x)
                       ? <span className="grid text-right"><Money value={Number(incomeReparto(x).n1) + Number(incomeReparto(x).n2)} currency={x.currency} className="font-bold text-success" /><span className="text-xs text-muted-foreground">al mes</span></span>
                       : <Money value={Number(x.valor)} currency={x.currency} className="font-bold text-success" />}
-                    onClick={canEdit ? () => setEditing(x) : undefined}
-                    actions={canEdit ? [
+                    onClick={canRow(x) ? () => setEditing(x) : undefined}
+                    actions={canRow(x) ? [
                       { label: `Editar ${x.concepto}`, icon: "pencil", onClick: () => setEditing(x) },
                       { label: `Eliminar ${x.concepto}`, icon: "trash-2", onClick: () => del.mutate(x), destructive: true },
                     ] : []} />

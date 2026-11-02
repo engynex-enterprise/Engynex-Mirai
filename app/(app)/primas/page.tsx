@@ -5,5 +5,5 @@ import { PrimasView } from "@/features/extras/primas-view"
 export const metadata = { title: "Primas y cesantías" }
 
 export default function Page() {
-  return <Suspense fallback={<PageSkeleton kpis={0} />}><PrimasView /></Suspense>
+  return <Suspense fallback={<PageSkeleton kpis={3} />}><PrimasView /></Suspense>
 }

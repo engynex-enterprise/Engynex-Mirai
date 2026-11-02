@@ -2,15 +2,17 @@
 
 import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { CircleCheck, Download, FileSpreadsheet, FileText, Paperclip, Pencil, Plus, Trash2, Upload } from "lucide-react"
+import { CircleCheck, Download, FileSpreadsheet, FileText, Paperclip, Trash2, Upload } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import { Combobox } from "@/components/mirai/combobox"
+import { DataTable, DTPrimary, type DTColumn } from "@/components/mirai/data-table"
+import { Panel } from "@/components/mirai/panel"
+import { IconButton, Tip } from "@/components/mirai/tip"
+import { ToneIcon, toneFor } from "@/components/mirai/tone-icon"
 import { FormField } from "@/components/mirai/field"
 import { Icon } from "@/components/mirai/icon"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
@@ -33,6 +35,13 @@ const RTABS = [
 type Tab = (typeof RTABS)[number][0]
 const $ = (v: number) => fmtMoney(Math.round(v))
 const BT = Object.fromEntries(BTIP.map(([k, l, i]) => [k, { l, i }])) as Record<string, { l: string; i: string }>
+/** Color de referencia por tipo de bien. */
+const BTONE: Record<string, "blue" | "amber" | "green" | "violet" | "brand" | "navy" | "gray"> = { inmueble: "blue", vehiculo: "amber", cuenta: "green", inversion: "violet", cripto: "violet", exterior: "navy", cobrar: "brand" }
+type BienRow = TaxAssetIn & { id?: string }
+/** Fila "concepto ··· valor" de los resúmenes (mismo alto y alineación en todas las tarjetas). */
+function Line({ l, v, strong, className }: { l: React.ReactNode; v: number; strong?: boolean; className?: string }) {
+  return <div className={cn("flex items-baseline justify-between gap-3 border-b py-2 text-sm last:border-0", strong && "font-semibold", className)}><span className="min-w-0">{l}</span><Money value={v} className="shrink-0 tabular-nums" /></div>
+}
 
 /** Acciones de escritura (solo el titular; en el portal del contador no existen). */
 export type RentaActions = {
@@ -93,12 +102,25 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
     const est = (C.A as Record<string, number>)[k] || 0
     return (
       <div key={k} className="grid gap-2 border-b py-3 last:border-0 sm:grid-cols-[1fr_14rem] sm:items-center">
-        <div><p className="flex flex-wrap items-center gap-2 font-medium">{l}{manual ? <StatusPill tone="info">Del certificado</StatusPill> : est ? <StatusPill tone="estimado">Estimado</StatusPill> : <StatusPill tone="gray">Sin dato</StatusPill>}</p><p className="text-sm text-muted-foreground">{h}</p></div>
+        <div><p className="flex flex-wrap items-center gap-2 font-medium"><label htmlFor={`ing-${k}`}>{l}</label>{manual ? <Tip label="Lo escribiste tú, con el dato del certificado."><span><StatusPill tone="info">Del certificado</StatusPill></span></Tip> : est ? <Tip label="Lo calculamos con lo que registraste en Mirai. Si tienes el certificado, escribe el valor exacto."><span><StatusPill tone="estimado">Estimado</StatusPill></span></Tip> : <StatusPill tone="gray">Sin dato</StatusPill>}</p><p className="text-sm text-muted-foreground">{h}</p></div>
         {ro ? <p className="text-right font-medium tabular-nums"><Money value={(C as unknown as Record<string, number>)[k]} /></p>
-          : <MoneyAutosave value={manual ? +(tax.ing?.[k] ?? 0) : 0} placeholder={est ? new Intl.NumberFormat("es-CO").format(Math.round(est)) : "0"} onSave={(v) => { const ing = { ...tax.ing }; if (v) ing[k] = v; else delete ing[k]; save({ ing }) }} />}
+          : <MoneyAutosave id={`ing-${k}`} value={manual ? +(tax.ing?.[k] ?? 0) : 0} placeholder={est ? new Intl.NumberFormat("es-CO").format(Math.round(est)) : "0"} onSave={(v) => { const ing = { ...tax.ing }; if (v) ing[k] = v; else delete ing[k]; save({ ing }) }} />}
       </div>
     )
   }
+
+  const tiposBien = [...new Set(P.B.map((b) => b.tipo))]
+  const bienCols: DTColumn<BienRow>[] = [
+    { id: "bien", header: "Bien", sort: (b) => b.nombre, csv: (b) => b.nombre,
+      cell: (b) => <DTPrimary media={<ToneIcon icon={BT[b.tipo]?.i ?? "tag"} tone={BTONE[b.tipo] ?? toneFor(b.tipo)} />} title={b.nombre}
+        sub={[BT[b.tipo]?.l, b.entidad, b.fecha_adq ? `desde ${fmtDate(b.fecha_adq)}` : ""].filter(Boolean).join(" · ")} /> },
+    { id: "ident", header: "Identificación", csv: (b) => b.ident ?? "", cell: (b) => b.ident || <span className="text-muted-foreground">—</span> },
+    { id: "costo", header: "Costo fiscal", align: "right", sort: (b) => b.costo, csv: (b) => b.costo, cell: (b) => <Money value={b.costo} /> },
+    { id: "avaluo", header: "Avalúo", align: "right", sort: (b) => b.avaluo, csv: (b) => b.avaluo, cell: (b) => <Money value={b.avaluo} /> },
+    { id: "pct", header: "Tu parte", info: "El porcentaje del bien que es tuyo.", align: "right", sort: (b) => +b.pct, csv: (b) => b.pct, cell: (b) => <span className="tabular-nums">{b.pct} %</span> },
+    { id: "valor", header: "Valor a declarar", align: "right", sort: (b) => (bValor(b) * (+b.pct || 100)) / 100, csv: (b) => Math.round((bValor(b) * (+b.pct || 100)) / 100),
+      cell: (b) => <Money value={(bValor(b) * (+b.pct || 100)) / 100} className="font-semibold" /> },
+  ]
 
   return (
     <div className="grid gap-6">
@@ -109,21 +131,25 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
         actions={<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={exportPdf} disabled={busy === "pdf"}>{busy === "pdf" ? <Spinner /> : <FileText />} Informe</Button><Button variant="outline" onClick={exportXlsx} disabled={busy === "xlsx"}>{busy === "xlsx" ? <Spinner /> : <FileSpreadsheet />} Excel</Button></div>} />
       {!ro && <p className="-mt-3 text-sm text-muted-foreground">¿Te ayuda un contador? <Link href="/contador" className="text-link underline">Dale acceso de solo lectura</Link> para que vea esta información en vivo.</p>}
 
-      <Card className="flex-row flex-wrap items-end gap-3 p-4 shadow-card ring-0">
-        <div className="grid w-full gap-1 sm:w-56"><span className="text-sm font-medium">Año gravable</span><Combobox value={String(y)} onChange={(v) => setY(+v)} options={years.map((v) => ({ value: String(v), label: `${v} (declaras en ${v + 1})` }))} /></div>
-        <div className="grid w-full gap-1 sm:w-56"><span className="text-sm font-medium">¿Quién declara?</span><Combobox value={mid} onChange={setMid} options={data.members.map((m) => ({ value: m.id, label: m.nombre, icon: "user", hint: m.rol }))} /></div>
-        <div className="grid w-full gap-1 sm:w-48"><span className="text-sm font-medium">UVT del año {y}</span>
-          {ro ? <p className="h-10 content-center font-medium">{$(U)}</p> : <MoneyAutosave value={U} onSave={(v) => actions!.saveUvt(y, v)} />}</div>
-      </Card>
+      <Panel className="grid gap-4 sm:grid-cols-3">
+        <FormField label="Año gravable" htmlFor="r-year" tip="El año de los ingresos que declaras. La declaración se presenta al año siguiente."><Combobox id="r-year" value={String(y)} onChange={(v) => setY(+v)} options={years.map((v) => ({ value: String(v), label: `${v} (declaras en ${v + 1})` }))} /></FormField>
+        <FormField label="¿Quién declara?" htmlFor="r-quien" tip={false}><Combobox id="r-quien" value={mid} onChange={setMid} options={data.members.map((m) => ({ value: m.id, label: m.nombre, icon: "user", hint: m.rol }))} /></FormField>
+        <FormField label={`UVT del año ${y}`} htmlFor="r-uvt" tip="La Unidad de Valor Tributario que fija la DIAN cada año. Los topes y la tabla del impuesto se miden en UVT.">
+          {ro ? <p className="flex h-11 items-center font-medium" data-money>{$(U)}</p> : <MoneyAutosave id="r-uvt" value={U} onSave={(v) => actions!.saveUvt(y, v)} />}
+        </FormField>
+      </Panel>
 
-      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Partes de la declaración">
         {RTABS.map(([k, l, i]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm whitespace-nowrap hover:bg-hover", tab === k && "bg-brand-soft font-semibold text-link")}><Icon name={i} className="size-4" />{l}</button>
+          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            className={cn("flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors hover:bg-hover focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none", tab === k ? "bg-brand-soft font-semibold text-link ring-1 ring-brand/30" : "text-muted-foreground")}>
+            <Icon name={i} className="size-4" />{l}
+          </button>
         ))}
       </div>
 
       {tab === "resumen" && (
-        <div className="grid gap-4">
+        <div className="grid gap-6">
           <Notice tone={debe ? "warn" : cerca ? "info" : "ok"} title={debe ? "Sí, todo indica que debes declarar renta" : cerca ? "Estás cerca de los topes: revisa con cuidado" : "Por ahora no superas los topes para declarar"}>
             {quien} · año gravable {y}. {fecha ? <>Tu fecha límite: <b>{fmtDate(fecha.fecha, { long: true, year: true })}</b>.</> : ro ? <>La fecha límite depende de los dos últimos dígitos del NIT.</> : <>Mira tu fecha en el <Link href="/calendario" className="underline">Calendario fiscal</Link>.</>}
           </Notice>
@@ -132,8 +158,7 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
             <Kpi icon="landmark" label="Patrimonio líquido" value={<Money value={P.liquido} />} sub="Bienes − deudas" />
             <Kpi icon="arrow-down-to-line" tone="green" label="Ingresos brutos del año" value={<Money value={C.brutos} />} />
           </KpiGrid>
-          <Card className="gap-2 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Tu ruta para declarar</h2>
+          <Panel title="Tu ruta para declarar" icon="route" className="gap-2">
             {([
               ["Revisa tus ingresos", Object.keys(tax.ing ?? {}).length > 0, "ingresos"],
               ["Registra tus bienes", P.B.length > 0 || data.book.assets.length > 0, "bienes"],
@@ -142,22 +167,21 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
               ["Reúne los documentos", ndocs >= RDOCS.length * 0.6, "documentos"],
             ] as [string, boolean, Tab][]).map(([l, ok, t], i) => (
               <button key={l} type="button" onClick={() => setTab(t)} className="flex items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-hover">
-                <span className={cn("grid size-7 place-items-center rounded-full text-xs font-semibold", ok ? "bg-success text-white" : "bg-muted")}>{ok ? <CircleCheck className="size-4" /> : i + 1}</span>
+                <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold", ok ? "bg-success text-white" : "bg-muted")}>{ok ? <CircleCheck className="size-4" /> : i + 1}</span>
                 <span className="flex-1">{l}</span>{ok && <StatusPill tone="pagado">Listo</StatusPill>}
               </button>
             ))}
-            {!ro && <Link href="/contador" className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-hover"><span className="grid size-7 place-items-center rounded-full bg-muted text-xs">6</span>Comparte con tu contador</Link>}
+            {!ro && <Link href="/contador" className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-hover"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">6</span>Comparte con tu contador</Link>}
             <p className="pt-2 text-xs text-muted-foreground">Estimación para la cédula general. No incluye dividendos, ganancias ocasionales ni anticipo del año siguiente. El valor final lo determina el contador.</p>
-          </Card>
+          </Panel>
         </div>
       )}
 
       {tab === "topes" && (
-        <Card className="gap-4 p-5 shadow-card ring-0">
-          <h2 className="font-semibold">Los topes de la DIAN para el año {y}</h2>
+        <Panel title={`Los topes de la DIAN para el año ${y}`} icon="scale" info="Si superas uno solo de estos topes, debes declarar renta.">
           {T.map((t) => (
             <div key={t.l} className="grid gap-1.5">
-              <div className="flex flex-wrap items-center gap-2"><p className="flex-1 font-medium">{t.l}</p><Money value={t.v} className="font-semibold" />{t.pasa && <StatusPill tone="vencido">Supera</StatusPill>}</div>
+              <div className="flex flex-wrap items-center gap-2"><p className="flex-1 font-medium">{t.l}</p><Money value={t.v} className="font-semibold" />{t.pasa ? <Tip label="Superas este tope: debes declarar."><span><StatusPill tone="vencido">Supera</StatusPill></span></Tip> : <Tip label={`Te faltan ${$(t.tope - t.v)} para llegar al tope.`}><span><StatusPill tone="ok">Debajo</StatusPill></span></Tip>}</div>
               <Progress value={Math.min(100, (t.v / t.tope) * 100)} className={cn("h-2", t.pasa ? "[&>div]:bg-danger" : "[&>div]:bg-lime")} />
               <p className="text-xs text-muted-foreground">{t.d} Tope: {new Intl.NumberFormat("es-CO").format(t.u)} UVT = {$(t.tope)}</p>
             </div>
@@ -168,128 +192,125 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
               <FormField label="Consumos totales del año (si no los registraste todos)" tip={false}><MoneyAutosave value={+tax.consumos} onSave={(v) => save({ consumos: v })} /></FormField>
             </div>
           )}
-        </Card>
+        </Panel>
       )}
 
       {tab === "ingresos" && (
-        <Card className="gap-1 p-5 shadow-card ring-0">
-          <h2 className="font-semibold">Ingresos, aportes y retenciones</h2>
-          <p className="text-sm text-muted-foreground">Calculados con lo que registraste en Mirai. {!ro && "Deja vacío para usar el valor estimado (gris). Los salarios incluyen 12 meses más las primas."}</p>
-          {RIK.map(([k, l, h]) => ingRow(k, l, h))}
-        </Card>
+        <Panel title="Ingresos, aportes y retenciones" icon="arrow-down-to-line" className="gap-1"
+          description={<>Calculados con lo que registraste en Mirai. {!ro && "Deja vacío para usar el valor estimado (gris). Los salarios incluyen 12 meses más las primas."}</>}>
+          <div>{RIK.map(([k, l, h]) => ingRow(k, l, h))}</div>
+        </Panel>
       )}
 
       {tab === "bienes" && (
-        <div className="grid gap-4">
-          <Card className="gap-3 p-5 shadow-card ring-0">
-            <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Bienes de {quien}</h2>
-              {!ro && <div className="flex gap-2"><Button variant="outline" onClick={async () => { const n = await actions!.importBienes(); toast(n ? `Traje ${n} bien${n === 1 ? "" : "es"} de Mi dinero. Completa el costo fiscal y el avalúo.` : "No hay bienes nuevos en Mi dinero.") }}><Download /> Traer de Mi dinero</Button><Button onClick={() => setBien({ tipo: "inmueble", nombre: "", costo: 0, avaluo: 0, valor31: 0, pct: 100, member_id: mid })}><Plus /> Agregar bien</Button></div>}
-            </div>
-            {!P.B.length ? <p className="text-sm text-muted-foreground">Aún no registras bienes para {quien}.</p> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[40rem] text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">Bien</th><th className="font-medium">Identificación</th><th className="text-right font-medium">Costo fiscal</th><th className="text-right font-medium">Avalúo</th><th className="text-right font-medium">%</th><th className="text-right font-medium">Valor a declarar</th>{!ro && <th />}</tr></thead>
-                <tbody>{P.B.map((b) => (
-                  <tr key={b.id} className="border-b last:border-0">
-                    <td className="py-2"><div className="flex items-center gap-2"><Icon name={BT[b.tipo]?.i ?? "tag"} className="size-4 text-muted-foreground" /><div><p className="font-medium">{b.nombre}</p><p className="text-xs text-muted-foreground">{BT[b.tipo]?.l}{b.entidad ? ` · ${b.entidad}` : ""}{b.fecha_adq ? ` · desde ${fmtDate(b.fecha_adq)}` : ""}</p></div></div></td>
-                    <td>{b.ident || "—"}</td><td className="text-right tabular-nums"><Money value={b.costo} /></td><td className="text-right tabular-nums"><Money value={b.avaluo} /></td><td className="text-right">{b.pct}%</td>
-                    <td className="text-right font-medium tabular-nums"><Money value={(bValor(b) * (+b.pct || 100)) / 100} /></td>
-                    {!ro && <td className="text-right whitespace-nowrap"><Button size="icon-sm" variant="ghost" aria-label={`Editar ${b.nombre}`} onClick={() => setBien(b)}><Pencil /></Button><Button size="icon-sm" variant="ghost" className="text-danger" aria-label={`Eliminar ${b.nombre}`} onClick={() => actions!.delBien(b.id!, b.nombre)}><Trash2 /></Button></td>}
-                  </tr>
-                ))}</tbody>
-                <tfoot><tr><td colSpan={5} className="py-2 font-semibold">Total bienes</td><td className="text-right font-semibold"><Money value={P.bv} /></td>{!ro && <td />}</tr></tfoot>
-              </table></div>
-            )}
-            <p className="text-xs text-muted-foreground">Los inmuebles se declaran por el mayor valor entre el costo fiscal y el avalúo catastral.</p>
-          </Card>
+        <div className="grid gap-6">
+          {!ro && data.book.assets.length > 0 && (
+            <Notice tone="info" title="¿Ya registraste tus bienes en Mi dinero?" action={<Button variant="outline" onClick={async () => { const n = await actions!.importBienes(); toast(n ? `Traje ${n} bien${n === 1 ? "" : "es"} de Mi dinero. Completa el costo fiscal y el avalúo.` : "No hay bienes nuevos en Mi dinero.") }}><Download /> Traer de Mi dinero</Button>}>
+              Tráelos con un clic y solo completa el costo fiscal y el avalúo.
+            </Notice>
+          )}
+          <DataTable<BienRow> title={`Bienes de ${quien}`} info="Lo que tienes a tu nombre al 31 de diciembre. Los inmuebles se declaran por el mayor valor entre el costo fiscal y el avalúo catastral."
+            data={P.B as BienRow[]} rowKey={(b) => b.id ?? b.nombre} columns={bienCols} exportName={`bienes-${y}`}
+            search={{ placeholder: "Buscar bien", text: (b) => `${b.nombre} ${b.ident ?? ""} ${b.entidad ?? ""} ${BT[b.tipo]?.l ?? ""}` }}
+            filters={tiposBien.length > 1 ? [{ id: "tipo", label: "Tipo", options: tiposBien.map((t) => ({ value: t, label: BT[t]?.l ?? t })), match: (b, v) => b.tipo === v }] : []}
+            create={ro ? undefined : { label: "Agregar bien", onClick: () => setBien({ tipo: "inmueble", nombre: "", costo: 0, avaluo: 0, valor31: 0, pct: 100, member_id: mid }) }}
+            actions={ro ? undefined : [{ label: "Editar", onSelect: (b) => setBien(b) }, { label: "Eliminar", destructive: true, onSelect: (b) => actions!.delBien(b.id!, b.nombre) }]}
+            initialSort={{ id: "valor", dir: "desc" }}
+            empty={<p className="text-muted-foreground">Aún no registras bienes para {quien}.</p>}
+            footer={<span className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground"><span className="font-semibold">Total bienes</span><Money value={P.bv} className="font-semibold" /></span>} />
           {esTit && (
-            <Card className="gap-1 p-5 shadow-card ring-0">
-              <h2 className="font-semibold">También suman a tu patrimonio (de Mi dinero)</h2>
-              {([["Cuentas y efectivo", P.cuentas], ["Inversiones", P.invs], ["Lo que te deben", P.cobr], ["Otros bienes sin detalle", P.otrosAct]] as [string, number][]).map(([l, v]) => <div key={l} className="flex justify-between border-b py-2 text-sm last:border-0"><span>{l}</span><Money value={v} /></div>)}
-              <div className="flex justify-between pt-2 font-semibold"><span>Patrimonio bruto</span><Money value={P.bruto} /></div>
-            </Card>
+            <Panel title="También suman a tu patrimonio (de Mi dinero)" icon="wallet" className="gap-1">
+              <div>
+                {([["Cuentas y efectivo", P.cuentas], ["Inversiones", P.invs], ["Lo que te deben", P.cobr], ["Otros bienes sin detalle", P.otrosAct]] as [string, number][]).map(([l, v]) => <Line key={l} l={l} v={v} />)}
+                <Line l="Patrimonio bruto" v={P.bruto} strong className="border-t" />
+              </div>
+            </Panel>
           )}
         </div>
       )}
 
       {tab === "deudas" && (
-        <Card className="gap-1 p-5 shadow-card ring-0">
-          <h2 className="font-semibold">Deudas al 31 de diciembre</h2>
-          {!esTit ? <p className="text-sm text-muted-foreground">Las deudas registradas en Mirai se asignan al titular del libro.</p> : <>
-            {data.liabilitiesNamed.map((l, i) => <div key={i} className="flex justify-between border-b py-2 text-sm"><span>{l.nombre}</span><Money value={conv(l.valor, l.currency, data.book.settings.trm)} /></div>)}
-            {data.book.loans.filter((L) => L.kind === "pagar").map((L) => <div key={L.id} className="flex justify-between border-b py-2 text-sm"><span>{L.concepto || loanName(L, data.book.contacts, data.book.entities)}</span><Money value={loanEngine(L, today).saldo} /></div>)}
-            <div className="flex justify-between pt-2 font-semibold"><span>Total deudas</span><Money value={P.deudas} /></div>
-            <p className="pt-2 text-xs text-muted-foreground">Pide a cada entidad el certificado de saldo al 31 de diciembre.</p>
-          </>}
-        </Card>
+        <Panel title="Deudas al 31 de diciembre" icon="receipt" className="gap-1" description={esTit ? "Pide a cada entidad el certificado de saldo al 31 de diciembre." : undefined}>
+          {!esTit ? <p className="text-sm text-muted-foreground">Las deudas registradas en Mirai se asignan al titular del libro.</p> : (
+            <div>
+              {data.liabilitiesNamed.map((l, i) => <Line key={i} l={l.nombre} v={conv(l.valor, l.currency, data.book.settings.trm)} />)}
+              {data.book.loans.filter((L) => L.kind === "pagar").map((L) => <Line key={L.id} l={L.concepto || loanName(L, data.book.contacts, data.book.entities)} v={loanEngine(L, today).saldo} />)}
+              {!data.liabilitiesNamed.length && !data.book.loans.some((L) => L.kind === "pagar") && <p className="py-2 text-sm text-muted-foreground">No tienes deudas registradas en Mirai.</p>}
+              <Line l="Total deudas" v={P.deudas} strong className="border-t" />
+            </div>
+          )}
+        </Panel>
       )}
 
       {tab === "dependientes" && (
-        <div className="grid gap-4">
-          <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-6">
+          <div className="grid gap-4 md:grid-cols-2">
             {data.members.filter((m) => m.id !== mid).map((m) => {
               const d = depInfo(m, today)
               const otro = m.dep_de && m.dep_de !== mid ? data.members.find((x) => x.id === m.dep_de)?.nombre : null
               return (
-                <Card key={m.id} className="flex-row items-center gap-3 p-4 shadow-card ring-0">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-soft font-semibold text-link">{m.nombre.slice(0, 1)}</span>
+                <Panel key={m.id} className="flex-row items-center gap-3 p-4">
+                  <span aria-hidden className={cn("grid size-10 shrink-0 place-items-center rounded-full font-semibold", "bg-brand-soft text-link")}>{m.nombre.slice(0, 1).toUpperCase()}</span>
                   <div className="min-w-0 flex-1"><p className="font-medium">{m.nombre}</p><p className="text-xs text-muted-foreground">{m.rol}{d.e !== null ? ` · ${d.e} años` : ""}{m.doc ? ` · ${m.doc}` : ""}</p>
-                    <div className="mt-1">{otro ? <StatusPill tone="gray">Lo declara {otro}</StatusPill> : m.dep_de === mid ? <StatusPill tone={d.ok ? "pagado" : "porVencer"}>{d.ok ? "Válido" : d.why}</StatusPill> : <StatusPill tone="gray">No es tu dependiente</StatusPill>}</div>
+                    <div className="mt-1">{otro ? <Tip label="Un dependiente solo lo puede tomar una persona."><span><StatusPill tone="gray">Lo declara {otro}</StatusPill></span></Tip> : m.dep_de === mid ? <StatusPill tone={d.ok ? "pagado" : "porVencer"} className={cn(!d.ok && "h-auto py-0.5 whitespace-normal")}>{d.ok ? "Válido" : d.why}</StatusPill> : <StatusPill tone="gray">No es tu dependiente</StatusPill>}</div>
                     {m.dep_de === mid && d.ok && <p className="mt-1 text-xs text-muted-foreground">{d.why}</p>}
                   </div>
-                  {!ro && <Button size="sm" variant="outline" onClick={() => setDep(m.id)}>Datos</Button>}
-                </Card>
+                  {!ro && <Button size="sm" variant="outline" className="shrink-0" onClick={() => setDep(m.id)} aria-label={`Editar los datos de ${m.nombre}`}>Editar datos</Button>}
+                </Panel>
               )
             })}
             {data.members.length <= 1 && <p className="text-sm text-muted-foreground">{ro ? "No hay otros integrantes registrados." : <>Agrega a tu familia en <Link className="underline" href="/perfil">Perfil</Link> para usar dependientes.</>}</p>}
           </div>
-          <Card className="gap-2 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">¿Cuánto te ahorran?</h2>
+          <Panel title="¿Cuánto te ahorran?" icon="piggy-bank" className="gap-2">
             <p className="text-sm">Tienes <b>{C.nD}</b> dependiente{C.nD === 1 ? "" : "s"} válido{C.nD === 1 ? "" : "s"}.</p>
-            <div className="flex justify-between border-b py-2 text-sm"><span>10 % de tus ingresos laborales (tope 32 UVT al mes) — dentro del límite del 40 %</span><Money value={C.dep10} /></div>
-            <div className="flex justify-between py-2 text-sm"><span>72 UVT por cada dependiente (hasta 4) — fuera del límite</span><Money value={C.dep72} /></div>
+            <div>
+              <Line l="10 % de tus ingresos laborales (tope 32 UVT al mes) — dentro del límite del 40 %" v={C.dep10} />
+              <Line l="72 UVT por cada dependiente (hasta 4) — fuera del límite" v={C.dep72} />
+            </div>
             {C.nD > 0 && <p className="text-xs text-muted-foreground">Desde el Decreto 2231 de 2023, un mismo dependiente sirve para el 10 % y para los 72 UVT.</p>}
-          </Card>
+          </Panel>
         </div>
       )}
 
       {tab === "deducciones" && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="gap-1 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Deducciones y beneficios</h2>
-            <p className="text-sm text-muted-foreground">Escribe lo que pagaste en el año según tus certificados.</p>
-            {RDK.map(([k, l, h, tope]) => (
-              <div key={k} className="grid gap-2 border-b py-3 last:border-0">
-                <div><p className="font-medium">{l}</p><p className="text-sm text-muted-foreground">{h}{tope ? ` (${$(tope * U)})` : ""}</p></div>
-                {ro ? <Money value={+(tax.ded?.[k as RdkKey] ?? 0)} className="font-medium" /> : <MoneyAutosave value={+(tax.ded?.[k as RdkKey] ?? 0)} onSave={(v) => save({ ded: { ...tax.ded, [k]: v } })} />}
-              </div>
-            ))}
-          </Card>
-          <Card className="gap-1 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Cómo quedan aplicadas</h2>
-            {([[`Cesantías exentas (${Math.round(C.cesPct * 100)} %)`, C.cesEx], ["Aportes voluntarios y AFC", C.vol], ["Dependientes (10 %)", C.dep10], ["Intereses de vivienda", C.intViv], ["Medicina prepagada", C.prep], ["50 % del 4×1000", C.gmf], ["Intereses ICETEX", C.icetex], ["Renta exenta del 25 %", C.r25]] as [string, number][]).map(([l, v]) => <div key={l} className="flex justify-between border-b py-2 text-sm"><span>{l}</span><Money value={v} /></div>)}
-            <div className="flex justify-between py-2 font-medium"><span>Subtotal</span><Money value={C.sub} /></div>
-            <div className="flex justify-between py-2 text-sm"><span>Límite (40 % de la renta líquida, máx. 1.340 UVT)</span><Money value={C.lim} /></div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel title="Deducciones y beneficios" icon="badge-percent" className="gap-1" description="Escribe lo que pagaste en el año según tus certificados.">
+            <div>
+              {RDK.map(([k, l, h, tope]) => (
+                <div key={k} className="grid gap-2 border-b py-3 last:border-0">
+                  <div><label htmlFor={`ded-${k}`} className="font-medium">{l}</label><p className="text-sm text-muted-foreground">{h}{tope ? ` (${$(tope * U)})` : ""}</p></div>
+                  {ro ? <Money value={+(tax.ded?.[k as RdkKey] ?? 0)} className="font-medium" /> : <MoneyAutosave id={`ded-${k}`} value={+(tax.ded?.[k as RdkKey] ?? 0)} onSave={(v) => save({ ded: { ...tax.ded, [k]: v } })} />}
+                </div>
+              ))}
+            </div>
+          </Panel>
+          <Panel title="Cómo quedan aplicadas" icon="list-checks" className="gap-1">
+            <div>
+              {([[`Cesantías exentas (${Math.round(C.cesPct * 100)} %)`, C.cesEx], ["Aportes voluntarios y AFC", C.vol], ["Dependientes (10 %)", C.dep10], ["Intereses de vivienda", C.intViv], ["Medicina prepagada", C.prep], ["50 % del 4×1000", C.gmf], ["Intereses ICETEX", C.icetex], ["Renta exenta del 25 %", C.r25]] as [string, number][]).map(([l, v]) => <Line key={l} l={l} v={v} />)}
+              <Line l="Subtotal" v={C.sub} className="font-medium" />
+              <Line l="Límite (40 % de la renta líquida, máx. 1.340 UVT)" v={C.lim} />
+            </div>
             {C.recorte > 0 && <Notice tone="warn" title={`Pierdes ${$(C.recorte)} por el límite`} />}
-            <div className="flex justify-between py-2 font-semibold"><span>Aplicado</span><Money value={C.apl} /></div>
-            <div className="flex justify-between border-t py-2 text-sm"><span>Fuera del límite: dependientes adicionales + 1 % factura electrónica</span><Money value={C.dep72 + C.fe} /></div>
-          </Card>
+            <div>
+              <Line l="Aplicado" v={C.apl} strong />
+              <Line l="Fuera del límite: dependientes adicionales + 1 % factura electrónica" v={C.dep72 + C.fe} className="border-t" />
+            </div>
+          </Panel>
         </div>
       )}
 
       {tab === "documentos" && <Docs data={data} y={y} docs={tax.docs ?? {}} ro={ro} actions={actions} fileUrl={fileUrl} onToggle={(k, v) => save({ docs: { ...tax.docs, [k]: v } })} />}
 
       {tab === "borrador" && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="gap-1 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Borrador del impuesto</h2><p className="text-sm text-muted-foreground">Cédula general · formulario 210</p>
-            {rLines(C).map(([l, v]) => <div key={l} className={cn("flex justify-between border-b py-2 text-sm", l.startsWith("=") && "font-semibold")}><span>{l}</span><Money value={v} /></div>)}
-          </Card>
-          <Card className="gap-1 p-5 shadow-card ring-0">
-            <h2 className="font-semibold">Tabla del artículo 241</h2>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel title="Borrador del impuesto" icon="calculator" className="gap-1" description="Cédula general · formulario 210">
+            <div>{rLines(C).map(([l, v]) => <Line key={l} l={l} v={v} strong={l.startsWith("=")} />)}</div>
+          </Panel>
+          <Panel title="Tabla del artículo 241" icon="table" className="gap-1" info="La tabla con la que la DIAN calcula el impuesto según tu renta gravable en UVT.">
             <p className="text-sm">Tu renta gravable: <b>{new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(C.RLG / U)} UVT</b></p>
             <table className="w-full text-sm"><thead><tr className="text-left text-muted-foreground"><th className="py-1 font-medium">Desde (UVT)</th><th className="font-medium">Hasta</th><th className="font-medium">Tarifa</th><th className="font-medium">Más</th></tr></thead>
-              <tbody>{TRAMOS241.map(([a, b, t, m]) => { const on = C.RLG / U > a && C.RLG / U <= b || (a === 0 && C.RLG / U <= b); return <tr key={a} className={cn("border-t", on && "bg-brand-soft font-semibold")}><td className="py-1.5">{a}</td><td>{b === Infinity ? "En adelante" : b}</td><td>{t} %</td><td>{m} UVT</td></tr> })}</tbody></table>
-          </Card>
+              <tbody>{TRAMOS241.map(([a, b, t, m]) => { const on = C.RLG / U > a && C.RLG / U <= b || (a === 0 && C.RLG / U <= b); return <tr key={a} className={cn("border-t tabular-nums", on && "bg-brand-soft font-semibold")} aria-current={on || undefined}><td className="py-1.5 pl-1">{a}</td><td>{b === Infinity ? "En adelante" : b}</td><td>{t} %</td><td>{m} UVT</td></tr> })}</tbody></table>
+          </Panel>
         </div>
       )}
 
@@ -306,22 +327,21 @@ function Docs({ data, y, docs, ro, actions, fileUrl, onToggle }: { data: RentaDa
   const files = (k: string) => data.attachments.filter((a) => a.doc_key === k && a.year === y)
   const n = RDOCS.filter(([k]) => docs[k] || files(k).length).length
   return (
-    <Card className="gap-2 p-5 shadow-card ring-0">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Documentos ({n} de {RDOCS.length})</h2>{!ro && <span className="text-xs text-muted-foreground">Tu contador ve este avance y los archivos que subas.</span>}</div>
-      <Progress value={(n / RDOCS.length) * 100} className="h-2" />
+    <Panel title={`Documentos (${n} de ${RDOCS.length})`} icon="folder-check" className="gap-2" description={ro ? undefined : "Tu contador ve este avance y los archivos que subas."}>
+      <Progress value={(n / RDOCS.length) * 100} className="h-2 [&>div]:bg-lime" aria-label={`${n} de ${RDOCS.length} documentos listos`} />
       {RDOCS.map(([k, l, h]) => (
         <div key={k} className="grid gap-2 border-b py-3 last:border-0">
           <div className="flex items-start gap-3">
             <Checkbox checked={!!docs[k] || files(k).length > 0} disabled={ro} onCheckedChange={(v) => onToggle(k, v === true)} aria-label={l} className="mt-0.5" />
             <div className="flex-1"><p className="font-medium">{l}</p><p className="text-sm text-muted-foreground">{h}</p></div>
-            {!ro && <Button size="sm" variant="ghost" disabled={busy === k} onClick={() => { setTarget(k); input.current?.click() }}>{busy === k ? <Spinner /> : <Upload />} Subir</Button>}
+            {!ro && <Button size="sm" variant="outline" disabled={busy === k} aria-label={`Subir ${l}`} onClick={() => { setTarget(k); input.current?.click() }}>{busy === k ? <Spinner /> : <Upload />} {busy === k ? "Subiendo…" : "Subir"}</Button>}
           </div>
           {files(k).map((f) => (
             <div key={f.id} className="ml-7 flex items-center gap-2 text-sm">
-              <Paperclip className="size-3.5 text-muted-foreground" />
+              <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <button type="button" className="min-w-0 flex-1 truncate text-left text-link underline" onClick={async () => { const u = await fileUrl(f.path); if (u) window.open(u, "_blank") }}>{f.nombre}</button>
               <span className="text-xs text-muted-foreground">{Math.max(1, Math.round(f.size / 1024))} KB</span>
-              {!ro && <Button size="icon-xs" variant="ghost" className="text-danger" aria-label={`Quitar ${f.nombre}`} onClick={() => actions!.delAttachment(f.id)}><Trash2 /></Button>}
+              {!ro && <IconButton size="icon-sm" icon={<Trash2 />} label={`Quitar ${f.nombre}`} destructive onClick={() => actions!.delAttachment(f.id)} />}
             </div>
           ))}
         </div>
@@ -334,7 +354,7 @@ function Docs({ data, y, docs, ro, actions, fileUrl, onToggle }: { data: RentaDa
         try { await actions.upload(y, target, f); toast.success("Documento guardado") } catch (err) { toast.error("No se pudo subir", { description: (err as Error).message }) }
         setBusy(null)
       }} />
-    </Card>
+    </Panel>
   )
 }
 

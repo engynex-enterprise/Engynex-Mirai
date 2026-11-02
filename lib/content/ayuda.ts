@@ -76,6 +76,12 @@ const V55: Release = {
     ["imp", "Tu opinión más completa", "Ahora puedes enviarnos un elogio, decidir si incluimos la página donde estás y filtrar lo que nos has enviado (sin resolver, con respuesta o casos de soporte)."],
     ["imp", "Mensajes y avisos renovados", "Los mensajes de confirmación tienen el estilo de Facebook y una barra que muestra cuánto falta para que se cierren (se pausa si pasas el mouse). Los avisos y las ventanas de confirmación también se ven más claros."],
     ["fix", "Ayudas en el celular", "Los íconos (i) de ayuda ya se abren con un toque en el celular."],
+    ["new", "Chat de Mirai renovado", "La burbuja y el Consejero son ahora un chat como ChatGPT o Claude: respuestas que se escriben en vivo, preguntas sugeridas que cambian, copiar, regenerar, calificar y editar tu pregunta, dictado por voz y fotos o PDF de facturas y extractos. Pídele que registre un gasto, cree una meta o un recordatorio: solo guarda cuando tocas Confirmar."],
+    ["imp", "Consejero sin formulario", "Escribe la decisión en el chat (por ejemplo, \"¿me conviene comprar una moto de 8 millones a 24 cuotas?\") y el análisis con tus números sale como una tarjeta con veredicto, cifras, riesgos y pasos. La tarjeta cambia según lo que preguntas: cifras en frases sencillas con su explicación, un medidor de cuánto pesa frente a lo que te sobra al mes y qué te recomendamos."],
+    ["new", "Historial de conversaciones completo", "Con el botón ⋯ o clic derecho: fija, renombra, pide un título nuevo, duplica, archiva, exporta en texto, Markdown o PDF, copia el enlace o elimina (con Deshacer). Selecciona varias a la vez y usa Ctrl/⌘ + Shift + O para una conversación nueva."],
+    ["new", "Proveedores", "Guarda a quién le pagas (Enel, el acueducto, la inmobiliaria, Claro, el colegio…) con su número de contrato y contacto, y elígelo de una lista en vez de escribirlo. Agrégalo desde el mismo selector, mira cuánto le pagas a cada uno al mes y escoge entre proveedores comunes de Colombia. En Mi dinero › Proveedores y en Ajustes."],
+    ["new", "Recibe pagos por banco o billetera", "En tu perfil agrupa tus llaves Bre-B y cuentas por entidad, con su logo: varias llaves por banco (celular, cédula, correo, @alfanumérica o código de comercio), Nequi, Daviplata y más de 30 bancos, billeteras y cooperativas. Marca una como principal, ponle un nombre, cópiala con un toque, comparte por WhatsApp con vista previa, saca un QR por llave u oculta los números. El recordatorio de cobro de un préstamo ya incluye dónde pagarte."],
+    ["new", "Tu hogar en una sola lista", "En Ajustes › Hogar y en tu perfil ves a todas las personas del hogar: quienes usan Mirai, quienes solo registras tú (como un hijo pequeño) y las invitaciones pendientes. Con Agregar persona la invitas por correo o WhatsApp (o la envías desde tu WhatsApp), y Mirai no deja invitar dos veces a la misma persona. Roles nuevos con nombres simples: Dueño del hogar, Administra, Colabora, Registra sus gastos y Solo mira."],
   ],
 }
 const V54: Release = {
@@ -148,8 +154,9 @@ const GUIDES_V5: Guide[] = [
     id: "familia", t: "Invitar a tu familia", icon: "users", go: "ajustes?tab=hogar", min: 2,
     s: [
       "Ve a <b>Ajustes › Hogar y familia</b>.",
-      "En <b>Invitar a alguien</b> escribe su correo y elige el permiso: <b>Editor</b> (registra y cambia movimientos) o <b>Lector</b> (solo puede ver).",
-      "Toca <b>Invitar</b>. La invitación vence en 7 días.",
+      "Toca <b>Agregar persona</b> y elige <b>Invitarla para que use Mirai</b> (o <b>Solo agregarla al hogar</b> si es un niño pequeño o alguien sin cuenta).",
+      "Escribe su correo o celular y elige qué podrá hacer: <b>Administra</b>, <b>Colabora</b>, <b>Registra sus gastos</b> o <b>Solo mira</b>.",
+      "Toca <b>Enviar invitación</b>. Le llega por correo, o la envías tú con <b>Enviar desde mi WhatsApp</b>. Vence en 7 días y la puedes reenviar o cancelar.",
       "Cuando la acepte, entra a tu hogar y los dos ven los cambios en vivo.",
     ],
     tip: "Varios integrantes y varios libros hacen parte de Mirai Premium.",

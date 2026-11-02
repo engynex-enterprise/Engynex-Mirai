@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { navIdOf } from "@/lib/nav"
 import { Bell, House, Menu, Plus, Receipt } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
@@ -12,8 +13,10 @@ export function MobileTabBar() {
   const path = usePathname()
   const { setOpenMobile } = useSidebar()
   const setAdd = useShell((s) => s.setAdd)
+  // Gastos también queda activa en /fijos (es una pestaña de Gastos).
+  const here = `/${navIdOf(path.split("/")[1] || "inicio")}`
   const tab = (href: string, label: string, icon: React.ReactNode) => (
-    <Link href={href} className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold", path.startsWith(href) ? "text-brand after:absolute after:inset-x-4 after:top-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-muted-foreground")} aria-current={path.startsWith(href) ? "page" : undefined}>
+    <Link href={href} className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold", here.startsWith(href) ? "text-brand after:absolute after:inset-x-4 after:top-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-muted-foreground")} aria-current={here.startsWith(href) ? "page" : undefined}>
       {icon}{label}
     </Link>
   )

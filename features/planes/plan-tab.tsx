@@ -1,12 +1,15 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Crown, Receipt } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { SubmitButton } from "@/components/mirai/submit-button"
+import { Tip } from "@/components/mirai/tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
@@ -38,9 +41,13 @@ export function PlanTab() {
   useEffect(() => {
     if (params.get("pago")) toast("Estamos confirmando tu pago", { description: "Puede tardar unos minutos. Te avisamos cuando quede listo." })
   }, [params])
+  const [confirmar, setConfirmar] = useState(false)
+  const [cancelando, setCancelando] = useState(false)
   const cancel = async () => {
-    const r = await cancelRenewal()
+    setCancelando(true)
+    const r = await cancelRenewal().finally(() => setCancelando(false))
     toast[r.ok ? "success" : "error"](r.msg)
+    if (r.ok) setConfirmar(false)
     qc.invalidateQueries({ queryKey: ["plan-sub", household.id] })
   }
   if (isPending) return <Skeleton className="h-60" />
@@ -55,7 +62,19 @@ export function PlanTab() {
         {sub && <SettingRow title="Cómo pagas" desc={`${PROV[sub.proveedor as keyof typeof PROV] ?? sub.proveedor} · ${sub.periodo === "anio" ? "anual" : "mensual"}`}>{null}</SettingRow>}
         {sub?.proveedor === "mercadopago" && sub.estado === "activa" && household.role === "owner" && (
           <SettingRow title="Renovación automática" desc="Si la cancelas, no te cobramos más y sigues con Premium hasta el vencimiento.">
-            <Button variant="outline" className="text-danger" onClick={cancel}>Cancelar renovación</Button>
+            <AlertDialog open={confirmar} onOpenChange={(o) => !cancelando && setConfirmar(o)}>
+              <AlertDialogTrigger asChild><Button variant="outline" className="text-danger">Cancelar renovación</Button></AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Cancelar la renovación automática?</AlertDialogTitle>
+                  <AlertDialogDescription>No te cobramos más. Sigues con {plan.nombre} hasta el {sub.vence_at ? fmtDate(sub.vence_at.slice(0, 10), { year: true }) : "vencimiento"} y luego tu hogar pasa a Gratis, sin perder datos.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={cancelando}>Seguir con la renovación</AlertDialogCancel>
+                  <SubmitButton className="bg-danger text-white hover:bg-danger/90" loading={cancelando} loadingText="Cancelando…" onClick={cancel}>Sí, cancelar renovación</SubmitButton>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </SettingRow>
         )}
         {plan.id !== "gratis" && sub && sub.proveedor !== "mercadopago" && household.role === "owner" && (
@@ -74,7 +93,7 @@ export function PlanTab() {
                   <li key={x.id} className="flex flex-wrap items-center gap-3 border-b py-3 last:border-0">
                     <Receipt className="size-5 text-muted-foreground" />
                     <div className="grid min-w-0 flex-1"><p className="text-sm font-medium">Plan {x.plan ?? "premium"} {x.periodo === "anio" ? "anual" : "mensual"} · {precio(x.monto)}</p><p className="text-xs text-muted-foreground">{fmtDate((x.paid_at ?? x.created_at).slice(0, 10), { year: true })} · {PROV[x.proveedor as keyof typeof PROV] ?? x.proveedor}{x.metodo ? ` · ${x.metodo}` : ""}</p></div>
-                    <StatusPill tone={st[0]}>{st[1]}</StatusPill>
+                    <Tip label={x.referencia ? `Referencia: ${x.referencia}` : undefined}><span><StatusPill tone={st[0]}>{st[1]}</StatusPill></span></Tip>
                   </li>
                 )
               })}

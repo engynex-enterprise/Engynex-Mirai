@@ -3,9 +3,9 @@
 import { useState } from "react"
 import { ArrowRight, CircleCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { AvanceAcademia, LeccionBody } from "@/features/academia/leccion"
+import { AvanceAcademia, LeccionBody, NIVEL_TONE } from "@/features/academia/leccion"
 import { LECCIONES, NIVELES, avancePorNivel, nivelDe, siguienteLeccion } from "@/lib/content/academia"
-import { AppLink, Empty, ListSkeleton, RowButton, SectionTitle, useHelpNav } from "./ui"
+import { AppLink, Empty, ListSkeleton, RowButton, GroupLabel, useHelpNav } from "./ui"
 import { useAyuda } from "./use-ayuda"
 
 /** Academia dentro del panel: avance, insignias y lecciones por nivel. */
@@ -20,9 +20,9 @@ export function AcademiaPanel() {
       {sig && <Button onClick={() => go({ v: "leccion", id: sig.id })} className="w-full justify-between"><span className="truncate">{hechas.length ? "Continuar" : "Empezar"}: {sig.titulo}</span><ArrowRight /></Button>}
       {avancePorNivel(hechas).map(({ nivel, total, hechas: n }) => (
         <section key={nivel} className="grid gap-0.5">
-          <SectionTitle action={<span className="text-xs text-muted-foreground">{n} de {total}</span>}>Nivel {NIVELES[nivel].label.toLowerCase()}</SectionTitle>
+          <GroupLabel action={<span className="text-xs text-muted-foreground">{n} de {total}</span>}>Nivel {NIVELES[nivel].label.toLowerCase()}</GroupLabel>
           {LECCIONES.filter((l) => nivelDe(l) === nivel).map((l) => (
-            <RowButton key={l.id} icon={l.icon} title={l.titulo} sub={`${l.minutos} min${hechas.includes(l.id) ? " · Completada" : ""}`} onClick={() => go({ v: "leccion", id: l.id })}
+            <RowButton key={l.id} icon={l.icon} tone={NIVEL_TONE[nivel]} title={l.titulo} sub={`${l.minutos} min${hechas.includes(l.id) ? " · Completada" : ""}`} onClick={() => go({ v: "leccion", id: l.id })}
               badge={hechas.includes(l.id) ? <CircleCheck className="size-5 shrink-0 text-success" aria-label="Completada" /> : undefined} />
           ))}
         </section>

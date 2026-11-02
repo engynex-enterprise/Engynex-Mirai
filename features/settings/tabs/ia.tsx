@@ -1,16 +1,14 @@
 "use client"
 
-import { ArrowDown, ArrowUp } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
-import { Icon } from "@/components/mirai/icon"
+import { IconButton, Tip } from "@/components/mirai/tip"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { Notice } from "@/components/mirai/notice"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useSettings } from "@/features/catalogs/hooks"
 import { AI_KINDS, integrationByKind } from "@/lib/integrations/registry"
-import { SettingRow, SettingSection } from "../ui"
+import { SettingRow, SettingSection, SettingSkeleton, SettingStack } from "../ui"
 import { AiQuotaNotice } from "@/features/ia-uso/uso-view"
 import { useBookSettingsSave } from "../prefs"
 import { IntegrationsTab, useIntegrations } from "./integrations"
@@ -29,7 +27,7 @@ export function IaTab() {
   const { data: cfg } = useSettings()
   const { data: ints } = useIntegrations()
   const save = useBookSettingsSave()
-  if (!cfg) return <Skeleton className="h-96 w-full" />
+  if (!cfg) return <SettingSkeleton sections={3} />
   const ia = (cfg.ia ?? {}) as Ia
   const on = ia.on !== false
   const set = (p: Partial<Ia>) => save.mutate({ ia: { ...ia, ...p } as never })
@@ -43,7 +41,7 @@ export function IaTab() {
   }
 
   return (
-    <div className="grid gap-4">
+    <SettingStack>
       <AiQuotaNotice />
       <SettingSection icon="sparkles" title="Inteligencia artificial">
         <SettingRow title="Usar inteligencia artificial" desc="Si la apagas, Mirai funciona igual con tus reglas, tu historial y palabras clave.">
@@ -73,18 +71,20 @@ export function IaTab() {
           </SettingSection>
 
           <SettingSection icon="list-ordered" title="Orden de los proveedores" desc="Mirai usa el primero que esté activo; si falla, prueba con el siguiente.">
-            <ol className="grid gap-1">
+            <ol className="grid gap-1" aria-label="Orden de uso de los proveedores de IA">
               {orden.map((k, i) => {
                 const def = integrationByKind(k)!
                 const act = !!ints?.[k]?.enabled
                 return (
                   <li key={k} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover">
                     <span className="w-5 text-center text-sm text-muted-foreground tabular-nums">{i + 1}</span>
-                    <Icon name={def.icon} className="size-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm font-medium">{def.n}</span>
-                    {act ? <StatusPill tone="pagado">Activo</StatusPill> : <StatusPill tone="gray">Apagado</StatusPill>}
-                    <Button size="icon-sm" variant="ghost" aria-label={`Subir ${def.n}`} disabled={i === 0} onClick={() => move(k, -1)}><ArrowUp /></Button>
-                    <Button size="icon-sm" variant="ghost" aria-label={`Bajar ${def.n}`} disabled={i === orden.length - 1} onClick={() => move(k, 1)}><ArrowDown /></Button>
+                    <ToneIcon icon={def.icon} tone={act ? "brand" : "gray"} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{def.n}</span>
+                    <Tip label={act ? "Mirai lo usa en este orden" : "Actívalo abajo para que Mirai lo use"}>
+                      <span>{act ? <StatusPill tone="pagado">Activo</StatusPill> : <StatusPill tone="gray">Apagado</StatusPill>}</span>
+                    </Tip>
+                    <IconButton size="icon-sm" icon="arrow-up" label={`Subir ${def.n}`} disabled={i === 0} onClick={() => move(k, -1)} />
+                    <IconButton size="icon-sm" icon="arrow-down" label={`Bajar ${def.n}`} disabled={i === orden.length - 1} onClick={() => move(k, 1)} />
                   </li>
                 )
               })}
@@ -95,6 +95,6 @@ export function IaTab() {
           <p className="text-xs text-muted-foreground">Las claves de API se guardan cifradas en el servidor y solo se usan cuando pides algo a la IA. Las cuentas personales (ChatGPT Plus, Gemini Advanced, Claude Pro) no sirven: se necesita una clave de API.</p>
         </>
       )}
-    </div>
+    </SettingStack>
   )
 }

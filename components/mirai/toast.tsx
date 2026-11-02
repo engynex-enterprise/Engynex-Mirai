@@ -62,11 +62,23 @@ function MiraiToast({ id, kind, title, description, action, cancel, duration }: 
   )
 }
 
+/**
+ * Toasts iguales no se apilan: los campos que se guardan solos (al escribir) llaman "Guardado" varias veces seguidas.
+ * Un toast con el mismo tipo, título y texto reemplaza al que ya está en pantalla (sonner conserva su temporizador, así
+ * que igual se cierra solo). Los que traen acción (Deshacer) o un id propio no se agrupan.
+ */
+function dedupeId(kind: Kind, title: React.ReactNode, desc: React.ReactNode, o: Opts) {
+  if (o.id != null || o.action || o.cancel || typeof title !== "string" || (desc != null && typeof desc !== "string")) return undefined
+  return `dedupe:${kind}|${title}|${desc ?? ""}`
+}
+
 function show(kind: Kind, title: React.ReactNode, o: Opts = {}) {
   const { description, action, cancel, duration: d, ...rest } = o
   const duration = d ?? KIND[kind].ms
   const desc = typeof description === "function" ? (description as () => React.ReactNode)() : description
-  return sonner.custom((id) => <MiraiToast key={`${id}-${kind}`} id={id} kind={kind} title={title} description={desc} action={action} cancel={cancel} duration={duration} />, { ...rest, duration })
+  const dd = dedupeId(kind, title, desc, o)
+  return sonner.custom((id) => <MiraiToast key={`${id}-${kind}`} id={id} kind={kind} title={title} description={desc} action={action} cancel={cancel} duration={duration} />,
+    { ...rest, duration, ...(dd ? { id: dd } : {}) })
 }
 
 export const toast = Object.assign((title: React.ReactNode, o?: Opts) => show("message", title, o), {

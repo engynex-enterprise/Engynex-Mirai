@@ -3,10 +3,10 @@ import { login, watchErrors } from "./helpers"
 
 // Barrido de calidad: con los datos de ejemplo recorre cada sección y cada pestaña de Ajustes buscando errores
 // visibles de formato o de lógica (NaN, undefined, fechas inválidas, montos rotos, scroll horizontal, errores de consola).
-const RUTAS = ["puesta", "inicio", "consejero", "balance", "balance?tab=q1", "balance?tab=q2", "balance?tab=mes", "ingresos", "gastos", "fijos", "tarjetas", "suscripciones", "correo", "importar",
+const RUTAS = ["puesta", "inicio", "consejero", "balance", "balance?tab=q1", "balance?tab=q2", "balance?tab=mes", "ingresos", "gastos", "fijos", "tarjetas", "suscripciones", "proveedores", "correo", "importar",
   "me-deben", "le-debo", "contactos", "estrategia", "presupuesto", "flujo", "metas", "retos", "logros", "primas", "familia", "mesadas", "compartidos",
   "inversiones", "renta", "calendario", "contador", "recordatorios", "indicadores", "reportes", "novedades", "faq", "manual", "perfil",
-  ...["general", "apariencia", "privacidad", "seguridad", "hogar", "ia", "integraciones", "alertas", "finanzas", "defs", "cats", "ings", "ents", "medios", "rels", "reglas", "respaldo"].map((t) => `ajustes?tab=${t}`)]
+  ...["general", "apariencia", "privacidad", "seguridad", "hogar", "ia", "integraciones", "alertas", "finanzas", "defs", "cats", "ings", "ents", "medios", "proveedores", "rels", "reglas", "respaldo"].map((t) => `ajustes?tab=${t}`)]
 
 const MALO = [/\bNaN\b/, /\bundefined\b/, /Invalid Date/, /\[object Object\]/, /\$\s*-?\s*NaN/, /Infinity/, /\bnull\b(?! *\))/]
 

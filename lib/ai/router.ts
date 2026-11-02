@@ -34,14 +34,18 @@ export function hormigaCierta(it: Pick<ClassifyItem, "descripcion" | "valor" | "
  * Reparte los gastos: lo que se resuelve con reglas (`done`) y lo que necesita IA (`pending`).
  * `needCat`/`needH` dicen qué se pidió (Ajustes › IA: categoría automática y gastos hormiga).
  */
-export function routeClassify(items: ClassifyItem[], ctx: LocalCatContext & { umbral: number; needCat: boolean; needH: boolean }) {
+export function routeClassify(items: ClassifyItem[], ctx: LocalCatContext & {
+  umbral: number; needCat: boolean; needH: boolean
+  /** La IA decide siempre la categoría: lo que encuentren las reglas va como pista ("categoría probable"). */
+  siempreIA?: boolean
+}) {
   const done: ClassifyOut[] = []
   const pending: (ClassifyItem & { category_id: string | null; cat?: string; askCat: boolean; askH: boolean })[] = []
   for (const it of items) {
     const hit = localCat(it.descripcion, ctx)
     const cat = hit ? ctx.categories.find((c) => c.id === hit.category_id) : undefined
     const h = ctx.needH ? hormigaCierta(it, cat, ctx.umbral) : null
-    const askCat = ctx.needCat && !hit
+    const askCat = ctx.needCat && (!!ctx.siempreIA || !hit)
     const askH = ctx.needH && !h
     if (!askCat && !askH) {
       done.push({ i: it.i, category_id: hit?.category_id ?? null, hormiga: h ? h.h : null, razon: h?.razon ?? (hit ? `Por ${hit.src === "regla" ? "tu regla" : hit.src === "historial" ? "tu historial" : "palabras clave"}` : ""), src: "regla" })
@@ -113,7 +117,8 @@ export function quickAnswer(q: string, f: ChatFacts): string | null {
   // ¿Cuánto gasté en <categoría>?
   const gasto = n.match(/^cuanto (?:he |hemos |llevo |llevamos |me |)(?:gastado|gaste|gastamos|gasto|va gastado)(?: (.+?))?(?: este mes| el mes pasado| el mes anterior| en el mes)?$/)
   if (gasto) {
-    const want = (gasto[1] ?? "").replace(/^(en|de) /, "").replace(/^(el|la|los|las) /, "").trim()
+    // El período ("el mes pasado", "este mes") puede quedar dentro del grupo: se quita antes de buscar la categoría.
+    const want = (gasto[1] ?? "").replace(/\s*\b(?:este mes|el mes pasado|el mes anterior|en el mes)$/, "").replace(/^(en|de) /, "").replace(/^(el|la|los|las) /, "").trim()
     if (/\by\b|\bo\b/.test(want)) return null // varias categorías juntas: mejor la IA
     if (/^(total|todo|este mes|el mes|en total|)$/.test(want)) {
       const t = pasado ? f.gasto_mes_anterior : f.gasto_mes

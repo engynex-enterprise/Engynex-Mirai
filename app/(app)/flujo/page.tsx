@@ -5,5 +5,5 @@ import { CashflowView } from "@/features/planning/cashflow-view"
 export const metadata = { title: "Flujo de caja" }
 
 export default function Page() {
-  return <Suspense fallback={<PageSkeleton />}><CashflowView /></Suspense>
+  return <Suspense fallback={<PageSkeleton kpis={4} />}><CashflowView /></Suspense>
 }

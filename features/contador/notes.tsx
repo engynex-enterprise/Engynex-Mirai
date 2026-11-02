@@ -5,7 +5,8 @@ import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
 import { Send } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/mirai/tip"
+import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
@@ -16,9 +17,16 @@ export function NotesThread({ notes, me, other, onSend, limit }: { notes: Note[]
   const [t, setT] = useState("")
   const [busy, setBusy] = useState(false)
   const list = limit ? notes.slice(-limit) : notes
+  const send = async () => {
+    if (!t.trim() || busy) return
+    setBusy(true)
+    try { await onSend(t.trim()); setT("") } catch (e) { toast.error((e as Error).message) }
+    setBusy(false)
+  }
   return (
     <div className="grid gap-3">
-      {!list.length && <p className="text-sm text-muted-foreground">Aún no hay notas.</p>}
+      {!list.length && <p className="text-sm text-muted-foreground">Aún no hay notas. Escribe la primera para pedir un documento o resolver una duda.</p>}
+      {limit && notes.length > limit && <p className="text-center text-xs text-muted-foreground">Mostramos las últimas {limit} de {notes.length} notas.</p>}
       {list.map((n) => (
         <div key={n.id} className={cn("max-w-[85%] rounded-[18px] px-3.5 py-2 text-sm", n.autor === me ? "ml-auto rounded-br-sm bg-brand text-white" : "rounded-bl-sm bg-muted")}>
           <p className="whitespace-pre-wrap">{n.texto}</p>
@@ -26,12 +34,9 @@ export function NotesThread({ notes, me, other, onSend, limit }: { notes: Note[]
         </div>
       ))}
       <div className="flex items-end gap-2">
-        <Textarea rows={2} value={t} onChange={(e) => setT(e.target.value)} placeholder={`Escribe una nota para ${other}…`} aria-label={`Nota para ${other}`} />
-        <Button size="icon-lg" aria-label="Enviar nota" disabled={!t.trim() || busy} onClick={async () => {
-          setBusy(true)
-          try { await onSend(t); setT("") } catch (e) { toast.error((e as Error).message) }
-          setBusy(false)
-        }}><Send /></Button>
+        <Textarea rows={2} value={t} maxLength={2000} onChange={(e) => setT(e.target.value)} placeholder={`Escribe una nota para ${other}…`} aria-label={`Nota para ${other}`}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send() } }} />
+        <IconButton variant={t.trim() ? "soft" : "secondary"} size="icon-lg" label="Enviar nota" icon={busy ? <Spinner /> : <Send />} aria-busy={busy || undefined} disabled={!t.trim() || busy} onClick={send} />
       </div>
     </div>
   )

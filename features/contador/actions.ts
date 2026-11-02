@@ -39,7 +39,7 @@ async function mail(householdId: string, to: string, owner: string, url: string)
 export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boolean; msg: string; url?: string }> {
   const p = New.safeParse(input)
   if (!p.success) return { ok: false, msg: p.error.issues[0].message }
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   if (!can(ctx.plan, "impuestos")) return { ok: false, msg: "El acceso para tu contador no está incluido en tu plan." }
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").insert({ book_id: ctx.book.id, label: p.data.label, email: p.data.email, perms: p.data.perms, token_hash: hash(token), expires_at: expiry(p.data.exp), created_by: ctx.user.id })
@@ -52,7 +52,7 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
 
 /** Genera un enlace nuevo (el anterior deja de funcionar). */
 export async function rotateShare(id: string) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").update({ token_hash: hash(token), revoked_at: null }).eq("id", id).eq("book_id", ctx.book.id)
   if (error) throw new Error(error.message)
@@ -60,7 +60,7 @@ export async function rotateShare(id: string) {
 }
 
 export async function revokeShare(id: string) {
-  const ctx = await requireRole("owner")
+  const ctx = await requireRole("admin")
   await supabaseAdmin().from("accountant_shares").update({ revoked_at: new Date().toISOString() }).eq("id", id).eq("book_id", ctx.book.id)
 }
 

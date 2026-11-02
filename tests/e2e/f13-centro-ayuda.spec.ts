@@ -105,8 +105,9 @@ test("centro de ayuda: portada, ayuda de la página, búsqueda, glosario, noveda
   // Contactar soporte: crea un caso con número y aparece en "Tus casos"
   await centro.getByRole("button", { name: /^Contactar soporte/ }).click()
   await centro.getByRole("radio", { name: "Mis datos o respaldos" }).click()
-  await centro.getByRole("button", { name: "Enviar caso" }).click()
-  await expect(page.getByText(/Escribe un asunto corto/)).toBeVisible()
+  // Sin asunto ni detalle, "Enviar caso" queda inactivo y explica qué falta.
+  await expect(centro.getByRole("button", { name: "Enviar caso" })).toBeDisabled()
+  await expect(centro.getByText(/Escribe un asunto corto/)).toBeVisible()
   await centro.getByRole("textbox", { name: "Asunto" }).fill(`No encuentro mi respaldo (${TAG})`)
   await centro.getByRole("textbox", { name: "Cuéntanos qué pasa" }).fill(`Busqué en Ajustes y no aparece el respaldo de ayer (${TAG})`)
   await expect(centro.getByRole("switch", { name: "Incluir la página donde estás" })).toBeChecked()
