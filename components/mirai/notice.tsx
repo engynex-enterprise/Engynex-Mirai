@@ -2,23 +2,28 @@ import { CircleAlert, CircleCheck, Lightbulb, TriangleAlert } from "lucide-react
 import { cn } from "@/lib/utils"
 
 const V = {
-  info: { box: "bg-brand-soft", dot: "bg-lime text-navy", Icon: Lightbulb },
-  ok: { box: "bg-success-soft", dot: "bg-success text-white dark:text-navy", Icon: CircleCheck },
-  warn: { box: "bg-warning-soft", dot: "bg-[#E08A00] text-white", Icon: TriangleAlert },
-  bad: { box: "bg-danger-soft", dot: "bg-danger text-white", Icon: CircleAlert },
+  info: { bar: "bg-lime", dot: "bg-brand-soft text-[#3F7A1E] dark:text-lime", Icon: Lightbulb },
+  ok: { bar: "bg-success", dot: "bg-success-soft text-success", Icon: CircleCheck },
+  warn: { bar: "bg-[#E08A00]", dot: "bg-warning-soft text-[#B86E00] dark:text-[#FFB547]", Icon: TriangleAlert },
+  bad: { bar: "bg-danger", dot: "bg-danger-soft text-danger", Icon: CircleAlert },
 } as const
 
-/** Alerta con círculo de ícono (alertBox de la v4 / sistema de diseño). */
+/**
+ * Alerta dentro de una página al estilo de Facebook: tarjeta blanca con franja de color a la izquierda, ícono en un
+ * círculo suave, título y texto (alertBox de la v4 / sistema de diseño). Misma API de siempre.
+ */
 export function Notice({ tone = "info", title, children, action, className }: { tone?: keyof typeof V; title: string; children?: React.ReactNode; action?: React.ReactNode; className?: string }) {
-  const { box, dot, Icon } = V[tone]
+  const { bar, dot, Icon } = V[tone]
   return (
-    <div role={tone === "bad" || tone === "warn" ? "alert" : "status"} className={cn("flex items-start gap-3 rounded-lg p-4", box, className)}>
-      <span className={cn("grid size-8 shrink-0 place-items-center rounded-full", dot)}><Icon className="size-4" /></span>
-      <div className="grid flex-1 gap-0.5">
-        <p className="font-semibold">{title}</p>
-        {children && <div className="text-sm text-foreground/90">{children}</div>}
+    <div role={tone === "bad" || tone === "warn" ? "alert" : "status"}
+      className={cn("relative flex flex-wrap items-start gap-3 overflow-hidden rounded-lg bg-white p-3.5 pl-5 shadow-[0_1px_2px_rgba(0,0,0,.1)] ring-1 ring-black/5 sm:flex-nowrap dark:bg-[#242526] dark:ring-white/10", className)}>
+      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", bar)} />
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", dot)}><Icon className="size-[18px]" aria-hidden /></span>
+      <div className="grid min-w-0 flex-1 basis-48 gap-0.5 self-center">
+        <p className="text-[15px] leading-5 font-semibold">{title}</p>
+        {children && <div className="text-sm leading-5 text-muted-foreground">{children}</div>}
       </div>
-      {action}
+      {action && <div className="shrink-0 self-center">{action}</div>}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
 import { ArchiveRestore, Download, FileUp, History, Save, ShieldAlert, Trash2, UserX } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -167,10 +167,10 @@ function Cuenta() {
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><ShieldAlert className="size-5 text-danger" /> Eliminar tu cuenta</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center justify-center gap-2"><ShieldAlert className="size-5 text-danger" /> Eliminar tu cuenta</AlertDialogTitle>
             <AlertDialogDescription>Descarga antes tus datos si los quieres conservar. Para confirmar, escribe tu correo: <b>{user.email}</b></AlertDialogDescription>
           </AlertDialogHeader>
-          <Input className="h-10" value={conf} onChange={(e) => setConf(e.target.value)} placeholder={user.email} aria-label="Tu correo" />
+          <div className="px-6 pb-4"><Input className="h-10" value={conf} onChange={(e) => setConf(e.target.value)} placeholder={user.email} aria-label="Tu correo" /></div>
           <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel>
             <Button variant="destructive" disabled={busy === "del" || conf.trim().toLowerCase() !== user.email.toLowerCase()} onClick={async () => {
               setBusy("del")

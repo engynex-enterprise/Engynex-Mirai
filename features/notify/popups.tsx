@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { useBookId } from "@/components/app/app-context"
 import { openAppNotifs } from "./actions"
 

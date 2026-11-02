@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Copy, Link2, MessageCircle, RefreshCw, UserX } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FieldGroup } from "@/components/ui/field"

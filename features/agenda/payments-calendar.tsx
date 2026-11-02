@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Download, Plus } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { es } from "react-day-picker/locale"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"

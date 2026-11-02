@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { createClient } from "@/utils/supabase/client"
 import { useApp, useBookId } from "@/components/app/app-context"
 import type { Row } from "@/lib/supabase/tables"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { createClient } from "@/utils/supabase/client"
 import { useBookId } from "@/components/app/app-context"
 import { DERIVED_KEYS, qk, type BookTable, type Insert, type Row, type Update } from "@/lib/supabase/tables"

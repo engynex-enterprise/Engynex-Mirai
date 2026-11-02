@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { LogOut, ShieldCheck, ShieldOff } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { Copy, Gift, MessageCircle, Share2 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"

@@ -1,6 +1,6 @@
 "use client"
 
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 
 const KEY = "mirai-privado"
 

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 import { Copy, HandCoins, Pencil, Plus, Trash2 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"

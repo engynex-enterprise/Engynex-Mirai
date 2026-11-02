@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react"
 import { Check, ImageUp, Type } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Spinner } from "@/components/ui/spinner"
 import { BrandLogo } from "./brand-logo"
 import { ResponsiveDialog } from "./responsive-dialog"

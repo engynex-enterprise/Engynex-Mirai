@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { CircleCheck, CircleX, ExternalLink, FlaskConical, Settings2, Trash2 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FieldGroup } from "@/components/ui/field"

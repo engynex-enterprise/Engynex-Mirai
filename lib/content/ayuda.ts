@@ -74,6 +74,7 @@ const V55: Release = {
     ["new", "Centro de ayuda", "El panel de ayuda ahora es un Centro de ayuda: busca en todo (preguntas, manual, guías, academia y glosario), mira la ayuda de la pantalla donde estás, marca las novedades como leídas, dinos si una respuesta te sirvió, consulta el glosario financiero de Colombia y los atajos de teclado, revisa el estado del servicio y abre un caso de soporte. Ábrelo desde el menú, con la tecla ? o con Cómo funciona."],
     ["imp", "Academia por niveles", "Once lecciones en tres niveles (básico, intermedio y avanzado), con insignias y la siguiente lección sugerida. Nuevas: lo que te descuentan de la nómina, prima y cesantías, y cómo cuidar tu historial de crédito."],
     ["imp", "Tu opinión más completa", "Ahora puedes enviarnos un elogio, decidir si incluimos la página donde estás y filtrar lo que nos has enviado (sin resolver, con respuesta o casos de soporte)."],
+    ["imp", "Mensajes y avisos renovados", "Los mensajes de confirmación tienen el estilo de Facebook y una barra que muestra cuánto falta para que se cierren (se pausa si pasas el mouse). Los avisos y las ventanas de confirmación también se ven más claros."],
     ["fix", "Ayudas en el celular", "Los íconos (i) de ayuda ya se abren con un toque en el celular."],
   ],
 }

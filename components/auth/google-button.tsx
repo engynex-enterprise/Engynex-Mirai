@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { BrandLogo } from "@/components/mirai/brand-logo"
 import { createClient } from "@/utils/supabase/client"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 
 /** Botón "Continuar con Google" con el logo oficial de Google (pautas de marca de Google Sign-In). */
 export function GoogleButton({ next = "/inicio" }: { next?: string }) {

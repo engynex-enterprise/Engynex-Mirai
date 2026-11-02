@@ -296,6 +296,11 @@
     mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tooth) 51% repeat-x,
       conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--tooth) 51% repeat-x;
   }
+  /* Barra regresiva de los toasts (components/mirai/toast.tsx): se vacía en lo que dura el toast y se pausa al pasar el mouse. */
+  .toast-countdown { animation-name: toast-countdown; animation-timing-function: linear; animation-fill-mode: forwards; }
+  [data-sonner-toaster]:hover .toast-countdown { animation-play-state: paused; }
+  @media (prefers-reduced-motion: reduce) { .toast-countdown { display: none; } }
+  html.rm .toast-countdown { display: none; }
   .receipt-shadow { filter: drop-shadow(0 1px 1px rgb(0 0 0 / .08)) drop-shadow(0 6px 14px rgb(31 43 75 / .12)); }
 }
 
@@ -307,6 +312,8 @@ html.priv [data-money]:hover { filter: none; }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 html.rm *, html.rm *::before, html.rm *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+
+@keyframes toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
 /* Glimmer de carga (como Facebook: opacidad 1 ↔ 0,25) */
 @keyframes glimmer {

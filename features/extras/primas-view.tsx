@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Sparkles, WandSparkles } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { primaPlan } from "@/features/ai/actions"

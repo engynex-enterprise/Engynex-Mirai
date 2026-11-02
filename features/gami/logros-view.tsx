@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
 import { Flame } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"

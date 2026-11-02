@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { Copy, KeyRound, Landmark, Plus, QrCode, Share2, Trash2 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FieldGroup } from "@/components/ui/field"
