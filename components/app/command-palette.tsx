@@ -10,7 +10,10 @@ import { Icon } from "@/components/mirai/icon"
 import { Kbd } from "@/components/ui/kbd"
 import { TONE, type IconTone } from "@/components/mirai/tone-icon"
 import { cn } from "@/lib/utils"
-import { PAGES } from "@/lib/nav"
+import { PAGES, PAGE_TABS } from "@/lib/nav"
+
+/** Palabras extra de cada sección (la descripción de su pestaña: "gastos hormiga", "Netflix"…). */
+const TAB_DESC = new Map(Object.values(PAGE_TABS).flat().map((t) => [t.id, t.desc]))
 import { createClient } from "@/utils/supabase/client"
 import { useShell } from "./shell-store"
 import { useBookId } from "./app-context"
@@ -65,7 +68,7 @@ export function CommandPalette() {
         <CommandEmpty><span className="grid justify-items-center gap-1 py-2"><Illustration k="sin-resultados" width={150} /><span className="font-semibold">No encontramos eso</span><span className="text-xs text-muted-foreground">Prueba con otra palabra.</span></span></CommandEmpty>
         <CommandGroup heading="Secciones">
           {PAGES.map((p) => (
-            <CommandItem key={p.id} value={`${p.label} ${p.group?.label ?? ""}`} onSelect={() => go(p.href)}>
+            <CommandItem key={p.id} value={`${p.label} ${p.group?.label ?? ""} ${TAB_DESC.get(p.id) ?? ""}`} onSelect={() => go(p.href)}>
               <Glyph name={p.icon} tone="brand" /> {p.label}
               <span className="ml-auto text-xs text-muted-foreground">{p.group?.label ?? p.section}</span>
             </CommandItem>

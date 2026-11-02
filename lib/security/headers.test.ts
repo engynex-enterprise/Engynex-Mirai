@@ -13,6 +13,10 @@ describe("cabeceras de seguridad", () => {
     expect(get(h, "X-Content-Type-Options")).toBe("nosniff")
     expect(get(h, "Permissions-Policy")).toContain("microphone=(self)")
   })
+  it("la CSP de solo reporte no lleva upgrade-insecure-requests (el navegador avisa en la consola)", () => {
+    const h = securityHeaders({ dev: false })
+    expect(get(h, "Content-Security-Policy-Report-Only")).not.toContain("upgrade-insecure-requests")
+  })
   it("con MIRAI_CSP_ENFORCE la CSP completa se aplica", () => {
     const h = securityHeaders({ dev: false, enforceCsp: true })
     expect(get(h, "Content-Security-Policy")).toContain("script-src")

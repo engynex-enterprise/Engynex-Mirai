@@ -39,7 +39,8 @@ export function securityHeaders(o: { dev: boolean; supabaseUrl?: string; enforce
   const full = cspDirectives(o)
   return [
     o.enforceCsp ? { key: "Content-Security-Policy", value: full } : { key: "Content-Security-Policy", value: CSP_BASE },
-    ...(o.enforceCsp ? [] : [{ key: "Content-Security-Policy-Report-Only", value: full }]),
+    // upgrade-insecure-requests no aplica en modo solo-reporte (el navegador lo ignora y avisa en la consola).
+    ...(o.enforceCsp ? [] : [{ key: "Content-Security-Policy-Report-Only", value: full.replace("; upgrade-insecure-requests", "") }]),
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
