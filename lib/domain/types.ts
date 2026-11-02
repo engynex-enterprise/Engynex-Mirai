@@ -38,6 +38,8 @@ export interface SettingsIn {
   /** Sobrescrituras por año: { "2026": 52374 } */
   uvt?: Record<string, number>
   smmlv?: Record<string, number>
+  /** Ajustes de nómina: procedimiento de retención por defecto y tabla del FSP (lib/domain/payroll.ts). */
+  nomina?: { retModo?: "auto" | "proc2"; retPct?: number; fsp?: [number, number][] }
 }
 
 export type CategoryIn = Pick<Row<"categories">, "id" | "nombre" | "icon" | "tope"> & { grupo: Grupo | string }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { dedCalc } from "./payroll"
 import { quincena } from "./quincena"
-import { fijoValor, incomeCuando, incomePagos, quincenaDeDia, quincenasNetas } from "./reparto"
+import { dedAMes, fijoValor, incomeCuando, incomePagos, pagosMes, planIngreso, quincenaDeDia, quincenasNetas, tipoIngreso } from "./reparto"
+import { ingresoMensual } from "./totals"
 import type { BookData } from "./types"
 
 const ref = { smmlv: 1750905, uvt: 52374 }
@@ -107,5 +108,77 @@ describe("quincena con reparto", () => {
     expect(q2.E).toBe(3_330_000)
     expect(q1.Sa).toBe(1_000_000)
     expect(q2.Sa).toBe(500_000)
+  })
+})
+
+describe("comprobante de nómina real (Altipal, octubre 2026, quincena 2)", () => {
+  // Sueldo $9.175.000, procedimiento 2 al 4,38 %, todos los descuentos del mes en la 2ª quincena.
+  const D = { tipo: "empleado" as const, mes: true, retModo: "proc2" as const, retV: 4.38 }
+  const plan = planIngreso({ frec: "quincenal", mensual: 9_175_000, D, ref, ded: "q2" })
+  it("cada descuento coincide con el desprendible", () => {
+    expect(Object.fromEntries(plan.items.map((i) => [i.n, i.v]))).toEqual({
+      Salud: 367_000, Pensión: 367_000, "Fondo de solidaridad pensional": 91_800, "Retención en la fuente": 274_000,
+    })
+    expect(plan.desc).toBe(1_099_800)
+  })
+  it("la 1ª llega completa y la 2ª con los descuentos; con el auxilio de conectividad da el neto del comprobante", () => {
+    expect(plan.pagos.map((p) => [p.bruto, p.desc, p.neto])).toEqual([[4_587_500, 0, 4_587_500], [4_587_500, 1_099_800, 3_487_700]])
+    const apoyo = planIngreso({ frec: "quincenal", mensual: 60_000, ref })
+    expect(plan.pagos[1].neto + apoyo.pagos[1].neto).toBe(3_517_700)
+    expect(plan.valor * 2).toBe(9_175_000 - 1_099_800)
+  })
+  it("mitad y mitad, o una parte escrita en la 1ª", () => {
+    const m = planIngreso({ frec: "quincenal", mensual: 9_175_000, D, ref, ded: "mitad" })
+    expect(m.pagos.map((p) => p.desc)).toEqual([549_900, 549_900])
+    const p = planIngreso({ frec: "quincenal", mensual: 9_175_000, D, ref, ded: "pers", x1: 734_000 })
+    expect(p.pagos.map((x) => x.desc)).toEqual([734_000, 365_800])
+  })
+  it("las quincenas se pueden ajustar a mano", () => {
+    const p = planIngreso({ frec: "quincenal", mensual: 0, b1: 5_000_000, b2: 4_175_000, D, ref, ded: "q2" })
+    expect(p.mensual).toBe(9_175_000)
+    expect(p.pagos[0].neto).toBe(5_000_000)
+  })
+  it("procedimiento 1 (tabla) da una retención distinta", () => {
+    const t = planIngreso({ frec: "mensual", mensual: 9_175_000, D: { tipo: "empleado", mes: true }, ref })
+    expect(t.items.find((i) => i.n === "Retención en la fuente")!.v).not.toBe(274_000)
+  })
+})
+
+describe("planIngreso por frecuencia", () => {
+  it("semanal y diario dividen el mes", () => {
+    const s = planIngreso({ frec: "semanal", mensual: 5_200_000, ref })
+    expect(s.pagos[0].neto).toBe(1_200_000)
+    const d = planIngreso({ frec: "diario", mensual: 3_000_000, dias: 20, ref })
+    expect(d.valor).toBe(150_000)
+  })
+  it("anual: el valor es el del pago", () => {
+    expect(planIngreso({ frec: "anual", mensual: 2_000_000, ref }).valor).toBe(2_000_000)
+  })
+  it("pago diario: suma los días del mes y se resume por quincena", () => {
+    const x = { frec: "diario", valor: 100_000, dia: 30, reparto: { dias: 22 } }
+    expect(pagosMes(x)).toBe(22)
+    expect(incomePagos(x, 2026, 1)).toEqual([
+      { fecha: "2026-02-15", v: 1_100_000, parte: "q1", dias: 11 }, { fecha: "2026-02-28", v: 1_100_000, parte: "q2", dias: 11 },
+    ])
+    expect(ingresoMensual([{ id: "d", concepto: "Jornal", ...x, currency: "COP" }], {})).toBe(2_200_000)
+    expect(incomeCuando(x)).toBe("Cada día (22 días al mes)")
+  })
+})
+
+describe("tipo de ingreso y descuentos de antes", () => {
+  it("tipoIngreso: guardado o por la categoría y el concepto", () => {
+    expect(tipoIngreso({ reparto: { tipo: "bono" }, concepto: "x" })).toBe("bono")
+    expect(tipoIngreso({ concepto: "Mi sueldo" })).toBe("salario")
+    expect(tipoIngreso({ concepto: "Apoyo conectividad" })).toBe("bono")
+    expect(tipoIngreso({ concepto: "Cosa" }, "Honorarios")).toBe("honorarios")
+    expect(tipoIngreso({ concepto: "Cosa" })).toBe("otro")
+  })
+  it("dedAMes: los valores fijos de cada quincena pasan a ser del mes", () => {
+    const D = dedAMes({ tipo: "empleado", retModo: "manual", retV: 100_000, otros: [{ n: "Libranza", v: 50_000 }, { n: "Fondo", v: 2, pct: true }] }, "quincenal")
+    expect(D).toMatchObject({ mes: true, retV: 200_000, otros: [{ v: 100_000 }, { v: 2, pct: true }] })
+    // Mismo resultado del mes antes y después.
+    const antes = quincenasNetas(4_000_000, 4_000_000, { tipo: "empleado", retModo: "manual", retV: 100_000, otros: [{ n: "Libranza", v: 50_000 }] }, ref)
+    const despues = quincenasNetas(4_000_000, 4_000_000, dedAMes({ tipo: "empleado", retModo: "manual", retV: 100_000, otros: [{ n: "Libranza", v: 50_000 }] }, "quincenal"), ref)
+    expect(Math.abs(antes.total - despues.total)).toBeLessThanOrEqual(200)
   })
 })

@@ -74,7 +74,9 @@ const V54: Release = {
     ["imp", "Bienvenida y migas de pan", "Una bienvenida al entrar por primera vez y, arriba de cada sección, el camino para volver atrás."],
     ["imp", "Menús más cómodos", "Los menús de opciones ya no parten el texto en varias líneas."],
     ["new", "Ingresos y gastos por quincena", "Si te pagan por quincena puedes poner un valor distinto en cada una, escoger los días de pago y decir en cuál te descuentan salud, pensión y retención (por ejemplo, la 1ª completa y todo el descuento en la 2ª). Los gastos fijos quincenales también pueden tener un valor distinto en cada quincena."],
-    ["imp", "Pagos semanales y anuales", "Escoge el día de la semana en que te pagan y el mes de un ingreso anual (como una prima o un bono de fin de año)."],
+    ["new", "Agregar ingreso paso a paso", "Primero escoges el tipo (salario, bono, prima, honorarios, pensión…), luego si te descuentan salud, pensión, fondo de solidaridad y retención, y cuánto ganas al mes. Al escoger cada cuánto te pagan repartimos el mes en cada pago (quincena, semana o día) y puedes ajustar cada valor."],
+    ["imp", "Retención y fondo de solidaridad a tu medida", "La ley permite dos formas de calcular la retención y tu empresa escoge una: si tu desprendible dice \"Procedimiento 2\" con un porcentaje, escríbelo y el cálculo coincide con tu nómina. En Ajustes › Finanzas › Nómina dejas el procedimiento de siempre y puedes cambiar la tabla del fondo de solidaridad si cambia la ley. Los aportes se redondean como en la planilla PILA."],
+    ["imp", "Pagos semanales, diarios y anuales", "Escoge el día de la semana en que te pagan, cuántos días te pagan al mes si es por día y el mes de un ingreso anual (como una prima o un bono de fin de año)."],
     ["imp", "Anuncios con límite", "En el plan gratis cada anuncio sale pocas veces al día y puedes cerrar la barra de arriba. Con Premium no ves ninguno."],
   ],
 }

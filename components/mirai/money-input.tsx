@@ -16,11 +16,12 @@ type Props = {
   invalid?: boolean
   disabled?: boolean
   onBlur?: () => void
+  "aria-label"?: string
 }
 
 /** Campo de dinero: prefijo $, separador de miles en vivo, acepta "120 mil" o "1,5 millones". */
 export const MoneyInput = forwardRef<HTMLInputElement, Props>(function MoneyInput(
-  { value, onChange, currency = "COP", decimals, id, placeholder = "0", invalid, disabled, onBlur }, ref,
+  { value, onChange, currency = "COP", decimals, id, placeholder = "0", invalid, disabled, onBlur, "aria-label": ariaLabel }, ref,
 ) {
   const dec = decimals ?? currency !== "COP"
   // Mientras escribe se muestra su texto; fuera de foco, el valor formateado (así refleja cambios externos).
@@ -37,6 +38,7 @@ export const MoneyInput = forwardRef<HTMLInputElement, Props>(function MoneyInpu
         autoComplete="off"
         placeholder={placeholder}
         aria-invalid={invalid}
+        aria-label={ariaLabel}
         disabled={disabled}
         data-money
         className="num"

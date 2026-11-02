@@ -60,6 +60,10 @@ export function quincena(b: BookData, y: number, m: number, which: QuincenaWhich
       if (pagos.length) ent.push({ icon: "briefcase", n: x.concepto, s: `${pagos.length} pagos semanales`, v: conv(x.valor, x.currency, trm) * pagos.length, fecha: ai })
       continue
     }
+    if (x.frec === "diario") {
+      for (const p of pagos) ent.push({ icon: "briefcase", n: x.concepto, s: `${p.dias} días de pago`, v: conv(p.v, x.currency, trm), fecha: ai })
+      continue
+    }
     const tag = x.frec === "quincenal" ? "Ingreso quincenal · " : x.frec === "anual" ? "Ingreso anual · " : "Ingreso · "
     for (const p of pagos) ent.push({ icon: "briefcase", n: x.concepto, s: tag + fshort(parseDate(p.fecha)), v: conv(p.v, x.currency, trm), fecha: p.fecha })
   }

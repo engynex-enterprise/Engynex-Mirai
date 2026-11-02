@@ -4,7 +4,7 @@ import { conv } from "./money"
 import { inv } from "./investments"
 import { loanEngine } from "./loans"
 import { fspPct, retEmpleado, smmlvFor, uvtFor } from "./payroll"
-import { FREC } from "./totals"
+import { pagosMes } from "./reparto"
 import { toDay } from "./dates"
 import type { BookData, DateInput } from "./types"
 
@@ -83,7 +83,7 @@ const esDe = (memberId: string | null | undefined, mid: string, tit: string) => 
 export function salarioDe(R: RentaInput, mid: string) {
   const tit = titularId(R.members), trm = R.book.settings.trm
   return R.book.incomes.filter((x) => esDe(x.member_id, mid, tit) && /salari/i.test(`${x.cat ?? ""} ${x.concepto}`))
-    .reduce((a, x) => a + (+(x.bruto ?? 0) ? +(x.bruto ?? 0) * (FREC[x.frec] || 0) : conv(x.valor, x.currency, trm) * (FREC[x.frec] || 0)), 0)
+    .reduce((a, x) => a + (+(x.bruto ?? 0) ? +(x.bruto ?? 0) * pagosMes(x) : conv(x.valor, x.currency, trm) * pagosMes(x)), 0)
 }
 
 function edad(nac: string | null | undefined, today: DateInput) {
@@ -132,7 +132,7 @@ export function rentaAuto(R: RentaInput, mid: string, today: DateInput) {
   const sal = salarioDe(R, mid)
   const txt = (x: { cat?: string; concepto: string }) => `${x.cat ?? ""} ${x.concepto}`
   const mine = R.book.incomes.filter((x) => esDe(x.member_id, mid, tit))
-  const mensual = (x: (typeof mine)[number]) => conv(x.valor, x.currency, trm) * (FREC[x.frec] || 0)
+  const mensual = (x: (typeof mine)[number]) => conv(x.valor, x.currency, trm) * pagosMes(x)
   const by = (re: RegExp) => mine.filter((x) => re.test(txt(x)) && !/salari/i.test(txt(x))).reduce((a, x) => a + mensual(x), 0) * 12
   const hon = by(/honorar|independ|servicio|freelance|contrato/i), arr = by(/arriend/i), pen = by(/pensi[oó]n/i)
   const otr = mine.filter((x) => !/salari|honorar|independ|servicio|freelance|contrato|arriend|pensi[oó]n/i.test(txt(x))).reduce((a, x) => a + mensual(x), 0) * 12
@@ -140,7 +140,7 @@ export function rentaAuto(R: RentaInput, mid: string, today: DateInput) {
   const retInv = mid === tit ? R.book.investments.reduce((a, x) => a + inv(x, today).ret, 0) : 0
   const lab = sal * 13, ces = sal * 1.12
   const smm = smmlvFor(yNow, R.smmlvOverrides), U0 = uvtFor(yNow, R.uvtOverrides)
-  const fsp = sal ? fspPct(sal, smm) / 100 : 0
+  const fsp = sal ? fspPct(sal, smm, R.book.settings.nomina?.fsp) / 100 : 0
   const aportes = sal * 12 * (0.08 + fsp) + hon * 0.4 * 0.285
   let retLab = 0
   try { retLab = sal ? retEmpleado(sal, sal * (0.08 + fsp), U0) * 12 : 0 } catch { retLab = 0 }

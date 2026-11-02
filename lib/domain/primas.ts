@@ -3,7 +3,7 @@
 // intereses de cesantías = 12 % de las cesantías.
 import { iso, toDay } from "./dates"
 import { conv } from "./money"
-import { FREC } from "./totals"
+import { pagosMes } from "./reparto"
 import type { DateInput, IncomeCategoryIn, IncomeIn, Trm } from "./types"
 
 /** Salario mensual tomado de los ingresos: el mayor ingreso cuya categoría o concepto diga "salari…". */
@@ -11,7 +11,7 @@ export function salarioDesdeIngresos(incomes: IncomeIn[], incomeCategories: Inco
   const catName = (id: string | null | undefined) => (id ? incomeCategories.find((c) => c.id === id)?.nombre ?? "" : "")
   return incomes
     .filter((i) => /salari/i.test(catName(i.category_id) + i.concepto))
-    .reduce((a, i) => Math.max(a, conv(i.valor, i.currency, trm) * (FREC[i.frec] || 0)), 0)
+    .reduce((a, i) => Math.max(a, conv(i.valor, i.currency, trm) * pagosMes(i)), 0)
 }
 
 export interface PrimaFecha {

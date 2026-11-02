@@ -19,7 +19,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { initials } from "@/components/app/app-sidebar"
 import { useApp, useCanEdit } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
-import { FREC } from "@/lib/domain"
+import { pagosMes } from "@/lib/domain"
 import { fmtMoney, fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
@@ -51,7 +51,7 @@ export function FamilyView() {
     if (!book) return null
     const gastos = book.expenses.filter((g) => g.fecha.startsWith(mes))
     const gastoDe = (id: string | null) => gastos.filter((g) => (g.member_id ?? null) === id).reduce((a, g) => a + Number(g.valor), 0)
-    const ingDe = (id: string) => book.incomes.filter((i) => i.member_id === id).reduce((a, i) => a + Number(i.valor) * (FREC[i.frec] ?? 1), 0)
+    const ingDe = (id: string) => book.incomes.filter((i) => i.member_id === id).reduce((a, i) => a + Number(i.valor) * pagosMes(i), 0)
     const totIng = members.reduce((a, m) => a + ingDe(m.id), 0)
     return { gastoDe, ingDe, totIng, compartido: gastoDe(null) }
   }, [book, members, mes])

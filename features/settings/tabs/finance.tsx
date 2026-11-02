@@ -10,7 +10,9 @@ import { MoneyAutosave } from "@/components/mirai/money-autosave"
 import { Notice } from "@/components/mirai/notice"
 import { createClient } from "@/utils/supabase/client"
 import { categoryOptions, memberOptions, methodOptions, useCategories, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
-import { FRECS, SISTEMAS, smmlvFor, uvtFor } from "@/lib/domain"
+import { FRECS, FSP_LEY797, SISTEMAS, smmlvFor, uvtFor, type NominaCfg } from "@/lib/domain"
+import { Plus, RotateCcw, Trash2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { fmtDate } from "@/lib/format"
 import { SettingRow, SettingSection } from "../ui"
 import { useBookSettingsSave } from "../prefs"
@@ -62,6 +64,8 @@ export function FinanzasTab() {
         <SettingRow title="Salario mínimo (SMMLV)" desc="Se usa para el fondo de solidaridad y la base mínima de independientes."><div className="w-48"><MoneyAutosave value={smmlvFor(year, smmlv)} onSave={(v) => save.mutate({ smmlv: { ...smmlv, [year]: v } })} /></div></SettingRow>
         <SettingRow title="Valor de la UVT" desc="Unidad de la DIAN para topes de renta y retención."><div className="w-48"><MoneyAutosave value={uvtFor(year, uvt)} onSave={(v) => save.mutate({ uvt: { ...uvt, [year]: v } })} /></div></SettingRow>
       </SettingSection>
+
+      <NominaSection value={(cfg.nomina ?? {}) as NominaCfg} onSave={(nomina) => save.mutate({ nomina: nomina as never })} />
 
       <SettingSection icon="calendar-range" title="Quincenas y fondo de emergencia">
         <SettingRow title="Corte de la primera quincena" desc="Día del mes en que termina la primera quincena."><NumBlur label="Corte de la primera quincena" value={cfg.corte_q} min={1} max={27} onSave={(v) => save.mutate({ corte_q: v })} suffix="de cada mes" /></SettingRow>
@@ -117,5 +121,46 @@ export function DefaultsTab() {
         <SettingRow title="Número de cuotas"><NumBlur label="Número de cuotas" value={+(d.plazo ?? 12)} min={1} max={360} onSave={(v) => set({ plazo: v })} suffix="cuotas" /></SettingRow>
       </SettingSection>
     </div>
+  )
+}
+
+/**
+ * Nómina: el procedimiento de retención que usa tu empresa (los dos son de ley, arts. 385 y 386 del Estatuto
+ * Tributario) y la tabla del Fondo de Solidaridad Pensional (por defecto la de la Ley 797 de 2003).
+ */
+function NominaSection({ value, onSave }: { value: NominaCfg; onSave: (v: NominaCfg) => void }) {
+  const tabla = value.fsp?.length ? value.fsp : FSP_LEY797
+  const propia = !!value.fsp?.length
+  const setFila = (i: number, j: 0 | 1, n: number) => onSave({ ...value, fsp: tabla.map((f, k) => (k === i ? (j === 0 ? [n, f[1]] : [f[0], n]) : f)) as [number, number][] })
+  return (
+    <SettingSection icon="briefcase" title="Nómina (descuentos de empleados)" desc="Reglas nacionales que aplican a cualquier empresa. Se usan al calcular lo que te llega de un salario.">
+      <SettingRow title="Retención en la fuente: procedimiento" desc={<>Los dos son de ley y tu empresa escoge uno. El <b>1</b> usa la tabla del art. 383 cada mes. En el <b>2</b> la empresa calcula un porcentaje fijo en junio y diciembre y lo pone en tu desprendible (p. ej. &quot;Procedimiento 2, 4,38 %&quot;). Si no sabes, deja el 1.</>}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-64"><Combobox value={value.retModo ?? "auto"} onChange={(v) => onSave({ ...value, retModo: (v as NominaCfg["retModo"]) ?? "auto" })}
+            options={[{ value: "auto", label: "Procedimiento 1 (tabla)" }, { value: "proc2", label: "Procedimiento 2 (% fijo)" }]} /></div>
+          {value.retModo === "proc2" && <NumBlur label="Porcentaje del procedimiento 2" value={value.retPct ?? 0} min={0} max={39} step={0.01} onSave={(v) => onSave({ ...value, retPct: v })} suffix="%" />}
+        </div>
+      </SettingRow>
+      <div className="grid gap-3 py-4">
+        <div className="grid gap-0.5">
+          <p className="font-medium">Fondo de Solidaridad Pensional</p>
+          <p className="text-sm text-muted-foreground">Se descuenta si ganas 4 salarios mínimos o más. {propia ? "Estás usando una tabla propia." : "Hoy se usa la tabla de la Ley 797 de 2003."} Cámbiala solo si cambia la ley (por ejemplo, con la reforma pensional) o tu desprendible muestra otro porcentaje.</p>
+        </div>
+        <div className="grid gap-2">
+          {tabla.map(([desde, pct], i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Desde</span>
+              <NumBlur label={`Desde cuántos salarios mínimos, fila ${i + 1}`} value={desde} min={0} max={100} step={0.5} onSave={(v) => setFila(i, 0, v)} suffix="salarios mínimos:" />
+              <NumBlur label={`Porcentaje, fila ${i + 1}`} value={pct} min={0} max={10} step={0.1} onSave={(v) => setFila(i, 1, v)} suffix="%" />
+              <Button variant="ghost" size="icon" aria-label={`Quitar fila ${i + 1}`} onClick={() => onSave({ ...value, fsp: tabla.filter((_, k) => k !== i) })} disabled={tabla.length <= 1}><Trash2 /></Button>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => onSave({ ...value, fsp: [...tabla, [(tabla.at(-1)?.[0] ?? 3) + 1, tabla.at(-1)?.[1] ?? 1]] })}><Plus /> Agregar fila</Button>
+          {propia && <Button variant="ghost" size="sm" onClick={() => onSave({ ...value, fsp: undefined })}><RotateCcw /> Volver a la tabla de ley</Button>}
+        </div>
+      </div>
+    </SettingSection>
   )
 }

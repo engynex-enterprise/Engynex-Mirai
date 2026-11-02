@@ -19,7 +19,9 @@ export function ResponsiveDialog({
   open, onOpenChange, title, description, mdesc, footer, children, wide,
 }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; mdesc?: string
-  footer?: React.ReactNode; children: React.ReactNode; wide?: boolean
+  footer?: React.ReactNode; children: React.ReactNode
+  /** Ventana más ancha; "xl" para formularios con panel de resumen al lado. */
+  wide?: boolean | "xl"
 }) {
   const live = useIsMobile()
   const hydrated = useSyncExternalStore(noop, () => true, () => false)
@@ -44,7 +46,7 @@ export function ResponsiveDialog({
     )
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("flex max-h-[92dvh] flex-col gap-0 p-0", wide ? "sm:max-w-[820px]" : "sm:max-w-[700px]")}>
+      <DialogContent className={cn("flex max-h-[92dvh] flex-col gap-0 p-0", wide === "xl" ? "sm:max-w-[1180px]" : wide ? "sm:max-w-[820px]" : "sm:max-w-[700px]")}>
         {/* Encabezado estilo Facebook: título centrado, línea divisoria y cerrar en círculo gris */}
         <DialogHeader className="items-center border-b px-14 pt-4 pb-3 text-center">
           <DialogTitle className="text-[20px] leading-6 font-bold">{title}</DialogTitle>

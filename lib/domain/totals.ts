@@ -7,17 +7,18 @@ import { isHormiga } from "./hormiga"
 import { inv } from "./investments"
 import { FMES, loanEngine } from "./loans"
 import { conv } from "./money"
+import { pagosMes } from "./reparto"
 import { subsMes } from "./subscriptions"
 import type {
   AssetIn, BookData, CategoryIn, DateInput, ExpenseIn, FixedExpenseIn, IncomeIn, InvestmentIn, LoanIn, Trm,
 } from "./types"
 
 /** Veces que se recibe un ingreso al mes según su frecuencia. */
-export const FREC: Record<string, number> = { mensual: 1, quincenal: 2, semanal: 52 / 12, anual: 1 / 12 }
+export const FREC: Record<string, number> = { mensual: 1, quincenal: 2, semanal: 52 / 12, anual: 1 / 12, diario: 30 }
 
 /** Ingreso mensual equivalente de todos los ingresos (en COP). */
 export const ingresoMensual = (incomes: IncomeIn[], trm: Trm): number =>
-  incomes.reduce((a, x) => a + conv(x.valor, x.currency, trm) * (FREC[x.frec] || 0), 0)
+  incomes.reduce((a, x) => a + conv(x.valor, x.currency, trm) * pagosMes(x), 0)
 
 /** Dinero disponible: cuentas y efectivo (PUC 11xx) + inversiones de tipo ahorro. */
 export function liquidez(assets: AssetIn[], investments: InvestmentIn[], trm: Trm, today: DateInput): number {
