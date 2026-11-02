@@ -23,5 +23,12 @@ export const INTEGRATION_BRAND: Record<string, string> = {
   ai_gateway: "vercel", ai_gemini: "gemini", ai_groq: "groq", ai_openrouter: "openrouter", ai_anthropic: "claude", ai_openai: "openai",
   email_resend: "resend", email_brevo: "brevo", email_sendgrid: "sendgrid", email_gmail: "gmail", telegram: "telegram", whatsapp: "whatsapp",
   coingecko: "coingecko", google_gmail: "gmail", google_calendar: "google-calendar", turnstile: "cloudflare", sentry: "sentry",
-  analytics: "vercel", upstash: "upstash",
+  analytics: "vercel", upstash: "upstash", adsense: "google-adsense", webpush: "pwa", trm: "superfinanciera", usura: "superfinanciera",
+  festivos: "nager", fx: "exchangerate-api", stocks: "alphavantage",
+}
+
+/** Logo de una integración; si deja escoger proveedor (Acciones y ETF), el del proveedor configurado. */
+export function integrationBrand(kind: string, config?: Record<string, unknown> | null): string | undefined {
+  if (kind === "stocks" && config?.provider === "twelvedata") return "twelvedata"
+  return INTEGRATION_BRAND[kind]
 }

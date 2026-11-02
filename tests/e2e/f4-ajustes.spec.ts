@@ -60,7 +60,7 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, integraciones, hogar y 
   await expect(page.getByText("Orden de los proveedores")).toBeVisible()
 
   await tab("hogar")
-  await expect(page.getByText("Personas con acceso")).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Personas con acceso" })).toBeVisible()
   await expect(page.getByText("(tú)")).toBeVisible()
 
   await tab("respaldo")

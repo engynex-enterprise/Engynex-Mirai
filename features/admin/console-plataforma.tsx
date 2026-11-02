@@ -30,7 +30,7 @@ import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { CATS, INTEGRATIONS, type IntegrationDef } from "@/lib/integrations/registry"
 import { MODES, type GlobalMode } from "@/lib/integrations/resolve"
-import { INTEGRATION_BRAND } from "@/lib/brands"
+import { integrationBrand } from "@/lib/brands"
 import { FEATURES, FEATURE_LIST, ahorroAnual, precio } from "@/lib/plans"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -196,7 +196,7 @@ export function IntegracionesPanel() {
               return (
                 <Card key={def.kind} className="gap-3 p-4 shadow-card ring-0">
                   <div className="flex items-start gap-3">
-                    {INTEGRATION_BRAND[def.kind] ? <BrandLogo k={INTEGRATION_BRAND[def.kind]} size={40} /> : <span className="grid size-10 place-items-center rounded-lg bg-muted"><Icon name={def.icon} className="size-5" /></span>}
+                    {integrationBrand(def.kind, r.config) ? <BrandLogo k={integrationBrand(def.kind, r.config)!} size={40} /> : <span className="grid size-10 place-items-center rounded-lg bg-muted"><Icon name={def.icon} className="size-5" /></span>}
                     <div className="grid min-w-0 flex-1 gap-1">
                       <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={tone[r.modo]}>{MODES.find((m) => m.value === r.modo)?.label}</StatusPill>{r.env && <StatusPill tone="info">Variable del despliegue</StatusPill>}</p>
                       <p className="text-xs text-muted-foreground">{r.planes.length ? `Solo planes: ${r.planes.join(", ")}` : "Todos los planes"} · {r.hogaresPropios} {r.hogaresPropios === 1 ? "hogar" : "hogares"} con cuenta propia{r.hogaresApagada ? ` · ${r.hogaresApagada} la ${r.hogaresApagada === 1 ? "apagó" : "apagaron"}` : ""}</p>

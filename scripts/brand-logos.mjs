@@ -35,6 +35,13 @@ const B = [
   ["sentry", "Sentry", "logos:sentry-icon", "integracion", "sentry"],
   ["upstash", "Upstash", "logos:upstash-icon", "integracion", "upstash"],
   ["coingecko", "CoinGecko", "mono:#8DC63F:CG", "integracion", "coingecko"],
+  ["google-adsense", "Google AdSense", "logos:google-adsense", "integracion", "adsense"],
+  ["pwa", "Web Push (app instalada)", "logos:pwa", "integracion", "web push|\\bpwa\\b"],
+  ["superfinanciera", "Superintendencia Financiera", "mono:#0B3C7D:SFC", "integracion", "superfinanciera|superintendencia financiera"],
+  ["nager", "Nager.Date", "mono:#1F2937:ND", "integracion", "nager"],
+  ["exchangerate-api", "ExchangeRate-API", "mono:#0E7C66:ER", "integracion", "exchange ?rate"],
+  ["alphavantage", "Alpha Vantage", "mono:#5A2D82:AV", "integracion", "alpha ?vantage"],
+  ["twelvedata", "Twelve Data", "mono:#1B6EF3:12", "integracion", "twelve ?data"],
   ["github", "GitHub", "logos:github-icon", "software", "github"],
   // Video
   ["netflix", "Netflix", "logos:netflix-icon", "video", "netflix"],

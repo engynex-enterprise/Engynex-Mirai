@@ -22,7 +22,7 @@ import { createClient } from "@/utils/supabase/client"
 import { CATS, INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
 import { deleteIntegration, listModels, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/actions"
 import { MODEL_LIST } from "@/lib/ai/models"
-import { INTEGRATION_BRAND } from "@/lib/brands"
+import { integrationBrand } from "@/lib/brands"
 import { cn } from "@/lib/utils"
 
 type Pub = { kind: string; enabled: boolean; config: Record<string, unknown>; meta: Record<string, unknown> }
@@ -138,7 +138,7 @@ export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
               return (
                 <Card key={def.kind} className={cn("gap-3 p-4 shadow-card ring-0", on && "ring-1 ring-brand")}>
                   <div className="flex items-start gap-3">
-                    {INTEGRATION_BRAND[def.kind] ? <BrandLogo k={INTEGRATION_BRAND[def.kind]} size={40} className={cn(!on && "opacity-80 grayscale-[.35]")} /> : <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", on ? "bg-brand-soft text-brand" : "bg-muted text-muted-foreground")}><Icon name={def.icon} className="size-5" /></span>}
+                    {integrationBrand(def.kind, cur?.config) ? <BrandLogo k={integrationBrand(def.kind, cur?.config)!} size={40} className={cn(!on && "opacity-80 grayscale-[.35]")} /> : <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", on ? "bg-brand-soft text-brand" : "bg-muted text-muted-foreground")}><Icon name={def.icon} className="size-5" /></span>}
                     <div className="grid flex-1 gap-1">
                       <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={FREE[def.free][0]}>{FREE[def.free][1]}</StatusPill>{def.scope === "platform" && <StatusPill tone="info">Del despliegue</StatusPill>}{offered && <StatusPill tone="pagado">{locked ? "Incluida por Mirai · obligatoria" : "Incluida por Mirai"}</StatusPill>}</p>
                       <p className="text-sm text-muted-foreground">{def.d}</p>
