@@ -317,58 +317,69 @@ function cuandoTxt(w: Values): string {
   return `Cada mes · día ${w.dia || 30}`
 }
 
-/** Panel derecho: cómo va quedando el ingreso (del mes, descuentos y lo que llega en cada pago). Fijo al desplazar. */
+/**
+ * Panel derecho con forma de tirilla de recibo: cómo va quedando el ingreso (del mes, descuentos y lo que llega en cada
+ * pago). Fijo al desplazar. El zigzag de arriba y abajo es una máscara (`receipt-edge`); la sombra va en el contenedor.
+ */
 function Resumen({ plan, tipo, concepto, currency, conDesc, ref_, cuando, reparto, etiquetas, anual }: {
   plan: PlanIngreso; tipo: (typeof TIPOS_INGRESO)[number] | null; concepto: string; currency: string; conDesc: boolean
   ref_: { smmlv: number; uvt: number }; cuando?: string; reparto?: string; etiquetas?: string[]; anual: boolean
 }) {
   const M = (v: number, cls?: string) => <Money value={v} currency={currency} className={cls} />
+  const corte = <hr className="border-0 border-t border-dashed border-foreground/25" />
   return (
-    <aside className="grid gap-4 rounded-xl border bg-card p-4 shadow-card lg:sticky lg:top-0" aria-live="polite" data-testid="ingreso-resumen" aria-label="Resumen del ingreso">
-      <div className="flex items-center gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-success-soft text-success"><Icon name={tipo?.icon ?? "coins"} className="size-5" /></span>
-        <div className="grid min-w-0">
-          <span className="truncate font-semibold">{concepto.trim() || tipo?.label || "Tu ingreso"}</span>
+    <div className="receipt-shadow lg:sticky lg:top-0">
+      <aside className="receipt-edge grid gap-4 bg-receipt px-5 pt-8 pb-9" aria-live="polite" data-testid="ingreso-resumen" aria-label="Resumen del ingreso">
+        <div className="grid justify-items-center gap-1.5 text-center">
+          <span className="grid size-11 place-items-center rounded-full bg-card text-success shadow-card"><Icon name={tipo?.icon ?? "receipt"} className="size-5" /></span>
+          <span className="text-[11px] font-semibold tracking-[.2em] text-muted-foreground uppercase">Recibo de pago</span>
+          <span className="max-w-full truncate text-base font-bold">{concepto.trim() || tipo?.label || "Tu ingreso"}</span>
           <span className="text-xs text-muted-foreground">{[tipo?.label, cuando].filter(Boolean).join(" · ") || "Aquí verás cómo va quedando"}</span>
         </div>
-      </div>
-      {!(plan.mensual > 0) ? (
-        <p className="rounded-lg bg-secondary/60 p-3 text-sm text-muted-foreground">{tipo ? "Escribe cuánto recibes y aquí verás cuánto te llega en cada pago." : "Escoge el tipo de ingreso para empezar."}</p>
-      ) : (
-        <>
-          <div className="grid gap-1.5">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{anual ? "El pago" : "En el mes"}</p>
-            <table className="w-full text-sm">
-              <tbody>
-                <tr><td className="py-1">{conDesc ? (anual ? "Valor del pago" : "Valor antes de descuentos") : anual ? "Valor del pago" : "Valor del mes"}</td><td className="py-1 text-right">{M(plan.mensual)}</td></tr>
-                {plan.items.map((x) => (
-                  <tr key={x.n} className="border-t border-black/5 dark:border-white/10">
-                    <td className="py-1">− {x.n} <span className="block text-xs text-muted-foreground">{x.h}</span></td>
-                    <td className="py-1 text-right text-danger">{M(x.v)}</td>
-                  </tr>
-                ))}
-                {plan.desc > 0 && <tr className="border-t font-medium"><td className="py-1">Total descuentos</td><td className="py-1 text-right text-danger">{M(plan.desc)}</td></tr>}
-                <tr className="border-t-2 font-bold"><td className="py-1.5">Te llega {anual ? "en el pago" : "al mes"}</td><td className="py-1.5 text-right text-success">{M(plan.neto)}</td></tr>
-              </tbody>
-            </table>
-          </div>
-          {cuando && <div className="grid gap-2 rounded-lg border-l-4 border-lime bg-brand-soft p-3">
-            <p className="text-sm font-semibold">Lo que te llega a la cuenta</p>
-            {reparto && <p className="text-xs text-muted-foreground">Descuentos: {reparto.toLowerCase()}</p>}
-            <div className={plan.pagos.length > 1 ? "grid grid-cols-2 items-start gap-3" : "grid"}>
-              {plan.pagos.map((p, i) => (
-                <div key={p.n} className="grid">
-                  <span className="text-xs text-muted-foreground">{etiquetas ? `${p.n} (${etiquetas[i]})` : p.n}</span>
-                  {M(p.neto, "text-[20px] font-extrabold")}
-                  {p.desc > 0 && <span className="text-xs text-muted-foreground">{M(p.bruto)} − {M(p.desc)}</span>}
-                </div>
-              ))}
+        {corte}
+        {!(plan.mensual > 0) ? (
+          <p className="py-2 text-center text-sm text-muted-foreground">{tipo ? "Escribe cuánto recibes y aquí verás cuánto te llega en cada pago." : "Escoge el tipo de ingreso para empezar."}</p>
+        ) : (
+          <>
+            <div className="grid gap-1.5">
+              <p className="text-[11px] font-semibold tracking-[.15em] text-muted-foreground uppercase">{anual ? "El pago" : "En el mes"}</p>
+              <table className="num w-full text-sm">
+                <tbody>
+                  <tr><td className="py-1">{conDesc ? (anual ? "Valor del pago" : "Valor antes de descuentos") : anual ? "Valor del pago" : "Valor del mes"}</td><td className="py-1 text-right font-medium">{M(plan.mensual)}</td></tr>
+                  {plan.items.map((x) => (
+                    <tr key={x.n}>
+                      <td className="py-1">− {x.n} <span className="block text-xs text-muted-foreground">{x.h}</span></td>
+                      <td className="py-1 text-right align-top text-danger">{M(x.v)}</td>
+                    </tr>
+                  ))}
+                  {plan.desc > 0 && <tr className="border-t border-dashed border-foreground/25 font-medium"><td className="py-1.5">Total descuentos</td><td className="py-1.5 text-right text-danger">{M(plan.desc)}</td></tr>}
+                  <tr className="border-t-2 border-double border-foreground/40 text-[15px] font-bold"><td className="py-2">Te llega {anual ? "en el pago" : "al mes"}</td><td className="py-2 text-right text-success">{M(plan.neto)}</td></tr>
+                </tbody>
+              </table>
             </div>
-          </div>}
-          {conDesc && <p className="text-xs text-muted-foreground">Cálculo aproximado con salario mínimo {fmtMoney(ref_.smmlv)} y UVT {fmtMoney(ref_.uvt)}. Compáralo con tu desprendible: si no coincide, ajusta los descuentos a la izquierda.</p>}
-        </>
-      )}
-    </aside>
+            {cuando && (
+              <>
+                {corte}
+                <div className="grid gap-2">
+                  <p className="text-sm font-semibold">Lo que te llega a la cuenta</p>
+                  {reparto && <p className="-mt-1 text-xs text-muted-foreground">Descuentos: {reparto.toLowerCase()}</p>}
+                  <div className={plan.pagos.length > 1 ? "grid grid-cols-2 items-start gap-2" : "grid"}>
+                    {plan.pagos.map((p, i) => (
+                      <div key={p.n} className="grid rounded-lg border border-dashed border-foreground/25 bg-card/70 p-2.5">
+                        <span className="text-xs text-muted-foreground">{etiquetas ? `${p.n} (${etiquetas[i]})` : p.n}</span>
+                        {M(p.neto, "text-[19px] font-extrabold text-success")}
+                        {p.desc > 0 && <span className="text-[11px] text-muted-foreground">{M(p.bruto)} − {M(p.desc)}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {conDesc && <>{corte}<p className="text-center text-[11px] leading-4 text-muted-foreground">Cálculo aproximado con salario mínimo {fmtMoney(ref_.smmlv)} y UVT {fmtMoney(ref_.uvt)}. Compáralo con tu desprendible: si no coincide, ajusta los descuentos a la izquierda.</p></>}
+          </>
+        )}
+      </aside>
+    </div>
   )
 }
 

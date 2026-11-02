@@ -57,6 +57,7 @@
   --color-info-soft: var(--info-soft);
   --color-brand: var(--brand);
   --color-brand-soft: var(--brand-soft);
+  --color-receipt: var(--receipt);
   --color-link: var(--link);
   --color-navy-tone: var(--navy-tone);
   --color-field: var(--field);
@@ -115,6 +116,7 @@
   --ring: #2A7F14;
   --brand: #2A7F14;
   --brand-soft: #E7F5D9;
+  --receipt: #FBF8EE;
   --link: #1F6B0E;
   --navy-tone: #1F2B4B;
   --field: #FFFFFF;
@@ -188,6 +190,7 @@
   --ring: #9EDB4E;
   --brand: #9EDB4E;
   --brand-soft: #263A1A;
+  --receipt: #2A303C;
   --link: #B2EB6A;
   --navy-tone: #C9D3EA;
   --field: #242526;
@@ -284,6 +287,15 @@
   .no-scrollbar { scrollbar-width: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  /* Tirilla de recibo: bordes rasgados en zigzag arriba y abajo (la sombra va en un contenedor con drop-shadow). */
+  .receipt-edge {
+    --tooth: 18px;
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tooth) 51% repeat-x,
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--tooth) 51% repeat-x;
+    mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tooth) 51% repeat-x,
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--tooth) 51% repeat-x;
+  }
+  .receipt-shadow { filter: drop-shadow(0 1px 1px rgb(0 0 0 / .08)) drop-shadow(0 6px 14px rgb(31 43 75 / .12)); }
 }
 
 /* Modo privado: montos borrosos hasta pasar el mouse */

@@ -53,7 +53,8 @@ export function ResponsiveDialog({
           {desc && <DialogDescription className="max-w-[60ch] text-center text-[14px]">{desc}</DialogDescription>}
         </DialogHeader>
         <div className="overflow-y-auto px-6 pt-5 pb-6">{children}</div>
-        {footer && <DialogFooter className="border-t px-6 py-3">{footer}</DialogFooter>}
+        {/* Pie fijo dentro de la ventana (el DialogFooter de shadcn trae márgenes negativos que lo sacaban del borde). */}
+        {footer && <DialogFooter className="m-0 shrink-0 rounded-b-xl bg-card px-6 py-3">{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>
   )
