@@ -20,7 +20,11 @@ export function modelFrom(v: IntegrationValue, override?: string): LanguageModel
   const m = override || modelIdOf(v)
   const key = v.secrets.apiKey
   switch (v.kind) {
-    case "ai_gateway": return createGateway({ apiKey: key || process.env.AI_GATEWAY_API_KEY })(m)
+    case "ai_gateway":
+      // La clave del despliegue solo vale cuando la IA es la de la plataforma (se cobra en créditos). Un hogar con su
+      // propio Gateway debe traer su clave: sin esto, usaría la de Mirai sin descontar créditos.
+      if (!key && v.source === "hogar") throw new Error("Pega la clave de tu Vercel AI Gateway en Ajustes › Inteligencia artificial.")
+      return createGateway({ apiKey: key || process.env.AI_GATEWAY_API_KEY })(m)
     case "ai_gemini": return createGoogleGenerativeAI({ apiKey: key })(m)
     case "ai_groq": return createGroq({ apiKey: key })(m)
     case "ai_openrouter": return createOpenRouter({ apiKey: key }).chat(m)

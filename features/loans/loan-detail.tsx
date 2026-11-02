@@ -17,16 +17,21 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Icon } from "@/components/mirai/icon"
+import { Notice } from "@/components/mirai/notice"
 import { initials } from "@/components/app/app-sidebar"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
-import { FRECS, SISTEMAS, loanEngine, loanName, loanStatus, type LoanIn, type Prenda, type Sistema } from "@/lib/domain"
+import { FRECS, SISTEMAS, loanEngine, loanName, loanStatus, loanTipo, loanTitulo, normProv, tipoDef, type LoanIn, type Prenda, type Sistema } from "@/lib/domain"
+import { suggestLoanProvider } from "@/lib/domain/proveedor-pagos"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { useProviders } from "@/features/catalogs/hooks"
 import { fmtDate, fmtMoney, fmtPct, fmtShort, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { avatarTone } from "@/features/contacts/contacts-view"
-import { DOC_TIPOS, toAddress } from "@/features/contacts/contact-form"
+import { toAddress } from "@/features/contacts/contact-form"
+import { descargarAcuerdo } from "./acuerdo"
 import { PayLoanDialog } from "./pay-loan-dialog"
 import { ReminderDialog } from "./reminder-dialog"
 
@@ -55,6 +60,12 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
   const [all, setAll] = useState(false)
   const [how, setHow] = useState(() => { try { return localStorage.getItem("mirai-how-plan") !== "0" } catch { return true } })
   const pr = loan.prenda as Prenda | null
+  const tp = loanTipo(loan)
+  const td = tipoDef(tp)
+  const titulo = loanTitulo(tp, nm, { concepto: loan.concepto, prenda: pr })
+  const { data: providers = [] } = useProviders()
+  const prov = providers.find((p) => p.id === (loan as { provider_id?: string | null }).provider_id)
+  const sugerido = !prov ? suggestLoanProvider(nm, providers, normProv) : undefined
   const cur = e.vencidas[0] ?? e.next
   const refresh = () => { invalidateBook(qc, bookId, "loans"); invalidateBook(qc, bookId, "loan_payments") }
 
@@ -71,17 +82,10 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
     refresh(); onDeleted()
   }
   const acuerdo = async () => {
-    const { data: me } = await createClient().from("profiles").select("nombre,doc_tipo,doc,ciudad").eq("id", user.id).single()
-    const { downloadAgreement } = await import("./agreement-pdf")
-    const docOf = (t?: string | null, d?: string | null) => (d ? `${DOC_TIPOS.find((x) => x.value === t)?.value ?? "C.C."} ${d}` : "")
-    const ad = toAddress(contact)
-    await downloadAgreement({
-      kind: isC ? "cobrar" : "pagar", hoy: today, ciudad: me?.ciudad ?? "",
-      yo: { nombre: me?.nombre || user.nombre, doc: docOf(me?.doc_tipo, me?.doc) },
-      otro: { nombre: nm, doc: docOf(contact?.doc_tipo, contact?.doc), direccion: [ad.dir, ad.ciudad].filter(Boolean).join(", "), telefono: contact?.telefono },
-      monto: Number(loan.monto), concepto: loan.concepto, inicio: loan.inicio, plazo: loan.plazo, frec: loan.frec, sistema: loan.sistema, tasa: Number(loan.tasa),
-      ea: loan.sistema === "simple" ? (Number(loan.tasa) * 12) / 100 : Math.pow(1 + Number(loan.tasa) / 100, 12) - 1, e,
-    }, `acuerdo-de-pago-${nm.toLowerCase().replace(/\s+/g, "-")}.pdf`)
+    await descargarAcuerdo({
+      kind: isC ? "cobrar" : "pagar", hoy: today, user, contact, nombre: nm,
+      monto: Number(loan.monto), concepto: loan.concepto, inicio: loan.inicio, plazo: loan.plazo, frec: loan.frec, sistema: loan.sistema, tasa: Number(loan.tasa), e,
+    })
     toast.success("Acuerdo de pago listo", { description: "Revísalo con la otra persona antes de firmarlo." })
   }
 
@@ -98,17 +102,32 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
   return (
     <Card className="gap-5 p-5 shadow-card ring-0">
       <div className="flex flex-wrap items-center gap-3">
-        <Avatar className="size-12">{contact ? <AvatarFallback className={cn("bg-gradient-to-br text-white", avatarTone(nm))}>{initials(nm)}</AvatarFallback> : <AvatarFallback className="bg-muted"><Icon name="landmark" /></AvatarFallback>}</Avatar>
+        {contact && !prov ? <Avatar className="size-12"><AvatarFallback className={cn("bg-gradient-to-br text-white", avatarTone(nm))}>{initials(nm)}</AvatarFallback></Avatar>
+          : <EntityLogo name={nm} provider={prov} icon={td?.icon ?? "landmark"} seed={nm} size={48} />}
         <div className="grid min-w-0 flex-1 gap-1">
           <h2 className="truncate text-xl font-semibold">{nm}</h2>
+          {titulo !== nm && <p className="truncate text-sm text-muted-foreground" data-testid="loan-titulo">{titulo}</p>}
           <div className="flex flex-wrap gap-1.5">
-            {loan.concepto && <StatusPill tone="gray">{loan.concepto}</StatusPill>}
+            {td && <StatusPill tone={tp === "gota" ? "vencido" : tp === "empeno" ? "violet" : "info"}><Icon name={td.icon} className="size-3" /> {td.corto}</StatusPill>}
+            {loan.concepto && loan.concepto !== td?.corto && <StatusPill tone="gray">{loan.concepto}</StatusPill>}
             <StatusPill tone="gray">{SISTEMAS[loan.sistema as Sistema]?.n ?? "Cuota fija"}</StatusPill>
-            <StatusPill tone="gray">{FRECS[loan.frec]?.n}</StatusPill>
+            <StatusPill tone="gray">{loan.frec === "unico" ? (loan.vence ? `Pago único · ${fmtDate(loan.vence)}` : FRECS.unico.n) : FRECS[loan.frec]?.n}</StatusPill>
             <StatusPill tone="gray">{Number(loan.tasa) ? `${fmtPct(Number(loan.tasa), 2)} mensual` : "sin intereses"}</StatusPill>
-            {pr && <StatusPill tone="violet"><Gem className="size-3" /> Empeño</StatusPill>}
+            {pr && tp !== "empeno" && <StatusPill tone="violet"><Gem className="size-3" /> Con garantía</StatusPill>}
             <StatusPill tone={PILL[st]}><Icon name={stIcon} className="size-3" /> {stTxt}</StatusPill>
           </div>
+          {prov ? (
+            <Link href={`/proveedores?id=${prov.id}`} className="flex w-fit items-center gap-1.5 text-sm font-medium text-link hover:underline"><EntityLogo provider={prov} size={20} /> Proveedor: {prov.nombre}</Link>
+          ) : sugerido && canEdit && (
+            <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+              <EntityLogo provider={sugerido} size={20} /> ¿Es tu proveedor “{sugerido.nombre}”?
+              <button type="button" className="font-semibold text-link hover:underline" onClick={async () => {
+                const { error } = await createClient().from("loans").update({ provider_id: sugerido.id }).eq("id", loan.id)
+                if (error) return toast.error("No se pudo enlazar", { description: error.message })
+                toast.success("Quedó enlazado", { description: `Lo ves también en Proveedores › ${sugerido.nombre}.` }); refresh()
+              }}>Enlazar</button>
+            </p>
+          )}
         </div>
       </div>
 
@@ -122,10 +141,15 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
               {e.done ? (isC ? "El préstamo está pagado: ya debes devolver el objeto." : "Ya pagaste todo: puedes recoger tu objeto.")
                 : d == null ? "Sin fecha límite registrada."
                 : d < 0 ? <>La fecha límite pasó hace {-d} días.{!isC && " Comunícate ya con la casa de empeño: podrías perder el objeto."}</>
-                : <>Quedan <b>{d} días</b> (hasta el {fmtDate(pr.limite!)}).{!isC && <> Para recuperarlo debes pagar {fmtMoney(e.saldo)}{loan.sistema === "americano" && e.plan.length > 1 ? " o al menos los intereses para refrendar (extender el plazo)" : ""}.</>}</>}</p>
+                : <>Quedan <b>{d} días</b> (hasta el {fmtDate(pr.limite!)}).{!isC && <> Para recuperarlo debes pagar {fmtMoney(e.saldo)}{loan.sistema === "americano" && e.plan.length > 1 ? " o al menos los intereses para refrendar (extender el plazo)" : ""}. Si no pagas a tiempo puedes perder el objeto.</>}</>}</p>
           </div>
         )
       })()}
+
+      {tp === "gota" && !e.done && (
+        <Notice tone="bad" title="Préstamo gota a gota">{td?.riesgo}</Notice>
+      )}
+      {loan.nota?.trim() && <p className="rounded-lg bg-secondary/60 p-3 text-sm"><b>Nota del acuerdo:</b> {loan.nota}</p>}
 
       <div className={cn("flex flex-wrap items-center gap-4 rounded-lg p-4", e.done ? "bg-success-soft" : e.vencidas.length ? "bg-danger-soft" : cur && daysBetween(today, cur.fecha) <= anticipo ? "bg-warning-soft" : "bg-info-soft")}>
         <div className="grid flex-1 gap-0.5">

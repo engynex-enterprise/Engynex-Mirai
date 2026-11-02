@@ -62,13 +62,21 @@ type Props<T> = {
   rowKey: (row: T) => string
   search?: { placeholder: string; text: (row: T) => string }
   filters?: DTFilter<T>[]
-  /** Pestañas rápidas sobre la lista (la primera suele ser "Todos", sin `match`). */
+  /** Pestañas rápidas sobre la lista (la de "Todos" va sin `match`). */
   views?: DTView<T>[]
+  /** Pestaña con la que abre (la primera si falta). */
+  initialView?: string
   create?: { label: string; onClick: () => void; icon?: React.ReactNode }
   exportName?: string
   /** Enlace "Detalles" de cada fila. */
   details?: (row: T) => string | null
   actions?: DTAction<T>[]
+  /** "start": el menú de acciones (⋯) va fijo a la izquierda de cada fila, siempre visible al desplazarse de lado. */
+  menuAt?: "start" | "end"
+  /** Filas más bajas y letra un poco menor (tablas con muchas filas). */
+  compact?: boolean
+  /** Panel angosto (columna lateral): título con Filtros, Ordenar y Exportar como íconos, y el buscador debajo. */
+  narrow?: boolean
   /** Acciones sobre varias filas seleccionadas. */
   bulk?: { label: string; onSelect: (rows: T[]) => void; destructive?: boolean }[]
   initialSort?: { id: string; dir: "asc" | "desc" }
@@ -86,6 +94,8 @@ type Props<T> = {
   item?: (row: T) => React.ReactNode
   /** Modo lista: agrupa filas seguidas con la misma clave (p. ej. por día) mientras el orden sea uno de `sorts`. */
   group?: { by: (row: T) => string; label: (key: string, rows: T[]) => React.ReactNode; sorts?: string[] }
+  /** Modo lista: clases del <ul> (p. ej. una cuadrícula de tarjetas). */
+  listClassName?: string
   /** Controles extra en la barra (p. ej. el selector de mes). */
   toolbar?: React.ReactNode
   /** Sin tarjeta propia (dentro de otra tarjeta). */
@@ -114,8 +124,8 @@ const plural = (n: number, [s, p]: [string, string]) => `${n.toLocaleString("es-
  * la misma barra, para que todas las listas de Mirai se vean y funcionen igual.
  */
 export function DataTable<T>({
-  title, info, subtitle, data, loading, columns, rowKey, search, filters = [], views, create, exportName, details, actions, bulk, initialSort,
-  pageSize, empty, emptyState, footer, total, noun = ["resultado", "resultados"], item, group, toolbar, bare,
+  title, info, subtitle, data, loading, columns, rowKey, search, filters = [], views, create, exportName, details, actions, bulk, initialSort, menuAt = "end", compact, narrow,
+  pageSize, empty, emptyState, footer, total, noun = ["resultado", "resultados"], item, group, toolbar, bare, initialView, listClassName,
 }: Props<T>) {
   const mobile = useIsMobile()
   const list = !!item
@@ -123,7 +133,8 @@ export function DataTable<T>({
   const [active, setActive] = useState<Record<string, string[]>>({})
   const [ranges, setRanges] = useState<Record<string, Range>>({})
   const [dates, setDates] = useState<Record<string, Dates>>({})
-  const [view, setView] = useState(views?.[0]?.id ?? "")
+  const [view, setView] = useState(initialView ?? views?.[0]?.id ?? "")
+  const allView = views?.find((v) => !v.match)
   const [sort, setSort] = useState<{ id: string; dir: "asc" | "desc" } | null>(initialSort ?? null)
   const [hidden, setHidden] = useState<string[]>(() => columns.filter((c) => c.hidden).map((c) => c.id))
   const [sel, setSel] = useState<string[]>([])
@@ -132,6 +143,10 @@ export function DataTable<T>({
   const cols = columns.filter((c) => !hidden.includes(c.id))
   const sortable = columns.filter((c) => c.sort)
   const hasActions = !!(details || actions?.length)
+  // Menú a la izquierda: columna angosta y fija; la primera columna de datos ya no lleva el margen del borde.
+  const menuStart = hasActions && menuAt === "start"
+  const edge = (i: number) => i === 0 && !bulk && !menuStart
+  const cellY = compact ? "py-2.5" : "py-4"
 
   // Búsqueda + filtros (antes de las pestañas, para que cada pestaña muestre su conteo)
   const filtered = useMemo(() => {
@@ -188,8 +203,10 @@ export function DataTable<T>({
     if (!ls.length) return null
     return (
       <DropdownMenu>
-        <DropdownMenuTrigger asChild><Button size="icon-sm" variant="outline" className="size-9 rounded-lg" aria-label="Más acciones"><MoreHorizontal /></Button></DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuTrigger asChild>
+          <Button size="icon-sm" variant={menuStart ? "ghost" : "outline"} className={menuStart ? "size-8 rounded-full text-muted-foreground hover:text-foreground" : "size-9 rounded-lg"} aria-label="Más acciones"><MoreHorizontal /></Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={menuStart ? "start" : "end"}>
           {ls.map((a, i) => (
             <span key={a.label}>
               {a.destructive && i > 0 && <DropdownMenuSeparator />}
@@ -204,39 +221,43 @@ export function DataTable<T>({
   // Modo lista: filas seguidas con la misma clave van bajo un mismo título (p. ej. "Hoy · 2 de noviembre").
   const grouped = list && group && (!group.sorts || (sort && group.sorts.includes(sort.id)))
   const listBody = () => {
-    if (!grouped) return <ul className="-mx-2 grid">{pageRows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
+    if (!grouped) return <ul className={listClassName ?? "-mx-2 grid"}>{pageRows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
     const gs: { key: string; rows: T[] }[] = []
     for (const r of pageRows) { const k = group!.by(r); const last = gs.at(-1); if (last?.key === k) last.rows.push(r); else gs.push({ key: k, rows: [r] }) }
     return gs.map((g, i) => (
       <section key={`${g.key}-${i}`} className="grid gap-1">
         <h3 className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground uppercase">{group!.label(g.key, g.rows)}</h3>
-        <ul className="-mx-2 grid">{g.rows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
+        <ul className={listClassName ?? "-mx-2 grid"}>{g.rows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
       </section>
     ))
   }
 
-  const pad = bare ? "px-0" : "px-5 sm:px-7"
+  const pad = narrow ? "px-4" : bare ? "px-0" : "px-5 sm:px-7"
+  // Modo angosto: botones de solo ícono (con su nombre para lectores de pantalla y tooltip).
+  const tb = narrow ? "size-9 rounded-full p-0" : "h-10 rounded-lg"
+  const tl = narrow ? "sr-only" : "max-sm:sr-only"
+  const tip = (label: string, el: React.ReactElement) => (narrow ? <Tooltip><TooltipTrigger asChild>{el}</TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip> : el)
   const Wrap = bare ? "div" : Card
   return (
     <Wrap className={cn(bare ? "grid" : "gap-0 overflow-hidden p-0 shadow-card ring-0")} data-testid="data-table">
       {/* Barra superior: título + buscador + Filtros + Ordenar + Exportar + crear */}
-      <div className={cn("flex flex-wrap items-center gap-3 pt-5 pb-4 sm:pt-6", pad)}>
-        <div className="mr-auto grid min-w-0 lg:mr-6">
-          <h2 className="flex items-center gap-2 text-[22px] font-bold tracking-tight">{title}{info && <HeaderInfo text={info} />}</h2>
+      <div className={cn("flex flex-wrap items-center", narrow ? "gap-2 pt-4 pb-3" : "gap-3 pt-5 pb-4 sm:pt-6", pad)}>
+        <div className={cn("mr-auto grid min-w-0", !narrow && "lg:mr-6")}>
+          <h2 className={cn("flex items-center gap-2 font-bold tracking-tight", narrow ? "text-[17px]" : "text-[22px]")}>{title}{info && <HeaderInfo text={info} />}</h2>
           {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
         </div>
         {search && (
-          <div className="relative order-last w-full lg:order-none lg:w-auto lg:min-w-56 lg:flex-1">
+          <div className={cn("relative order-last w-full", !narrow && "lg:order-none lg:w-auto lg:min-w-56 lg:flex-1")}>
             <Search className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-foreground/70" />
             <Input className="h-10 rounded-lg pl-11 text-[15px]" placeholder={search.placeholder} value={q} onChange={(e) => { setQ(e.target.value); setPage(0) }} aria-label={search.placeholder} />
             {q && <button type="button" aria-label="Borrar búsqueda" className="absolute top-1/2 right-2.5 grid size-6 -translate-y-1/2 place-items-center rounded-full hover:bg-hover" onClick={() => setQ("")}><X className="size-4" /></button>}
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={cn("flex flex-wrap items-center", narrow ? "gap-1" : "gap-2")}>
           {toolbar}
           {filters.length > 0 && (
             <Popover>
-              <PopoverTrigger asChild><Button variant="outline" className="h-10 rounded-lg"><SlidersHorizontal /> Filtros{chips.length ? <span className="ml-0.5 grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground">{chips.length}</span> : null}</Button></PopoverTrigger>
+              {tip("Filtros", <PopoverTrigger asChild><Button variant={narrow ? "ghost" : "outline"} className={cn(tb, "relative")} aria-label="Filtros"><SlidersHorizontal /><span className={narrow ? "sr-only" : undefined}>Filtros</span>{chips.length ? <span className={cn("grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground", narrow ? "absolute -top-1 -right-1 size-4 text-[10px]" : "ml-0.5")}>{chips.length}</span> : null}</Button></PopoverTrigger>)}
               <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))] p-0">
                 <div className="max-h-[min(28rem,70dvh)] overflow-y-auto p-3">
                   {filters.map((f) => (
@@ -271,7 +292,7 @@ export function DataTable<T>({
           )}
           {(list || mobile) && sortable.length > 0 && (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="outline" className="h-10 rounded-lg" aria-label="Ordenar"><ArrowDownUp /><span className="max-sm:sr-only">Ordenar</span></Button></DropdownMenuTrigger>
+              {tip("Ordenar", <DropdownMenuTrigger asChild><Button variant={narrow ? "ghost" : "outline"} className={tb} aria-label="Ordenar"><ArrowDownUp /><span className={tl}>Ordenar</span></Button></DropdownMenuTrigger>)}
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
                 {sortable.map((c) => (
@@ -294,7 +315,7 @@ export function DataTable<T>({
           )}
           {columns.some((c) => c.csv) && (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="outline" className="h-10 rounded-lg" disabled={!rows.length} aria-label="Exportar"><Download /><span className="max-sm:sr-only">Exportar</span> <span aria-hidden className="ml-0.5 border-x-[5px] border-t-[6px] border-x-transparent border-t-current max-sm:hidden" /></Button></DropdownMenuTrigger>
+              {tip("Exportar", <DropdownMenuTrigger asChild><Button variant={narrow ? "ghost" : "outline"} className={tb} disabled={!rows.length} aria-label="Exportar"><Download /><span className={tl}>Exportar</span>{!narrow && <span aria-hidden className="ml-0.5 border-x-[5px] border-t-[6px] border-x-transparent border-t-current max-sm:hidden" />}</Button></DropdownMenuTrigger>)}
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={downloadCsv}><Download /> Descargar CSV (Excel)</DropdownMenuItem>
                 <DropdownMenuItem onSelect={copyTsv}><Copy /> Copiar para pegar en una hoja</DropdownMenuItem>
@@ -312,7 +333,7 @@ export function DataTable<T>({
             const on = v.id === view
             const btn = (
               <button key={v.id} type="button" role="tab" aria-selected={on} onClick={() => { setView(v.id); setPage(0) }}
-                className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors", on ? "bg-brand-soft text-link" : "text-muted-foreground hover:bg-hover hover:text-foreground")}>
+                className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full font-semibold transition-colors", narrow ? "h-8 px-3 text-[13px]" : "h-9 px-3.5 text-sm", on ? "bg-brand-soft text-link" : "text-muted-foreground hover:bg-hover hover:text-foreground")}>
                 {v.label}<span className={cn("rounded-full px-1.5 text-xs tabular-nums", on ? "bg-white/70 dark:bg-white/10" : "bg-muted")}>{counts[v.id] ?? 0}</span>
               </button>
             )
@@ -354,11 +375,13 @@ export function DataTable<T>({
       {/* Escritorio: tabla */}
       {!list && !mobile && <div className="max-h-[70vh] overflow-auto">
         <table className="w-full text-[15px]">
-          <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_var(--border),0_2px_4px_rgba(0,0,0,.04)]">
+          {/* Cabecera fija con fondo sólido (--popover): con --card, que es translúcido, se veían las filas por detrás. */}
+          <thead className="sticky top-0 z-10 bg-popover shadow-[0_1px_0_var(--border),0_2px_4px_rgba(0,0,0,.04)]">
             <tr>
+              {menuStart && <th className="sticky left-0 z-[1] w-14 bg-popover py-3.5 pr-1 pl-4" aria-label="Acciones" />}
               {bulk && <th className="w-12 py-3.5 pl-7"><Checkbox aria-label="Seleccionar la página" checked={allOnPage} onCheckedChange={(v) => setSel((s) => (v ? [...new Set([...s, ...pageRows.map(rowKey)])] : s.filter((k) => !pageRows.some((r) => rowKey(r) === k))))} /></th>}
               {cols.map((c, i) => (
-                <th key={c.id} className={cn("py-3.5 pr-4 text-left font-bold whitespace-nowrap", i === 0 && !bulk && "pl-7", c.align === "right" && "text-right", c.className)}>
+                <th key={c.id} className={cn("py-3.5 pr-4 text-left font-bold whitespace-nowrap", edge(i) && "pl-7", c.align === "right" && "text-right", c.className)}>
                   <span className={cn("inline-flex items-center gap-1.5", c.align === "right" && "flex-row-reverse")}>
                     {c.sort ? (
                       <button type="button" className="inline-flex items-center gap-1.5 rounded hover:text-link" onClick={() => toggleSort(c.id)} aria-label={`Ordenar por ${c.header}`}>
@@ -369,21 +392,22 @@ export function DataTable<T>({
                   </span>
                 </th>
               ))}
-              {hasActions && <th className="w-40 pr-7" />}
+              {hasActions && !menuStart && <th className="w-40 pr-7" />}
             </tr>
           </thead>
           <tbody>
             {loading ? Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-b last:border-0">{(bulk ? [null, ...cols] : cols).map((_, j) => <td key={j} className={cn("py-5 pr-4", j === 0 && "pl-7")}><Skeleton className="h-5 w-3/4" /></td>)}{hasActions && <td />}</tr>
+              <tr key={i} className="border-b last:border-0">{menuStart && <td className="pl-4" />}{(bulk ? [null, ...cols] : cols).map((_, j) => <td key={j} className={cn("py-5 pr-4", j === 0 && !menuStart && "pl-7")}><Skeleton className="h-5 w-3/4" /></td>)}{hasActions && !menuStart && <td />}</tr>
             )) : pageRows.map((r) => {
               const k = rowKey(r)
               const href = details?.(r)
               return (
-                <tr key={k} className={cn("border-b transition-colors last:border-0 hover:bg-hover/60", sel.includes(k) && "bg-brand-soft/50")}>
-                  {bulk && <td className="py-4 pl-7"><Checkbox aria-label="Seleccionar fila" checked={sel.includes(k)} onCheckedChange={(v) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k)))} /></td>}
-                  {cols.map((c, i) => <td key={c.id} className={cn("py-4 pr-4 align-middle", i === 0 && !bulk && "pl-7", c.align === "right" && "text-right", c.className)}>{c.cell ? c.cell(r) : c.csv?.(r)}</td>)}
-                  {hasActions && (
-                    <td className="py-4 pr-7">
+                <tr key={k} className={cn("group/row border-b transition-colors last:border-0 hover:bg-hover/60", compact && "text-[14px]", sel.includes(k) && "bg-brand-soft/50")}>
+                  {menuStart && <td className={cn("sticky left-0 z-[1] bg-popover pr-1 pl-4 align-middle group-hover/row:bg-[color-mix(in_oklab,var(--popover),var(--hover)_60%)]", cellY)}>{rowMenu(r)}</td>}
+                  {bulk && <td className={cn("pl-7", cellY)}><Checkbox aria-label="Seleccionar fila" checked={sel.includes(k)} onCheckedChange={(v) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k)))} /></td>}
+                  {cols.map((c, i) => <td key={c.id} className={cn("pr-4 align-middle", cellY, edge(i) && "pl-7", c.align === "right" && "text-right", c.className)}>{c.cell ? c.cell(r) : c.csv?.(r)}</td>)}
+                  {hasActions && !menuStart && (
+                    <td className={cn("pr-7", cellY)}>
                       <div className="flex items-center justify-end gap-4">
                         {href && <Link href={href} className="text-[15px] font-medium text-link hover:underline">Detalles</Link>}
                         {rowMenu(r)}
@@ -426,7 +450,7 @@ export function DataTable<T>({
           </div>
         )) : (
           <EmptyState art="sin-resultados" title="No hay resultados" description={narrowed ? "Nada coincide con esa búsqueda o esos filtros. Prueba con otra palabra o quita algunos filtros." : "No hay nada en esta vista."}
-            action={narrowed ? <Button variant="outline" onClick={clearAll}>Limpiar búsqueda y filtros</Button> : views?.length ? <Button variant="outline" onClick={() => setView(views[0].id)}>Ver {views[0].label.toLowerCase()}</Button> : undefined} />
+            action={narrowed ? <Button variant="outline" onClick={clearAll}>Limpiar búsqueda y filtros</Button> : allView && allView.id !== view ? <Button variant="outline" onClick={() => setView(allView.id)}>Ver {allView.label.toLowerCase()}</Button> : undefined} />
         )
       )}
 

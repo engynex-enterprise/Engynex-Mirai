@@ -89,7 +89,7 @@ function Body({ onOpenChange, sub, preset }: Props) {
           <Segmented value={comparte} onChange={setComparte} items={[{ value: "1", label: "No" }, ...[2, 3, 4, 5].map((n) => ({ value: String(n), label: `Entre ${n}` }))]} />
         </FormField>
         <FormField label="Proveedor (opcional)" htmlFor="s-prov" tip="La empresa que te cobra. Si te lo cobra otra (por ejemplo, Netflix incluido en tu plan de Claro), elígela aquí para ver en Proveedores cuánto le pagas.">
-          <ProviderSelect id="s-prov" value={prov} placeholder="El mismo servicio" onChange={(id, p) => { setProv(id); const c = categoriaSugerida(p, cats); if (c && !sub && !catManual) setCatId(c) }} />
+          <ProviderSelect id="s-prov" value={prov} placeholder="El mismo servicio" onChange={(id, p) => { setProv(id); const c = categoriaSugerida(p, cats); if (c && !sub && !catManual) setCatId(c); if (!sub && p?.payment_method_id) setMedio(p.payment_method_id) }} />
         </FormField>
         <FormField label="Categoría" htmlFor="s-cat" hint={ai.hint}>
           <Combobox id="s-cat" value={catId} onChange={(v) => { setCatManual(true); setCatId(v) }} options={categoryOptions(cats)} />

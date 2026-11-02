@@ -21,25 +21,35 @@ export const FRECS: Record<string, { n: string; per: string; k: number; pl: stri
   semanal: { n: "Semanal", per: "semana", k: 12 / 52, pl: "semanas" },
   diario: { n: "Diario", per: "día", k: 12 / 365, pl: "días" },
   diariohab: { n: "Diario (lunes a sábado)", per: "día hábil", k: 12 / 313, pl: "días hábiles" },
+  // Un solo pago en la fecha pactada (`vence`): la fracción de mes sale de los días entre el préstamo y esa fecha.
+  unico: { n: "Pago único (en una fecha)", per: "pago", k: 1, pl: "pago" },
 }
 
 /** Cuántas cuotas caen en un mes según la frecuencia. */
 export const FMES: Record<string, number> = { mensual: 1, quincenal: 2, semanal: 52 / 12, diario: 365 / 12, diariohab: 313 / 12 }
 
-type LoanRate = Pick<LoanIn, "tasa" | "sistema" | "frec">
+type LoanRate = Pick<LoanIn, "tasa" | "sistema" | "frec"> & { inicio?: string; vence?: string | null }
+
+/** Meses (con decimales) entre el préstamo y la fecha del pago único; 1 si no hay fecha. */
+export function mesesUnico(inicio: string | undefined, vence: string | null | undefined): number {
+  if (!inicio || !vence) return 1
+  const dias = (parseDate(vence).getTime() - parseDate(inicio).getTime()) / 86_400_000
+  return Math.max(0, dias / (365.25 / 12))
+}
 
 /** Tasa de interés de cada periodo (fracción, no %). */
 export function periodRate(L: LoanRate): number {
   const im = (+L.tasa || 0) / 100
   if (L.sistema === "sin" || !im) return 0
-  const k = FRECS[L.frec]?.k || 1
+  const k = L.frec === "unico" ? mesesUnico(L.inicio, L.vence) : FRECS[L.frec]?.k || 1
   return L.sistema === "simple" ? im * k : Math.pow(1 + im, k) - 1
 }
 
 /** Fecha programada de la cuota `k` (quincenal = cada 15 días exactos, no 15 y 30). */
-export function addPeriod(inicio: string, frec: string, k: number): Date {
+export function addPeriod(inicio: string, frec: string, k: number, vence?: string | null): Date {
   const d = parseDate(inicio)
-  return frec === "quincenal" ? addDays(d, 15 * k)
+  return frec === "unico" ? (vence ? parseDate(vence) : addMonths(d, k))
+    : frec === "quincenal" ? addDays(d, 15 * k)
     : frec === "semanal" ? addDays(d, 7 * k)
     : frec === "diario" ? addDays(d, k)
     : frec === "diariohab" ? addBiz(d, k)
@@ -87,7 +97,7 @@ export interface LoanEngine {
   extraFut: number
 }
 
-type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[] }
+type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null }
 
 /**
  * Simula el préstamo cuota a cuota aplicando los pagos registrados en orden de fecha.
@@ -99,7 +109,7 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
   const i = periodRate(L)
   const sys: Sistema = L.sistema in SISTEMAS ? (L.sistema as Sistema) : "frances"
   let S = +L.monto
-  let nRem = +L.plazo
+  let nRem = L.frec === "unico" ? 1 : +L.plazo
   let k = 0
   let base = S
   let C = annuity(S, i, nRem)
@@ -125,7 +135,7 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
       const q = next()
       if (!q) continue
       S -= q.cap; k++; nRem--; intPag += q.int; pagado += q.valor
-      hist.push({ id: p.id, tipo: "cuota", n: k, fecha: iso(parseDate(p.fecha)), prog: iso(addPeriod(L.inicio, L.frec, k)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+      hist.push({ id: p.id, tipo: "cuota", n: k, fecha: iso(parseDate(p.fecha)), prog: iso(addPeriod(L.inicio, L.frec, k, L.vence)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
     } else {
       const v = Math.min(+p.valor || 0, S)
       if (v <= 0) continue
@@ -147,7 +157,7 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
     while (S > 0.5 && nRem > 0 && plan.length < 1200) {
       const q = next()!
       j++; S -= q.cap; nRem--
-      plan.push({ n: j, fecha: iso(addPeriod(L.inicio, L.frec, j)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+      plan.push({ n: j, fecha: iso(addPeriod(L.inicio, L.frec, j, L.vence)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
     }
     ;({ S, nRem, k, C, capF, base } = sv)
   }
@@ -176,11 +186,13 @@ export interface LoanPreviewInput {
   plazo: number
   inicio?: string | null
   extra?: number | null
+  /** Pago único: fecha pactada. */
+  vence?: string | null
 }
 
 /** Vista previa al crear un préstamo: primera y última cuota, total, intereses, fecha final y tasa E.A. */
 export function previewLoan(p: LoanPreviewInput, today: DateInput) {
-  const L = { monto: p.monto, sistema: p.sistema, tasa: p.tasa, frec: p.frec, plazo: p.plazo, inicio: p.inicio || iso(toDay(today)), payments: [], extra: p.extra || 0 }
+  const L = { monto: p.monto, sistema: p.sistema, tasa: p.tasa, frec: p.frec, plazo: p.frec === "unico" ? 1 : p.plazo, inicio: p.inicio || iso(toDay(today)), payments: [], extra: p.extra || 0, vence: p.vence ?? null }
   const e = loanEngine(L, today)
   const first = e.plan[0]
   const last = e.plan[e.plan.length - 1]
@@ -213,10 +225,12 @@ export function rateFromCuota(M: number, cuota: number, n: number, frec: string)
 }
 
 /** Nombre de la contraparte: contacto (me deben) o entidad/contacto (le debo). */
-export function loanName(L: Pick<LoanIn, "kind" | "contact_id" | "entity_id">, contacts: ContactIn[], entities: EntityIn[]): string {
-  if (L.kind === "cobrar") return contacts.find((c) => c.id === L.contact_id)?.nombre || "Sin contacto"
-  if (L.contact_id) return contacts.find((c) => c.id === L.contact_id)?.nombre || "—"
-  return entities.find((e) => e.id === L.entity_id)?.nombre || "—"
+export function loanName(L: Pick<LoanIn, "kind" | "contact_id" | "entity_id"> & { acreedor?: string | null }, contacts: ContactIn[], entities: EntityIn[]): string {
+  // Fiado o préstamo con un proveedor: la base guarda su nombre en `acreedor`.
+  const otro = L.acreedor?.trim() || ""
+  if (L.kind === "cobrar") return contacts.find((c) => c.id === L.contact_id)?.nombre || otro || "Sin contacto"
+  if (L.contact_id) return contacts.find((c) => c.id === L.contact_id)?.nombre || otro || "—"
+  return entities.find((e) => e.id === L.entity_id)?.nombre || otro || "—"
 }
 
 export type LoanStatus = [cls: "ok" | "bad" | "warn" | "info", texto: string, icon: string]

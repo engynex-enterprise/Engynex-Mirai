@@ -88,6 +88,7 @@ export async function classifyExpenses(items: ClassifyItem[]): Promise<ClassifyO
 
 /** Revisa con IA los gastos del mes sin veredicto de hormiga (reviewMonth de la v4), en lotes de 40. */
 export async function reviewMonthHormiga(k: string): Promise<{ ok: boolean; msg: string }> {
+  if (typeof k !== "string" || !/^\d{4}-\d{2}$/.test(k)) return { ok: false, msg: "Mes inválido." }
   const ctx = await requireRole("editor")
   const sb = await supabaseServer()
   const { data: gs } = await sb.from("expenses").select("id,descripcion,valor,fecha").eq("book_id", ctx.book.id).is("deleted_at", null).is("fixed_expense_id", null).is("hormiga_src", null).like("fecha", `${k}%`)
@@ -117,6 +118,8 @@ async function asist(bookId: string) { const ia = await aiSettings(bookId); retu
 export async function suggestCategory(desc: string, nombre: string, icons: string[]): Promise<{ ok: boolean; s?: { nombre: string; icon: string; grupo: "n" | "g" | "a"; tope: number; razon: string } }> {
   const ctx = await requireRole("editor")
   if (!(await asist(ctx.book.id))) return { ok: false }
+  icons = (Array.isArray(icons) ? icons : []).filter((x) => typeof x === "string" && /^[a-z0-9-]{1,40}$/.test(x)).slice(0, 300)
+  desc = String(desc ?? ""); nombre = String(nombre ?? "")
   const cats = await catalog(ctx.book.id)
   try {
     const { object: r } = await aiObject({
@@ -184,6 +187,8 @@ export async function readReceipt(fd: FormData): Promise<{ ok: true; valor: numb
 /** Reescribe el mensaje de cobro para WhatsApp (cobroIA de la v4). */
 export async function improveCobro(msg: string, tono: "amable" | "directo" | "firme"): Promise<{ ok: boolean; text: string }> {
   const ctx = await requireRole("viewer")
+  if (!["amable", "directo", "firme"].includes(tono)) tono = "amable"
+  msg = String(msg ?? "")
   try {
     const { text } = await aiText({ householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "cobro", prompt: `Tono: ${tono}.\nMENSAJE:\n${msg.slice(0, 1500)}` })
     return { ok: true, text: text.trim() }

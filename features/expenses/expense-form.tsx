@@ -49,7 +49,9 @@ const schema = z.object({
 })
 type Values = z.infer<typeof schema>
 
-type Props = { open: boolean; onOpenChange: (o: boolean) => void; expense?: Row<"expenses"> | null }
+/** `preset`: valores iniciales al crear (p. ej. desde Proveedores › "Registrar un gasto"). */
+type Preset = { provider_id?: string | null; payment_method_id?: string | null; category_id?: string | null; descripcion?: string }
+type Props = { open: boolean; onOpenChange: (o: boolean) => void; expense?: Row<"expenses"> | null; preset?: Preset | null }
 
 /** Registrar / editar gasto. El formulario se monta al abrir para tomar los valores por defecto ya cargados. */
 export function ExpenseForm(props: Props) {
@@ -65,7 +67,7 @@ export function ExpenseForm(props: Props) {
   )
 }
 
-function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: string }) {
+function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { formId: string }) {
   const open = true
   const bookId = useBookId()
   const qc = useQueryClient()
@@ -99,8 +101,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
           fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, usarFondo: false,
         }
       : {
-          descripcion: "", valor: 0, category_id: defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
-          quien: defaults.quien || "familia", payment_method_id: defaults.medio || methods[0]?.id || null, provider_id: null, usarFondo: true,
+          descripcion: preset?.descripcion ?? "", valor: 0, category_id: preset?.category_id || defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
+          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, usarFondo: true,
         },
   })
   const { errors, isSubmitting } = form.formState
@@ -236,6 +238,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId }: Props & { formId: st
                 <Controller control={form.control} name="provider_id" render={({ field }) => (
                   <ProviderSelect id="g-prov" value={field.value} onChange={(id, p) => {
                     field.onChange(id)
+                    // Medio de pago preferido del proveedor (solo al crear).
+                    if (!expense && p?.payment_method_id) form.setValue("payment_method_id", p.payment_method_id)
                     // Categoría por defecto del proveedor si aún no hay una o no la escogió a mano.
                     const c = categoriaSugerida(p, cats)
                     if (c && (!catManual || !form.getValues("category_id"))) { form.setValue("category_id", c, { shouldValidate: true }); setCatSrc(null) }

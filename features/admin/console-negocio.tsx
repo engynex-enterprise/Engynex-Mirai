@@ -40,7 +40,8 @@ const PAY: Record<string, [PillTone, string, string]> = {
   aprobado: ["pagado", "Aprobado", "El dinero llegó."], rechazado: ["vencido", "Rechazado", "La pasarela no aprobó el cobro."], reembolsado: ["gray", "Devuelto", "Se le devolvió el dinero."],
   anulado: ["gray", "Anulado", "Anulado en Mirai."], pendiente: ["porVencer", "Pendiente", "La pasarela aún no confirma."],
 }
-const in30 = () => new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
+const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)
+const in30 = () => inDays(30)
 
 /** Pill de estado con su explicación en un tooltip. */
 function StatePill({ map, k }: { map: Record<string, [PillTone, string, string]>; k: string }) {
@@ -192,12 +193,14 @@ export function SuscripcionesPanel() {
   type S = NonNullable<typeof data>[number]
   const upd = (s: S, a: Parameters<typeof adminUpdateSubscription>[1], ok: string) => run(() => adminUpdateSubscription(s.id, a), ok, qc)
   const vigentes = (data ?? []).filter((s) => s.vigente)
+  // La fecha límite se calcula una vez (Date.now() no puede ir en el render).
+  const [en7] = useState(() => inDays(7))
   return (
     <div className="grid gap-6">
       <KpiGrid>
         <Kpi icon="badge-check" tone="green" label="Vigentes" value={nf(vigentes.length)} sub={`${nf(vigentes.filter((s) => s.estado === "activa").length)} pagando`} loading={isPending} />
         <Kpi icon="gift" tone="blue" label="Cortesías" value={nf(vigentes.filter((s) => s.estado === "cortesia").length)} sub="Asignadas por Mirai" loading={isPending} />
-        <Kpi icon="calendar-clock" tone="amber" label="Vencen en 7 días" value={nf(vigentes.filter((s) => s.vence_at && new Date(s.vence_at).getTime() - Date.now() < 7 * 86_400_000).length)} sub="Revisa si se renuevan" loading={isPending} />
+        <Kpi icon="calendar-clock" tone="amber" label="Vencen en 7 días" value={nf(vigentes.filter((s) => s.vence_at && s.vence_at.slice(0, 10) <= en7).length)} sub="Revisa si se renuevan" loading={isPending} />
         <Kpi icon="circle-x" tone="red" label="No se renuevan" value={nf((data ?? []).filter((s) => s.estado === "cancelada").length)} sub="Canceladas por el cliente" loading={isPending} />
       </KpiGrid>
       <DataTable<S>

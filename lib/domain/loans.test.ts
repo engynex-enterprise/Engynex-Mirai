@@ -159,3 +159,23 @@ describe("histPlan (préstamos que ya venían de antes) = v4", () => {
     expect(Math.abs(e.saldo - 3300000)).toBeLessThan(2)
   })
 })
+
+describe("pago único y fiado", () => {
+  const base = { monto: 1_000_000, sistema: "simple", tasa: 2, frec: "unico", plazo: 12, inicio: "2026-01-01", extra: 0, payments: [] }
+  it("una sola cuota en la fecha pactada, con interés por los días que dura", () => {
+    const e = loanEngine({ ...base, vence: "2026-04-01" }, "2026-01-02")
+    expect(e.plan).toHaveLength(1)
+    expect(e.plan[0].fecha).toBe("2026-04-01")
+    // 90 días ≈ 2,96 meses al 2 % simple
+    expect(e.plan[0].valor).toBeGreaterThan(1_058_000)
+    expect(e.plan[0].valor).toBeLessThan(1_060_000)
+  })
+  it("fiado sin intereses: lo mismo que se debe", () => {
+    const e = loanEngine({ ...base, sistema: "sin", tasa: 0, vence: "2026-01-31" }, "2026-01-02")
+    expect(e.plan[0].valor).toBe(1_000_000)
+  })
+  it("el nombre de un fiado sale del proveedor (acreedor)", () => {
+    expect(loanName({ kind: "pagar", contact_id: null, entity_id: null, acreedor: "Tienda Don Pepe" }, [], [])).toBe("Tienda Don Pepe")
+    expect(loanName({ kind: "pagar", contact_id: null, entity_id: null }, [], [])).toBe("—")
+  })
+})

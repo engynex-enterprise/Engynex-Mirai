@@ -1,10 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { IsoIcon } from "@/components/mirai/iso-icon"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { useShell } from "./shell-store"
 
 /** Menú "Agregar" (tecla N). Cada opción abre el formulario de su sección con ?nuevo=1. */
@@ -23,38 +21,23 @@ export function AddMenu() {
   const open = useShell((s) => s.add)
   const setOpen = useShell((s) => s.setAdd)
   const router = useRouter()
-  const mobile = useIsMobile()
-  const grid = (
-    <div className="grid grid-cols-2 gap-2 p-1 sm:grid-cols-4">
-      {ADD_ITEMS.map((i) => (
-        <button
-          key={i.href}
-          type="button"
-          onClick={() => { setOpen(false); router.push(i.href) }}
-          className="flex flex-col items-center gap-2 rounded-lg border bg-card p-4 text-center transition hover:border-brand hover:bg-brand-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-        >
-          <IsoIcon k={i.iso} size={36} />
-          <span className="text-sm font-semibold">{i.label}</span>
-          <span className="text-xs text-muted-foreground">{i.hint}</span>
-        </button>
-      ))}
-    </div>
-  )
-  if (mobile)
-    return (
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent>
-          <DrawerHeader><DrawerTitle>¿Qué quieres agregar?</DrawerTitle><DrawerDescription>Elige y te llevamos al formulario.</DrawerDescription></DrawerHeader>
-          <div className="px-4 pb-6">{grid}</div>
-        </DrawerContent>
-      </Drawer>
-    )
+  // Misma ventana que los formularios (Dialog en escritorio, panel inferior en celular, título centrado).
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>¿Qué quieres agregar?</DialogTitle><DialogDescription>Elige y te llevamos al formulario.</DialogDescription></DialogHeader>
-        {grid}
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog open={open} onOpenChange={setOpen} title="¿Qué quieres agregar?" description="Elige y te llevamos al formulario." wide>
+      <div className="grid grid-cols-2 gap-2 pb-2 sm:grid-cols-4">
+        {ADD_ITEMS.map((i) => (
+          <button
+            key={i.href}
+            type="button"
+            onClick={() => { setOpen(false); router.push(i.href) }}
+            className="press flex flex-col items-center gap-2 rounded-lg border bg-card p-4 text-center transition hover:border-brand hover:bg-brand-soft focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <IsoIcon k={i.iso} size={36} />
+            <span className="text-sm font-semibold">{i.label}</span>
+            <span className="text-xs text-muted-foreground">{i.hint}</span>
+          </button>
+        ))}
+      </div>
+    </ResponsiveDialog>
   )
 }

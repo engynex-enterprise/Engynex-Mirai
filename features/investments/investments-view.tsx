@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Lightbulb, Pencil, Plus, Trash2 } from "lucide-react"
+import { Lightbulb, Plus } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,7 +19,12 @@ import { ChoiceCards, Segmented } from "@/components/mirai/choice-cards"
 import { FormField, InfoTip } from "@/components/mirai/field"
 import { EmptyState } from "@/components/mirai/empty-state"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
-import { Icon } from "@/components/mirai/icon"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { IconAction } from "@/components/mirai/list-row"
+import { StatusPill } from "@/components/mirai/status-pill"
+import { SubmitButton } from "@/components/mirai/submit-button"
+import { DataTable, catalogMatch, catalogOptions } from "@/components/mirai/data-table"
+import { brandFor } from "@/lib/brands"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useSave, useSoftDelete } from "@/hooks/use-book-data"
@@ -27,14 +32,12 @@ import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
 import { conv, inv, type InvestmentIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, fmtPct, todayISO } from "@/lib/format"
-import { cn } from "@/lib/utils"
 import INVT_RAW from "@/lib/data/legacy-invt.json"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
 import { CURRENCY_OPTIONS, entityOptions, useEntities } from "@/features/catalogs/hooks"
 
 const INVT = INVT_RAW as Record<string, { l: string; icon: string; ib: string; d: string }>
-const TONE: Record<string, string> = { "t-blue": "bg-info-soft text-info", "t-green": "bg-success-soft text-success", "t-violet": "bg-info-soft text-info", "t-amber": "bg-warning-soft text-warning", "t-red": "bg-danger-soft text-danger", "t-gray": "bg-muted text-muted-foreground" }
 const GLOSARIO = [
   ["E.A. (efectiva anual)", "Lo que gana tu dinero en un año completo. Si te dicen 9% E.A., por cada $1.000.000 ganas unos $90.000 al año."],
   ["Plazo", "El tiempo que tu dinero queda guardado. En un CDT no lo puedes sacar antes."],
@@ -43,6 +46,9 @@ const GLOSARIO = [
   ["Riesgo", "Qué tan posible es que pierdas plata. CDT y cuentas de ahorro: bajo. Acciones y cripto: alto."],
 ]
 const UNIT = { dias: 1, semanas: 7, meses: 30, anos: 365 } as const
+/** Color de referencia de cada tipo (para el ícono cuando la entidad no tiene logo). */
+const TONE_HEX: Record<string, string> = { "t-blue": "#1B7FCC", "t-green": "#2E9E5B", "t-violet": "#7A4BE0", "t-amber": "#C99400", "t-red": "#D0243F", "t-gray": "#5A6C9E" }
+type Inv = { x: Row<"investments">; v: ReturnType<typeof inv> }
 
 function InvestmentForm({ open, onOpenChange, x }: { open: boolean; onOpenChange: (o: boolean) => void; x?: Row<"investments"> | null }) {
   return <ResponsiveDialog open={open} onOpenChange={onOpenChange} wide mdesc="inversion" title={x ? "Editar inversión" : "Agregar inversión"}>{open && <InvBody x={x} onOpenChange={onOpenChange} />}</ResponsiveDialog>
@@ -91,7 +97,7 @@ function InvBody({ x, onOpenChange }: { x?: Row<"investments"> | null; onOpenCha
         )}
         {tipo !== "cdt" && tipo !== "ahorro" && <FormField label="¿Cuánto vale hoy?" htmlFor="in-a"><MoneyInput id="in-a" value={actual} onChange={setActual} currency={currency} /></FormField>}
       </div>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={save.isPending}>Guardar</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!nombre.trim() || !(capital > 0)} loading={save.isPending} onClick={submit} /></div>
     </FieldGroup>
   )
 }
@@ -106,9 +112,10 @@ export function InvestmentsView() {
   const [sim, setSim] = useState({ c: 5000000, t: "10", d: "180" })
   const { data: book, isPending } = useBookData()
   const del = useSoftDelete("investments", "Inversión eliminada")
-  const rows = useMemo(() => (book?.investments ?? []).map((x) => ({ x: x as unknown as Row<"investments">, v: inv(x as InvestmentIn, today) })), [book, today])
+  const rows: Inv[] = useMemo(() => (book?.investments ?? []).map((x) => ({ x: x as unknown as Row<"investments">, v: inv(x as InvestmentIn, today) })), [book, today])
   if (isPending || !book) return <PageSkeleton kpis={3} />
   const trm = book.settings.trm
+  const entName = (x: Row<"investments">) => book.entities.find((e) => e.id === x.entity_id)?.nombre ?? ""
   const puesto = rows.reduce((a, r) => a + conv(Number(r.x.capital), r.x.currency, trm), 0)
   const vale = rows.reduce((a, r) => a + conv(r.v.valor, r.x.currency, trm), 0)
   const prox = rows.filter((r) => r.v.venc && r.v.venc >= today).sort((a, b) => a.v.venc!.localeCompare(b.v.venc!))[0]
@@ -118,23 +125,44 @@ export function InvestmentsView() {
   return (
     <div className="grid gap-6">
       <PageHeader id="inversiones" description="Mira cuánto está creciendo tu dinero, explicado sin palabras raras." actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar inversión</Button>} />
-      <KpiGrid className="xl:grid-cols-3">
+      <KpiGrid cols={3}>
         <Kpi icon="trending-up" tone="income" label="Tu dinero invertido vale hoy" value={<Money value={vale} />} sub={<>Pusiste <Money value={puesto} /></>} />
         <Kpi icon="sparkles" tone={vale >= puesto ? "green" : "red"} label="Has ganado" value={<Money value={vale - puesto} />} valueClassName={vale >= puesto ? "text-success" : "text-danger"} sub={`${fmtPct(puesto ? ((vale - puesto) / puesto) * 100 : 0, 1)} sobre lo que pusiste`} />
         <Kpi icon="calendar-clock" tone="amber" label="Próximo vencimiento" value={prox ? fmtDate(prox.v.venc) : "—"} sub="Te avisamos 10 días antes" />
       </KpiGrid>
-      {!rows.length ? (
-        <Card className="shadow-card ring-0"><EmptyState iso="inversiones" title="Aún no registras inversiones" description="CDT, cuentas que rinden, fondos, acciones o cripto." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar inversión</Button>} /></Card>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {rows.map(({ x, v }) => {
+      <DataTable<Inv>
+        bare title="Tus inversiones" info="CDT, cuentas que rinden, fondos, acciones o cripto. Mira cuánto vale hoy cada una."
+        data={rows} rowKey={(r) => r.x.id} noun={["inversión", "inversiones"]} exportName="inversiones" listClassName="grid gap-6 lg:grid-cols-2"
+        total={{ value: (r) => conv(r.v.valor, r.x.currency, trm), label: "valen hoy" }}
+        columns={[
+          { id: "nombre", header: "Inversión", sort: (r) => r.x.nombre.toLowerCase(), csv: (r) => r.x.nombre },
+          { id: "tipo", header: "Tipo", csv: (r) => (INVT[r.x.tipo] ?? INVT.otro).l },
+          { id: "entidad", header: "Entidad", csv: (r) => entName(r.x) },
+          { id: "capital", header: "Pusiste", sort: (r) => conv(Number(r.x.capital), r.x.currency, trm), csv: (r) => Number(r.x.capital) },
+          { id: "valor", header: "Vale hoy", sort: (r) => conv(r.v.valor, r.x.currency, trm), csv: (r) => Math.round(r.v.valor) },
+          { id: "ganancia", header: "Ganancia", sort: (r) => conv(r.v.valor - Number(r.x.capital), r.x.currency, trm), csv: (r) => Math.round(r.v.valor - Number(r.x.capital)) },
+          { id: "venc", header: "Vencimiento", sort: (r) => r.v.venc ?? "9999", csv: (r) => r.v.venc ?? "" },
+          { id: "moneda", header: "Moneda", csv: (r) => r.x.currency },
+        ]}
+        initialSort={{ id: "valor", dir: "desc" }}
+        search={{ placeholder: "Buscar inversión", text: (r) => `${r.x.nombre} ${(INVT[r.x.tipo] ?? INVT.otro).l} ${entName(r.x)}` }}
+        filters={[
+          { id: "tipo", label: "Tipo", options: Object.entries(INVT).filter(([k]) => rows.some((r) => r.x.tipo === k)).map(([value, t]) => ({ value, label: t.l })), match: (r, v) => r.x.tipo === v },
+          { id: "entidad", label: "Entidad", options: catalogOptions(rows, book.entities as never, (r) => r.x.entity_id, "Sin entidad"), match: catalogMatch((r) => r.x.entity_id) },
+          { id: "moneda", label: "Moneda", options: [...new Set(rows.map((r) => r.x.currency))].map((c) => ({ value: c, label: c === "COP" ? "Pesos (COP)" : c })), match: (r, v) => r.x.currency === v },
+          { id: "venc", label: "Vencimiento", kind: "dates", value: (r) => r.v.venc },
+        ]}
+        emptyState={<Card className="shadow-card ring-0"><EmptyState iso="inversiones" title="Aún no registras inversiones" description="CDT, cuentas que rinden, fondos, acciones o cripto." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar inversión</Button>} /></Card>}
+        item={({ x, v }) => {
             const t = INVT[x.tipo] ?? INVT.otro
             return (
-              <Card key={x.id} className="gap-4 p-5 shadow-card ring-0">
+              <li key={x.id} className="grid"><Card className="h-full gap-4 p-5 shadow-card ring-0">
                 <div className="flex items-center gap-3">
-                  <span className={cn("grid size-11 place-items-center rounded-full", TONE[t.ib])}><Icon name={t.icon} className="size-5" /></span>
-                  <div className="grid flex-1"><b className="text-lg">{x.nombre}</b><span className="text-sm text-muted-foreground">{t.l}{x.entity_id && ` · ${book.entities.find((e) => e.id === x.entity_id)?.nombre ?? ""}`}</span></div>
-                  {canEdit && <><Button variant="ghost" size="icon" aria-label={`Editar ${x.nombre}`} onClick={() => setEditing(x)}><Pencil /></Button><Button variant="ghost" size="icon" aria-label={`Eliminar ${x.nombre}`} onClick={() => del.mutate(x)}><Trash2 /></Button></>}
+                  <EntityLogo brand={brandFor(entName(x))} icon={t.icon} color={TONE_HEX[t.ib]} size={44} />
+                  <div className="grid flex-1"><b className="text-lg">{x.nombre}</b><span className="text-sm text-muted-foreground">{t.l}{x.entity_id && ` · ${entName(x)}`}</span></div>
+                  {x.tipo === "cdt" && v.venc && v.venc >= today && v.rest != null && v.rest <= 10 && <StatusPill tone="porVencer" hint="El CDT vence pronto: decide si lo renuevas o lo retiras.">vence pronto</StatusPill>}
+                  {x.tipo === "cdt" && v.venc && v.venc < today && <StatusPill tone="vencido" hint="El CDT ya venció. Decide si lo renuevas o retiras el dinero.">vencido</StatusPill>}
+                  {canEdit && <><IconAction a={{ label: `Editar ${x.nombre}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(x) }} /><IconAction a={{ label: `Eliminar ${x.nombre}`, tip: "Eliminar", icon: "trash-2", destructive: true, onClick: () => del.mutate(x) }} /></>}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md bg-muted p-3"><p className="text-xs text-muted-foreground">Pusiste</p><Money value={Number(x.capital)} currency={x.currency} className="font-semibold" /></div>
@@ -155,11 +183,10 @@ export function InvestmentsView() {
                     {canEdit && <ActualEditor value={Number(x.actual ?? x.capital)} currency={x.currency} onSave={(val) => setActual(x.id, val)} />}
                   </div>
                 )}
-              </Card>
+              </Card></li>
             )
-          })}
-        </div>
-      )}
+        }}
+      />
       <Card className="shadow-card ring-0">
         <CardHeader><CardTitle className="text-base">¿Cuánto ganaría en un CDT?</CardTitle></CardHeader>
         <CardContent className="grid gap-4">

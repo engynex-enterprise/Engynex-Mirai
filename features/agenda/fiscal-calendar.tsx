@@ -175,6 +175,8 @@ function EventDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   )
 }
 
+const fRowText = (r: FRow) => `${r.e.titulo} ${r.e.nota ?? ""} ${FCAT[r.cat].n}`
+
 export function FiscalCalendar() {
   const bookId = useBookId()
   const canEdit = useCanEdit()
@@ -193,7 +195,7 @@ export function FiscalCalendar() {
 
   const rows: FRow[] = events.map((e) => ({ e, nx: nextOcc(e, today), cat: fcatOf(e) })).sort((a, b) => a.nx.localeCompare(b.nx))
   const filtros: ListFilter<FRow>[] = [{ value: "todas", label: "Todas", icon: "list" }, ...(Object.keys(FCAT) as FCatKey[]).filter((k) => rows.some((r) => r.cat === k)).map((k) => ({ value: k, label: FCAT[k].n, icon: FCAT[k].icon, match: (r: FRow) => r.cat === k }))]
-  const ctl = useListControls(rows, { text: (r) => `${r.e.titulo} ${r.e.nota ?? ""} ${FCAT[r.cat].n}`, filters: filtros, sorts: ORDEN })
+  const ctl = useListControls(rows, { text: fRowText, filters: filtros, sorts: ORDEN })
   // Renta: estimado con el borrador de la Declaración del año anterior a la fecha (calEst de la v4).
   const isRenta = (e: Row<"calendar_events">) => e.template_key === "renta" || /declaraci[oó]n de renta/i.test(e.titulo)
   const { data: renta } = useQuery({ queryKey: qk(bookId, "renta"), enabled: events.some(isRenta), queryFn: () => loadRentaData(createClient(), bookId) })

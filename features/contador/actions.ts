@@ -11,6 +11,8 @@ import { maskDest } from "@/lib/notify/rules"
 import { loadRentaData, type RentaData } from "@/features/renta/data"
 import { siteUrl } from "@/lib/site-url"
 import { can } from "@/lib/plans"
+import { escapeHtml, publicError } from "@/lib/security/errors"
+import { limitError, rateLimit } from "@/lib/security/rate-limit"
 
 const hash = (t: string) => createHash("sha256").update(t).digest("hex")
 const New = z.object({ label: z.string().trim().min(1, "Escribe el nombre de tu contador").max(80), email: z.union([z.email("Correo inválido"), z.literal("")]), perms: z.enum(["renta", "todo"]), exp: z.enum(["30", "90", "dic", "nunca"]) })
@@ -27,7 +29,8 @@ async function mail(householdId: string, to: string, owner: string, url: string)
     if (!v?.enabled) continue
     const log = { household_id: householdId, channel: "email", kind: "contador", provider: k, source: v.source ?? null, destino: maskDest("email", to) } as const
     try {
-    const ref = await sendEmail(v, { to, subject: `${owner} te dio acceso a su información en Mirai`, html: brandEmail("Tienes acceso de solo lectura", `<p>${owner} te compartió su información para la declaración de renta en Mirai.</p><p style="margin-top:20px"><a href="${url}" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Abrir la información</a></p><p style="color:#616161;font-size:13px">El enlace es personal. No lo reenvíes.</p>`) })
+    const name = owner.replace(/[\r\n<>]/g, " ").trim().slice(0, 80) || "Tu cliente"
+    const ref = await sendEmail(v, { to, subject: `${name} te dio acceso a su información en Mirai`, html: brandEmail("Tienes acceso de solo lectura", `<p>${escapeHtml(name)} te compartió su información para la declaración de renta en Mirai.</p><p style="margin-top:20px"><a href="${url}" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Abrir la información</a></p><p style="color:#616161;font-size:13px">El enlace es personal. No lo reenvíes.</p>`) })
     await logSend({ ...log, status: "enviado", ref })
     } catch (e) { await logSend({ ...log, status: "fallido", error: (e as Error).message }); throw e }
     return true
@@ -41,9 +44,11 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
   if (!p.success) return { ok: false, msg: p.error.issues[0].message }
   const ctx = await requireRole("admin")
   if (!can(ctx.plan, "impuestos")) return { ok: false, msg: "El acceso para tu contador no está incluido en tu plan." }
+  const lim = await limitError("contador", ctx.user.id, "Creaste muchos accesos hoy")
+  if (lim) return { ok: false, msg: lim }
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").insert({ book_id: ctx.book.id, label: p.data.label, email: p.data.email, perms: p.data.perms, token_hash: hash(token), expires_at: expiry(p.data.exp), created_by: ctx.user.id })
-  if (error) return { ok: false, msg: error.message }
+  if (error) return { ok: false, msg: publicError(error, "No pudimos crear el acceso. Intenta de nuevo.") }
   const url = `${siteUrl()}/contador/${token}`
   let sent = false
   if (p.data.email) { try { sent = await mail(ctx.household.id, p.data.email, ctx.user.nombre, url) } catch { sent = false } }
@@ -53,9 +58,10 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
 /** Genera un enlace nuevo (el anterior deja de funcionar). */
 export async function rotateShare(id: string) {
   const ctx = await requireRole("admin")
+  if (!z.uuid().safeParse(id).success) throw new Error("Acceso no encontrado")
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").update({ token_hash: hash(token), revoked_at: null }).eq("id", id).eq("book_id", ctx.book.id)
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(publicError(error))
   return `${siteUrl()}/contador/${token}`
 }
 
@@ -67,9 +73,13 @@ export async function revokeShare(id: string) {
 export async function ownerNote(shareId: string, texto: string) {
   const ctx = await requireRole("editor")
   const t = texto.trim().slice(0, 2000)
-  if (!t) return
-  const { error } = await supabaseAdmin().from("accountant_notes").insert({ book_id: ctx.book.id, share_id: shareId, autor: "titular", texto: t, created_by: ctx.user.id })
-  if (error) throw new Error(error.message)
+  if (!t || !z.uuid().safeParse(shareId).success) return
+  // El acceso tiene que ser de este mismo libro (si no, la nota aparecería en el portal de otro hogar).
+  const db = supabaseAdmin()
+  const { data: share } = await db.from("accountant_shares").select("id").eq("id", shareId).eq("book_id", ctx.book.id).maybeSingle()
+  if (!share) throw new Error("Ese acceso ya no existe.")
+  const { error } = await db.from("accountant_notes").insert({ book_id: ctx.book.id, share_id: shareId, autor: "titular", texto: t, created_by: ctx.user.id })
+  if (error) throw new Error(publicError(error))
 }
 
 // ── Portal público del contador (sin sesión: el token es la credencial) ──
@@ -87,6 +97,7 @@ export async function shareByToken(token: string): Promise<Share | null> {
 }
 
 export async function contadorOpen(token: string): Promise<{ share: Share; data: RentaData } | null> {
+  if (typeof token !== "string" || !(await rateLimit("portalContador", token.slice(0, 64))).ok) return null
   const share = await shareByToken(token)
   if (!share) return null
   const db = supabaseAdmin()
@@ -107,14 +118,15 @@ export async function contadorNotes(token: string) {
 export async function contadorNote(token: string, texto: string) {
   const share = await shareByToken(token)
   if (!share) throw new Error("El acceso ya no está disponible")
-  const t = texto.trim().slice(0, 2000)
+  const t = String(texto ?? "").trim().slice(0, 2000)
   if (!t) return
+  if (!(await rateLimit("portalContador", `nota:${share.id}`)).ok) throw new Error("Escribiste muchas notas seguidas. Espera un momento.")
   await supabaseAdmin().from("accountant_notes").insert({ book_id: share.book_id, share_id: share.id, autor: "contador", texto: t })
 }
 
 export async function contadorFileUrl(token: string, path: string) {
   const share = await shareByToken(token)
-  if (!share || !path.startsWith(`${share.book_id}/`)) return null
+  if (!share || typeof path !== "string" || !path.startsWith(`${share.book_id}/`) || path.includes("..")) return null
   const db = supabaseAdmin()
   const { data: att } = await db.from("attachments").select("id,visible_contador").eq("path", path).eq("book_id", share.book_id).is("deleted_at", null).maybeSingle()
   if (!att?.visible_contador) return null

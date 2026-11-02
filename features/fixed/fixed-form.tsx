@@ -54,7 +54,9 @@ const schema = z.object({
   repQ: z.enum(["igual", "distinto"]), q1: z.number(), q2: z.number(),
 })
 type Values = z.infer<typeof schema>
-type Props = { open: boolean; onOpenChange: (o: boolean) => void; fixed?: FixedRow | null }
+/** `preset`: valores iniciales al crear (p. ej. desde Proveedores › "Agregar recordatorio de pago"). */
+type Preset = { nombre?: string; provider_id?: string | null; proveedor?: string; payment_method_id?: string | null; category_id?: string | null }
+type Props = { open: boolean; onOpenChange: (o: boolean) => void; fixed?: FixedRow | null; preset?: Preset | null }
 
 export function FixedForm(props: Props) {
   const [formId] = useState(() => `fijo-${Math.random().toString(36).slice(2)}`)
@@ -69,7 +71,7 @@ export function FixedForm(props: Props) {
 
 const toIn = (f: FixedRow): FixedExpenseIn => ({ ...f, valor: Number(f.valor), payments: f.payments.map((p) => ({ ...p, valor: Number(p.valor) })) })
 
-function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string }) {
+function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId: string }) {
   const bookId = useBookId()
   const qc = useQueryClient()
   const today = todayISO()
@@ -78,18 +80,18 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
   const { data: members = [] } = useMembers()
   const { data: rules = [] } = useKeywordRules()
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
-  const [catManual, setCatManual] = useState(!!fixed)
+  const [catManual, setCatManual] = useState(!!fixed || !!preset?.category_id)
   const [newCat, setNewCat] = useState<string | null>(null)
   const ai = useAICategory({ manual: catManual, onCategory: (id) => form.setValue("category_id", id) })
   const plus7 = new Date(new Date(today + "T12:00:00").getTime() + 7 * 864e5).toISOString().slice(0, 10)
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      nombre: fixed?.nombre ?? "", category_id: fixed?.category_id ?? cats.find((c) => c.nombre === "Vivienda")?.id ?? null,
+      nombre: fixed?.nombre ?? preset?.nombre ?? "", category_id: fixed?.category_id ?? preset?.category_id ?? cats.find((c) => c.nombre === "Vivienda")?.id ?? null,
       tipoValor: fixed?.variable ? "rango" : "fijo", valor: Number(fixed?.valor ?? 0), vmin: Number(fixed?.vmin ?? 0), vmax: Number(fixed?.vmax ?? 0),
       frec: fixed?.frec ?? "mensual", prox: fixed ? fijoProxIso(toIn(fixed), today) : fijoProxIso(null, today),
       diaQ1: fixed?.frec === "quincenal" ? Math.min(15, fixed.dia) : 15, dia2: fixed?.dia2 ?? 30,
-      fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? "", provider_id: fixed?.provider_id ?? null,
+      fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? preset?.payment_method_id ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? preset?.proveedor ?? "", provider_id: fixed?.provider_id ?? preset?.provider_id ?? null,
       personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
@@ -234,6 +236,8 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
                 <ProviderSelect id="f-prov" value={field.value} fallbackName={w.proveedor} onChange={(id, p) => {
                   field.onChange(id)
                   form.setValue("proveedor", p?.nombre ?? "")
+                  // Medio de pago preferido del proveedor (solo al crear).
+                  if (!fixed && p?.payment_method_id) form.setValue("medio", p.payment_method_id)
                   if (p && !form.getValues("nombre").trim()) form.setValue("nombre", p.nombre, { shouldValidate: true })
                   // Categoría por defecto del proveedor si aún no la escogió a mano.
                   const c = categoriaSugerida(p, cats)

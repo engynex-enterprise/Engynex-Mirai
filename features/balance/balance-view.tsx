@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { parseAsString, useQueryState } from "nuqs"
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PageHeader } from "@/components/mirai/page-header"
@@ -11,7 +11,8 @@ import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Segmented } from "@/components/mirai/choice-cards"
-import { Icon } from "@/components/mirai/icon"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { IconAction } from "@/components/mirai/list-row"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useCanEdit } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
@@ -36,13 +37,13 @@ function TColumn({ title, sub, lines, total, empty, onDelete, canEdit }: { title
       </div>
       {!lines.length ? <p className="py-4 text-sm text-muted-foreground">{empty}</p> : lines.map((l, i) => (
         <div key={l.id ?? i} className="grid grid-cols-[2rem_1fr_auto_auto] items-center gap-2 border-b border-dotted py-2">
-          <span className="grid size-8 place-items-center rounded-full bg-muted"><Icon name={l.icon} className="size-4" /></span>
+          <EntityLogo name={l.row ? l.n : null} icon={l.icon} seed={l.n} size={32} />
           <span className="grid min-w-0">
             <span className="truncate font-medium">{l.href ? <Link href={l.href} className="hover:text-link">{l.n}</Link> : l.n}</span>
             <span className="truncate text-xs text-muted-foreground">{l.s}</span>
           </span>
-          <Money value={l.v} className="font-semibold" />
-          {l.row && canEdit ? <Button variant="ghost" size="icon" aria-label={`Eliminar ${l.n}`} onClick={() => onDelete(l)}><Trash2 /></Button> : <span className="w-8" />}
+          <Money value={l.v} className="text-right font-semibold" />
+          {l.row && canEdit ? <IconAction a={{ label: `Eliminar ${l.n}`, tip: "Eliminar", icon: "trash-2", destructive: true, onClick: () => onDelete(l) }} /> : <span className="w-9" />}
         </div>
       ))}
       <div className="mt-1 flex justify-between border-t-2 border-foreground pt-2 font-bold"><span>Total</span><Money value={total} /></div>
@@ -56,12 +57,12 @@ function FlowColumn({ title, sub, items, empty }: { title: string; sub: string; 
       <div className="border-b-[3px] border-foreground pb-2"><p className="font-semibold">{title}</p><p className="text-xs tracking-wide text-muted-foreground uppercase">{sub}</p></div>
       {!items.length ? <p className="py-4 text-sm text-muted-foreground">{empty}</p> : items.map((x, i) => (
         <div key={i} className={cn("grid grid-cols-[2rem_1fr_auto] items-center gap-2 border-b border-dotted py-2", x.paid && "opacity-70")}>
-          <span className="grid size-8 place-items-center rounded-full bg-muted"><Icon name={x.icon} className="size-4" /></span>
+          <EntityLogo icon={x.icon} seed={x.n} size={32} />
           <span className="grid min-w-0">
-            <span className="flex items-center gap-1.5 truncate font-medium">{x.n}{x.paid && <StatusPill tone="pagado" check>Hecho</StatusPill>}</span>
+            <span className="flex items-center gap-1.5 truncate font-medium">{x.n}{x.paid && <StatusPill tone="pagado" check hint="Ya está registrado como pagado o recibido.">Hecho</StatusPill>}</span>
             <span className="truncate text-xs text-muted-foreground">{fmtDate(x.fecha, { year: false })} · {x.s}</span>
           </span>
-          <Money value={x.v} className="font-semibold" />
+          <Money value={x.v} className="text-right font-semibold" />
         </div>
       ))}
     </div>
@@ -136,7 +137,7 @@ export function BalanceView() {
             <Button variant="outline" size="icon" aria-label="Mes siguiente" onClick={() => move(1)}><ChevronRight /></Button>
             <p className="ml-2 text-sm text-muted-foreground">Del {fmtDate(data.q.a, { year: false })} al {fmtDate(data.q.b, { year: false })}</p>
           </div>
-          <KpiGrid className="xl:grid-cols-3">
+          <KpiGrid cols={3}>
             <Kpi icon="arrow-down-to-line" tone="income" label="Entra" value={<Money value={data.q.E} />} valueClassName="text-success" />
             <Kpi icon="arrow-up-from-line" tone="expense" label="Sale" value={<Money value={data.q.Sa} />} valueClassName="text-danger" />
             <Kpi icon="wallet" tone={data.q.disp >= 0 ? "green" : "red"} label={data.q.disp >= 0 ? "Te sobra" : "Te falta"} value={<Money value={Math.abs(data.q.disp)} />} valueClassName={data.q.disp >= 0 ? "text-success" : "text-danger"} sub="Disponible del periodo" />

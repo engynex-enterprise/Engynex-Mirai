@@ -3,24 +3,26 @@
 import { useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { EmptyState } from "@/components/mirai/empty-state"
 import { ListRow } from "@/components/mirai/list-row"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { DataTable, catalogMatch, catalogOptions } from "@/components/mirai/data-table"
 import { useCanEditRow, useCanRecord } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { incomeCuando, incomeReparto, ingresoBrutoMensual, ingresoMensual, quincena, type Deducciones } from "@/lib/domain"
+import { incomeCuando, incomeReparto, ingresoBrutoMensual, ingresoMensual, quincena, type Deducciones, type IncomeIn } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { memberName, useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
 import { useBookData } from "@/features/book/use-book-data"
 import { IncomeForm } from "./income-form"
 import { AdSlot } from "@/features/ads/ad-slot"
+
+const FRECS_ING: Record<string, string> = { mensual: "Cada mes", quincenal: "Cada quincena", semanal: "Cada semana", diario: "Por días", anual: "Una vez al año" }
 
 /** "1ª quincena $X · 2ª quincena $Y" cuando cambia entre quincenas. */
 const quincLine = (x: Row<"incomes">) => {
@@ -53,6 +55,9 @@ export function IncomesView() {
   const del = useSoftDelete("incomes", "Ingreso eliminado")
   const today = todayISO()
   const incomes = (book?.incomes ?? []) as unknown as Row<"incomes">[]
+  const trm = book?.settings.trm ?? {}
+  /** Lo que deja el ingreso en un mes, en pesos (quincenas, semanas y monedas convertidas). */
+  const mensualDe = (x: Row<"incomes">) => ingresoMensual([x as unknown as IncomeIn], trm)
 
   const k = useMemo(() => {
     if (!book) return null
@@ -65,7 +70,7 @@ export function IncomesView() {
     <div className="grid gap-6">
       <PageHeader id="ingresos" description="Tu salario, honorarios, arriendos y cualquier dinero que recibas con regularidad."
         actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar ingreso</Button>} />
-      <KpiGrid className="xl:grid-cols-3">
+      <KpiGrid cols={3}>
         <Kpi icon="wallet" tone="income" label="Ingreso mensual" loading={isPending}
           value={<>{<Money value={k?.mes} />} <span className="text-[12px] font-medium text-muted-foreground">con descuentos</span></>} valueClassName="text-success"
           sub={k && k.bruto - k.mes >= 1
@@ -74,35 +79,49 @@ export function IncomesView() {
         <Kpi icon="calendar" tone="blue" label={`1ª quincena (1–${k?.corte ?? 15})`} loading={isPending} value={<Money value={k?.q1} />} />
         <Kpi icon="calendar" tone="blue" label={`2ª quincena (${(k?.corte ?? 15) + 1}–fin)`} loading={isPending} value={<Money value={k?.q2} />} />
       </KpiGrid>
-      <Card className="shadow-card ring-0">
-        <CardContent className="grid gap-1">
-          {isPending ? (
-            Array.from({ length: 3 }).map((_, i) => <div key={i} className="flex items-center gap-3 py-2"><Skeleton className="size-10 rounded-full" /><div className="grid flex-1 gap-1.5"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/2" /></div><Skeleton className="h-5 w-24" /></div>)
-          ) : !incomes.length ? (
-            <EmptyState iso="ingresos" title="Aún no registras ingresos" description="Es lo más importante: sin esto no podemos decirte cuánto te queda." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar el primero</Button>} />
-          ) : (
-            <ul className="-mx-2 grid">
-              {incomes.map((x) => {
-                const cat = cats.find((c) => c.id === x.category_id)
-                return (
-                  <ListRow key={x.id} icon={cat?.icon ?? "coins"} iconClassName="bg-success-soft text-success" title={x.concepto}
-                    badges={x.bruto ? <StatusPill tone="estimado">neto</StatusPill> : null}
-                    subtitle={[cat?.nombre, incomeCuando(x), memberName(x.member_id, members)].filter(Boolean).join(" · ")}
-                    extra={quincLine(x) || dedLine(x) ? <>{quincLine(x) && <span className="block">{quincLine(x)}</span>}{dedLine(x) && <span className="block">{dedLine(x)}</span>}</> : null}
-                    value={quincLine(x)
-                      ? <span className="grid text-right"><Money value={Number(incomeReparto(x).n1) + Number(incomeReparto(x).n2)} currency={x.currency} className="font-bold text-success" /><span className="text-xs text-muted-foreground">al mes</span></span>
-                      : <Money value={Number(x.valor)} currency={x.currency} className="font-bold text-success" />}
-                    onClick={canRow(x) ? () => setEditing(x) : undefined}
-                    actions={canRow(x) ? [
-                      { label: `Editar ${x.concepto}`, icon: "pencil", onClick: () => setEditing(x) },
-                      { label: `Eliminar ${x.concepto}`, icon: "trash-2", onClick: () => del.mutate(x), destructive: true },
-                    ] : []} />
-                )
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable<Row<"incomes">>
+        title="Tus ingresos" info="Lo que recibes con regularidad. El total del mes ya convierte las quincenas, semanas y monedas a pesos al mes."
+        data={incomes} loading={isPending} rowKey={(x) => x.id} noun={["ingreso", "ingresos"]} exportName="ingresos"
+        total={{ value: (x) => mensualDe(x), label: "suman al mes" }}
+        columns={[
+          { id: "concepto", header: "Concepto", sort: (x) => x.concepto.toLowerCase(), csv: (x) => x.concepto },
+          { id: "mensual", header: "Al mes", sort: (x) => mensualDe(x), csv: (x) => Math.round(mensualDe(x)) },
+          { id: "valor", header: "Valor por pago", sort: (x) => Number(x.valor), csv: (x) => Number(x.valor) },
+          { id: "moneda", header: "Moneda", csv: (x) => x.currency },
+          { id: "bruto", header: "Bruto", csv: (x) => (x.bruto ? Number(x.bruto) : "") },
+          { id: "cuando", header: "Cuándo", csv: (x) => incomeCuando(x) },
+          { id: "categoria", header: "Categoría", sort: (x) => cats.find((c) => c.id === x.category_id)?.nombre ?? "~", csv: (x) => cats.find((c) => c.id === x.category_id)?.nombre ?? "" },
+          { id: "persona", header: "Persona", csv: (x) => memberName(x.member_id, members) },
+        ]}
+        initialSort={{ id: "mensual", dir: "desc" }}
+        search={{ placeholder: "Buscar ingreso", text: (x) => `${x.concepto} ${cats.find((c) => c.id === x.category_id)?.nombre ?? ""} ${memberName(x.member_id, members)}` }}
+        filters={[
+          { id: "cat", label: "Categoría", options: catalogOptions(incomes, cats, (x) => x.category_id, "Sin categoría"), match: catalogMatch((x) => x.category_id) },
+          { id: "persona", label: "Persona", options: [...(incomes.some((x) => !x.member_id) ? [{ value: "__none", label: "Familia" }] : []), ...catalogOptions(incomes, members, (x) => x.member_id)], match: catalogMatch((x) => x.member_id) },
+          { id: "frec", label: "Frecuencia", options: Object.entries(FRECS_ING).filter(([v]) => incomes.some((x) => x.frec === v)).map(([value, label]) => ({ value, label })), match: (x, v) => x.frec === v },
+          { id: "ded", label: "Descuentos de nómina", options: [{ value: "si", label: "Con descuentos (neto)" }, { value: "no", label: "Sin descuentos" }], match: (x, v) => (v === "si") === !!x.bruto },
+          { id: "moneda", label: "Moneda", options: [...new Set(incomes.map((x) => x.currency))].map((c) => ({ value: c, label: c === "COP" ? "Pesos (COP)" : c })), match: (x, v) => x.currency === v },
+          { id: "valor", label: "Valor al mes", kind: "range", money: true, value: (x) => mensualDe(x) },
+        ]}
+        emptyState={<EmptyState iso="ingresos" title="Aún no registras ingresos" description="Es lo más importante: sin esto no podemos decirte cuánto te queda." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar el primero</Button>} />}
+        item={(x) => {
+          const cat = cats.find((c) => c.id === x.category_id)
+          return (
+            <ListRow key={x.id} icon={cat?.icon ?? "coins"} media={<EntityLogo icon={cat?.icon ?? "coins"} tone="success" name={x.concepto} />} title={x.concepto}
+              badges={x.bruto ? <StatusPill tone="estimado" hint="Es lo que te llega a la cuenta después de los descuentos de nómina (salud, pensión, retención).">neto</StatusPill> : null}
+              subtitle={[cat?.nombre, incomeCuando(x), memberName(x.member_id, members)].filter(Boolean).join(" · ")}
+              extra={quincLine(x) || dedLine(x) ? <>{quincLine(x) && <span className="block">{quincLine(x)}</span>}{dedLine(x) && <span className="block">{dedLine(x)}</span>}</> : null}
+              value={quincLine(x)
+                ? <span className="grid text-right"><Money value={Number(incomeReparto(x).n1) + Number(incomeReparto(x).n2)} currency={x.currency} className="font-bold text-success" /><span className="text-xs text-muted-foreground">al mes</span></span>
+                : <Money value={Number(x.valor)} currency={x.currency} className="font-bold text-success" />}
+              onClick={canRow(x) ? () => setEditing(x) : undefined}
+              actions={canRow(x) ? [
+                { label: `Editar ${x.concepto}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(x) },
+                { label: `Eliminar ${x.concepto}`, tip: "Eliminar", icon: "trash-2", onClick: () => del.mutate(x), destructive: true },
+              ] : []} />
+          )
+        }}
+      />
       <IncomeForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} income={editing} />
       <AdSlot slot="lista" />
     </div>

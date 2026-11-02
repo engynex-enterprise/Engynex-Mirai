@@ -6,8 +6,8 @@ import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Spinner } from "@/components/ui/spinner"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { FormField } from "@/components/mirai/field"
 import { MoneyInput } from "@/components/mirai/money-input"
 import { DatePicker } from "@/components/mirai/date-picker"
@@ -55,7 +55,7 @@ function GoalBody({ goal, onOpenChange }: { goal?: Row<"goals"> | null; onOpenCh
         <FormField label="¿Cuánto llevas ahorrado?" htmlFor="m-a"><MoneyInput id="m-a" value={ahorrado} onChange={setAhorrado} /></FormField>
         <FormField label="¿Para cuándo?" htmlFor="m-f"><DatePicker id="m-f" value={fecha} onChange={setFecha} quick="futuro" /></FormField>
       </div>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={save.isPending}>Guardar meta</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!nombre.trim() || !(objetivo > 0)} loading={save.isPending} onClick={submit}>Guardar meta</SubmitButton></div>
     </FieldGroup>
   )
 }
@@ -110,7 +110,7 @@ function FundBody({ tipo, onOpenChange, saldo, metaTxt }: { tipo: "guardar" | "u
           : <FormField label="¿Cómo lo pagaste?" htmlFor="fd-m"><Combobox id="fd-m" value={medio} onChange={setMedio} options={methodOptions(methods)} /></FormField>}
       </div>
       {tipo === "guardar" && <p className="text-sm text-muted-foreground">{metaTxt}</p>}
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={busy}>{busy && <Spinner />} {tipo === "usar" ? "Registrar imprevisto" : "Guardar"}</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!(valor > 0) || (tipo === "usar" && !nota.trim())} loading={busy} onClick={submit}>{tipo === "usar" ? "Registrar imprevisto" : "Guardar"}</SubmitButton></div>
     </FieldGroup>
   )
 }
@@ -181,7 +181,7 @@ function AporteBody({ target, existing, payDays, sugerencia, onOpenChange }: { t
       <div className="flex flex-wrap justify-end gap-2">
         {existing && <Button variant="ghost" className="mr-auto text-danger" onClick={quitar}>Quitar aporte</Button>}
         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-        <Button onClick={submit} disabled={busy}>{busy && <Spinner />} {existing ? "Guardar cambios" : "Programar aporte"}</Button>
+        <SubmitButton disabled={!(valor > 0)} loading={busy} onClick={submit}>{existing ? "Guardar cambios" : "Programar aporte"}</SubmitButton>
       </div>
     </FieldGroup>
   )

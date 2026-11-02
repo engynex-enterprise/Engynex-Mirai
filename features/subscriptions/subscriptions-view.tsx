@@ -96,7 +96,7 @@ export function SubscriptionsView() {
           { id: "estado", header: "Estado", csv: (s) => (s.activa ? "Activa" : "Pausada") },
         ]}
         initialSort={{ id: "proximo", dir: "asc" }}
-        total={{ value: (s) => (s.activa ? subMensual({ ...s, valor: Number(s.valor) }, trm) / Math.max(1, s.comparte) : 0), label: "te cuestan al mes" }}
+        total={{ value: (s) => (s.activa ? subMensual({ ...s, valor: Number(s.valor) }, trm) / Math.max(1, s.comparte) : 0), label: "tu parte al mes" }}
         search={{ placeholder: "Buscar suscripción", text: (s) => `${s.nombre} ${methods.find((m) => m.id === s.payment_method_id)?.nombre ?? ""} ${providers.find((p) => p.id === s.provider_id)?.nombre ?? ""}` }}
         views={[
           { id: "todas", label: "Todas" },

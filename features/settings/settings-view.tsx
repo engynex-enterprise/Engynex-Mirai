@@ -17,6 +17,7 @@ import { GeneralTab, AparienciaTab, PrivacidadTab } from "./tabs/account"
 // Cada pestaña se descarga al abrirla: General va en el JS inicial; Seguridad (QR), Uso de IA (recharts),
 // Respaldo, Catálogos, etc. ya no pesan en la carga de Ajustes.
 const TabLoading = () => <div className="h-72 animate-pulse rounded-xl bg-muted/60" aria-busy="true" aria-label="Cargando" />
+const CuentaTab = dynamic(() => import("./tabs/cuenta").then((m) => m.CuentaTab), { loading: TabLoading })
 const SeguridadTab = dynamic(() => import("./tabs/security").then((m) => m.SeguridadTab), { loading: TabLoading })
 const IaTab = dynamic(() => import("./tabs/ia").then((m) => m.IaTab), { loading: TabLoading })
 const AiUsageView = dynamic(() => import("@/features/ia-uso/uso-view").then((m) => m.AiUsageView), { loading: TabLoading })
@@ -35,10 +36,11 @@ const ProvidersManager = dynamic(() => import("@/features/providers/providers-vi
  */
 export const TABS = [
   ["general", "General", "settings", "Cuenta", "Pantalla de inicio, ayudas y tour"],
+  ["cuenta", "Tu cuenta", "id-card", "Cuenta", "Correo, formas de entrar, sesiones, tus hogares y dueño del hogar"],
   ["plan", "Mi plan", "crown", "Cuenta", "Premium, renovación y pagos"],
   ["apariencia", "Apariencia", "palette", "Cuenta", "Tema, tamaño de letra y densidad"],
   ["privacidad", "Privacidad", "eye-off", "Cuenta", "Ocultar montos y datos en mensajes"],
-  ["seguridad", "Seguridad", "shield-check", "Cuenta", "Contraseña, dos pasos y bloqueo"],
+  ["seguridad", "Seguridad", "shield-check", "Cuenta", "Verificación en dos pasos y bloqueo"],
   ["hogar", "Hogar y familia", "users", "Cuenta", "Quién más usa este hogar y con qué permisos"],
   ["ia", "Inteligencia artificial", "sparkles", "Inteligencia", "Proveedores, claves, modelo y funciones de la IA"],
   ["usoia", "Uso de IA", "gauge", "Inteligencia", "Créditos del mes, costo, ahorro y consultas"],
@@ -56,11 +58,12 @@ export const TABS = [
 ] as const
 type TabId = (typeof TABS)[number][0]
 /** Enlaces viejos: ?tab=integraciones abre la IA (lo único que el hogar configura). */
-const ALIAS: Record<string, TabId> = { integraciones: "ia", servidor: "ia" }
+const ALIAS: Record<string, TabId> = { integraciones: "ia", servidor: "ia", sesiones: "cuenta" }
 
 function Body({ tab }: { tab: TabId }) {
   switch (tab) {
     case "general": return <GeneralTab />
+    case "cuenta": return <CuentaTab />
     case "plan": return <PlanTab />
     case "apariencia": return <AparienciaTab />
     case "privacidad": return <PrivacidadTab />

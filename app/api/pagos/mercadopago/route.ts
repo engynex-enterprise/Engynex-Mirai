@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
   const type = String(body.type ?? req.nextUrl.searchParams.get("type") ?? req.nextUrl.searchParams.get("topic") ?? "")
   const id = String(body.data?.id ?? req.nextUrl.searchParams.get("data.id") ?? req.nextUrl.searchParams.get("id") ?? "")
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET
+  // En producción la firma es obligatoria: sin la clave del webhook no se procesa nada (Mercado Pago reintenta).
+  if (!secret && process.env.VERCEL_ENV === "production") return NextResponse.json({ error: "Falta MERCADOPAGO_WEBHOOK_SECRET" }, { status: 503 })
   if (secret && !mercadoPagoVerify({ xSignature: req.headers.get("x-signature"), xRequestId: req.headers.get("x-request-id"), dataId: req.nextUrl.searchParams.get("data.id") ?? id, secret }))
     return NextResponse.json({ error: "Firma inválida" }, { status: 401 })
   if (!id) return NextResponse.json({ ok: true, ignorado: "sin id" })
@@ -47,7 +49,8 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true })
   } catch (e) {
-    // 500 para que Mercado Pago reintente más tarde.
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    // 500 para que Mercado Pago reintente más tarde (sin detalles internos en la respuesta).
+    void e
+    return NextResponse.json({ error: "No se pudo procesar la notificación" }, { status: 500 })
   }
 }

@@ -19,7 +19,7 @@ import { useSave } from "@/hooks/use-book-data"
 import { brandFor } from "@/lib/brands"
 import { PROVIDER_TIPOS, cleanProvName, findProvider, isProviderTipo, tipoSugerido, type ProviderTipo } from "@/lib/domain"
 import type { Row } from "@/lib/supabase/tables"
-import { categoryOptions, useCategories, useProviders } from "@/features/catalogs/hooks"
+import { categoryOptions, methodOptions, useCategories, usePaymentMethods, useProviders } from "@/features/catalogs/hooks"
 import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
 import { ProviderAvatar } from "./provider-avatar"
 
@@ -37,6 +37,7 @@ const schema = z.object({
   notas: z.string().max(500),
   icon: z.string(),
   activo: z.boolean(),
+  payment_method_id: z.string(),
 })
 type Values = z.infer<typeof schema>
 
@@ -65,6 +66,7 @@ export function ProviderDialog(props: Props) {
 function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, formId }: Props & { formId: string }) {
   const { data: list = [] } = useProviders()
   const { data: cats = [] } = useCategories()
+  const { data: methods = [] } = usePaymentMethods()
   const save = useSave("providers")
   const [tipoManual, setTipoManual] = useState(!!provider || !!initialTipo)
   const form = useForm<Values>({
@@ -73,6 +75,7 @@ function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, 
       nombre: provider?.nombre ?? initialName, tipo: provider?.tipo ?? initialTipo ?? (initialName ? tipoSugerido(initialName) : "otro"),
       category_id: provider?.category_id ?? "", referencia: provider?.referencia ?? "", nit: provider?.nit ?? "", telefono: provider?.telefono ?? "",
       correo: provider?.correo ?? "", sitio_web: provider?.sitio_web ?? "", notas: provider?.notas ?? "", icon: provider?.icon ?? "", activo: provider?.activo ?? true,
+      payment_method_id: provider?.payment_method_id ?? "",
     },
   })
   const { errors, isSubmitting } = form.formState
@@ -87,7 +90,7 @@ function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, 
       ...(provider ? { id: provider.id } : {}),
       nombre: n, tipo: isProviderTipo(v.tipo) ? v.tipo : "otro", category_id: v.category_id || null, referencia: v.referencia.trim(), nit: v.nit.trim(),
       telefono: v.telefono.trim(), correo: v.correo.trim(), sitio_web: v.sitio_web.trim(), notas: v.notas.trim(), icon: v.icon || null,
-      brand: brandFor(n), activo: v.activo,
+      brand: brandFor(n), activo: v.activo, payment_method_id: v.payment_method_id || null,
     } as never)
     toast.success(provider ? "Proveedor actualizado" : "Proveedor agregado", { description: `“${n}”` })
     onSaved?.(row as Row<"providers">)
@@ -116,6 +119,11 @@ function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, 
           <FormField label="Categoría del gasto" htmlFor="p-cat" tip="Cuando elijas este proveedor en un gasto, Mirai pone esta categoría si aún no tiene una.">
             <Controller control={form.control} name="category_id" render={({ field }) => (
               <Combobox id="p-cat" value={field.value} onChange={field.onChange} placeholder="Según el tipo" options={[{ value: "", label: "Según el tipo", icon: "sparkles" }, ...categoryOptions(cats)]} />
+            )} />
+          </FormField>
+          <FormField label="Medio de pago preferido" htmlFor="p-medio" tip="Con qué le pagas normalmente (débito, Nequi, tarjeta…). Mirai lo pone solo cuando registres un gasto con este proveedor.">
+            <Controller control={form.control} name="payment_method_id" render={({ field }) => (
+              <Combobox id="p-medio" value={field.value} onChange={field.onChange} placeholder="Sin preferencia" options={[{ value: "", label: "Sin preferencia", icon: "circle-ellipsis" }, ...methodOptions(methods)]} />
             )} />
           </FormField>
           <FormField label="Número de contrato o de cliente" htmlFor="p-ref" tip="El número que te piden para pagar (lo ves en la factura). Así lo tienes a mano.">

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { LogOut, ShieldCheck, ShieldOff } from "lucide-react"
+import Link from "next/link"
+import { KeyRound, LogOut, ShieldCheck, ShieldOff } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusPill } from "@/components/mirai/status-pill"
@@ -13,7 +13,6 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Notice } from "@/components/mirai/notice"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { Tip } from "@/components/mirai/tip"
-import { PasswordMeter, passwordScore } from "@/components/auth/password-meter"
 import { createClient } from "@/utils/supabase/client"
 import { SettingRow, SettingSection, SettingStack } from "../ui"
 import { usePrefs } from "../prefs"
@@ -26,10 +25,7 @@ export function SeguridadTab() {
   const [factors, setFactors] = useState<Factor[] | null>(null)
   const [enroll, setEnroll] = useState<{ id: string; qr: string; secret: string } | null>(null)
   const [code, setCode] = useState("")
-  const [pw, setPw] = useState("")
   const [busy, setBusy] = useState(false)
-  const [pwBusy, setPwBusy] = useState(false)
-  const pwOk = pw.length >= 10 && passwordScore(pw) >= 3
   const load = () => sb.auth.mfa.listFactors().then(({ data }) => setFactors((data?.totp ?? []) as Factor[]))
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const verified = factors?.filter((f) => f.status === "verified") ?? []
@@ -49,24 +45,13 @@ export function SeguridadTab() {
     toast.success("Verificación en dos pasos activada"); setEnroll(null); setCode(""); load()
   }
   const off = async (id: string) => { const { error } = await sb.auth.mfa.unenroll({ factorId: id }); if (error) return toast.error("No se pudo desactivar", { description: error.message }); toast("Verificación en dos pasos desactivada"); load() }
-  const changePw = async () => {
-    if (!pwOk) return toast.error("La contraseña es muy débil")
-    setPwBusy(true)
-    const { error } = await sb.auth.updateUser({ password: pw })
-    setPwBusy(false)
-    if (error) return toast.error("No se pudo cambiar", { description: error.message })
-    toast.success("Contraseña actualizada"); setPw("")
-  }
 
   return (
     <SettingStack>
-      <SettingSection icon="key-round" title="Contraseña" desc="Si entras con Google o enlace mágico, aquí puedes crear una contraseña también.">
-        <form className="grid max-w-md gap-3" onSubmit={(e) => { e.preventDefault(); if (pwOk && !pwBusy) changePw() }}>
-          <Input type="password" autoComplete="new-password" className="h-11" placeholder="Contraseña nueva" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="Contraseña nueva" />
-          {pw ? <PasswordMeter value={pw} /> : <p className="text-xs text-muted-foreground">Mínimo 10 caracteres. Mezcla letras, números y algún símbolo.</p>}
-          <SubmitButton className="w-fit" disabled={!pwOk} loading={pwBusy} loadingText="Cambiando…" onClick={changePw}
-            hint={pw ? "Hazla más segura: al menos 10 caracteres con letras, números y algún símbolo" : "Escribe la contraseña nueva"}>Cambiar contraseña</SubmitButton>
-        </form>
+      <SettingSection icon="key-round" title="Contraseña y formas de entrar" desc="Crea o cambia tu contraseña, conecta o quita tu cuenta de Google y cambia tu correo.">
+        <SettingRow title="Cuentas conectadas" desc="Están en tu perfil, en la tarjeta Cuentas conectadas.">
+          <Button variant="outline" asChild><Link href="/perfil#cuentas"><KeyRound /> Ir a Cuentas conectadas</Link></Button>
+        </SettingRow>
       </SettingSection>
       <SettingSection icon="shield-check" title="Verificación en dos pasos" desc="Además de tu contraseña te pedimos un código de tu celular. Así nadie entra aunque sepa tu contraseña.">
         {factors === null ? <Skeleton className="h-12 w-full max-w-md" /> : verified.length ? (
@@ -92,6 +77,9 @@ export function SeguridadTab() {
         </SettingRow>
         <SettingRow title="Cerrar sesión en otros dispositivos" desc="Útil si entraste desde un computador que no es tuyo.">
           <Button variant="outline" onClick={async () => { await sb.auth.signOut({ scope: "others" }); toast.success("Cerramos tu sesión en los demás dispositivos") }}><LogOut /> Cerrar en otros</Button>
+        </SettingRow>
+        <SettingRow title="Sesiones abiertas y actividad" desc="Mira en qué dispositivos tienes abierto Mirai y qué cambió en tu cuenta.">
+          <Button variant="outline" asChild><Link href="/ajustes?tab=cuenta">Ver en Tu cuenta</Link></Button>
         </SettingRow>
       </SettingSection>
       <Notice tone="info" title="Tus datos están protegidos en el servidor">Cada hogar solo puede ver su información (reglas de seguridad en la base de datos) y las claves de tus servicios se guardan cifradas.</Notice>

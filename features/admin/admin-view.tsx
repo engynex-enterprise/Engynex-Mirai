@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
@@ -59,7 +58,7 @@ export function UsoPanel() {
             data={o?.byDay.map((d) => ({ d: d.d, a: d.acciones, title: `${fmtDate(d.d)}: ${d.acciones} acciones de ${d.personas} persona${d.personas === 1 ? "" : "s"}` }))} />
         </Panel>
         <Panel title="Lo más usado" icon="flame" description="Secciones con más registros este mes.">
-          {isPending ? <Skeleton className="h-44" /> : <BarList rows={o!.porSeccion.map((s) => ({ k: s.tabla, label: tablaLabel(s.tabla), v: s.n }))} empty="Aún no hay actividad este mes." />}
+          {isPending ? <Skeleton className="h-44" /> : <BarList rows={(o?.porSeccion ?? []).map((s) => ({ k: s.tabla, label: tablaLabel(s.tabla), v: s.n }))} empty="Aún no hay actividad este mes." />}
         </Panel>
       </div>
     </div>
@@ -179,7 +178,7 @@ function FeedbackItem({ f }: { f: Fb }) {
           <Textarea rows={2} placeholder="Escribe una respuesta. La persona la verá en Tu opinión y le llegará un aviso." value={resp} onChange={(e) => setResp(e.target.value)} aria-label={`Respuesta a ${f.autor?.nombre || "la persona"}`} />
           <SubmitButton className="w-fit" disabled={sinCambio} loading={busy} loadingText="Enviando…" hint={resp.trim() ? "Cambia la respuesta para volver a enviarla" : "Escribe una respuesta"}
             onClick={() => update({ respuesta: resp, ...(f.estado === "nuevo" ? { estado: "revisando" } : {}) }, "Respuesta enviada")}>
-            {busy ? <Spinner /> : <Send />} {f.respuesta ? "Actualizar respuesta" : "Responder"}
+            <Send /> {f.respuesta ? "Actualizar respuesta" : "Responder"}
           </SubmitButton>
         </div>
       </div>

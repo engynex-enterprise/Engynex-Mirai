@@ -30,7 +30,7 @@ export async function saveIntegration(kind: string, values: Record<string, strin
       if (secrets[f.k]) meta[f.k] = mask(secrets[f.k])
     } else config[f.k] = v ?? f.def ?? ""
   }
-  const missing = def.fields.filter((f) => f.required && !(f.type === "secret" ? secrets[f.k] : config[f.k]))
+  const missing = def.fields.filter((f) => (f.required || (def.scope === "platform" && f.k === "apiKey")) && !(f.type === "secret" ? secrets[f.k] : config[f.k]))
   if (enabled && missing.length) throw new Error(`Falta: ${missing.map((f) => f.l).join(", ")}`)
   const { error } = await supabaseAdmin().from("integrations").upsert({
     household_id: ctx.household.id, kind, enabled, config: config as never, meta: meta as never,
@@ -90,9 +90,11 @@ export async function listModels(kind: string, apiKey?: string): Promise<{ ok: b
   const ctx = await requireRole("admin")
   const src = MODEL_LIST[kind]
   if (!src) return { ok: false, models: [], msg: "Este proveedor no tiene lista de modelos." }
-  const saved = await getIntegration(ctx.household.id, kind)
+  if (isAdminOnly(kind)) return { ok: false, models: [], msg: ADMIN_MSG }
+  // Solo la clave escrita o la propia del hogar (nunca la de la plataforma ni la del despliegue).
+  const saved = await getOwnIntegration(ctx.household.id, kind)
   const def = integrationByKind(kind)
-  const key = apiKey?.trim() || saved?.secrets.apiKey || (def?.env ? process.env[def.env] : "") || ""
+  const key = apiKey?.trim() || saved?.secrets.apiKey || ""
   if (!key && !src.keyless) return { ok: false, models: [], msg: "Pega la clave de API para ver los modelos de tu cuenta." }
   try {
     const r = await fetch(src.url + (key && src.query ? src.query(key) : ""), { headers: key && src.headers ? src.headers(key) : {}, signal: AbortSignal.timeout(12000), cache: "no-store" })

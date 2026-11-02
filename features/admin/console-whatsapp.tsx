@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { ExternalLink, ImagePlus, Pencil, Phone, Plus, RefreshCw, Reply, Save, Send, Trash2, X } from "lucide-react"
+import { ExternalLink, ImagePlus, Pencil, Phone, Plus, RefreshCw, Reply, Send, Trash2, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -11,19 +11,24 @@ import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Combobox } from "@/components/mirai/combobox"
 import { FormField } from "@/components/mirai/field"
-import { Icon } from "@/components/mirai/icon"
+import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
+import { Notice } from "@/components/mirai/notice"
+import { Panel } from "@/components/mirai/panel"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
-import { Segmented } from "@/components/mirai/choice-cards"
+import { ChoiceCards, Segmented } from "@/components/mirai/choice-cards"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { SubmitButton } from "@/components/mirai/submit-button"
+import { IconButton } from "@/components/mirai/tip"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { autoMap, buildTemplateMessage, caseConfig, esPlantillaDeMeta, isNamed, pickTemplate, sampleValues, templateSlots, WA_CASES, WA_VARS, type MetaTemplate, type ParamPreview, type WaCase, type WaCaseCfg, type WaMap, type WaSettings } from "@/lib/notify/whatsapp"
 import { bodyVarCount, canEdit, draftComponents, emptyDraft, isDynamicUrl, metaToDraft, REJECT_REASON, STATUS_LABEL, validateDraft, WA_CATEGORIES, WA_LANGS, type DraftButton, type TemplateDraft } from "@/lib/notify/wa-templates"
 import { adminTestDefaults } from "./server"
+import { useAsk, useDialogTarget } from "./ui"
 import { adminWaDeleteTemplate, adminWaPreview, adminWaSaveSettings, adminWaSaveTemplate, adminWaSendTest, adminWaState, type WaState } from "./whatsapp"
 
 const QK = ["admin", "wa"] as const
@@ -117,11 +122,10 @@ const tplKey = (t: MetaTemplate) => `${t.name}|${t.language}`
 
 // ── Editor de plantillas (crear / editar) ──────────────────────────────────────────────────────────────────────
 
-function TemplateDialog({ initial, edit, state, onClose }: { initial: TemplateDraft; edit?: MetaTemplate; state: WaState; onClose: () => void }) {
+function TemplateDialog({ initial, edit, state, open, onOpenChange }: { initial: TemplateDraft; edit?: MetaTemplate; state: WaState; open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient()
   const [d, setD] = useState<TemplateDraft>(initial)
   const [busy, setBusy] = useState(false)
-  const [tried, setTried] = useState(false)
   const set = <K extends keyof TemplateDraft>(k: K, v: TemplateDraft[K]) => setD((x) => ({ ...x, [k]: v }))
   const check = useMemo(() => validateDraft(d, { editing: !!edit }), [d, edit])
   const n = bodyVarCount(d.body)
@@ -135,18 +139,17 @@ function TemplateDialog({ initial, edit, state, onClose }: { initial: TemplateDr
   }
   const setBtn = (i: number, b: DraftButton) => set("buttons", d.buttons.map((x, j) => (j === i ? b : x)))
   const save = async () => {
-    setTried(true)
-    if (check.errors.length) return void toast.error("Revisa la plantilla", { description: check.errors[0] })
     setBusy(true)
     const r = await adminWaSaveTemplate(d, edit ? { id: edit.id!, status: edit.status } : undefined).catch((e) => ({ ok: false, msg: (e as Error).message }))
     setBusy(false)
     toast[r.ok ? "success" : "error"](r.ok ? (edit ? "Cambios enviados a Meta" : "Plantilla enviada a Meta") : "Meta no la aceptó", { description: r.msg, duration: 15000 })
-    if (r.ok) { qc.invalidateQueries({ queryKey: QK }); onClose() }
+    if (r.ok) { qc.invalidateQueries({ queryKey: QK }); onOpenChange(false) }
   }
   return (
-    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} wide="xl" title={edit ? `Editar ${edit.name} (${edit.language})` : "Nueva plantilla de WhatsApp"}
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} wide="xl" title={edit ? `Editar ${edit.name} (${edit.language})` : "Nueva plantilla de WhatsApp"}
+      footer={<><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={check.errors.length > 0} loading={busy} loadingText="Enviando a Meta…" hint={check.errors[0] ?? "Revisa la plantilla"} onClick={save}><Send /> {edit ? "Enviar cambios a Meta" : "Crear y enviar a Meta"}</SubmitButton></>}
       description={edit ? "Meta vuelve a revisar la plantilla después de editarla. El nombre y el idioma no se pueden cambiar." : "Se crea en tu cuenta de WhatsApp Business y Meta la revisa (de minutos a 24 horas). Después la puedes asignar a un caso."}>
-      <div className="grid gap-6 pb-2 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <FieldGroup>
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField label="Nombre" htmlFor="wt-n" required tip="Solo minúsculas sin tildes, números y guiones bajos. Por ejemplo mirai_pago_proximo." hint={!edit ? "minúsculas_y_guiones_bajos" : undefined}>
@@ -155,9 +158,7 @@ function TemplateDialog({ initial, edit, state, onClose }: { initial: TemplateDr
             <FormField label="Idioma" htmlFor="wt-l" tip={false}><Combobox id="wt-l" value={d.language} onChange={(x) => !edit && set("language", x)} options={WA_LANGS} /></FormField>
           </div>
           <FormField label="Categoría" tip={false}>
-            <div className="grid gap-2 sm:grid-cols-2">{WA_CATEGORIES.map((c) => (
-              <button key={c.value} type="button" role="radio" aria-checked={d.category === c.value} onClick={() => set("category", c.value)} className={cn("grid gap-0.5 rounded-lg p-3 text-left text-sm ring-1 ring-border", d.category === c.value && "bg-brand-soft ring-2 ring-brand")}><b>{c.label}</b><span className="text-muted-foreground">{c.desc}</span></button>
-            ))}</div>
+            <ChoiceCards value={d.category} onChange={(x) => set("category", x as TemplateDraft["category"])} items={WA_CATEGORIES.map((c) => ({ value: c.value, label: c.label, desc: c.desc, icon: c.value === "UTILITY" ? "bell-ring" : "megaphone" }))} />
           </FormField>
           <FormField label="Encabezado" tip={false}>
             <Segmented value={d.header.type} onChange={(x) => set("header", x === "none" ? { type: "none" } : x === "text" ? { type: "text", text: "", example: "" } : { type: "image", url: state.defaultImage })} items={[{ value: "none", label: "Sin encabezado" }, { value: "text", label: "Texto" }, { value: "image", label: "Imagen" }]} />
@@ -194,7 +195,7 @@ function TemplateDialog({ initial, edit, state, onClose }: { initial: TemplateDr
                     {b.type === "url" && isDynamicUrl(b.url) && <Input aria-label="Ejemplo del final del enlace" placeholder="Ejemplo del final: inicio" value={b.example ?? ""} onChange={(e) => setBtn(i, { ...b, example: e.target.value })} />}
                     {b.type === "phone" && <Input aria-label="Teléfono" placeholder="+57 601 123 4567" value={b.phone} onChange={(e) => setBtn(i, { ...b, phone: e.target.value })} />}
                   </div>
-                  <Button size="icon" variant="ghost" aria-label="Quitar botón" onClick={() => set("buttons", d.buttons.filter((_, j) => j !== i))}><Trash2 /></Button>
+                  <IconButton label={`Quitar el botón ${i + 1}`} icon="trash-2" destructive onClick={() => set("buttons", d.buttons.filter((_, j) => j !== i))} />
                 </div>
               ))}
               <div className="flex flex-wrap gap-2">
@@ -208,61 +209,76 @@ function TemplateDialog({ initial, edit, state, onClose }: { initial: TemplateDr
         <div className="grid content-start gap-3 lg:sticky lg:top-0">
           <p className="text-sm font-semibold">Vista previa</p>
           <WaBubble tpl={preview} values={values} image={d.header.type === "image" ? d.header.url : undefined} />
-          {(tried || check.errors.length < 4) && check.errors.length > 0 && <ul className="grid list-disc gap-1 pl-5 text-xs text-danger">{check.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
+          {check.errors.length > 0 && <div className="grid gap-1 rounded-lg bg-danger-soft/60 p-3"><p className="text-xs font-semibold text-danger">Falta para enviarla a Meta:</p><ul className="grid list-disc gap-1 pl-5 text-xs text-danger">{check.errors.map((e) => <li key={e}>{e}</li>)}</ul></div>}
           {check.warnings.length > 0 && <ul className="grid list-disc gap-1 pl-5 text-xs text-warning">{check.warnings.map((e) => <li key={e}>{e}</li>)}</ul>}
           {!check.errors.length && <p className="text-xs text-success">La plantilla cumple las reglas de Meta. Igual Meta puede rechazarla por el contenido.</p>}
         </div>
       </div>
-      <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={onClose}>Cancelar</Button><Button disabled={busy} onClick={save}>{busy ? <Spinner /> : <Send />} {edit ? "Enviar cambios a Meta" : "Crear y enviar a Meta"}</Button></div>
     </ResponsiveDialog>
   )
 }
 
 // ── Pestaña Plantillas ─────────────────────────────────────────────────────────────────────────────────────────
 
+const st = (t: MetaTemplate) => String(t.status ?? "").toUpperCase()
+const TPL_FILTERS: ListFilter<MetaTemplate>[] = [
+  { value: "todas", label: "Todas", icon: "list" },
+  { value: "aprobadas", label: "Aprobadas", icon: "circle-check", match: (t) => st(t) === "APPROVED" },
+  { value: "revision", label: "En revisión", icon: "hourglass", match: (t) => ["PENDING", "IN_APPEAL"].includes(st(t)) },
+  { value: "problemas", label: "Rechazadas o en pausa", icon: "circle-alert", match: (t) => ["REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED"].includes(st(t)) },
+]
+
 function PlantillasTab({ state, settings, onDefault }: { state: WaState; settings: WaSettings; onDefault: (t: MetaTemplate) => void }) {
   const qc = useQueryClient()
-  const [edit, setEdit] = useState<{ draft: TemplateDraft; tpl?: MetaTemplate } | null>(null)
+  const ask = useAsk()
+  const edit = useDialogTarget<{ draft: TemplateDraft; tpl?: MetaTemplate }>()
   const [del, setDel] = useState<string | null>(null)
   const uses = (t: MetaTemplate) => [settings.template === t.name ? "Por defecto" : null, ...WA_CASES.filter((c) => settings.casos[c.k]?.template === t.name).map((c) => c.n)].filter(Boolean) as string[]
+  const c = useListControls(state.templates, { text: (t) => `${t.name} ${t.language} ${CAT_N[String(t.category)] ?? t.category}`, filters: TPL_FILTERS })
+  const borrar = async (t: MetaTemplate) => {
+    if (!(await ask.confirm({ title: `¿Eliminar la plantilla ${t.name} (${t.language}) en Meta?`, description: "No se puede deshacer y el nombre no se puede reutilizar durante 30 días.", confirmLabel: "Eliminar", destructive: true }))) return
+    setDel(tplKey(t))
+    const r = await adminWaDeleteTemplate(t.name, t.id).catch((e) => ({ ok: false, msg: (e as Error).message }))
+    setDel(null)
+    toast[r.ok ? "success" : "error"](r.ok ? "Plantilla eliminada" : "No se pudo eliminar", { description: r.msg, duration: 12000 })
+    qc.invalidateQueries({ queryKey: QK })
+  }
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{state.templates.length} plantilla{state.templates.length === 1 ? "" : "s"} en la cuenta de WhatsApp Business{state.numero ? ` · número ${state.numero}` : ""}.</p>
-        <Button onClick={() => setEdit({ draft: { ...emptyDraft(settings.lang || "es_CO"), header: { type: "image", url: state.defaultImage }, buttons: [{ type: "url", text: "Abrir Mirai", url: `${state.base}/{{1}}`, example: "inicio" }] } })}><Plus /> Nueva plantilla</Button>
+        <Button onClick={() => edit.show({ draft: { ...emptyDraft(settings.lang || "es_CO"), header: { type: "image", url: state.defaultImage }, buttons: [{ type: "url", text: "Abrir Mirai", url: `${state.base}/{{1}}`, example: "inicio" }] } })}><Plus /> Nueva plantilla</Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-        {state.templates.map((t) => {
-          const reason = t.rejected_reason && t.rejected_reason !== "NONE" ? REJECT_REASON[t.rejected_reason] ?? t.rejected_reason : ""
-          const u = uses(t)
-          return (
-            <Card key={t.id ?? tplKey(t)} className="gap-3 p-4 shadow-card ring-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="grid min-w-0 gap-1">
-                  <p className="truncate font-semibold">{t.name}</p>
-                  <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">{statusPill(t)}<span>{t.language}</span>·<span>{CAT_N[String(t.category)] ?? t.category}</span>{isNamed(t) && <span>· variables con nombre</span>}{t.quality_score?.score && t.quality_score.score !== "UNKNOWN" && <span>· calidad {t.quality_score.score}</span>}</p>
+      <ListToolbar c={c} placeholder="Buscar plantilla" filters={TPL_FILTERS} />
+      {!c.rows.length ? <NoResults c={c}>{c.filtered ? "No hay plantillas con esa búsqueda o ese filtro." : "Aún no hay plantillas en la cuenta."}</NoResults> : (
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {c.rows.map((t) => {
+            const reason = t.rejected_reason && t.rejected_reason !== "NONE" ? REJECT_REASON[t.rejected_reason] ?? t.rejected_reason : ""
+            const u = uses(t)
+            return (
+              <Card key={t.id ?? tplKey(t)} className="h-full gap-3 p-5 shadow-card ring-0">
+                <div className="flex items-start gap-3">
+                  <ToneIcon icon="message-circle" tone={st(t) === "APPROVED" ? "green" : st(t) === "REJECTED" ? "red" : "amber"} />
+                  <div className="grid min-w-0 flex-1 gap-1">
+                    <p className="truncate font-semibold" title={t.name}>{t.name}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">{statusPill(t)}<span>{t.language}</span>·<span>{CAT_N[String(t.category)] ?? t.category}</span>{isNamed(t) && <span>· variables con nombre</span>}{t.quality_score?.score && t.quality_score.score !== "UNKNOWN" && <span>· calidad {t.quality_score.score}</span>}</p>
+                  </div>
                 </div>
-              </div>
-              {reason && <p className="text-xs text-danger">Motivo del rechazo: {reason}</p>}
-              {u.length > 0 && <div className="flex flex-wrap gap-1">{u.map((x) => <StatusPill key={x} tone="pagado">{x}</StatusPill>)}</div>}
-              <WaBubble tpl={t} values={Object.fromEntries(templateSlots(t).map((s) => [s.key, s.example ?? ""]))} />
-              <div className="flex flex-wrap gap-2">
-                {String(t.status).toUpperCase() === "APPROVED" && settings.template !== t.name && <Button size="sm" variant="soft" onClick={() => onDefault(t)}>Usar por defecto</Button>}
-                {canEdit(t.status) && String(t.category).toUpperCase() !== "AUTHENTICATION" && <Button size="sm" variant="outline" onClick={() => setEdit({ draft: metaToDraft(t), tpl: t })}><Pencil /> Editar</Button>}
-                <Button size="sm" variant="ghost" className="text-danger" disabled={del === tplKey(t)} onClick={async () => {
-                  if (!confirm(`¿Eliminar la plantilla ${t.name} (${t.language}) en Meta? No se puede deshacer y el nombre no se puede reutilizar durante 30 días.`)) return
-                  setDel(tplKey(t))
-                  const r = await adminWaDeleteTemplate(t.name, t.id).catch((e) => ({ ok: false, msg: (e as Error).message }))
-                  setDel(null)
-                  toast[r.ok ? "success" : "error"](r.ok ? "Plantilla eliminada" : "No se pudo eliminar", { description: r.msg, duration: 12000 })
-                  qc.invalidateQueries({ queryKey: QK })
-                }}>{del === tplKey(t) ? <Spinner /> : <Trash2 />} Eliminar</Button>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
-      {edit && <TemplateDialog initial={edit.draft} edit={edit.tpl} state={state} onClose={() => setEdit(null)} />}
+                {reason && <p className="text-xs text-danger">Motivo del rechazo: {reason}</p>}
+                {u.length > 0 && <div className="flex flex-wrap gap-1">{u.map((x) => <StatusPill key={x} tone="pagado">{x}</StatusPill>)}</div>}
+                <WaBubble tpl={t} values={Object.fromEntries(templateSlots(t).map((x) => [x.key, x.example ?? ""]))} />
+                <div className="mt-auto flex flex-wrap gap-2 border-t pt-3">
+                  {st(t) === "APPROVED" && settings.template !== t.name && <Button size="sm" variant="soft" onClick={() => onDefault(t)}>Usar por defecto</Button>}
+                  {canEdit(t.status) && String(t.category).toUpperCase() !== "AUTHENTICATION" && <Button size="sm" variant="outline" onClick={() => edit.show({ draft: metaToDraft(t), tpl: t })}><Pencil /> Editar</Button>}
+                  <Button size="sm" variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" disabled={del === tplKey(t)} onClick={() => borrar(t)}>{del === tplKey(t) ? <Spinner /> : <Trash2 />} Eliminar</Button>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+      {edit.value && <TemplateDialog key={edit.key} initial={edit.value.draft} edit={edit.value.tpl} state={state} open={edit.open} onOpenChange={edit.onOpenChange} />}
+      {ask.node}
     </div>
   )
 }
@@ -333,7 +349,7 @@ function CaseEditor({ caso, cfg, onChange, state, settings, isDefault }: { caso:
 }
 
 /** "Probar plantilla": muestra los valores que se enviarán (calculados en el servidor) y envía a un número. */
-function TestDialog({ caso, cfg, onClose }: { caso: WaCase; cfg?: WaCaseCfg; onClose: () => void }) {
+function TestDialog({ caso, cfg, open, onOpenChange }: { caso: WaCase; cfg?: WaCaseCfg; open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient()
   const { data: defs } = useQuery({ queryKey: ["admin", "test-defaults"], queryFn: () => adminTestDefaults() })
   const { data: pv, isPending } = useQuery({ queryKey: ["admin", "wa-preview", caso, JSON.stringify(cfg ?? {})], queryFn: () => adminWaPreview(caso, cfg) })
@@ -341,7 +357,8 @@ function TestDialog({ caso, cfg, onClose }: { caso: WaCase; cfg?: WaCaseCfg; onC
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState<ParamPreview[] | null>(null)
   const val = to ?? defs?.whatsapp ?? ""
-  const name = WA_CASES.find((c) => c.k === caso)?.n
+  const valid = val.replace(/\D/g, "").length >= 10
+  const name = caso === "resumen" ? "Plantilla por defecto" : WA_CASES.find((c) => c.k === caso)?.n
   const send = async () => {
     setBusy(true)
     const r = await adminWaSendTest({ caso, to: val, override: cfg }).catch((e) => ({ ok: false, msg: (e as Error).message, preview: undefined }))
@@ -352,16 +369,17 @@ function TestDialog({ caso, cfg, onClose }: { caso: WaCase; cfg?: WaCaseCfg; onC
   }
   const rows = sent ?? (pv?.ok ? pv.preview : null)
   return (
-    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} title={`Probar · ${name}`} description="Envía este caso con datos de ejemplo, con la plantilla y la asignación de la pantalla (aunque no las hayas guardado). Meta cobra el mensaje.">
-      <FieldGroup className="pb-2">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={`Probar · ${name}`} description="Envía este caso con datos de ejemplo, con la plantilla y la asignación de la pantalla (aunque no las hayas guardado). Meta cobra el mensaje."
+      footer={<><Button variant="outline" onClick={() => onOpenChange(false)}>{sent ? "Cerrar" : "Cancelar"}</Button><SubmitButton disabled={!valid} loading={busy} loadingText="Enviando…" hint="Escribe un celular de 10 dígitos" onClick={send}><Send /> {sent ? "Enviar otra vez" : "Enviar prueba"}</SubmitButton></>}>
+      <FieldGroup>
         <div className="grid gap-1.5 rounded-lg bg-secondary/60 p-3 text-sm">
           <p className="font-semibold">Valores que se enviarán{pv?.template ? ` · ${pv.template}` : ""}</p>
           {isPending ? <Skeleton className="h-12" /> : rows ? rows.map((p) => <p key={p.key} className="grid gap-0.5"><span className="text-xs text-muted-foreground">{p.label} · {p.src}</span><span className="break-all">{p.value}</span></p>) : <p className="text-danger">{pv?.msg}</p>}
         </div>
-        <FormField label="Celular (Colombia)" htmlFor="wt-to" tip={false}>
+        {sent && <Notice tone="ok" title="Prueba enviada">Revisa el celular. El resultado también queda en Registro de envíos.</Notice>}
+        <FormField label="Celular (Colombia)" htmlFor="wt-to" required tip={false}>
           <Input id="wt-to" className="h-11" type="tel" inputMode="numeric" placeholder="315 123 4567" value={val} onChange={(e) => setTo(e.target.value)} />
         </FormField>
-        <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>{sent ? "Cerrar" : "Cancelar"}</Button><Button disabled={busy || !val.trim()} onClick={send}>{busy ? <Spinner /> : <Send />} Enviar prueba</Button></div>
       </FieldGroup>
     </ResponsiveDialog>
   )
@@ -377,9 +395,10 @@ export function WhatsAppPanel() {
   const s = draft ?? state?.settings
   const dirty = !!draft
   const [saving, setSaving] = useState(false)
-  const [test, setTest] = useState<{ caso: WaCase; cfg?: WaCaseCfg } | null>(null)
+  const test = useDialogTarget<{ caso: WaCase; cfg?: WaCaseCfg }>()
   const [refreshing, setRefreshing] = useState(false)
-  if (isPending || !state || !s) return <Skeleton className="h-96" />
+  const [tab, setTab] = useState("plantillas")
+  if (isPending || !state || !s) return <div className="grid gap-6"><Skeleton className="h-20 rounded-lg" /><Skeleton className="h-10 w-80" /><div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-80 rounded-lg" />)}</div></div>
   const up = (x: WaSettings) => setDraft(x)
   const setCase = (k: WaCase, c: WaCaseCfg) => up({ ...s, casos: { ...s.casos, [k]: c } })
   const save = async (x = s) => {
@@ -390,63 +409,62 @@ export function WhatsAppPanel() {
     toast.success("Ajustes de WhatsApp guardados"); await qc.invalidateQueries({ queryKey: QK }); setDraft(null); qc.invalidateQueries({ queryKey: ["admin", "globals"] })
   }
   const refresh = async () => { setRefreshing(true); const r = await adminWaState(true); qc.setQueryData(QK, r); setRefreshing(false); toast[r.ok ? "success" : "error"](r.ok ? "Estado actualizado desde Meta" : "No se pudo leer Meta", { description: r.msg }) }
+  const defCfg: WaCaseCfg = { template: s.template, lang: s.lang, map: s.map, headerImage: s.headerImage }
   return (
-    <div className="grid gap-4">
-      <Card className="gap-1 p-4 text-sm shadow-card ring-0">
-        <p><b>Cómo funciona:</b> WhatsApp solo deja escribirle primero a una persona con una <b>plantilla aprobada por Meta</b>. Aquí ves las plantillas de tu cuenta, creas nuevas (Meta las revisa) y escoges cuál usa Mirai en cada caso y qué dato va en cada variable.</p>
-        <p className="text-muted-foreground">El número, el token y el ID de la cuenta se configuran en <Link href="/admin/integraciones" className="text-link underline">Integraciones globales › WhatsApp</Link>.{!state.activa && " Hoy la integración está apagada: las pruebas funcionan igual."}</p>
-      </Card>
-      {!state.ok && <Card className="p-4 text-sm text-danger shadow-card ring-0">{state.msg}</Card>}
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="grid gap-6">
+      <Notice tone="info" title="Cómo funciona">
+        <p>WhatsApp solo deja escribirle primero a una persona con una <b>plantilla aprobada por Meta</b>. Aquí ves las plantillas de tu cuenta, creas nuevas (Meta las revisa) y escoges cuál usa Mirai en cada caso y qué dato va en cada variable.</p>
+        <p className="mt-1">El número, el token y el ID de la cuenta se configuran en <Link href="/admin/integraciones" className="font-medium text-link underline">Integraciones globales › WhatsApp</Link>.{!state.activa && " Hoy la integración está apagada: las pruebas funcionan igual."}</p>
+      </Notice>
+      {!state.ok && <Notice tone="bad" title="No se pudo leer la cuenta de Meta">{state.msg}</Notice>}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented value={tab} onChange={setTab} items={[{ value: "plantillas", label: "Plantillas", icon: "layers" }, { value: "casos", label: "Casos de envío", icon: "route" }, { value: "ajustes", label: "Ajustes", icon: "settings" }]} />
         <Button variant="outline" disabled={refreshing || isFetching} onClick={refresh}>{refreshing ? <Spinner /> : <RefreshCw />} Refrescar desde Meta</Button>
-        {dirty && <Button disabled={saving} onClick={() => save()}>{saving ? <Spinner /> : <Save />} Guardar cambios</Button>}
-        {dirty && <Button variant="ghost" onClick={() => setDraft(null)}>Descartar</Button>}
       </div>
-      <Tabs defaultValue="plantillas">
-        <TabsList><TabsTrigger value="plantillas">Plantillas</TabsTrigger><TabsTrigger value="casos">Casos de envío</TabsTrigger><TabsTrigger value="ajustes">Ajustes</TabsTrigger></TabsList>
-        <TabsContent value="plantillas" className="pt-3">
-          {state.tieneWaba ? <PlantillasTab state={state} settings={s} onDefault={(t) => { const x = { ...s, template: t.name, lang: t.language, map: {} }; setDraft(x); void save(x) }} /> : <p className="text-sm text-muted-foreground">Guarda el ID de la cuenta de WhatsApp Business para ver y crear plantillas.</p>}
-        </TabsContent>
-        <TabsContent value="casos" className="grid gap-4 pt-3">
-          <Card className="gap-3 p-4 shadow-card ring-0">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div><p className="flex items-center gap-2 font-semibold"><Icon name="message-circle" className="size-5 text-brand" />Plantilla por defecto</p><p className="text-sm text-muted-foreground">La usan todos los casos que no tengan una propia.</p>
-                {esPlantillaDeMeta(s.template) && <p className="mt-1 text-sm font-medium text-danger">“{s.template}” es la plantilla de prueba de Meta: siempre llega el mensaje “Integration Test” y no tu resumen. Escoge una plantilla tuya (por ejemplo mirai_resumen).</p>}
-              </div>
-              <Button size="sm" variant="soft" onClick={() => setTest({ caso: "resumen", cfg: { template: s.template, lang: s.lang, map: s.map, headerImage: s.headerImage } })}><Send /> Probar</Button>
-            </div>
-            <CaseEditor caso="resumen" isDefault cfg={{ template: s.template, lang: s.lang, map: s.map, headerImage: s.headerImage }} onChange={(c) => up({ ...s, template: c.template ?? "", lang: c.lang || s.lang, map: c.map ?? {}, headerImage: c.headerImage ?? "" })} state={state} settings={s} />
-          </Card>
+      {dirty && (
+        <Notice tone="warn" title="Tienes cambios sin guardar" className="sticky top-2 z-10"
+          action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setDraft(null)}>Descartar</Button><SubmitButton loading={saving} onClick={() => save()}>Guardar cambios</SubmitButton></div>}>
+          Los casos y ajustes cambian cuando guardes.
+        </Notice>
+      )}
+      {tab === "plantillas" && (state.tieneWaba
+        ? <PlantillasTab state={state} settings={s} onDefault={(t) => { const x = { ...s, template: t.name, lang: t.language, map: {} }; setDraft(x); void save(x) }} />
+        : <Notice tone="warn" title="Falta el ID de la cuenta de WhatsApp Business">Guárdalo en Integraciones globales › WhatsApp para ver y crear plantillas.</Notice>)}
+      {tab === "casos" && (
+        <div className="grid gap-4">
+          <Panel title="Plantilla por defecto" icon="message-circle" description="La usan todos los casos que no tengan una propia."
+            action={<Button size="sm" variant="soft" onClick={() => test.show({ caso: "resumen", cfg: defCfg })}><Send /> Probar</Button>}>
+            {esPlantillaDeMeta(s.template) && <Notice tone="bad" title={`“${s.template}” es la plantilla de prueba de Meta`}>Siempre llega el mensaje “Integration Test” y no tu resumen. Escoge una plantilla tuya (por ejemplo mirai_resumen).</Notice>}
+            <CaseEditor caso="resumen" isDefault cfg={defCfg} onChange={(c) => up({ ...s, template: c.template ?? "", lang: c.lang || s.lang, map: c.map ?? {}, headerImage: c.headerImage ?? "" })} state={state} settings={s} />
+          </Panel>
           {WA_CASES.map((c) => {
             const cfg = s.casos[c.k] ?? {}
             return (
-              <Card key={c.k} className="gap-3 p-4 shadow-card ring-0">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0"><p className="flex flex-wrap items-center gap-2 font-semibold"><Icon name={c.icon} className="size-5 text-brand" />{c.n}{cfg.template ? <StatusPill tone={esPlantillaDeMeta(cfg.template) ? "vencido" : "pagado"}>{cfg.template}</StatusPill> : <StatusPill tone="gray">Por defecto</StatusPill>}</p><p className="text-sm text-muted-foreground">{c.d}</p></div>
-                  <Button size="sm" variant="soft" onClick={() => setTest({ caso: c.k, cfg })}><Send /> Probar</Button>
-                </div>
+              <Panel key={c.k} icon={c.icon} description={c.d}
+                title={<span className="flex flex-wrap items-center gap-2">{c.n}{cfg.template ? <StatusPill tone={esPlantillaDeMeta(cfg.template) ? "vencido" : "pagado"}>{cfg.template}</StatusPill> : <StatusPill tone="gray">Por defecto</StatusPill>}</span>}
+                action={<Button size="sm" variant="soft" onClick={() => test.show({ caso: c.k, cfg })}><Send /> Probar</Button>}>
                 <CaseEditor caso={c.k} cfg={cfg} onChange={(x) => setCase(c.k, x)} state={state} settings={s} />
-              </Card>
+              </Panel>
             )
           })}
-        </TabsContent>
-        <TabsContent value="ajustes" className="pt-3">
-          <Card className="gap-4 p-4 shadow-card ring-0">
-            <FieldGroup>
-              <FormField label="Idioma por defecto" htmlFor="wa-lang" tip="Idioma en que Mirai busca la plantilla aprobada (si hay varias traducciones) y con el que se crean las nuevas.">
-                <Combobox id="wa-lang" value={s.lang} onChange={(x) => up({ ...s, lang: x })} options={WA_LANGS} />
-              </FormField>
-              <FormField label="Imagen de encabezado por defecto" htmlFor="wa-img" tip="Para las plantillas con imagen en el encabezado. Cada caso puede tener la suya.">
-                <ImagePicker id="wa-img" value={s.headerImage} onChange={(u) => up({ ...s, headerImage: u })} fallback={state.defaultImage} fallbackLabel="Imagen de marca de Mirai" />
-              </FormField>
-              <FormField label="Dirección de Mirai para enlaces y botones" htmlFor="wa-base" tip="Se usa en el dato “Enlace a Mirai” y en el final de los botones con enlace variable ({{1}}). Vacía = la dirección del sitio." hint={`Ahora: ${state.base}`}>
-                <Input id="wa-base" className="h-11" type="url" placeholder="https://mirai.engynex.com" value={s.enlaceBase} onChange={(e) => up({ ...s, enlaceBase: e.target.value.trim() })} />
-              </FormField>
-            </FieldGroup>
-          </Card>
-        </TabsContent>
-      </Tabs>
-      {test && <TestDialog caso={test.caso} cfg={test.cfg} onClose={() => setTest(null)} />}
+        </div>
+      )}
+      {tab === "ajustes" && (
+        <Panel title="Ajustes de WhatsApp" icon="settings">
+          <FieldGroup>
+            <FormField label="Idioma por defecto" htmlFor="wa-lang" tip="Idioma en que Mirai busca la plantilla aprobada (si hay varias traducciones) y con el que se crean las nuevas.">
+              <Combobox id="wa-lang" value={s.lang} onChange={(x) => up({ ...s, lang: x })} options={WA_LANGS} />
+            </FormField>
+            <FormField label="Imagen de encabezado por defecto" htmlFor="wa-img" tip="Para las plantillas con imagen en el encabezado. Cada caso puede tener la suya.">
+              <ImagePicker id="wa-img" value={s.headerImage} onChange={(u) => up({ ...s, headerImage: u })} fallback={state.defaultImage} fallbackLabel="Imagen de marca de Mirai" />
+            </FormField>
+            <FormField label="Dirección de Mirai para enlaces y botones" htmlFor="wa-base" tip="Se usa en el dato “Enlace a Mirai” y en el final de los botones con enlace variable ({{1}}). Vacía = la dirección del sitio." hint={`Ahora: ${state.base}`}>
+              <Input id="wa-base" className="h-11" type="url" placeholder="https://mirai.engynex.com" value={s.enlaceBase} onChange={(e) => up({ ...s, enlaceBase: e.target.value.trim() })} />
+            </FormField>
+          </FieldGroup>
+        </Panel>
+      )}
+      {test.value && <TestDialog key={test.key} caso={test.value.caso} cfg={test.value.cfg} open={test.open} onOpenChange={test.onOpenChange} />}
     </div>
   )
 }

@@ -37,13 +37,16 @@ export function useListControls<T>(rows: T[] | undefined, opts: { text?: (row: T
 type Controls<T> = ReturnType<typeof useListControls<T>>
 
 /** Barra de la lista: buscador, chips de filtro (con conteo) y menú de orden. En celular se apila sin desbordar. */
-export function ListToolbar<T>({ c, placeholder = "Buscar", filters, sorts, className, showCounts = true }: {
+export function ListToolbar<T>({ c, placeholder = "Buscar", filters, sorts, className, showCounts = true, search = true }: {
   c: Controls<T>; placeholder?: string; filters?: ListFilter<T>[]; sorts?: ListSort<T>[]; className?: string; showCounts?: boolean
+  /** false: solo filtros y orden (listas cortas sin texto que buscar). */
+  search?: boolean
 }) {
+  const hasSort = !!sorts && sorts.length > 1
   return (
     <div className={cn("grid gap-3", className)}>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 basis-56">
+      {(search || hasSort) && <div className="flex flex-wrap items-center gap-2">
+        {search && <div className="relative min-w-0 flex-1 basis-56">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-[18px] -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input className="h-10 rounded-lg pl-10" placeholder={placeholder} aria-label={placeholder} value={c.q} onChange={(e) => c.setQ(e.target.value)} />
           {c.q && (
@@ -51,14 +54,14 @@ export function ListToolbar<T>({ c, placeholder = "Buscar", filters, sorts, clas
               <X className="size-4" />
             </button>
           )}
-        </div>
-        {sorts && sorts.length > 1 && (
+        </div>}
+        {hasSort && (
           <Select value={c.sort} onValueChange={c.setSort}>
             <SelectTrigger className="h-10 w-auto min-w-44 rounded-lg" aria-label="Ordenar"><ArrowDownUp className="size-4 text-muted-foreground" /><SelectValue /></SelectTrigger>
-            <SelectContent align="end">{sorts.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+            <SelectContent align="end">{sorts!.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
           </Select>
         )}
-      </div>
+      </div>}
       {filters && filters.length > 1 && (
         <Segmented value={c.filter} onChange={c.setFilter}
           items={filters.map((f) => ({ value: f.value, icon: f.icon, label: showCounts ? `${f.label} (${c.counts[f.value] ?? 0})` : f.label }))} />

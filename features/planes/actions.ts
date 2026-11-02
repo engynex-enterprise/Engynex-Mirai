@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
-import { requireRole } from "@/lib/dal"
+import { getAppContext, requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { siteUrl } from "@/lib/site-url"
 import { couponProblem, precio, withCoupon, type Coupon } from "@/lib/plans"
@@ -79,11 +79,22 @@ export async function startCheckout(proveedor: "mercadopago" | "wompi", periodoI
   }
 }
 
+/** ¿Pagas tú una renovación automática de este hogar? (quien pasó el hogar puede cancelarla aunque ya no sea dueño). */
+export async function paysRenewal(): Promise<boolean> {
+  const ctx = await getAppContext()
+  const { count } = await supabaseAdmin().from("plan_subscriptions").select("id", { count: "exact", head: true }).eq("household_id", ctx.household.id).eq("proveedor", "mercadopago").eq("created_by", ctx.user.id).in("estado", ["activa", "pendiente"])
+  return (count ?? 0) > 0
+}
+
 /** Cancela la renovación automática (Mercado Pago). El plan sigue hasta la fecha de vencimiento. */
 export async function cancelRenewal(): Promise<{ ok: boolean; msg: string }> {
-  const ctx = await requireRole("owner")
+  // El dueño cancela cualquier renovación del hogar; quien pasó el hogar y la sigue pagando puede cancelar la suya.
+  const ctx = await getAppContext()
+  const owner = ctx.household.access === "owner"
   const db = supabaseAdmin()
-  const { data: subs } = await db.from("plan_subscriptions").select("id,proveedor_ref,vence_at").eq("household_id", ctx.household.id).eq("proveedor", "mercadopago").in("estado", ["activa", "pendiente"])
+  let q = db.from("plan_subscriptions").select("id,proveedor_ref,vence_at").eq("household_id", ctx.household.id).eq("proveedor", "mercadopago").in("estado", ["activa", "pendiente"])
+  if (!owner) q = q.eq("created_by", ctx.user.id)
+  const { data: subs } = await q
   if (!subs?.length) return { ok: false, msg: "No tienes una renovación automática activa." }
   try {
     for (const s of subs) {

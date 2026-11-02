@@ -2,13 +2,13 @@
 
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { CreditCard, Pencil, Plus, ShoppingBag, Trash2, Wallet } from "lucide-react"
+import { Pencil, Plus, ShoppingBag, Trash2, Wallet } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
@@ -23,16 +23,20 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { BrandLogo } from "@/components/mirai/brand-logo"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { ListRow } from "@/components/mirai/list-row"
+import { StatusPill } from "@/components/mirai/status-pill"
+import { DataTable } from "@/components/mirai/data-table"
 import { brandFor } from "@/lib/brands"
-import { annuity, compraEstado, proxDia, tarjetaPagoMes, tarjetasDeuda, type CreditCardIn } from "@/lib/domain"
-import { fmtDate, fmtPct, todayISO } from "@/lib/format"
+import { annuity, compraEstado, proxDia, tarjetaPagoMes, tarjetasDeuda, type CreditCardIn, type PurchaseState } from "@/lib/domain"
+import { fmtDate, fmtMoney, fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
 import { CardForm, PurchaseForm } from "./card-forms"
 
 type CardRow = Row<"credit_cards"> & { purchases: Row<"card_purchases">[] }
+type Compra = { p: Row<"card_purchases">; e: PurchaseState }
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 
 export function CardsView() {
@@ -82,10 +86,10 @@ export function CardsView() {
   return (
     <div className="grid gap-6">
       <PageHeader id="tarjetas" actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar tarjeta</Button>} />
-      <KpiGrid className="xl:grid-cols-3">
+      <KpiGrid cols={3}>
         <Kpi icon="credit-card" tone="red" label="Debes en tarjetas" value={<Money value={deuda} />} sub={`${cards.length} tarjeta${cards.length === 1 ? "" : "s"}`} />
         <Kpi icon="calendar-clock" tone="amber" label="Pago mínimo de este mes" value={<Money value={pagoMes} />} sub="Suma de las cuotas que se cobran" />
-        <Kpi icon="gauge" tone={uso > 30 ? "red" : "green"} label="Uso del cupo total" value={fmtPct(uso, 0)} valueClassName={uso > 30 ? "text-danger" : "text-success"} sub="Lo sano: menos del 30 %" />
+        <Kpi icon="gauge" tone={uso > 30 ? "red" : "green"} label="Uso del cupo total" info="Qué parte del cupo de tus tarjetas estás usando. Usar menos del 30 % cuida tu historial en las centrales de riesgo." value={fmtPct(uso, 0)} valueClassName={uso > 30 ? "text-danger" : "text-success"} sub="Lo sano: menos del 30 %" />
       </KpiGrid>
 
       {!cards.length ? (
@@ -99,12 +103,12 @@ export function CardsView() {
             <CardHeader className="gap-3">
               {cards.length > 1 && <Segmented value={card.id} onChange={setSel} items={cards.map((c) => ({ value: c.id, label: c.nombre, icon: "credit-card" }))} />}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2 text-lg">{brandFor(card.nombre) ? <BrandLogo k={brandFor(card.nombre)!} size={32} /> : <CreditCard className="size-5 text-brand" />} {card.nombre}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg"><EntityLogo name={card.nombre} brand={brandFor(book.entities.find((x) => x.id === card.entity_id)?.nombre)} icon="credit-card" seed={card.id} size={36} /> {card.nombre}</CardTitle>
                 {canEdit && (
                   <div className="flex flex-wrap gap-2">
                     <Button variant="soft" onClick={() => setBuying(card)}><ShoppingBag /> Registrar compra</Button>
-                    <Button variant="outline" size="icon" aria-label="Editar tarjeta" onClick={() => setEditing(card)}><Pencil /></Button>
-                    <Button variant="outline" size="icon" aria-label="Eliminar tarjeta" onClick={() => setConfirmDel(card)}><Trash2 /></Button>
+                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label="Editar tarjeta" onClick={() => setEditing(card)}><Pencil /></Button></TooltipTrigger><TooltipContent>Editar tarjeta</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label="Eliminar tarjeta" onClick={() => setConfirmDel(card)}><Trash2 /></Button></TooltipTrigger><TooltipContent>Eliminar tarjeta y sus compras</TooltipContent></Tooltip>
                   </div>
                 )}
               </div>
@@ -130,28 +134,40 @@ export function CardsView() {
               )}
               {card.purchases.length > 0 && (
                 <>
-                  <div className="hidden overflow-x-auto md:block">
-                    <Table>
-                      <TableHeader><TableRow><TableHead>Compra</TableHead><TableHead>Fecha</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Cuotas</TableHead><TableHead className="text-right">Cuota mensual</TableHead><TableHead className="text-right">Intereses</TableHead><TableHead className="text-right">Te falta</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                        {card.purchases.map((p) => { const e = compraEstado(ci, p as never, today); return (
-                          <TableRow key={p.id} className={cn(!e.pendiente && "opacity-60")}>
-                            <TableCell className="font-medium">{p.descripcion}</TableCell><TableCell>{fmtDate(p.fecha)}</TableCell>
-                            <TableCell className="text-right"><Money value={Number(p.valor)} /></TableCell><TableCell>{e.k} de {e.n}</TableCell>
-                            <TableCell className="text-right"><Money value={e.cuota} /></TableCell><TableCell className="text-right text-warning"><Money value={e.int} /></TableCell>
-                            <TableCell className="text-right font-semibold"><Money value={e.saldo} /></TableCell>
-                          </TableRow>) })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <ul className="grid gap-2 md:hidden">
-                    {card.purchases.map((p) => { const e = compraEstado(ci, p as never, today); return (
-                      <li key={p.id} className="grid gap-1 rounded-lg border p-3 text-sm">
-                        <div className="flex justify-between font-semibold"><span>{p.descripcion}</span><Money value={Number(p.valor)} /></div>
-                        <div className="flex justify-between text-muted-foreground"><span>{fmtDate(p.fecha)} · cuota {e.k} de {e.n}</span><span>cuota <Money value={e.cuota} /></span></div>
-                        <div className="flex justify-between"><span className="text-warning">Intereses <Money value={e.int} /></span><b>Te falta <Money value={e.saldo} /></b></div>
-                      </li>) })}
-                  </ul>
+                  <DataTable<Compra>
+                    bare title="Compras" data={card.purchases.map((p) => ({ p, e: compraEstado(ci, p as never, today) }))} rowKey={(x) => x.p.id} noun={["compra", "compras"]} exportName={`compras-${card.nombre}`}
+                    total={{ value: (x) => x.e.saldo, label: "te falta pagar" }}
+                    columns={[
+                      { id: "fecha", header: "Fecha", sort: (x) => x.p.fecha, csv: (x) => x.p.fecha },
+                      { id: "descripcion", header: "Compra", sort: (x) => x.p.descripcion.toLowerCase(), csv: (x) => x.p.descripcion },
+                      { id: "valor", header: "Valor", sort: (x) => Number(x.p.valor), csv: (x) => Number(x.p.valor) },
+                      { id: "cuotas", header: "Cuotas", sort: (x) => x.e.n, csv: (x) => `${x.e.k} de ${x.e.n}` },
+                      { id: "cuota", header: "Cuota mensual", csv: (x) => Math.round(x.e.cuota) },
+                      { id: "intereses", header: "Intereses", sort: (x) => x.e.int, csv: (x) => Math.round(x.e.int) },
+                      { id: "saldo", header: "Te falta", sort: (x) => x.e.saldo, csv: (x) => Math.round(x.e.saldo) },
+                    ]}
+                    initialSort={{ id: "fecha", dir: "desc" }}
+                    search={{ placeholder: "Buscar compra", text: (x) => x.p.descripcion }}
+                    views={[{ id: "todas", label: "Todas" }, { id: "pend", label: "Por pagar", match: (x) => x.e.pendiente }, { id: "pagadas", label: "Pagadas", match: (x) => !x.e.pendiente }]}
+                    filters={[
+                      { id: "tipo", label: "Cuotas", options: [{ value: "1", label: "A una cuota" }, { value: "n", label: "Diferidas" }], match: (x, v) => (v === "1") === (x.e.n === 1) },
+                      { id: "fecha", label: "Fecha", kind: "dates", value: (x) => x.p.fecha },
+                      { id: "valor", label: "Valor", kind: "range", money: true, value: (x) => Number(x.p.valor) },
+                    ]}
+                    item={({ p, e }) => {
+                      const cat = book.categories.find((c) => c.id === p.category_id)
+                      return (
+                        <ListRow key={p.id} icon="shopping-bag" className={cn(!e.pendiente && "opacity-70")}
+                          media={<EntityLogo name={p.descripcion} icon={cat?.icon ?? "shopping-bag"} seed={cat?.id ?? p.descripcion} />}
+                          title={p.descripcion}
+                          badges={!e.pendiente ? <StatusPill tone="pagado" check hint="Ya no tiene cuotas por pagar.">pagada</StatusPill>
+                            : e.n > 1 ? <StatusPill tone="info" hint={`La pagas en ${e.n} cuotas mensuales. Cada cuota trae intereses al ${fmtPct(Number(card.tasa), 1)} mensual.`}>diferida</StatusPill> : null}
+                          subtitle={`${fmtDate(p.fecha)} · cuota ${e.k} de ${e.n} · cuota mensual ${fmtMoney(e.cuota)}`}
+                          extra={e.int > 0.5 ? <span className="text-warning">Intereses en total {fmtMoney(e.int)}</span> : "Sin intereses si pagas a tiempo"}
+                          value={<span className="grid text-right"><Money value={e.saldo} className="font-bold" /><span className="text-xs text-muted-foreground">de <Money value={Number(p.valor)} /></span></span>} />
+                      )
+                    }}
+                  />
                   <p className="text-xs text-muted-foreground">Suponemos que pagas al menos el mínimo cada mes. Las compras a una sola cuota no cobran intereses si pagas a tiempo.</p>
                 </>
               )}

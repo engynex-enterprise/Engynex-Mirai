@@ -35,7 +35,7 @@ import { balancesGrupo } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { useCategories } from "@/features/catalogs/hooks"
-import { useLast, useOpenKey } from "./use-open-key"
+import { useLast, useOpenKey } from "@/components/mirai/dialog-state"
 
 type Group = Row<"shared_groups">
 type GroupExpense = Row<"shared_group_expenses">

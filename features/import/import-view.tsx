@@ -16,6 +16,9 @@ import { Combobox } from "@/components/mirai/combobox"
 import { FormField } from "@/components/mirai/field"
 import { Money } from "@/components/mirai/money"
 import { Notice } from "@/components/mirai/notice"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { StatusPill } from "@/components/mirai/status-pill"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
@@ -168,8 +171,8 @@ export function ImportView() {
                     <TableRow key={i} className={r.incl ? "" : "opacity-55"}>
                       <TableCell><Checkbox checked={r.incl} onCheckedChange={(c) => set(i, { incl: c === true })} aria-label={`Incluir ${r.descripcion}`} /></TableCell>
                       <TableCell>{fmtDate(r.fecha)}</TableCell>
-                      <TableCell className="font-medium">{r.descripcion}{r.dup && <span className="ml-2 text-xs text-warning">ya registrado</span>}</TableCell>
-                      <TableCell className="text-right"><Money value={r.valor} /></TableCell>
+                      <TableCell className="font-medium"><span className="flex items-center gap-2.5"><EntityLogo name={r.descripcion} icon={cats.find((c) => c.id === r.category_id)?.icon ?? "receipt"} seed={r.category_id ?? r.descripcion} size={32} /><span>{r.descripcion}{r.dup && <StatusPill tone="warn" className="ml-2" hint="Ya hay un gasto con la misma fecha, descripción y valor. Lo dejamos sin marcar para no duplicarlo.">ya registrado</StatusPill>}</span></span></TableCell>
+                      <TableCell className="text-right"><Money value={r.valor} className="font-semibold" /></TableCell>
                       <TableCell><Combobox value={r.category_id} onChange={(v) => set(i, { category_id: v, manual: true, src: null })} options={categoryOptions(cats)} className="h-9" /></TableCell>
                       <TableCell><Checkbox checked={r.hormiga} onCheckedChange={(c) => set(i, { hormiga: c === true })} aria-label={`Hormiga ${r.descripcion}`} /></TableCell>
                     </TableRow>
@@ -194,7 +197,7 @@ export function ImportView() {
               <FormField label="¿De quién son estos gastos?" htmlFor="imp-q"><Combobox id="imp-q" value={quien} onChange={setQuien} options={memberOptions(members)} /></FormField>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => { setRows(null); setTxt("") }}>Descartar</Button>
-                <Button onClick={importar} disabled={busy || !canEdit}>{busy && <Spinner />} Importar seleccionados</Button>
+                <SubmitButton disabled={!sel.length || !canEdit} loading={busy} loadingText="Importando…" onClick={importar}>Importar seleccionados</SubmitButton>
               </div>
             </div>
           </CardContent>

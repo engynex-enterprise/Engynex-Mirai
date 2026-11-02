@@ -7,6 +7,9 @@ import { useQuery } from "@tanstack/react-query"
 import { EyeOff, LifeBuoy, Moon, Plus } from "lucide-react"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
 import { Icon } from "@/components/mirai/icon"
+import { Kbd } from "@/components/ui/kbd"
+import { TONE, type IconTone } from "@/components/mirai/tone-icon"
+import { cn } from "@/lib/utils"
 import { PAGES } from "@/lib/nav"
 import { createClient } from "@/utils/supabase/client"
 import { useShell } from "./shell-store"
@@ -22,6 +25,11 @@ const HELP_ITEMS: [string, string, string, string][] = [
   ["@atajos", "Atajos de teclado", "command", "teclas teclado"],
   ["@estado", "Estado del servicio", "activity", "version conexion servidor caido"],
 ]
+
+/** Ícono del resultado en un cuadro con el color de su grupo (secciones, contactos, préstamos…). */
+function Glyph({ name, tone = "gray", children }: { name?: string; tone?: IconTone; children?: React.ReactNode }) {
+  return <span aria-hidden className={cn("grid size-7 shrink-0 place-items-center rounded-md [&>svg]:size-4", TONE[tone])}>{children ?? <Icon name={name ?? "circle"} />}</span>
+}
 
 /** Buscador global (Ctrl/⌘ K): secciones, contactos, préstamos y gastos fijos. */
 export function CommandPalette() {
@@ -58,7 +66,7 @@ export function CommandPalette() {
         <CommandGroup heading="Secciones">
           {PAGES.map((p) => (
             <CommandItem key={p.id} value={`${p.label} ${p.group?.label ?? ""}`} onSelect={() => go(p.href)}>
-              <Icon name={p.icon} /> {p.label}
+              <Glyph name={p.icon} tone="brand" /> {p.label}
               <span className="ml-auto text-xs text-muted-foreground">{p.group?.label ?? p.section}</span>
             </CommandItem>
           ))}
@@ -67,7 +75,7 @@ export function CommandPalette() {
           <CommandGroup heading="Contactos">
             {data.contacts.map((c) => (
               <CommandItem key={c.id} value={`contacto ${c.nombre}`} onSelect={() => go(`/contactos?id=${c.id}`)}>
-                <Icon name="user" /> {c.nombre} <span className="ml-auto text-xs text-muted-foreground">{c.ciudad}</span>
+                <Glyph name="user" tone="blue" /> {c.nombre} <span className="ml-auto text-xs text-muted-foreground">{c.ciudad}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -78,7 +86,7 @@ export function CommandPalette() {
               const name = l.contacts?.nombre ?? l.entities?.nombre ?? "Préstamo"
               return (
                 <CommandItem key={l.id} value={`préstamo ${name} ${l.concepto}`} onSelect={() => go(`/${l.kind === "cobrar" ? "me-deben" : "le-debo"}?id=${l.id}`)}>
-                  <Icon name={l.kind === "cobrar" ? "hand-coins" : "landmark"} /> {name}
+                  <Glyph name={l.kind === "cobrar" ? "hand-coins" : "landmark"} tone={l.kind === "cobrar" ? "green" : "red"} /> {name}
                   <span className="ml-auto text-xs text-muted-foreground">{l.kind === "cobrar" ? "Me debe" : "Le debo"}{l.concepto ? ` · ${l.concepto}` : ""}</span>
                 </CommandItem>
               )
@@ -89,32 +97,38 @@ export function CommandPalette() {
           <CommandGroup heading="Gastos fijos">
             {data.fixed.map((f) => (
               <CommandItem key={f.id} value={`fijo ${f.nombre}`} onSelect={() => go(`/fijos?id=${f.id}`)}>
-                <Icon name="house" /> {f.nombre}
+                <Glyph name="house" tone="amber" /> {f.nombre}
               </CommandItem>
             ))}
           </CommandGroup>
         )}
         <CommandGroup heading="Centro de ayuda">
-          <CommandItem value="centro de ayuda soporte como funciona manual" onSelect={() => help("@")}><LifeBuoy /> Abrir el Centro de ayuda <span className="ml-auto text-xs text-muted-foreground">?</span></CommandItem>
+          <CommandItem value="centro de ayuda soporte como funciona manual" onSelect={() => help("@")}><Glyph tone="violet"><LifeBuoy /></Glyph> Abrir el Centro de ayuda <span className="ml-auto text-xs text-muted-foreground">?</span></CommandItem>
           {HELP_ITEMS.map(([k, label, icon, words]) => (
-            <CommandItem key={k} value={`ayuda ${label} ${words}`} onSelect={() => help(k)}><Icon name={icon} /> {label}</CommandItem>
+            <CommandItem key={k} value={`ayuda ${label} ${words}`} onSelect={() => help(k)}><Glyph name={icon} tone="violet" /> {label}</CommandItem>
           ))}
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Acciones">
           {ADD_ITEMS.map((a) => (
             <CommandItem key={a.href} value={`agregar ${a.label}`} onSelect={() => go(a.href)}>
-              <Plus /> Agregar {a.label.toLowerCase()}
+              <Glyph tone="navy"><Plus /></Glyph> Agregar {a.label.toLowerCase()}
             </CommandItem>
           ))}
           <CommandItem value="modo oscuro claro tema" onSelect={() => { setTheme(resolvedTheme === "dark" ? "light" : "dark"); setOpen(false) }}>
-            <Moon /> Cambiar a modo {resolvedTheme === "dark" ? "claro" : "oscuro"}
+            <Glyph tone="navy"><Moon /></Glyph> Cambiar a modo {resolvedTheme === "dark" ? "claro" : "oscuro"}
           </CommandItem>
           <CommandItem value="ocultar mostrar montos privacidad" onSelect={() => { togglePrivacy(); setOpen(false) }}>
-            <EyeOff /> Ocultar o mostrar montos
+            <Glyph tone="navy"><EyeOff /></Glyph> Ocultar o mostrar montos
           </CommandItem>
         </CommandGroup>
       </CommandList>
+      {/* Pie con los atajos, como en los buscadores de Microsoft 365 */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs text-muted-foreground max-sm:hidden" aria-hidden>
+        <span className="flex items-center gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> moverte</span>
+        <span className="flex items-center gap-1"><Kbd>Enter</Kbd> abrir</span>
+        <span className="flex items-center gap-1"><Kbd>Esc</Kbd> cerrar</span>
+      </div>
       </Command>
     </CommandDialog>
   )

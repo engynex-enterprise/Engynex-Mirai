@@ -25,7 +25,7 @@ import { useCanEdit } from "@/components/app/app-context"
 import { useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { fmtDate } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
-import { useOpenKey } from "@/features/extras/use-open-key"
+import { useOpenKey } from "@/components/mirai/dialog-state"
 
 type Wish = Row<"wishlist">
 

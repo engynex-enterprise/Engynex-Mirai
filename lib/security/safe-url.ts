@@ -1,24 +1,9 @@
 import { isIP } from "node:net"
 
-// Validación de URLs y destinos. Puro y síncrono (salvo assertPublicHost, que resuelve el DNS): se prueba en safe-url.test.ts.
+export { safeHref, safeNext } from "./safe-next"
 
-/**
- * Ruta interna segura para redirigir después de entrar (?next=…). Solo rutas del mismo sitio: empiezan por "/",
- * no por "//" ni "/\" (los navegadores las tratan como otro dominio) y sin caracteres de control.
- */
-export function safeNext(n: string | null | undefined, fallback = "/inicio"): string {
-  if (typeof n !== "string" || !n.startsWith("/") || n.length > 2000) return fallback
-  if (n.startsWith("//") || n.startsWith("/\\") || /[\u0000-\u001f\u007f\\]/.test(n)) return fallback
-  return n
-}
-
-/** ¿Es un enlace que se puede abrir sin riesgo (http/https externo, ruta interna o mailto)? Bloquea javascript:, data:, etc. */
-export function safeHref(u: string | null | undefined): boolean {
-  if (typeof u !== "string" || !u.trim()) return false
-  const s = u.trim()
-  if (s.startsWith("/")) return safeNext(s, "") !== ""
-  return /^(https?:\/\/[^\s/?#]+|mailto:[^\s]+)/i.test(s)
-}
+// Validación de destinos salientes (SSRF), solo servidor. Puro y síncrono salvo assertPublicHost (resuelve el DNS).
+// Pruebas en security.test.ts.
 
 const BLOCKED_NAMES = /^(localhost|localhost\.localdomain|ip6-localhost|ip6-loopback|metadata|metadata\.google\.internal|instance-data|kubernetes(\.default)?(\.svc)?)$/i
 const BLOCKED_SUFFIX = /\.(localhost|local|internal|intranet|lan|home|corp|localdomain)$/i

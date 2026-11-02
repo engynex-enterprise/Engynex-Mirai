@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
@@ -53,7 +54,7 @@ function Body({ onOpenChange, initialSide }: { onOpenChange: (o: boolean) => voi
         <FormField label="Valor hoy" htmlFor="a-valor" required><MoneyInput id="a-valor" value={valor} onChange={setValor} currency={currency} decimals /></FormField>
       </div>
       <p className="text-sm text-muted-foreground">Los préstamos con cuotas regístralos en Préstamos y deudas para llevar su plan de pagos.</p>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit}>Guardar</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!nombre.trim() || !(valor > 0)} loading={saveA.isPending || saveP.isPending} onClick={submit} /></div>
     </FieldGroup>
   )
 }

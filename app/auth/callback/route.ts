@@ -1,14 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server"
 import type { User } from "@supabase/supabase-js"
 import { supabaseServer } from "@/utils/supabase/server"
+import { safeNext } from "@/lib/security/safe-next"
 
-/** Vuelta de Google, enlace mágico, confirmación de correo y recuperación (PKCE). */
+/** Agrega parámetros a una ruta interna conservando su ?query y su #ancla. */
+function withParams(path: string, params: Record<string, string>) {
+  const [base, hash = ""] = path.split("#")
+  const u = new URL(base, "http://x")
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v)
+  return `${u.pathname}${u.search}${hash ? `#${hash}` : ""}`
+}
+
+/**
+ * Vuelta de Google, enlace mágico, confirmación de correo, cambio de correo y recuperación (PKCE).
+ * - Conectar otra cuenta de Google que ya es de otra persona en Mirai: Supabase vuelve con error_code
+ *   identity_already_exists → /perfil?cuentas=ya_existe.
+ * - "Cambio de correo seguro": el primer enlace (de dos) vuelve sin código y con ?message → ?correo=falta_otro.
+ */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
   const code = searchParams.get("code")
   const next = safeNext(searchParams.get("next"))
+  const errCode = searchParams.get("error_code") ?? ""
+  const errDesc = searchParams.get("error_description") ?? ""
+  const supabase = await supabaseServer()
+
   if (code) {
-    const supabase = await supabaseServer()
     const { data: ses, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
       await googlePhoto(supabase, ses.user)
@@ -17,11 +34,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${origin}${dest}`)
     }
   }
-  return NextResponse.redirect(`${origin}/login?error=enlace`)
-}
 
-function safeNext(n: string | null) {
-  return n && n.startsWith("/") && !n.startsWith("//") ? n : "/inicio"
+  // Con sesión abierta (conectar Google, cambio de correo): volvemos a la página con el motivo.
+  const { data: claims } = await supabase.auth.getClaims()
+  if (claims?.claims.sub) {
+    if (errCode || errDesc) {
+      const motivo = /identity_already_exists|already linked|already exists/i.test(`${errCode} ${errDesc}`) ? "ya_existe" : /manual_linking|linking/i.test(`${errCode} ${errDesc}`) ? "sin_vincular" : "error"
+      return NextResponse.redirect(`${origin}${withParams(next, { cuentas: motivo })}`)
+    }
+    if (searchParams.get("message")) return NextResponse.redirect(`${origin}${withParams(next, { correo: "falta_otro" })}`)
+    // El código se abrió en otro navegador: el cambio de correo ya quedó hecho en Supabase.
+    if (code && /correo=/.test(next)) return NextResponse.redirect(`${origin}${next}`)
+  }
+  if (searchParams.get("message")) return NextResponse.redirect(`${origin}/login?aviso=correo`)
+  return NextResponse.redirect(`${origin}/login?error=enlace`)
 }
 
 /** Si entró con Google y aún no tiene foto ni avatar, toma la foto de su cuenta de Google. */

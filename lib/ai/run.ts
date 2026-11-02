@@ -11,6 +11,8 @@ import { AI_FEATURES, type AiFeature } from "./features"
 import { systemFor } from "./prompts"
 import { cheapModelFor, costFromMetadata, costUSD, creditsFor, estimateTokens } from "./pricing"
 import { aiPlatformSettings, cacheGet, cacheKey, cacheSet, householdQuota, logUsage } from "./usage"
+import { rateLimit as dbRateLimit } from "@/lib/security/rate-limit"
+import { limitMsg } from "@/lib/security/rate-limit-core"
 
 // Punto único para llamar a la IA. Orden de cada llamada:
 //   plan (Premium) → IA encendida → caché (respuesta idéntica reciente) → cupo de créditos → límite por hora →
@@ -39,7 +41,12 @@ async function rateLimit(householdId: string) {
   const up = await getIntegration(householdId, "upstash")
   const url = (up?.enabled && String(up.config.url || "")) || process.env.UPSTASH_REDIS_REST_URL
   const token = (up?.enabled && up.secrets.token) || process.env.UPSTASH_REDIS_REST_TOKEN
-  if (!url || !token) return
+  if (!url || !token) {
+    // Sin Upstash: el límite compartido de la base (rate_limits), por hogar y hora.
+    const r = await dbRateLimit("ia", householdId)
+    if (!r.ok) throw new AiUnavailable(limitMsg(r.resetMs, "Tu hogar hizo muchas consultas de IA en la última hora"))
+    return
+  }
   const max = +(up?.config.aiPerHour ?? 0) || 60
   const key = `mirai:ai:${householdId}:${new Date().toISOString().slice(0, 13)}`
   try {

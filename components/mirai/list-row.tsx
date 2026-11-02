@@ -37,7 +37,6 @@ export function ListRow({ icon, media, iconClassName, title, badges, subtitle, e
   icon: string; media?: React.ReactNode; iconClassName?: string; title: React.ReactNode; badges?: React.ReactNode; subtitle?: React.ReactNode; extra?: React.ReactNode
   value?: React.ReactNode; actions?: RowAction[]; onClick?: () => void; className?: string
 }) {
-  const inline = actions.filter((a) => a.inline)
   const menu = actions.filter((a) => !a.inline && !a.hideOnMobile)
   return (
     <li className={cn("flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-hover sm:items-center", className)}>

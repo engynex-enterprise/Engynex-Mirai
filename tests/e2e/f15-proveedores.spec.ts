@@ -84,7 +84,7 @@ test("proveedores: crear desde el selector dentro de Gasto fijo y verlo en el m�
   await page.goto("/proveedores")
   const row = fila(page, prov).first()
   await expect(row).toBeVisible()
-  await expect(row.getByText("1 gasto fijo")).toBeVisible()
+  // Por defecto solo se ven Proveedor, Próximo pago, Le debes / Te debe y Estado: el gasto fijo sale como próximo pago.
   await expect(row.getByText(/180\.000/).first()).toBeVisible()
   await shot(page, "proveedores-uso", info.project.name)
 
@@ -109,5 +109,68 @@ test("proveedores: pestaña en Ajustes y menú", async ({ page }, info) => {
   await expect(page.getByTestId("data-table")).toBeVisible()
   await expect(page.getByRole("link", { name: "Abrir la sección Proveedores" })).toBeVisible()
   await shot(page, "ajustes-proveedores", info.project.name)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("proveedores: medio de pago preferido, próximo pago, detalle y deuda enlazada con Le debo", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const sufijo = `${info.project.name} ${Date.now() % 1e6}`
+  const prov = `Almacén QA ${sufijo}`
+  const fijo = `Cuota almacén ${sufijo}`
+
+  // Proveedor con medio de pago preferido
+  await page.goto("/proveedores")
+  await page.getByRole("button", { name: "Agregar proveedor" }).first().click()
+  const dlg = page.getByRole("dialog")
+  await dlg.getByRole("textbox", { name: /Nombre del proveedor/ }).fill(prov)
+  await dlg.getByRole("combobox", { name: /Medio de pago preferido/ }).click()
+  await page.getByRole("option", { name: /^Transferencia/ }).click()
+  await page.getByRole("button", { name: "Guardar" }).click()
+  await expect(page.getByText("Proveedor agregado").first()).toBeVisible()
+  await expect(fila(page, prov).first().getByText("Transferencia")).toBeVisible()
+
+  // Gasto fijo con ese proveedor: sugiere su medio de pago y aparece como próximo pago
+  await page.goto("/fijos?nuevo=1")
+  const f = page.getByRole("dialog")
+  await f.getByRole("textbox", { name: "Nombre" }).fill(fijo)
+  await f.getByRole("textbox", { name: "Valor" }).fill("90000")
+  await f.getByRole("combobox", { name: "Proveedor" }).click()
+  await page.getByPlaceholder("Buscar o escribir un proveedor…").fill(prov)
+  await page.getByRole("option", { name: new RegExp(prov) }).first().click()
+  await expect(f.getByRole("combobox", { name: /Medio de pago|¿Con qué/ }).first()).toContainText("Transferencia")
+  await page.getByRole("button", { name: "Guardar" }).click()
+  await expect(page.getByText(`${fijo} guardado`)).toBeVisible()
+  await page.goto("/proveedores")
+  await expect(fila(page, prov).first().getByText(/90\.000/).first()).toBeVisible()
+
+  // Detalle del proveedor: contacto, enlazados y botón para registrar una deuda
+  // Tocar el nombre del proveedor abre su detalle.
+  await fila(page, prov).first().getByRole("button", { name: prov, exact: true }).click()
+  const det = page.getByRole("dialog")
+  await expect(det.getByRole("heading", { name: /Gastos fijos/ })).toBeVisible()
+  await expect(det.getByRole("link", { name: new RegExp(fijo) })).toBeVisible()
+  await shot(page, "proveedor-detalle", info.project.name)
+  await det.getByRole("link", { name: "Registrar una deuda con este proveedor" }).click()
+  await expect(page).toHaveURL(/\/le-debo\?nuevo=1&prov=/)
+  const loan = page.getByRole("dialog")
+  // Desde un proveedor, la deuda se abre como fiado: la tienda o negocio ya escogido y un solo pago en una fecha.
+  await expect(loan.getByRole("radio", { name: "Fiado en una tienda o negocio" })).toHaveAttribute("aria-checked", "true")
+  await expect(loan.getByRole("combobox", { name: /Tienda o negocio/ })).toContainText(prov)
+  await expect(loan.getByRole("radio", { name: "En una sola fecha" })).toHaveAttribute("aria-checked", "true")
+  await loan.getByRole("textbox", { name: "¿Cuánto fue lo que te fiaron?" }).fill("300000")
+  await page.getByRole("button", { name: "Registrar fiado" }).click()
+  await expect(page.getByText("Fiado registrado.")).toBeVisible()
+  await expect(page.getByRole("link", { name: new RegExp(`Proveedor: ${prov}`) })).toBeVisible()
+
+  // De vuelta en Proveedores: "Le debes" con el saldo y filtro "Le debes"
+  await page.goto("/proveedores")
+  await expect(fila(page, prov).first().getByText(/Le debes/)).toBeVisible()
+  await page.getByRole("button", { name: "Filtros" }).click()
+  await page.getByRole("checkbox", { name: "Le debes" }).click()
+  await page.keyboard.press("Escape")
+  await expect(fila(page, prov).first()).toBeVisible()
+  await shot(page, "proveedores-deudas", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
 })

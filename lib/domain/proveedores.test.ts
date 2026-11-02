@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { categoriaSugerida, cleanProvName, dedupeNames, findProvider, normProv, providerUsage, sugerenciasPendientes, tipoSugerido } from "./proveedores"
+import { categoriaSugerida, cleanProvName, fmtNit, fmtSitio, fmtTelefono, dedupeNames, findProvider, normProv, providerUsage, sugerenciasPendientes, tipoSugerido } from "./proveedores"
 
 describe("normProv", () => {
   it("ignora mayúsculas, tildes, puntos, comas y espacios de más", () => {
@@ -98,5 +98,20 @@ describe("providerUsage", () => {
     expect(u.get("a")).toEqual({ fijos: 2, suscripciones: 2, gastos: 2, mensual: 100000 + 30000 + 5000, pagadoMes: 100000 })
     expect(u.get("b")).toEqual({ fijos: 1, suscripciones: 0, gastos: 0, mensual: 100000, pagadoMes: 0 })
     expect(u.has("null")).toBe(false)
+  })
+})
+
+describe("formato de los datos del proveedor", () => {
+  it("NIT, teléfono y sitio web", () => {
+    expect(fmtNit("900123456-7")).toBe("900.123.456-7")
+    expect(fmtNit("8001869606")).toBe("8.001.869.606")
+    expect(fmtNit("")).toBe("")
+    expect(fmtTelefono("3001234567")).toBe("300 123 4567")
+    expect(fmtTelefono("+57 300 123 4567")).toBe("300 123 4567")
+    expect(fmtTelefono("6012345678")).toBe("(601) 234 5678")
+    expect(fmtTelefono("018000123456")).toBe("01 8000 123456")
+    expect(fmtSitio("https://www.epm.com.co/")).toEqual({ texto: "epm.com.co", href: "https://www.epm.com.co/" })
+    expect(fmtSitio("claro.com.co")?.href).toBe("https://claro.com.co")
+    expect(fmtSitio("")).toBeNull()
   })
 })

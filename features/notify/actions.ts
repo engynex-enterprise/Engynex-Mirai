@@ -8,6 +8,7 @@ import { telegramApi } from "@/lib/notify/channels"
 import { avisosPara, channelStatus, defaultRule, deliver, horaBogota, NOT_READY, sendDigest, testMsg, upsertAppNotifs, type Canal, type Rule } from "@/lib/notify/digest"
 import { normalizeCoPhone } from "@/lib/notify/whatsapp"
 import { enSilencio } from "@/lib/notify/rules"
+import { limitError } from "@/lib/security/rate-limit"
 
 async function myRule() {
   const ctx = await getAppContext()
@@ -18,7 +19,10 @@ async function myRule() {
 /** "Enviar resumen ahora" por un canal (también sirve de prueba si no hay avisos). */
 export async function sendDigestNow(canal: "email" | "telegram" | "push" | "whatsapp"): Promise<{ ok: boolean; msg: string }> {
   try {
+    if (!["email", "telegram", "push", "whatsapp"].includes(canal)) return { ok: false, msg: "Canal desconocido." }
     const { ctx, rule } = await myRule()
+    const lim = await limitError("pruebaAviso", ctx.user.id, "Enviaste muchas pruebas seguidas")
+    if (lim) return { ok: false, msg: lim }
     const r = await sendDigest({ householdId: ctx.household.id, rule, canal, email: ctx.user.email, nombre: ctx.user.nombre, force: true })
     return { ok: true, msg: r.msg }
   } catch (e) { return { ok: false, msg: (e as Error).message } }
@@ -35,6 +39,8 @@ export async function sendTestNow(canal: Canal): Promise<{ ok: boolean; msg: str
   try {
     if (!["email", "telegram", "push", "whatsapp"].includes(canal)) return { ok: false, msg: "Canal desconocido." }
     const { ctx, rule } = await myRule()
+    const lim = await limitError("pruebaAviso", ctx.user.id, "Enviaste muchas pruebas seguidas")
+    if (lim) return { ok: false, msg: lim }
     if (canal === "whatsapp" && rule.whatsapp_to && !normalizeCoPhone(rule.whatsapp_to)) return { ok: false, msg: "Tu número de WhatsApp no es válido: escribe un celular de 10 dígitos (por ejemplo 315 123 4567)." }
     const msg = await deliver({ householdId: ctx.household.id, userId: ctx.user.id, canal, emailTo: rule.email_to || ctx.user.email, whatsappTo: rule.whatsapp_to, kind: "prueba" }, testMsg(ctx.user.nombre))
     return { ok: true, msg }

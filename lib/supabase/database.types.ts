@@ -19,6 +19,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"account_events": {
+                  Row: {
+                    "created_at": string,"detail": NonNullable<Json>,"id": number,"ip": string | null,"kind": string,"user_agent": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"detail"?: NonNullable<Json>,"id"?: never,"ip"?: string | null,"kind": string,"user_agent"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"detail"?: NonNullable<Json>,"id"?: never,"ip"?: string | null,"kind"?: string,"user_agent"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"accountant_notes": {
                   Row: {
                     "autor": string,"book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"id": string,"share_id": string,"texto": string,"updated_at": string
@@ -1151,6 +1165,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"household_transfers": {
+                  Row: {
+                    "created_at": string,"expires_at": string,"from_role": string,"from_user": string,"household_id": string,"id": string,"plan_action": string,"resolved_at": string | null,"resolved_by": string | null,"status": string,"to_user": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_at"?: string,"from_role"?: string,"from_user": string,"household_id": string,"id"?: string,"plan_action"?: string,"resolved_at"?: string | null,"resolved_by"?: string | null,"status"?: string,"to_user": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_at"?: string,"from_role"?: string,"from_user"?: string,"household_id"?: string,"id"?: string,"plan_action"?: string,"resolved_at"?: string | null,"resolved_by"?: string | null,"status"?: string,"to_user"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "household_transfers_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"households": {
                   Row: {
                     "created_at": string,"created_by": string | null,"id": string,"nombre": string,"updated_at": string
@@ -1343,14 +1377,14 @@ isOneToOne: false
                   ]
                 },"loans": {
                   Row: {
-                    "book_id": string,"cerrado_at": string | null,"concepto": string,"contact_id": string | null,"created_at": string,"created_by": string | null,"cuota_fija": number | null,"currency": string,"deleted_at": string | null,"entity_id": string | null,"extra": number,"frec": string,"id": string,"inicio": string,"kind": string,"monto": number,"nota": string,"plazo": number,"prenda": Json | null,"sistema": string,"tasa": number,"tasa_ea": number | null,"updated_at": string
+                    "acreedor": string | null,"book_id": string,"cerrado_at": string | null,"concepto": string,"contact_id": string | null,"created_at": string,"created_by": string | null,"cuota_fija": number | null,"currency": string,"deleted_at": string | null,"entity_id": string | null,"extra": number,"fiado": boolean,"frec": string,"id": string,"inicio": string,"kind": string,"monto": number,"nota": string,"plazo": number,"prenda": Json | null,"provider_id": string | null,"sistema": string,"tasa": number,"tasa_ea": number | null,"tipo": string | null,"updated_at": string,"vence": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"cuota_fija"?: number | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"frec"?: string,"id"?: string,"inicio"?: string,"kind": string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"sistema"?: string,"tasa"?: number,"tasa_ea"?: number | null,"updated_at"?: string
+                    "acreedor"?: string | null,"book_id": string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"cuota_fija"?: number | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"fiado"?: boolean,"frec"?: string,"id"?: string,"inicio"?: string,"kind": string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"provider_id"?: string | null,"sistema"?: string,"tasa"?: number,"tasa_ea"?: number | null,"tipo"?: string | null,"updated_at"?: string,"vence"?: string | null
                   }
                   Update: {
-                    "book_id"?: string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"cuota_fija"?: number | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"frec"?: string,"id"?: string,"inicio"?: string,"kind"?: string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"sistema"?: string,"tasa"?: number,"tasa_ea"?: number | null,"updated_at"?: string
+                    "acreedor"?: string | null,"book_id"?: string,"cerrado_at"?: string | null,"concepto"?: string,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"cuota_fija"?: number | null,"currency"?: string,"deleted_at"?: string | null,"entity_id"?: string | null,"extra"?: number,"fiado"?: boolean,"frec"?: string,"id"?: string,"inicio"?: string,"kind"?: string,"monto"?: number,"nota"?: string,"plazo"?: number,"prenda"?: Json | null,"provider_id"?: string | null,"sistema"?: string,"tasa"?: number,"tasa_ea"?: number | null,"tipo"?: string | null,"updated_at"?: string,"vence"?: string | null
                   }
                   Relationships: [
                     {
@@ -1370,6 +1404,12 @@ isOneToOne: false
       columns: ["entity_id"]
 isOneToOne: false
       referencedRelation: "entities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "loans_provider_id_fkey"
+      columns: ["provider_id"]
+isOneToOne: false
+      referencedRelation: "providers"
       referencedColumns: ["id"]
     }
                   ]
@@ -1643,14 +1683,14 @@ isOneToOne: false
                   ]
                 },"providers": {
                   Row: {
-                    "activo": boolean,"book_id": string,"brand": string | null,"category_id": string | null,"correo": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"icon": string | null,"id": string,"nit": string,"nombre": string,"notas": string,"referencia": string,"sitio_web": string,"telefono": string,"tipo": string,"updated_at": string
+                    "activo": boolean,"book_id": string,"brand": string | null,"category_id": string | null,"correo": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"icon": string | null,"id": string,"nit": string,"nombre": string,"notas": string,"payment_method_id": string | null,"referencia": string,"sitio_web": string,"telefono": string,"tipo": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "activo"?: boolean,"book_id": string,"brand"?: string | null,"category_id"?: string | null,"correo"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"icon"?: string | null,"id"?: string,"nit"?: string,"nombre": string,"notas"?: string,"referencia"?: string,"sitio_web"?: string,"telefono"?: string,"tipo"?: string,"updated_at"?: string
+                    "activo"?: boolean,"book_id": string,"brand"?: string | null,"category_id"?: string | null,"correo"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"icon"?: string | null,"id"?: string,"nit"?: string,"nombre": string,"notas"?: string,"payment_method_id"?: string | null,"referencia"?: string,"sitio_web"?: string,"telefono"?: string,"tipo"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "activo"?: boolean,"book_id"?: string,"brand"?: string | null,"category_id"?: string | null,"correo"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"icon"?: string | null,"id"?: string,"nit"?: string,"nombre"?: string,"notas"?: string,"referencia"?: string,"sitio_web"?: string,"telefono"?: string,"tipo"?: string,"updated_at"?: string
+                    "activo"?: boolean,"book_id"?: string,"brand"?: string | null,"category_id"?: string | null,"correo"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"icon"?: string | null,"id"?: string,"nit"?: string,"nombre"?: string,"notas"?: string,"payment_method_id"?: string | null,"referencia"?: string,"sitio_web"?: string,"telefono"?: string,"tipo"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1665,6 +1705,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "categories"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "providers_payment_method_id_fkey"
+      columns: ["payment_method_id"]
+isOneToOne: false
+      referencedRelation: "payment_methods"
+      referencedColumns: ["id"]
     }
                   ]
                 },"push_subscriptions": {
@@ -1677,6 +1723,20 @@ isOneToOne: false
                   }
                   Update: {
                     "auth"?: string,"created_at"?: string,"endpoint"?: string,"id"?: string,"p256dh"?: string,"user_agent"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"rate_limits": {
+                  Row: {
+                    "count": number,"key": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "count"?: number,"key": string,"window_start": string
+                  }
+                  Update: {
+                    "count"?: number,"key"?: string,"window_start"?: string
                   }
                   Relationships: [
                     
@@ -2149,8 +2209,17 @@ isOneToOne: false
               "cached_tokens": number,"costo_cop": number,"costo_usd": number,"creditos": number,"de_plataforma": boolean,"dia": string,"duracion_ms": number,"feature": string,"fuente": string,"household_id": string,"input_tokens": number,"llamadas": number,"model": string,"ok": boolean,"output_tokens": number,"plan": string,"provider": string,"tokens_evitados": number
             }[]
                            },
+"apply_household_transfer":
+{ Args: { "p_from": string,"p_from_role": string,"p_household": string,"p_to": string }; Returns: undefined
+                           },
 "book_household":
 { Args: { "bk": string }; Returns: string
+                           },
+"cancel_household_transfer":
+{ Args: { "p_transfer": string }; Returns: undefined
+                           },
+"cancel_my_email_change":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "count_orphan_households":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -2163,6 +2232,9 @@ isOneToOne: false
                            },
 "delete_orphan_households":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"ensure_email_identity":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "fund_save":
 { Args: { "p_book": string,"p_fecha": string,"p_nota"?: string,"p_valor": number }; Returns: number
@@ -2202,6 +2274,9 @@ isOneToOne: false
 "link_family_member":
 { Args: { "p_family": string,"p_household": string,"p_user": string }; Returns: undefined
                            },
+"log_account_event":
+{ Args: { "p_detail"?: Json,"p_kind": string,"p_user": string }; Returns: undefined
+                           },
 "member_access":
 { Args: { "p_household": string,"p_user": string }; Returns: string
                            },
@@ -2211,8 +2286,19 @@ isOneToOne: false
 "mirai_schedule_notify":
 { Args: { "cron_secret": string,"site_url": string }; Returns: string
                            },
+"my_account":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"my_sessions":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "aal": string,"actual": boolean,"created_at": string,"id": string,"ip": string,"last_active": string,"user_agent": string
+            }[]
+                           },
 "pay_fixed_expense":
 { Args: { "p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json
+                           },
+"person_label":
+{ Args: { "p_user": string }; Returns: string
                            },
 "provider_norm":
 { Args: { "s": string }; Returns: string
@@ -2220,11 +2306,28 @@ isOneToOne: false
 "provider_tipo":
 { Args: { "s": string }; Returns: string
                            },
+"rate_limit_hit":
+{ Args: { "p_key": string,"p_max": number,"p_window_s": number }; Returns: {
+              "ok": boolean,"remaining": number,"reset_ms": number
+            }[]
+                           },
 "registro_abierto":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "remove_household_member":
 { Args: { "p_household": string,"p_user": string }; Returns: undefined
+                           },
+"remove_my_password":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"request_household_transfer":
+{ Args: { "p_confirm": string,"p_from_role": string,"p_household": string,"p_plan_action": string,"p_user": string }; Returns: string
+                           },
+"respond_household_transfer":
+{ Args: { "p_accept": boolean,"p_transfer": string }; Returns: Json
+                           },
+"revoke_my_session":
+{ Args: { "p_session": string }; Returns: boolean
                            },
 "role_rank":
 { Args: { "r": string }; Returns: number

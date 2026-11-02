@@ -17,7 +17,7 @@ import { createClient } from "@/utils/supabase/client"
 import { fmtDate } from "@/lib/format"
 import { isFull, precio } from "@/lib/plans"
 import { SettingRow, SettingSection } from "@/features/settings/ui"
-import { cancelRenewal } from "./actions"
+import { cancelRenewal, paysRenewal } from "./actions"
 import { PremiumBadge } from "./premium"
 
 const PROV = { mercadopago: "Mercado Pago (tarjeta)", wompi: "Wompi (Nequi, PSE, Bancolombia)", manual: "Asignado por Mirai" } as const
@@ -33,6 +33,7 @@ export function PlanTab() {
     queryKey: ["plan-sub", household.id],
     queryFn: async () => (await sb.rpc("household_subscription", { h: household.id })).data?.[0] ?? null,
   })
+  const { data: mine } = useQuery({ queryKey: ["plan-mine", household.id], enabled: household.role !== "owner", queryFn: () => paysRenewal() })
   const { data: pays } = useQuery({
     queryKey: ["plan-pays", household.id],
     enabled: household.role === "owner",
@@ -60,7 +61,7 @@ export function PlanTab() {
           {isFull(plan) ? <PremiumBadge label={plan.nombre} /> : <Button asChild><Link href="/planes"><Crown /> {plan.id === "gratis" ? "Pásate a Premium" : "Ver planes"}</Link></Button>}
         </SettingRow>
         {sub && <SettingRow title="Cómo pagas" desc={`${PROV[sub.proveedor as keyof typeof PROV] ?? sub.proveedor} · ${sub.periodo === "anio" ? "anual" : "mensual"}`}>{null}</SettingRow>}
-        {sub?.proveedor === "mercadopago" && sub.estado === "activa" && household.role === "owner" && (
+        {sub?.proveedor === "mercadopago" && sub.estado === "activa" && (household.role === "owner" || mine) && (
           <SettingRow title="Renovación automática" desc="Si la cancelas, no te cobramos más y sigues con Premium hasta el vencimiento.">
             <AlertDialog open={confirmar} onOpenChange={(o) => !cancelando && setConfirmar(o)}>
               <AlertDialogTrigger asChild><Button variant="outline" className="text-danger">Cancelar renovación</Button></AlertDialogTrigger>

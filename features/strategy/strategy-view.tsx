@@ -12,6 +12,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { EntityLogo } from "@/components/mirai/entity-logo"
 import { EmptyState } from "@/components/mirai/empty-state"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { cuotasMes, debtStrategy, loanEngine, loanName, simAbono, type DebtSimResult } from "@/lib/domain"
@@ -24,7 +25,7 @@ function Method({ title, icon, desc, r, base, best }: { title: string; icon: Rea
     <Card className={cn("gap-3 p-5 shadow-card ring-0", best && "ring-2 ring-brand")}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-lg font-semibold">{icon}{title}</p>
-        <StatusPill tone={best ? "pagado" : "gray"}>{r.m} meses</StatusPill>
+        <StatusPill tone={best ? "pagado" : "gray"} hint={best ? "Con este método terminas de pagar más rápido o pagas menos intereses." : "Meses que tardarías en pagar todo con este método."}>{r.m} meses</StatusPill>
       </div>
       <p className="text-sm text-muted-foreground">{desc}</p>
       <div className="grid grid-cols-2 gap-3">
@@ -32,7 +33,7 @@ function Method({ title, icon, desc, r, base, best }: { title: string; icon: Rea
         <div className="rounded-md bg-success-soft p-3"><p className="text-xs text-muted-foreground">Te ahorras</p><Money value={Math.max(0, base.ti - r.ti)} className="font-semibold text-success" /></div>
       </div>
       <ol className="grid gap-1 text-sm">
-        {r.ord.map((id, i) => <li key={id} className="flex justify-between gap-2"><span>{i + 1}. {r.names[id]}</span><span className="text-muted-foreground">terminas en el mes {r.pay[id]}</span></li>)}
+        {r.ord.map((id, i) => <li key={id} className="flex items-center justify-between gap-2"><span className="flex min-w-0 items-center gap-2"><span className="w-4 text-right text-muted-foreground tabular-nums">{i + 1}.</span><EntityLogo name={r.names[id]} icon="landmark" seed={r.names[id]} size={24} /><span className="truncate">{r.names[id]}</span></span><span className="shrink-0 text-muted-foreground">terminas en el mes {r.pay[id]}</span></li>)}
       </ol>
     </Card>
   )

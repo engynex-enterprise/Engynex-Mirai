@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { AuthSkeleton } from "@/components/auth/auth-skeleton"
 import { AuthHeader } from "@/components/auth/auth-ui"
+import { safeNext } from "@/lib/security/safe-next"
 
 function Verificacion() {
   const router = useRouter()
-  const next = useSearchParams().get("next") || "/inicio"
+  const next = safeNext(useSearchParams().get("next"))
   const [factorId, setFactorId] = useState<string | null>(null)
   const [code, setCode] = useState("")
   const [busy, setBusy] = useState(false)

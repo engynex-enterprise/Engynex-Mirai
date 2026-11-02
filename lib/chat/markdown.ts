@@ -27,7 +27,7 @@ const TOKEN = new RegExp(
     /`([^`\n]+)`/.source, // 1 código
     /\*\*([^*\n](?:[^*\n]|\*(?!\*))*?)\*\*/.source, // 2 negrita
     /__([^_\n]+)__/.source, // 3 negrita con _
-    /\[([^\]\n]+)\]\(((?:https?:\/\/|\/|mailto:)[^)\s]+)\)/.source, // 4,5 enlace
+    /\[([^\]\n]+)\]\(((?:https?:\/\/|\/(?![\/\\])|mailto:)[^)\s\\]+)\)/.source, // 4,5 enlace (no //otro-dominio ni /\otro)
     /(?<![\w*])\*([^*\s\n](?:[^*\n]*[^*\s\n])?)\*(?![\w*])/.source, // 6 cursiva
     /(?<![\w_])_([^_\s\n](?:[^_\n]*[^_\s\n])?)_(?![\w_])/.source, // 7 cursiva con _
     `(${MONEY.source})`, // 8 monto

@@ -154,3 +154,36 @@ export function providerUsage(
   for (const u of out.values()) { u.mensual = Math.round(u.mensual); u.pagadoMes = Math.round(u.pagadoMes) }
   return out
 }
+
+// ── Formato de los datos de contacto del proveedor ──────────────────────────────────────────────────────────────────
+
+/** NIT con puntos de miles y dígito de verificación: "900123456-7" → "900.123.456-7". */
+export function fmtNit(nit: string | null | undefined): string {
+  const t = String(nit ?? "").trim()
+  if (!t) return ""
+  const [base, dv] = t.replace(/[^\d-]/g, "").split("-")
+  const b = (base ?? "").replace(/\D/g, "")
+  if (!b) return t
+  const conPuntos = b.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  return dv ? `${conPuntos}-${dv.replace(/\D/g, "").slice(0, 1)}` : conPuntos
+}
+
+/** Teléfono de Colombia legible: celular "300 123 4567", fijo "(601) 234 5678"; si no se reconoce, tal cual. */
+export function fmtTelefono(tel: string | null | undefined): string {
+  const t = String(tel ?? "").trim()
+  let d = t.replace(/\D/g, "")
+  if (d.length === 12 && d.startsWith("57")) d = d.slice(2)
+  if (/^3\d{9}$/.test(d)) return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`
+  if (/^60\d{8}$/.test(d)) return `(${d.slice(0, 3)}) ${d.slice(3, 6)} ${d.slice(6)}`
+  if (/^\d{7}$/.test(d)) return `${d.slice(0, 3)} ${d.slice(3)}`
+  if (/^018000\d{6}$/.test(d)) return `01 8000 ${d.slice(6)}`
+  return t
+}
+
+/** Sitio web sin "https://", "www." ni la barra final, para mostrarlo; `href` con protocolo para el enlace. */
+export function fmtSitio(url: string | null | undefined): { texto: string; href: string } | null {
+  const t = String(url ?? "").trim()
+  if (!t) return null
+  const href = /^https?:\/\//i.test(t) ? t : `https://${t}`
+  return { texto: t.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, ""), href }
+}

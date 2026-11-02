@@ -12,10 +12,8 @@ import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
-import { Spinner } from "@/components/ui/spinner"
 import { AddressFields, emptyAddress, type Address } from "@/components/mirai/address-fields"
 import { AvatarPicker } from "@/components/mirai/avatar-picker"
-import { BrandLogo } from "@/components/mirai/brand-logo"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { Combobox } from "@/components/mirai/combobox"
 import { DatePicker } from "@/components/mirai/date-picker"
@@ -25,7 +23,6 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { Panel, SectionTitle } from "@/components/mirai/panel"
 import { Tip } from "@/components/mirai/tip"
-import { ToneIcon } from "@/components/mirai/tone-icon"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
@@ -40,6 +37,7 @@ import type { Row } from "@/lib/supabase/tables"
 import { normalizarCobros } from "@/lib/domain/cobros"
 import { CobroCard } from "./cobro-card"
 import { HouseholdPeople } from "@/features/household/people"
+import { ConnectedAccounts } from "@/features/account/connected-accounts"
 
 const DOCS = [{ value: "CC", label: "Cédula de ciudadanía" }, { value: "CE", label: "Cédula de extranjería" }, { value: "PA", label: "Pasaporte" }, { value: "PPT", label: "Permiso por protección temporal" }]
 const TRABAJO = [
@@ -88,7 +86,6 @@ export function ProfileView() {
   const saveCfg = useBookSettingsSave()
   const gami = useGami()
   const [picker, setPicker] = useState(false)
-  const [linking, setLinking] = useState(false)
   const key = ["profile-full", user.id]
   const { data: p } = useQuery({ queryKey: key, queryFn: async () => (await createClient().from("profiles").select("*").eq("id", user.id).single()).data })
   const { data: identities } = useQuery({ queryKey: ["identities", user.id], queryFn: async () => (await createClient().auth.getUserIdentities()).data?.identities ?? [] })
@@ -114,11 +111,6 @@ export function ProfileView() {
   const saveDoc = (doc: string, tipo = p.doc_tipo) => save({ doc, doc_tipo: tipo, ...(tipo === "CC" ? { digitos: digitosDian(doc) } : {}) })
   const google = identities?.find((i) => i.provider === "google")
   const googlePhoto = (google?.identity_data?.avatar_url ?? google?.identity_data?.picture ?? null) as string | null
-  const linkGoogle = async () => {
-    setLinking(true)
-    const { error } = await createClient().auth.linkIdentity({ provider: "google", options: { redirectTo: `${location.origin}/auth/callback?next=/perfil` } })
-    if (error) { setLinking(false); toast.error("No se pudo vincular Google", { description: error.message }) }
-  }
   const T = totales(book, todayISO())
   const ing = ingresoMensual(book.incomes, book.settings.trm)
   const addr = { ...emptyAddress, ...((p.direccion as Address) ?? {}), ciudad: p.ciudad || (p.direccion as Address)?.ciudad || "" }
@@ -264,19 +256,7 @@ export function ProfileView() {
             )}
           </Panel>
 
-          <Panel title="Cuentas conectadas" icon="link" className="h-auto">
-            <div className="flex items-center gap-3">
-              <ToneIcon icon="mail" tone="blue" className="rounded-[28%]" />
-              <div className="min-w-0 flex-1"><p className="text-sm font-medium">Correo</p><p className="truncate text-xs text-muted-foreground">{user.email}</p></div>
-              <StatusPill tone="ok">Activa</StatusPill>
-            </div>
-            <div className="flex items-center gap-3">
-              <BrandLogo k="google" size={40} />
-              <div className="min-w-0 flex-1"><p className="text-sm font-medium">Google</p><p className="truncate text-xs text-muted-foreground">{google ? (google.identity_data?.email as string) ?? "Conectada" : "Entra con un toque y usa tu foto de Google"}</p></div>
-              {google ? <StatusPill tone="ok">Conectada</StatusPill> : <Button size="sm" variant="outline" onClick={linkGoogle} disabled={linking}>{linking && <Spinner />}Vincular</Button>}
-            </div>
-            <p className="text-xs text-muted-foreground">Contraseña, verificación en dos pasos y sesiones abiertas en <Link className="text-link underline" href="/ajustes?tab=seguridad">Ajustes › Seguridad</Link>.</p>
-          </Panel>
+          <ConnectedAccounts />
 
           <Panel title="Resumen" icon="chart-pie" className="h-auto">
             <div className="grid grid-cols-2 gap-2">

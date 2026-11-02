@@ -23,7 +23,8 @@ import { useAccess, useApp, useCan } from "@/components/app/app-context"
 import { assignableRoles, canManage, ROLE_INFO, type AccessRole } from "@/lib/household/roles"
 import { haceCuanto } from "@/lib/household/invites"
 import { cn } from "@/lib/utils"
-import { cancelInvitation, changeRole, deleteFamilyMember, linkPerson, loadHouseholdPeople, markInvitationShared, removePerson, resendInvitation, shareInvitation, transferHousehold } from "./actions"
+import { cancelInvitation, changeRole, deleteFamilyMember, linkPerson, loadHouseholdPeople, markInvitationShared, removePerson, resendInvitation, shareInvitation } from "./actions"
+import { TransferDialog } from "@/features/account/transfer"
 import { AddPersonDialog, DeliveryLines } from "./invite-dialog"
 import { MemberDialog, parentescoIcon } from "./member-dialog"
 import { Confirm, PermButton, RoleMatrix, RolePicker, RolePill } from "./roles-ui"
@@ -135,7 +136,6 @@ export function HouseholdPeople({ layout = "list", showMatrix = true }: { layout
     if (x.k === "rol" && x.to) return run(x.p.key, () => changeRole(x.p.userId!, x.to!))
     if (x.k === "quitar") return run(x.p.key, () => removePerson(x.p.userId!))
     if (x.k === "salir") return run(x.p.key, () => removePerson(user.id), () => { router.push("/inicio"); router.refresh() })
-    if (x.k === "pasar") return run(x.p.key, () => transferHousehold(x.p.userId!), () => router.refresh())
     if (x.k === "cancelar") return run(x.p.key, () => cancelInvitation(x.p.invite!.id))
     if (x.k === "borrar") return run(x.p.key, () => deleteFamilyMember(x.p.familyId!), () => toast(`${n} ya no está en el hogar`, { action: { label: "Deshacer", onClick: () => run(x.p.key, () => deleteFamilyMember(x.p.familyId!, true)) } }), true)
   }
@@ -259,7 +259,8 @@ export function HouseholdPeople({ layout = "list", showMatrix = true }: { layout
       )}
       {pending?.k === "rol" && !pending.confirm && <RoleDialog p={pending.p} actor={access} onClose={() => setPending(null)} onSave={(to) => setPending({ k: "rol", p: pending.p, to, confirm: true })} />}
       {pending?.k === "vincular" && <LinkDialog p={pending.p} data={data} onClose={() => setPending(null)} onLink={(fid) => { const x = pending.p; setPending(null); run(x.key, () => linkPerson(x.userId!, fid)) }} />}
-      <Confirm open={!!pending && (pending.k !== "rol" || !!pending.confirm) && pending.k !== "vincular"} onOpenChange={(o) => !o && setPending(null)}
+      {pending?.k === "pasar" && <TransferDialog householdId={household.id} open preselect={pending.p.userId} onOpenChange={(o) => !o && setPending(null)} onDone={refresh} />}
+      <Confirm open={!!pending && (pending.k !== "rol" || !!pending.confirm) && pending.k !== "vincular" && pending.k !== "pasar"} onOpenChange={(o) => !o && setPending(null)}
         danger={pending?.k !== "rol" && pending?.k !== "pasar"} onConfirm={confirmPending}
         title={!pending ? "" : pending.k === "rol" ? `¿Cambiar el rol de ${pending.p.nombre}?` : pending.k === "quitar" ? `¿Quitar a ${pending.p.nombre} del hogar?` : pending.k === "salir" ? "¿Salir de este hogar?" : pending.k === "pasar" ? `¿Pasarle el hogar a ${pending.p.nombre}?` : pending.k === "cancelar" ? "¿Cancelar la invitación?" : `¿Quitar a ${pending.p.nombre}?`}
         action={!pending ? "" : pending.k === "rol" ? "Cambiar rol" : pending.k === "salir" ? "Salir del hogar" : pending.k === "pasar" ? "Pasarle el hogar" : pending.k === "cancelar" ? "Cancelar invitación" : "Quitar"}

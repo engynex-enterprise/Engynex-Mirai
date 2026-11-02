@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Combobox } from "@/components/mirai/combobox"
 import { Icon } from "@/components/mirai/icon"
+import { EntityLogo } from "@/components/mirai/entity-logo"
 import { MoneyAutosave } from "@/components/mirai/money-autosave"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { IconButton } from "@/components/mirai/tip"
@@ -182,7 +183,10 @@ function Entidades() {
         <ul className="grid pt-2" aria-label="Entidades">
           {c.rows.map((x) => (
             <li key={x.id} className="grid grid-cols-[1fr_auto] items-center gap-2 border-b py-2 last:border-0 sm:grid-cols-[1fr_10rem_10rem_auto]">
-              <TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} />
+              <div className="flex min-w-0 items-center gap-2.5">
+                <EntityLogo name={x.nombre} icon={x.tipo === "Billetera" ? "smartphone" : "landmark"} seed={x.nombre} size={32} />
+                <div className="min-w-0 flex-1"><TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} /></div>
+              </div>
               <IconButton icon="trash-2" destructive label={`Eliminar ${x.nombre}`} className="sm:order-last" disabled={!can} onClick={() => del.mutate(x)} />
               <div className="col-span-2 sm:col-span-1"><Combobox value={x.tipo} onChange={(v) => save.mutate({ id: x.id, tipo: v } as never)} options={TIPOS_ENT} disabled={!can} /></div>
               <div className="col-span-2 sm:col-span-1"><TextBlur label={`NIT de ${x.nombre}`} placeholder="NIT (opcional)" value={x.nit || ""} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nit: v } as never)} /></div>

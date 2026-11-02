@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
@@ -10,13 +11,18 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Icon } from "@/components/mirai/icon"
+import { Segmented } from "@/components/mirai/choice-cards"
+import { TONE, type IconTone } from "@/components/mirai/tone-icon"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { Illustration } from "@/components/mirai/illustration"
 import { useShell } from "./shell-store"
 import { useApp } from "./app-context"
+import { TransferBellActions } from "@/features/account/transfer"
 
-const KIND_ICON: Record<string, string> = { pago: "calendar-clock", cobro: "hand-coins", hormiga: "coffee", presupuesto: "chart-pie", inversion: "trending-up", meta: "target", contador: "user-round-check", logro: "medal", sistema: "info", opinion: "message-square-heart", plan: "crown" }
+const KIND_ICON: Record<string, string> = { pago: "calendar-clock", cobro: "hand-coins", hormiga: "coffee", presupuesto: "chart-pie", inversion: "trending-up", meta: "target", contador: "user-round-check", logro: "medal", sistema: "info", opinion: "message-square-heart", plan: "crown", hogar: "crown" }
+/** Color de referencia de cada tipo de aviso (el mismo en toda la app: pagos ámbar, cobros verde…). */
+const KIND_TONE: Record<string, IconTone> = { pago: "amber", cobro: "green", hormiga: "red", presupuesto: "violet", inversion: "blue", meta: "brand", contador: "navy", logro: "amber", sistema: "gray", opinion: "blue", plan: "violet", hogar: "amber" }
 
 export function useNotifications() {
   const { user, book } = useApp()
@@ -38,6 +44,9 @@ export function NotificationsSheet() {
   const { user } = useApp()
   const qc = useQueryClient()
   const { data, isPending } = useNotifications()
+  const [ver, setVer] = useState<"todas" | "sin-leer">("todas")
+  const unread = data?.filter((n) => !n.read_at).length ?? 0
+  const list = ver === "sin-leer" ? data?.filter((n) => !n.read_at) : data
   const markAll = useMutation({
     mutationFn: async () => {
       await createClient().from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", user.id).is("read_at", null)
@@ -52,28 +61,32 @@ export function NotificationsSheet() {
         <SheetHeader className="border-b">
           <SheetTitle>Notificaciones</SheetTitle>
           <SheetDescription>Pagos que se acercan, cobros, alertas de presupuesto y novedades.</SheetDescription>
-          <Button variant="ghost" size="sm" className="w-fit" disabled={!data?.some((n) => !n.read_at)} onClick={() => markAll.mutate()}>
-            <CheckCheck /> Marcar todo como leído
-          </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <Segmented value={ver} onChange={(v) => setVer(v as typeof ver)} items={[{ value: "todas", label: "Todas" }, { value: "sin-leer", label: unread ? `Sin leer (${unread})` : "Sin leer" }]} />
+            <Button variant="ghost" size="sm" className="w-fit" disabled={!unread || markAll.isPending} onClick={() => markAll.mutate()}>
+              <CheckCheck /> Marcar todo como leído
+            </Button>
+          </div>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-2">
           {isPending ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex gap-3 p-3"><Skeleton className="size-11 rounded-full" /><div className="grid flex-1 gap-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /></div></div>
             ))
-          ) : !data?.length ? (
+          ) : !list?.length ? (
             <Empty className="mt-10">
               <EmptyHeader>
-                <EmptyMedia><Illustration k="sin-avisos" width={190} /></EmptyMedia>
-                <EmptyTitle>No tienes notificaciones</EmptyTitle>
-                <EmptyDescription>Te avisaremos cuando se acerque un pago.</EmptyDescription>
+                <EmptyMedia><Illustration k={data?.length ? "todo-al-dia" : "sin-avisos"} width={190} /></EmptyMedia>
+                <EmptyTitle>{data?.length ? "Estás al día" : "No tienes notificaciones"}</EmptyTitle>
+                <EmptyDescription>{data?.length ? "Ya leíste todas tus notificaciones." : "Te avisaremos cuando se acerque un pago."}</EmptyDescription>
               </EmptyHeader>
+              {!!data?.length && <Button variant="outline" size="sm" onClick={() => setVer("todas")}>Ver todas</Button>}
             </Empty>
           ) : (
-            data.map((n) => {
+            <ul className="grid gap-0.5" aria-label="Lista de notificaciones">{list.map((n) => {
               const body = (
                 <>
-                  <span className={cn("grid size-14 shrink-0 place-items-center rounded-full", n.read_at ? "bg-secondary text-muted-foreground" : "bg-brand-gradient text-white")}>
+                  <span className={cn("relative grid size-12 shrink-0 place-items-center rounded-full", n.read_at ? TONE.gray : TONE[KIND_TONE[n.kind] ?? "brand"])}>
                     <Icon name={KIND_ICON[n.kind] ?? "bell"} className="size-6" />
                   </span>
                   <span className="grid flex-1 gap-0.5 text-left">
@@ -83,16 +96,22 @@ export function NotificationsSheet() {
                       {formatDistanceToNowStrict(new Date(n.created_at), { locale: es, addSuffix: true })}
                     </span>
                   </span>
-                  {!n.read_at && <span className="mt-2 size-2.5 shrink-0 rounded-full bg-brand" aria-label="Sin leer" />}
+                  {!n.read_at && <span className="mt-2 size-2.5 shrink-0 rounded-full bg-brand" role="img" aria-label="Sin leer" />}
                 </>
               )
-              const cls = "flex w-full gap-3 rounded-lg p-2.5 hover:bg-hover"
-              return n.href ? (
-                <Link key={n.id} href={n.href} className={cls} onClick={() => { markOne(n.id); setOpen(false) }}>{body}</Link>
-              ) : (
-                <button key={n.id} type="button" className={cls} onClick={() => markOne(n.id)}>{body}</button>
+              const cls = cn("flex w-full gap-3 rounded-lg p-2.5 hover:bg-hover focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none", !n.read_at && "bg-brand-soft/40")
+              return (
+                <li key={n.id} data-kind={n.kind}>
+                  {n.href ? (
+                    <Link href={n.href} className={cls} onClick={() => { markOne(n.id); setOpen(false) }}>{body}</Link>
+                  ) : (
+                    <button type="button" className={cls} onClick={() => markOne(n.id)} title={n.read_at ? undefined : "Marcar como leída"}>{body}</button>
+                  )}
+                  {/* "Quiere pasarte el hogar": se responde aquí mismo (al responder, el aviso queda leído) */}
+                  {!n.read_at && n.dedupe?.startsWith("transfer:") && <TransferBellActions transferId={n.dedupe.slice(9)} onDone={() => qc.invalidateQueries({ queryKey: ["notifications"] })} />}
+                </li>
               )
-            })
+            })}</ul>
           )}
         </div>
       </SheetContent>

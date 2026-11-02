@@ -16,11 +16,13 @@ export type Option = { value: string; label: string; icon?: string; hint?: strin
  */
 export function Combobox({
   value, onChange, options, id, placeholder = "Selecciona…", searchPlaceholder = "Buscar…", emptyText = "Sin resultados",
-  onCreate, onCreateAI, createLabel = "Crear", invalid, disabled, className,
+  onCreate, onCreateAI, createLabel = "Crear", invalid, disabled, className, "aria-label": ariaLabel, "aria-labelledby": ariaLabelledby,
 }: {
   value: string | null | undefined; onChange: (v: string) => void; options: Option[]; id?: string; placeholder?: string
   searchPlaceholder?: string; emptyText?: string; onCreate?: (text: string) => void; onCreateAI?: (text: string) => void
   createLabel?: string; invalid?: boolean; disabled?: boolean; className?: string
+  /** Nombre accesible cuando no hay un <label htmlFor> que apunte al `id`. */
+  "aria-label"?: string; "aria-labelledby"?: string
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState("")
@@ -29,7 +31,7 @@ export function Combobox({
   return (
     <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ("") }}>
       <PopoverTrigger asChild>
-        <Button id={id} type="button" variant="outline" role="combobox" aria-expanded={open} aria-invalid={invalid} disabled={disabled}
+        <Button id={id} type="button" variant="outline" role="combobox" aria-expanded={open} aria-haspopup="listbox" aria-invalid={invalid} aria-label={ariaLabel} aria-labelledby={ariaLabelledby} disabled={disabled}
           className={cn("h-11 w-full justify-between font-normal", !sel && "text-muted-foreground", className)}>
           <span className="flex min-w-0 items-center gap-2">
             {sel?.icon && <Icon name={sel.icon} className="text-muted-foreground" />}

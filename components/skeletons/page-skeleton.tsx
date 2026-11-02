@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 /** Esqueleto genérico de una sección: portada, KPIs y una lista (formas del diseño estilo Meta). */
 export function PageSkeleton({ kpis = 4, rows = 6 }: { kpis?: number; rows?: number }) {
   return (
-    <div className="grid gap-5" aria-busy="true" aria-label="Cargando">
+    <div className="grid gap-6" aria-busy="true" aria-label="Cargando">
       <div className="grid items-center gap-4 rounded-[24px] bg-white/45 p-6 sm:rounded-[28px] md:grid-cols-[minmax(0,1fr)_320px] md:p-9 dark:bg-white/5">
         <div className="grid gap-3">
           <Skeleton className="h-6 w-40 rounded-full" />

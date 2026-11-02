@@ -31,9 +31,13 @@ export function useSubmitState<T extends FieldValues>(formId: string, form: UseF
   useEffect(() => () => drop(formId), [formId, drop])
 }
 
-export function SubmitButton({ form, children = "Guardar", disabled, loading, loadingText = "Guardando…", className, onClick, hint = "Completa los campos obligatorios para guardar" }: {
+export function SubmitButton({ form, children = "Guardar", disabled, loading, loadingText = "Guardando…", className, onClick, hint = "Completa los campos obligatorios para guardar", type, variant }: {
   form?: string; children?: React.ReactNode; disabled?: boolean; loading?: boolean; loadingText?: string; className?: string
   onClick?: () => void
+  /** "submit" para usarlo dentro de un <form> sin react-hook-form (Enter envía). Con `form` siempre es submit. */
+  type?: "submit" | "button"
+  /** Variante del botón (p. ej. "destructive" para borrar o formatear). */
+  variant?: React.ComponentProps<typeof Button>["variant"]
   /** Por qué está inactivo (tooltip). */
   hint?: string
 }) {
@@ -42,7 +46,7 @@ export function SubmitButton({ form, children = "Guardar", disabled, loading, lo
   const busy = !!loading || !!st?.busy
   const off = !!disabled || busy || (form ? !st?.valid : false)
   const btn = (
-    <Button type={form ? "submit" : "button"} form={form} disabled={off} aria-busy={busy || undefined} className={className} onClick={onClick}>
+    <Button type={form ? "submit" : (type ?? "button")} variant={variant} form={form} disabled={off} aria-busy={busy || undefined} className={className} onClick={onClick}>
       {busy ? <><Spinner /> {loadingText}</> : children}
     </Button>
   )

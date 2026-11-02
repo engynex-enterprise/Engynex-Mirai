@@ -19,6 +19,8 @@ import { Money } from "@/components/mirai/money"
 import { Notice } from "@/components/mirai/notice"
 import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
@@ -111,14 +113,14 @@ export function CorreoView() {
           {state === "error" && <Notice tone="bad" title="Hubo un problema al leer el correo">{msg}</Notice>}
           {state === "ok" && (
             <Card className="gap-3 p-5 shadow-card ring-0">
-              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold">Revisa antes de guardar ({rows.filter((r) => r.incl).length} de {rows.length}){aiBusy && <span className="flex items-center gap-1 text-sm font-normal text-muted-foreground"><Spinner /> Categorizando con IA…</span>}</h2><Button onClick={save} disabled={saving}>{saving && <Spinner />} Guardar seleccionados</Button></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold">Revisa antes de guardar ({rows.filter((r) => r.incl).length} de {rows.length}){aiBusy && <span className="flex items-center gap-1 text-sm font-normal text-muted-foreground"><Spinner /> Categorizando con IA…</span>}</h2><SubmitButton disabled={!rows.some((r) => r.incl) || !canEdit} loading={saving} onClick={save}>Guardar seleccionados</SubmitButton></div>
               <div className="overflow-x-auto"><table className="w-full min-w-[40rem] text-sm">
                 <thead><tr className="border-b text-left text-muted-foreground"><th className="w-8 py-2" /><th className="font-medium">Fecha</th><th className="font-medium">Comercio</th><th className="font-medium">Categoría</th><th className="text-right font-medium">Valor</th></tr></thead>
                 <tbody>{rows.map((r, i) => (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="py-2"><Checkbox checked={r.incl} onCheckedChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, incl: v === true } : x)))} aria-label={`Incluir ${r.comercio}`} /></td>
                     <td className="whitespace-nowrap">{fmtDate(r.fecha)}</td>
-                    <td><p className="font-medium">{r.comercio}</p><p className="max-w-64 truncate text-xs text-muted-foreground">{r.asunto}</p>{r.hormiga && <StatusPill tone="porVencer" className="mt-1 h-5">hormiga</StatusPill>}</td>
+                    <td><div className="flex items-center gap-2.5"><EntityLogo name={r.comercio} icon={cats.find((c) => c.id === r.category_id)?.icon ?? "receipt"} seed={r.category_id ?? r.comercio} size={32} /><div className="grid min-w-0"><p className="font-medium">{r.comercio}</p><p className="max-w-64 truncate text-xs text-muted-foreground">{r.asunto}</p>{r.hormiga && <StatusPill tone="porVencer" className="mt-1 h-5 w-fit" hint="Gasto pequeño y frecuente que se puede evitar.">hormiga</StatusPill>}</div></div></td>
                     <td className="min-w-48"><Combobox value={r.category_id ?? ""} onChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, category_id: v, src: null, manual: true } : x)))} options={categoryOptions(cats)} placeholder="Elige" /></td>
                     <td className="text-right font-medium tabular-nums"><Money value={r.valor} /></td>
                   </tr>

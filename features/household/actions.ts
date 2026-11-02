@@ -13,8 +13,10 @@ import { formatCoPhone } from "@/lib/notify/whatsapp"
 import { siteUrl } from "@/lib/site-url"
 import { limitOf } from "@/lib/plans"
 import { ACCESS_ROLES, assignableRoles, can, deniedMsg, ROLE_INFO, ROLE_RANK, toAccess, type AccessRole } from "@/lib/household/roles"
-import { afterSend, checkDuplicate, inviteEstado, inviteText, normalizeDest, resendGate, sameName, waMeLink, type LastResult } from "@/lib/household/invites"
+import { afterSend, checkDuplicate, inviteEstado, inviteText, isTestEmail, normalizeDest, resendGate, sameName, waMeLink, type LastResult } from "@/lib/household/invites"
 import { sendInviteEmail, sendInviteWhatsApp, type InviteMsg } from "./send"
+import { limitError } from "@/lib/security/rate-limit"
+import { publicError } from "@/lib/security/errors"
 import type { HouseholdPeople, InviteResult, Person, Share } from "./types"
 
 type Res = { ok: boolean; msg: string }
@@ -22,7 +24,7 @@ const hash = (t: string) => createHash("sha256").update(t).digest("hex")
 const DAYS = 7
 const err = (e: unknown) => String((e as { message?: string })?.message ?? e ?? "Error desconocido")
 /** Error legible de una función SQL (los RAISE EXCEPTION ya vienen en español). */
-const sqlMsg = (m: string) => m.replace(/^.*?ERROR:\s*/, "")
+const sqlMsg = (m: string) => publicError({ message: m })
 
 type Ctx = Awaited<ReturnType<typeof getAppContext>>
 type Gate<T> = ({ ctx: Ctx; error?: undefined } & T) | { ctx?: undefined; error: string }
@@ -170,6 +172,10 @@ export async function invitePerson(input: z.input<typeof Invite>): Promise<Invit
   if (!assignableRoles(ctx.household.access).includes(p.data.access)) return { ok: false, msg: "No puedes dar un rol con más permisos que el tuyo." }
   const dest = normalizeDest(p.data.destino)
   if ("error" in dest) return { ok: false, msg: dest.error }
+  // Límite de invitaciones nuevas (evita usar Mirai para enviar correos o WhatsApp masivos). Los correos de prueba
+  // (.test, example.com) no se envían de verdad y no cuentan.
+  const lim = dest.kind === "email" && isTestEmail(dest.value) ? null : (await limitError("invitarMin", ctx.user.id, "Enviaste muchas invitaciones seguidas")) ?? (await limitError("invitar", ctx.user.id, "Llegaste al límite de invitaciones de hoy"))
+  if (lim) return { ok: false, msg: lim }
   const db = supabaseAdmin()
   const hh = ctx.household.id
 
@@ -219,7 +225,7 @@ export async function invitePerson(input: z.input<typeof Invite>): Promise<Invit
   const { data: inv, error } = await db.from("household_invitations").insert(row).select(INV_COLS).single()
   if (error || !inv) {
     if (error?.code === "23505") return { ok: false, code: "pendiente", msg: "Ya hay una invitación pendiente para esa persona. Búscala en la lista y reenvíala." }
-    return { ok: false, msg: `No pudimos crear la invitación: ${error?.message ?? "error desconocido"}` }
+    return { ok: false, msg: `No pudimos crear la invitación: ${publicError(error, "intenta de nuevo.")}` }
   }
   const { share, result } = await deliver(ctx, inv as InvRow, t.token)
   return { ok: true, invitationId: inv.id, share, delivery: result, msg: deliveryMsg(nombre || dest.label, result, false) }
@@ -274,7 +280,7 @@ export async function cancelInvitation(id: string): Promise<Res> {
   if (!o.ctx) return { ok: false, msg: o.error }
   const now = new Date().toISOString()
   const { error } = await supabaseAdmin().from("household_invitations").update({ canceled_at: now, canceled_by: o.ctx.user.id, expires_at: new Date(Math.min(Date.now(), new Date(o.inv.expires_at).getTime())).toISOString() }).eq("id", id)
-  return error ? { ok: false, msg: error.message } : { ok: true, msg: "Invitación cancelada. El enlace ya no sirve." }
+  return error ? { ok: false, msg: publicError(error) } : { ok: true, msg: "Invitación cancelada. El enlace ya no sirve." }
 }
 
 // ── Roles y personas con cuenta ───────────────────────────────────────────────────────────────────────────────
@@ -296,6 +302,10 @@ export async function removePerson(userId: string): Promise<Res> {
   const ctx = await getAppContext()
   const e = await rpc("remove_household_member", { p_household: ctx.household.id, p_user: userId })
   if (e) return { ok: false, msg: e }
+  // Los accesos del contador que creó esa persona dejan de servir: ya no es del hogar.
+  const db = supabaseAdmin()
+  const { data: bs } = await db.from("books").select("id").eq("household_id", ctx.household.id)
+  if (bs?.length) await db.from("accountant_shares").update({ revoked_at: new Date().toISOString() }).in("book_id", bs.map((b) => b.id)).eq("created_by", userId).is("revoked_at", null)
   if (userId === ctx.user.id) (await cookies()).delete(BOOK_COOKIE)
   return { ok: true, msg: userId === ctx.user.id ? "Saliste del hogar." : "Ya no tiene acceso al hogar. Sus gastos e ingresos se quedan a su nombre." }
 }
@@ -343,7 +353,7 @@ export async function saveFamilyMember(input: z.input<typeof Member>): Promise<R
   const { data, error } = p.data.id
     ? await sb.from("family_members").update(row).eq("id", p.data.id).eq("household_id", ctx.household.id).select("id").single()
     : await sb.from("family_members").insert({ ...row, household_id: ctx.household.id }).select("id").single()
-  if (error || !data) return { ok: false, msg: `No se pudo guardar: ${error?.message ?? "sin permiso"}` }
+  if (error || !data) return { ok: false, msg: `No se pudo guardar: ${error ? publicError(error, "intenta de nuevo.") : "sin permiso"}` }
   return { ok: true, id: data.id, msg: p.data.id ? `Se actualizaron los datos de ${row.nombre}.` : `${row.nombre} ya hace parte de tu hogar.` }
 }
 
@@ -356,7 +366,7 @@ export async function deleteFamilyMember(id: string, restore = false): Promise<R
   if (!f) return { ok: false, msg: "Ese integrante ya no está en el hogar." }
   if (!restore && (f.es_titular || f.user_id)) return { ok: false, msg: `${f.nombre} tiene cuenta en Mirai: primero quítale el acceso al hogar.` }
   const { error } = await sb.from("family_members").update({ deleted_at: restore ? null : new Date().toISOString() }).eq("id", id)
-  if (error) return { ok: false, msg: error.message }
+  if (error) return { ok: false, msg: publicError(error) }
   if (!restore) await supabaseAdmin().from("household_invitations").update({ canceled_at: new Date().toISOString(), canceled_by: a.ctx.user.id, expires_at: new Date().toISOString() }).eq("family_member_id", id).is("accepted_at", null).is("canceled_at", null)
   return { ok: true, msg: restore ? `${f.nombre} volvió al hogar.` : `${f.nombre} ya no está en el hogar.` }
 }

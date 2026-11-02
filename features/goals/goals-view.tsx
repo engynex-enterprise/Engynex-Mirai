@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { CalendarClock, Pencil, PiggyBank, Plus, Siren, Trash2, Umbrella } from "lucide-react"
+import { CalendarClock, PiggyBank, Plus, Siren, Umbrella } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +12,10 @@ import { Money } from "@/components/mirai/money"
 import { MoneyInput } from "@/components/mirai/money-input"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { EmptyState } from "@/components/mirai/empty-state"
-import { Icon } from "@/components/mirai/icon"
+import { EntityLogo } from "@/components/mirai/entity-logo"
+import { IconAction } from "@/components/mirai/list-row"
+import { DataTable } from "@/components/mirai/data-table"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
@@ -27,6 +30,8 @@ import { useCategories, useIncomeCategories } from "@/features/catalogs/hooks"
 import { PayFixedDialog } from "@/features/fixed/pay-fixed-dialog"
 import { FixedForm, type FixedRow } from "@/features/fixed/fixed-form"
 import { AporteDialog, FundDialog, GoalDialog, type AporteTarget } from "./goal-dialogs"
+
+type G = Row<"goals">
 
 function AporteRow({ fixed, today, onPay, onEdit, onNew, sugerido, label }: { fixed: FixedRow | undefined; today: string; onPay: (f: FixedRow) => void; onEdit: () => void; onNew: () => void; sugerido: string; label: string }) {
   if (!fixed) return (
@@ -46,7 +51,7 @@ function AporteRow({ fixed, today, onPay, onEdit, onNew, sugerido, label }: { fi
         <span className="text-muted-foreground">{pend ? <span className="text-danger">Pendiente desde {fmtDate(pend.due)}</span> : st.prox ? `Próximo: ${fmtDate(st.prox.due)}` : ""} · llevas {fixed.payments.length} aporte{fixed.payments.length === 1 ? "" : "s"} {label}</span>
       </span>
       {(pend || st.prox) && <Button size="sm" onClick={() => onPay(fixed)}>Ya aporté</Button>}
-      <Button variant="ghost" size="icon" aria-label="Editar aporte" onClick={onEdit}><Pencil /></Button>
+      <IconAction a={{ label: "Editar aporte", tip: "Cambiar el aporte programado", icon: "pencil", onClick: onEdit }} />
     </div>
   )
 }
@@ -63,6 +68,7 @@ export function GoalsView() {
   const [paying, setPaying] = useState<FixedRow | null>(null)
   const [resched, setResched] = useState<FixedRow | null>(null)
   const [abono, setAbono] = useState<Record<string, number>>({})
+  const [abonando, setAbonando] = useState<string | null>(null)
   const { data: book, isPending } = useBookData()
   const { data: cats = [] } = useCategories()
   const { data: incCats = [] } = useIncomeCategories()
@@ -88,10 +94,14 @@ export function GoalsView() {
   const meses = d.bas ? tiene / d.bas : 0
   const goals = book.goals as unknown as Row<"goals">[]
 
+  const planOf = (g: G) => metaPlan({ objetivo: Number(g.objetivo), ahorrado: Number(g.ahorrado), fecha: g.fecha }, today)
   const abonar = async (g: Row<"goals">) => {
     const v = abono[g.id]
     if (!v) return toast.error("Escribe cuánto guardaste")
-    await createClient().from("goals").update({ ahorrado: Number(g.ahorrado) + v }).eq("id", g.id)
+    setAbonando(g.id)
+    const { error } = await createClient().from("goals").update({ ahorrado: Number(g.ahorrado) + v }).eq("id", g.id)
+    setAbonando(null)
+    if (error) return toast.error("No se pudo abonar", { description: error.message })
     toast.success("¡Bien! Abono registrado", { description: `Llevas ${fmtMoney(Number(g.ahorrado) + v)} de ${fmtMoney(Number(g.objetivo))}.` })
     setAbono((a) => ({ ...a, [g.id]: 0 }))
     invalidateBook(qc, bookId, "goals")
@@ -137,21 +147,35 @@ export function GoalsView() {
         </CardContent>
       </Card>
 
-      {!goals.length ? (
-        <Card className="shadow-card ring-0"><EmptyState iso="metas" title="Aún no tienes metas" description="Un viaje, la cuota inicial de la casa o el estudio de tus hijos." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Crear meta</Button>} /></Card>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {goals.map((g) => {
-            const p = metaPlan({ objetivo: Number(g.objetivo), ahorrado: Number(g.ahorrado), fecha: g.fecha }, today)
-            const lograda = p.falta <= 0
-            return (
-              <Card key={g.id} className="gap-4 p-5 shadow-card ring-0">
+      <DataTable<G>
+        bare title="Tus metas" info="Lo que quieres lograr. Te decimos cuánto guardar cada mes para llegar a tiempo."
+        data={goals} rowKey={(g) => g.id} noun={["meta", "metas"]} exportName="metas" listClassName="grid gap-6 lg:grid-cols-2"
+        total={{ value: (g) => Math.max(0, Number(g.objetivo) - Number(g.ahorrado)), label: "te falta" }}
+        columns={[
+          { id: "nombre", header: "Meta", sort: (g) => g.nombre.toLowerCase(), csv: (g) => g.nombre },
+          { id: "avance", header: "Avance", sort: (g) => planOf(g).progreso, csv: (g) => `${Math.round(planOf(g).progreso * 100)} %` },
+          { id: "fecha", header: "Fecha", sort: (g) => g.fecha ?? "9999", csv: (g) => g.fecha },
+          { id: "objetivo", header: "Necesitas", sort: (g) => Number(g.objetivo), csv: (g) => Number(g.objetivo) },
+          { id: "ahorrado", header: "Llevas", csv: (g) => Number(g.ahorrado) },
+          { id: "mensual", header: "Guarda al mes", sort: (g) => planOf(g).sugerido, csv: (g) => Math.round(planOf(g).sugerido) },
+        ]}
+        search={{ placeholder: "Buscar meta", text: (g) => g.nombre }}
+        views={[{ id: "todas", label: "Todas" }, { id: "curso", label: "En curso", match: (g) => planOf(g).falta > 0 }, { id: "logradas", label: "Logradas", match: (g) => planOf(g).falta <= 0, hint: "Ya llegaste a lo que necesitabas." }]}
+        filters={[{ id: "fecha", label: "Fecha de la meta", kind: "dates", value: (g) => g.fecha }, { id: "objetivo", label: "Valor de la meta", kind: "range", money: true, value: (g) => Number(g.objetivo) }]}
+        emptyState={<Card className="shadow-card ring-0"><EmptyState iso="metas" title="Aún no tienes metas" description="Un viaje, la cuota inicial de la casa o el estudio de tus hijos." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Crear meta</Button>} /></Card>}
+        item={(g) => {
+          const p = planOf(g)
+          const lograda = p.falta <= 0
+          return (
+            <li key={g.id} className="grid">
+              <Card className="h-full gap-4 p-5 shadow-card ring-0">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-11 place-items-center rounded-full bg-info-soft text-info"><Icon name={g.icon} className="size-5" /></span>
-                  <div className="grid flex-1"><b className="text-lg">{g.nombre}</b><span className="text-sm text-muted-foreground"><Money value={Number(g.ahorrado)} /> de <Money value={Number(g.objetivo)} /></span></div>
-                  {canEdit && <><Button variant="ghost" size="icon" aria-label={`Editar ${g.nombre}`} onClick={() => setEditing(g)}><Pencil /></Button><Button variant="ghost" size="icon" aria-label={`Eliminar ${g.nombre}`} onClick={() => del.mutate(g)}><Trash2 /></Button></>}
+                  <EntityLogo icon={g.icon} seed={g.id} tone={lograda ? "success" : undefined} size={44} />
+                  <div className="grid min-w-0 flex-1"><b className="truncate text-lg">{g.nombre}</b><span className="text-sm text-muted-foreground"><Money value={Number(g.ahorrado)} /> de <Money value={Number(g.objetivo)} /></span></div>
+                  {lograda && <StatusPill tone="pagado" check hint="Ya juntaste lo que necesitabas.">Lograda</StatusPill>}
+                  {canEdit && <><IconAction a={{ label: `Editar ${g.nombre}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(g) }} /><IconAction a={{ label: `Eliminar ${g.nombre}`, tip: "Eliminar", icon: "trash-2", destructive: true, onClick: () => del.mutate(g) }} /></>}
                 </div>
-                <Progress value={Math.min(100, p.progreso * 100)} className="h-2.5 [&>div]:bg-navy dark:[&>div]:bg-lime" />
+                <Progress value={Math.min(100, p.progreso * 100)} className="h-2.5 [&>div]:bg-navy dark:[&>div]:bg-lime" aria-label={`${Math.round(p.progreso * 100)} % de la meta`} />
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="rounded-md bg-muted p-2"><p className="text-xs text-muted-foreground">Avance</p><b>{Math.round(p.progreso * 100)} %</b></div>
                   <div className="rounded-md bg-muted p-2"><p className="text-xs text-muted-foreground">Fecha</p><b>{fmtDate(g.fecha)}</b></div>
@@ -160,15 +184,15 @@ export function GoalsView() {
                 {!lograda && <AporteRow fixed={d.metaFijo(g.id)} today={today} onPay={setPaying} onEdit={() => setAporte({ t: "meta", id: g.id, nombre: g.nombre, mensual: p.mensual })} onNew={() => setAporte({ t: "meta", id: g.id, nombre: g.nombre, mensual: p.mensual })} sugerido={d.pd.txt} label="a esta meta" />}
                 {canEdit && !lograda && (
                   <div className="flex items-end gap-2">
-                    <div className="flex-1"><MoneyInput value={abono[g.id] ?? 0} onChange={(v) => setAbono((a) => ({ ...a, [g.id]: v }))} placeholder="¿Cuánto guardaste?" /></div>
-                    <Button variant="soft" className="h-11" onClick={() => abonar(g)}>Abonar</Button>
+                    <div className="flex-1"><MoneyInput value={abono[g.id] ?? 0} onChange={(v) => setAbono((a) => ({ ...a, [g.id]: v }))} placeholder="¿Cuánto guardaste?" aria-label={`Abono a ${g.nombre}`} /></div>
+                    <SubmitButton className="h-11" disabled={!(abono[g.id] > 0)} loading={abonando === g.id} loadingText="Abonando…" onClick={() => abonar(g)}>Abonar</SubmitButton>
                   </div>
                 )}
               </Card>
-            )
-          })}
-        </div>
-      )}
+            </li>
+          )
+        }}
+      />
 
       <GoalDialog open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} goal={editing} />
       <FundDialog tipo={fund} onOpenChange={(o) => !o && setFund(null)} saldo={saldo} metaTxt={`Meta recomendada: ${book.settings.emerg_meta} meses de tus gastos básicos (${fmtMoney(d.meta)}).`} />

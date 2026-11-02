@@ -20,6 +20,7 @@ import { testMsg } from "@/lib/notify/digest"
 import { logSend } from "@/lib/notify/log"
 import { maskDest } from "@/lib/notify/rules"
 import { formatCoPhone, normalizeCoPhone } from "@/lib/notify/whatsapp"
+import { purgeHouseholdFiles, purgeUserFiles } from "@/features/data/purge"
 
 const DAY = 86_400_000
 const ago = (d: number) => new Date(Date.now() - d * DAY).toISOString()
@@ -150,8 +151,9 @@ export async function adminDeleteUser(id: string, confirmEmail: string) {
   const { data: mem } = await db.from("household_members").select("household_id").eq("user_id", uid)
   for (const m of mem ?? []) {
     const { count } = await db.from("household_members").select("user_id", { count: "exact", head: true }).eq("household_id", m.household_id)
-    if ((count ?? 0) <= 1) await db.from("households").delete().eq("id", m.household_id)
+    if ((count ?? 0) <= 1) { await purgeHouseholdFiles(m.household_id); await db.from("households").delete().eq("id", m.household_id) }
   }
+  await purgeUserFiles(uid).catch(() => 0)
   const { error } = await db.auth.admin.deleteUser(uid)
   if (error) throw new Error(error.message)
   await audit(ctx.user.id, "eliminar usuario", uid, { email: u.user.email })

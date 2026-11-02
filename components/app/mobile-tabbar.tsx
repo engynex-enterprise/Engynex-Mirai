@@ -16,7 +16,7 @@ export function MobileTabBar() {
   // Gastos también queda activa en /fijos (es una pestaña de Gastos).
   const here = `/${navIdOf(path.split("/")[1] || "inicio")}`
   const tab = (href: string, label: string, icon: React.ReactNode) => (
-    <Link href={href} className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold", here.startsWith(href) ? "text-brand after:absolute after:inset-x-4 after:top-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-muted-foreground")} aria-current={here.startsWith(href) ? "page" : undefined}>
+    <Link href={href} className={cn("relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none", here.startsWith(href) ? "text-brand after:absolute after:inset-x-4 after:top-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-muted-foreground")} aria-current={here.startsWith(href) ? "page" : undefined}>
       {icon}{label}
     </Link>
   )
@@ -25,13 +25,13 @@ export function MobileTabBar() {
       <div className="mx-auto flex max-w-lg items-end">
         {tab("/inicio", "Inicio", <House className="size-5" />)}
         {tab("/gastos", "Gastos", <Receipt className="size-5" />)}
-        <button type="button" onClick={() => setAdd(true)} className="-mt-5 flex flex-1 flex-col items-center gap-0.5 text-[11px] font-medium text-muted-foreground" aria-label="Agregar">
-          <span className="bg-brand-gradient grid size-13 place-items-center rounded-full text-white shadow-[0_4px_14px_rgba(42,127,20,.45)] ring-4 ring-card"><Plus className="size-7" /></span>
+        <button type="button" onClick={() => setAdd(true)} className="group -mt-5 flex flex-1 flex-col items-center gap-0.5 rounded-lg text-[11px] font-semibold text-muted-foreground focus-visible:outline-none" aria-label="Agregar" aria-haspopup="dialog">
+          <span className="bg-brand-gradient grid size-13 place-items-center rounded-full text-white shadow-[0_4px_14px_rgba(42,127,20,.45)] ring-4 ring-card transition-transform group-active:scale-95 group-focus-visible:ring-ring/60"><Plus className="size-7" /></span>
           Agregar
         </button>
         {tab("/recordatorios", "Pagos", <Bell className="size-5" />)}
-        <button type="button" onClick={() => setOpenMobile(true)} className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-muted-foreground">
-          <Menu className="size-5" />Menú
+        <button type="button" onClick={() => setOpenMobile(true)} className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" aria-haspopup="dialog">
+          <Menu className="size-5" aria-hidden />Menú
         </button>
       </div>
     </nav>

@@ -14,6 +14,8 @@ import { chatTools, resolveCategory } from "@/lib/chat/tools"
 import { MSG_COLS, toMsg, type ChatEvent, type ChatMeta, type Consulta, type Propuesta } from "@/lib/chat/types"
 import { analyzeInput, interpretText } from "@/features/advisor/engine"
 import { chatAi, loadChatBook } from "@/features/chat/server"
+import { limitError } from "@/lib/security/rate-limit"
+import { publicError } from "@/lib/security/errors"
 
 // Chat de Mirai en streaming (burbuja y /consejero). Responde una línea JSON por evento (lib/chat/types.ts › ChatEvent).
 // Orden para cada mensaje, del más barato al más caro:
@@ -44,8 +46,19 @@ function decisionText(c: Consulta, faltan: string[]) {
   return [v.intro, ask].filter(Boolean).join("\n\n")
 }
 
+/** Solo peticiones desde Mirai (defensa extra contra CSRF: las cookies ya son SameSite=Lax). */
+function sameOrigin(req: Request) {
+  const origin = req.headers.get("origin")
+  if (!origin) return true
+  try { return new URL(origin).host === (req.headers.get("x-forwarded-host") ?? req.headers.get("host")) } catch { return false }
+}
+
 export async function POST(req: Request) {
+  if (!sameOrigin(req)) return Response.json({ msg: "Origen no permitido" }, { status: 403 })
+  if (!(req.headers.get("content-type") ?? "").includes("application/json")) return Response.json({ msg: "Solicitud inválida" }, { status: 415 })
   const ctx = await getAppContext()
+  const lim = await limitError("chat", ctx.user.id, "Enviaste muchos mensajes seguidos")
+  if (lim) return Response.json({ msg: lim }, { status: 429 })
   const parsed = Body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return Response.json({ msg: "Solicitud inválida" }, { status: 400 })
   const body = parsed.data
@@ -210,7 +223,7 @@ export async function POST(req: Request) {
         await sb.from("chat_threads").update({ updated_at: nowIso(), ultimo: preview(content) }).eq("id", threadId)
         emit({ t: "done", msg: toMsg(saved) })
       } catch (e) {
-        emit({ t: "error", msg: (e as Error).message?.slice(0, 200) || "No pudimos responder. Intenta de nuevo." })
+        emit({ t: "error", msg: publicError(e, "No pudimos responder. Intenta de nuevo.").slice(0, 200) })
       } finally {
         if (!closed) { closed = true; try { controller.close() } catch { /* ya cerrado */ } }
       }

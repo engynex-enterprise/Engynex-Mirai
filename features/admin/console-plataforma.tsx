@@ -36,7 +36,6 @@ import { CATS, INTEGRATIONS, type IntegrationDef } from "@/lib/integrations/regi
 import { ADMIN_MODES, MODES, type GlobalMode } from "@/lib/integrations/resolve"
 import { integrationBrand } from "@/lib/brands"
 import { FEATURES, FEATURE_LIST, ahorroAnual, precio } from "@/lib/plans"
-import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { usePlanOptions } from "./console-negocio"
 import { adminAddAdminByEmail, adminAdmins, adminAuditLog, adminBroadcast, adminCleanOrphanHouseholds, adminGlobalIntegrations, adminNotifyLog, adminSaveGlobalIntegration, adminSaveSettings, adminSendTest, adminSetPlatformAdmin, adminSystem, adminTestDefaults, adminTestGlobal } from "./server"

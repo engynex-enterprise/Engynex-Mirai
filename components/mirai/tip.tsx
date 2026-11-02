@@ -6,12 +6,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils"
 import { Icon } from "./icon"
 
-/** Tooltip sobre cualquier elemento (estado, pill, ícono). El hijo debe aceptar ref (botón, span, enlace). */
-export function Tip({ label, children, side = "top" }: { label: React.ReactNode; children: React.ReactElement; side?: "top" | "bottom" | "left" | "right" }) {
+/**
+ * Tooltip sobre cualquier elemento (estado, pill, ícono). El hijo debe aceptar ref (botón, span, enlace).
+ * Con `wrap` el hijo va dentro de un <span> enfocable: úsalo con componentes que no reenvían ref (p. ej. StatusPill),
+ * así el tooltip también se abre con el teclado.
+ */
+export function Tip({ label, children, side = "top", wrap }: { label: React.ReactNode; children: React.ReactElement; side?: "top" | "bottom" | "left" | "right"; wrap?: boolean }) {
   if (!label) return children
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger asChild>{wrap ? <span tabIndex={0} className="inline-flex rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">{children}</span> : children}</TooltipTrigger>
       <TooltipContent side={side} className="max-w-72">{label}</TooltipContent>
     </Tooltip>
   )
@@ -23,7 +27,7 @@ export function Tip({ label, children, side = "top" }: { label: React.ReactNode;
  */
 export function IconButton({ label, icon, onClick, href, variant = "ghost", size = "icon", className, disabled, destructive, side, ...rest }: {
   label: string; icon: string | React.ReactNode; onClick?: () => void; href?: string
-  variant?: "ghost" | "outline" | "secondary" | "soft"; size?: "icon" | "icon-sm" | "icon-lg"; className?: string; disabled?: boolean
+  variant?: "default" | "ghost" | "outline" | "secondary" | "soft"; size?: "icon" | "icon-sm" | "icon-lg"; className?: string; disabled?: boolean
   destructive?: boolean; side?: "top" | "bottom" | "left" | "right"
 } & Omit<React.ComponentProps<"button">, "children" | "onClick">) {
   const glyph = typeof icon === "string" ? <Icon name={icon} /> : icon

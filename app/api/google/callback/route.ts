@@ -2,15 +2,18 @@ import { NextResponse, type NextRequest } from "next/server"
 import { cookies } from "next/headers"
 import { supabaseServer } from "@/utils/supabase/server"
 import { exchangeCode, saveTokens, siteUrl } from "@/lib/google"
+import { safeEqual } from "@/lib/security/secrets"
+import { safeNext } from "@/lib/security/safe-next"
 
 export async function GET(req: NextRequest) {
   const store = await cookies()
-  const saved = JSON.parse(store.get("g_oauth")?.value ?? "{}") as { state?: string; back?: string }
+  let saved: { state?: string; back?: string } = {}
+  try { saved = JSON.parse(store.get("g_oauth")?.value ?? "{}") } catch { saved = {} }
   store.delete("g_oauth")
-  const back = saved.back || "/correo"
+  const back = safeNext(typeof saved.back === "string" ? saved.back : null, "/correo")
   const q = req.nextUrl.searchParams
   if (q.get("error")) return NextResponse.redirect(`${siteUrl()}${back}?google=cancelado`)
-  if (!saved.state || saved.state !== q.get("state")) return NextResponse.redirect(`${siteUrl()}${back}?google=error`)
+  if (!safeEqual(saved.state, q.get("state"))) return NextResponse.redirect(`${siteUrl()}${back}?google=error`)
   const sb = await supabaseServer()
   const { data } = await sb.auth.getClaims()
   if (!data?.claims) return NextResponse.redirect(`${siteUrl()}/login`)

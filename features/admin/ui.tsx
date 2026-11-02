@@ -38,12 +38,7 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${nf(n)} ${
  * Para ventanas de edición: guarda el registro abierto y no lo borra al cerrar (la animación de salida sigue mostrando
  * lo mismo, sin "abrir otra vez" vacía). `key` cambia en cada apertura para que el formulario arranque limpio.
  */
-export function useDialogTarget<T>() {
-  const [s, setS] = useState<{ value: T | null; open: boolean; key: number }>({ value: null, open: false, key: 0 })
-  const show = useCallback((value: T) => setS((x) => ({ value, open: true, key: x.key + 1 })), [])
-  const close = useCallback(() => setS((x) => ({ ...x, open: false })), [])
-  return { value: s.value, open: s.open, key: s.key, show, close, onOpenChange: (o: boolean) => { if (!o) close() } }
-}
+export { useDialogTarget } from "@/components/mirai/dialog-state"
 
 // ── Confirmar y pedir un dato (reemplaza confirm() y prompt() del navegador) ────────────────────────────────────
 

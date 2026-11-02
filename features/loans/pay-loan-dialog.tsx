@@ -14,6 +14,7 @@ import { MoneyInput } from "@/components/mirai/money-input"
 import { DatePicker } from "@/components/mirai/date-picker"
 import { ChoiceCards, Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
@@ -120,7 +121,7 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
           <p className="text-muted-foreground">{tipo === "cuota" ? `Se registran ${fmtMoney(paid)}.` : `Abono de ${fmtMoney(Math.min(valor, e0.saldo))}.`} {e1.done ? "¡Queda saldado!" : `Faltarán ${e1.plan.length} cuotas de ${fmtMoney(e1.plan[0]?.valor ?? 0)}.`}</p>
         </div>
       )}
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={submit} disabled={busy}>{busy && <Spinner />} Registrar pago</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={tipo === "abono" && !(valor > 0)} loading={busy} onClick={submit}>Registrar pago</SubmitButton></div>
     </FieldGroup>
   )
 }

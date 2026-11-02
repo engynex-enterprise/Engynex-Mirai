@@ -2,6 +2,7 @@ import "server-only"
 import nodemailer from "nodemailer"
 import { Resend } from "resend"
 import type { IntegrationValue } from "@/features/integrations/store"
+import { assertPublicHost } from "@/lib/security/safe-url"
 
 export type Mail = { to: string; subject: string; html: string; text?: string }
 
@@ -28,6 +29,7 @@ export async function sendEmail(v: IntegrationValue, m: Mail): Promise<string | 
     case "email_gmail":
     case "email_smtp": {
       const gmail = v.kind === "email_gmail"
+      if (!gmail) await assertPublicHost(String(c.host ?? "")) // SSRF: nada de localhost, IPs privadas ni metadatos
       const t = nodemailer.createTransport(gmail ? { service: "gmail", auth: { user: c.user, pass: s.pass } } : { host: c.host, port: Number(c.port) || 465, secure: c.secure !== "false" && (c.secure as unknown) !== false, auth: { user: c.user, pass: s.pass } })
       const info = await t.sendMail({ from: `${fromName} <${gmail ? c.user : c.from}>`, to: m.to, subject: m.subject, html: m.html, text: m.text })
       return info.messageId ?? null

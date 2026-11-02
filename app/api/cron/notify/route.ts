@@ -4,6 +4,7 @@ import { defaultRule, horaBogota, runRule, type Rule } from "@/lib/notify/digest
 import { refreshReferenceData } from "@/features/integrations/refresh"
 import { planReminders } from "@/lib/payments/reminders"
 import { runAutomationsCron } from "@/lib/automations/server"
+import { bearerOk } from "@/lib/security/secrets"
 
 export const maxDuration = 60
 
@@ -12,7 +13,8 @@ export const maxDuration = 60
  * (`select mirai_schedule_notify(url, secreto)`). Protegido con `Authorization: Bearer CRON_SECRET`.
  */
 export async function GET(req: NextRequest) {
-  if (!process.env.CRON_SECRET || req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`)
+  // Comparación en tiempo constante (no revela cuántos caracteres del secreto acertó quien prueba).
+  if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET))
     return NextResponse.json({ error: "No autorizado" }, { status: 401 })
   const daily = req.nextUrl.searchParams.get("daily") === "1"
   const db = supabaseAdmin()

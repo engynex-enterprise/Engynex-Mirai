@@ -19,8 +19,10 @@ test("asistentes: categoría sugerida (con respaldo sin IA), entidad por NIT, le
   await page.keyboard.press("Escape")
 
   await page.goto("/le-debo?nuevo=1")
-  await expect(page.getByRole("button", { name: "Leer con foto" })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole("combobox", { name: "Banco o entidad" }).click()
+  // La lectura con foto aparece al escoger un crédito con el banco.
+  await page.getByRole("radio", { name: "Banco, cooperativa o financiera" }).click({ timeout: 30_000 })
+  await expect(page.getByRole("button", { name: "Leer con foto" })).toBeVisible()
+  await page.getByRole("combobox", { name: /banco o entidad/i }).click()
   await page.getByPlaceholder("Buscar…").fill("890903938")
   await page.getByRole("option", { name: /Crear banco o entidad/ }).first().click()
   await expect(page.getByRole("textbox", { name: "NIT o documento" })).toHaveValue("890903938")

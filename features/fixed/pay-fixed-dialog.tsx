@@ -5,8 +5,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
-import { Spinner } from "@/components/ui/spinner"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
+import { SubmitButton } from "@/components/mirai/submit-button"
 import { FormField } from "@/components/mirai/field"
 import { MoneyInput } from "@/components/mirai/money-input"
 import { DatePicker } from "@/components/mirai/date-picker"
@@ -82,7 +82,7 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
       </div>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <Button variant="ghost" onClick={() => { onOpenChange(false); onReschedule(fixed) }}>No tocaba pagar · cambiar fecha</Button>
-        <Button onClick={pay} disabled={busy}>{busy && <Spinner />} Registrar pago</Button>
+        <SubmitButton disabled={!(valor > 0) || !per} loading={busy} onClick={pay}>Registrar pago</SubmitButton>
       </div>
     </FieldGroup>
   )

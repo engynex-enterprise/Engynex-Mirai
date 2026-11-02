@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Wand2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
+import { Notice } from "@/components/mirai/notice"
 import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { createClient } from "@/utils/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -18,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCaptcha } from "./turnstile"
 import { GoogleButton } from "./google-button"
 import { AuthDone, AuthHeader, PasswordInput, useAutofilled } from "./auth-ui"
+import { safeNext } from "@/lib/security/safe-next"
 
 const FORM_ID = "login"
 const schema = z.object({
@@ -36,7 +38,7 @@ const AUTH_ERRORS: Record<string, string> = {
 export function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
-  const next = params.get("next") || "/inicio"
+  const next = safeNext(params.get("next"))
   const [sent, setSent] = useState(false)
   // Tras entrar, el botón sigue en "Entrando…" mientras carga la siguiente pantalla.
   const [leaving, setLeaving] = useState(false)
@@ -82,6 +84,8 @@ export function LoginForm() {
   return (
     <div className="grid gap-6">
       <AuthHeader title="Hola de nuevo" description="Entra para ver las finanzas de tu hogar." />
+      {params.get("aviso") === "correo" && <Notice tone="info" title="Revisa tu correo">Si cambiaste el correo de tu cuenta, entra con el correo nuevo. Si aún falta confirmar, abre el enlace que te llegó al otro correo.</Notice>}
+      {params.get("salida") === "todas" && <Notice tone="info" title="Cerramos tu sesión en todos los dispositivos">Vuelve a entrar cuando quieras.</Notice>}
       <GoogleButton next={next} />
       <FieldSeparator>o con tu correo</FieldSeparator>
       <Tabs value={mode} onValueChange={(m) => { form.setValue("mode", m as Values["mode"], { shouldValidate: true }); form.clearErrors("password") }}>

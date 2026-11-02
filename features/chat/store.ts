@@ -116,6 +116,7 @@ export async function sendChat(qc: QueryClient, input: { text: string; editId?: 
       method: "POST", headers: { "content-type": "application/json" }, signal: ctrl.signal,
       body: JSON.stringify({ threadId, text, tono: st.tono, editId: input.editId, regenerate: input.regenerate }),
     })
+    if (res.status === 429) throw new Error(((await res.json().catch(() => ({}))) as { msg?: string }).msg ?? "Enviaste muchos mensajes seguidos. Espera un momento.")
     if (!res.ok || !res.body) throw new Error(res.status === 401 ? "Tu sesión se cerró. Vuelve a entrar." : "No pudimos conectarnos con Mirai. Revisa tu conexión.")
     const reader = res.body.getReader()
     const dec = new TextDecoder()

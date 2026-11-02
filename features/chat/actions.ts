@@ -1,6 +1,9 @@
 "use server"
 
+import { z } from "zod"
 import { getAppContext, requireRole } from "@/lib/dal"
+import { publicError } from "@/lib/security/errors"
+import { limitError } from "@/lib/security/rate-limit"
 import { supabaseServer } from "@/utils/supabase/server"
 import { formatCOP, todayBogota } from "@/lib/domain"
 import { autoTitle, preview, smartTitle } from "@/lib/chat/history"
@@ -29,8 +32,27 @@ const TABLA: Record<PropuestaTipo, { table: "expenses" | "extra_incomes" | "goal
 
 type Res = { ok: true; msg: string; href: string; table: string; propuesta: Propuesta } | { ok: false; msg: string }
 
+/**
+ * Datos de una propuesta validados en el servidor: la propuesta vive en chat_messages.meta, que la persona puede
+ * editar desde el navegador, así que no se confía en ella (texto de la IA o del usuario = entrada no confiable).
+ */
+const Fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const Datos = z.object({
+  valor: z.number().positive().max(1e12).optional(),
+  descripcion: z.string().trim().max(200).optional(),
+  fecha: Fecha.optional().nullable(),
+  category_id: z.uuid().nullable().optional(),
+  nombre: z.string().trim().max(120).optional(),
+  objetivo: z.number().positive().max(1e12).optional(),
+  ahorrado: z.number().min(0).max(1e12).optional(),
+  titulo: z.string().trim().max(200).optional(),
+  monto: z.number().min(0).max(1e12).optional(),
+}).loose()
+const Ids = z.object({ messageId: z.uuid(), propId: z.uuid() })
+
 async function loadProp(messageId: string, propId: string) {
   const sb = await supabaseServer()
+  if (!Ids.safeParse({ messageId, propId }).success) return { sb, meta: {} as ChatMeta, p: undefined }
   const { data } = await sb.from("chat_messages").select("id,meta").eq("id", messageId).maybeSingle()
   const meta = (data?.meta ?? {}) as ChatMeta
   const p = meta.propuestas?.find((x) => x.id === propId)
@@ -46,7 +68,15 @@ export async function chatConfirm(messageId: string, propId: string): Promise<Re
   const T = TABLA[p.tipo]
   if (p.estado === "hecho") return { ok: true, msg: T.ok, href: T.href, table: T.table, propuesta: p }
   if (p.estado === "cancelado") return { ok: false, msg: "Esta propuesta ya se canceló." }
-  const d = p.datos
+  if (!TABLA[p.tipo]) return { ok: false, msg: "No encontramos esta propuesta. Pídela de nuevo en el chat." }
+  const parsed = Datos.safeParse(p.datos ?? {})
+  if (!parsed.success) return { ok: false, msg: "Los datos de la propuesta no son válidos. Pídela de nuevo en el chat." }
+  const d = parsed.data as typeof p.datos
+  // La categoría tiene que ser de este libro (si no, se guarda sin categoría).
+  if (d.category_id) {
+    const { data: cat } = await sb.from("categories").select("id").eq("id", d.category_id).eq("book_id", ctx.book.id).maybeSingle()
+    if (!cat) d.category_id = null
+  }
   const today = todayBogota()
   const fecha = d.fecha && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha) ? d.fecha : today
   const id = crypto.randomUUID()
@@ -64,7 +94,7 @@ export async function chatConfirm(messageId: string, propId: string): Promise<Re
     if (!d.titulo?.trim() || !d.fecha) return { ok: false, msg: "El recordatorio necesita un nombre y una fecha." }
     ;({ error } = await sb.from("calendar_events").insert({ id, book_id: ctx.book.id, titulo: d.titulo.slice(0, 80), fecha: d.fecha, tipo: "egreso", monto: Math.round(+(d.monto ?? 0)), anual: false, nota: "Creado desde el chat de Mirai" }))
   }
-  if (error) return { ok: false, msg: `No se pudo guardar: ${error.message}` }
+  if (error) return { ok: false, msg: `No se pudo guardar: ${publicError(error, "intenta de nuevo.")}` }
   const done: Propuesta = { ...p, estado: "hecho", registroId: id }
   await sb.from("chat_messages").update({ meta: { ...meta, propuestas: meta.propuestas!.map((x) => (x.id === p.id ? done : x)) } as never }).eq("id", messageId)
   return { ok: true, msg: T.ok, href: T.href, table: T.table, propuesta: done }
@@ -91,6 +121,10 @@ export async function chatAttach(fd: FormData): Promise<{ ok: true; threadId: st
   if (ctx.household.role === "viewer") return { ok: false, msg: "Tu rol en este hogar es de solo lectura: no puedes registrar documentos." }
   const f = fd.get("file")
   if (!(f instanceof File) || !f.size) return { ok: false, msg: "Elige una foto o un PDF" }
+  if (f.size > 6 * 1024 * 1024) return { ok: false, msg: "El archivo pesa más de 6 MB." }
+  if (!/^(image\/(png|jpe?g|webp|gif|heic|heif|avif)|application\/pdf)$/.test(f.type)) return { ok: false, msg: "Usa una foto (JPG, PNG) o un PDF." }
+  const lim = await limitError("chatAdjunto", ctx.user.id, "Enviaste muchos archivos seguidos")
+  if (lim) return { ok: false, msg: lim }
   const sb = await supabaseServer()
   const text = String(fd.get("text") ?? "").trim().slice(0, 1000)
   let threadId = String(fd.get("threadId") ?? "") || null

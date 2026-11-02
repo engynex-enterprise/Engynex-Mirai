@@ -180,25 +180,27 @@ function Cuenta() {
   const [conf, setConf] = useState("")
   const [busy, setBusy] = useState<string | null>(null)
   return (
-    <SettingSection icon="shield-check" title="Tus datos personales (Ley 1581 de 2012)" desc="Puedes conocer, descargar y eliminar la información que Mirai guarda sobre ti.">
+    <SettingSection id="eliminar" icon="shield-check" title="Tus datos personales (Ley 1581 de 2012)" desc="Puedes conocer, descargar y eliminar la información que Mirai guarda sobre ti.">
       <SettingRow title="Descargar todos mis datos" desc="Perfil, preferencias, consentimientos y todos tus libros en un archivo JSON.">
         <Button variant="outline" disabled={!!busy} onClick={async () => { setBusy("me"); try { download(`mirai-mis-datos-${new Date().toISOString().slice(0, 10)}.json`, await exportMyData()); toast.success("Archivo descargado") } catch (e) { toast.error((e as Error).message) } setBusy(null) }}>{busy === "me" ? <Spinner /> : <Download />} Descargar</Button>
       </SettingRow>
       <SettingRow title="Política de tratamiento de datos" desc="Cómo usamos y protegemos tu información."><Button variant="outline" asChild><Link href="/legal/privacidad">Ver política</Link></Button></SettingRow>
-      <SettingRow title="Eliminar mi cuenta" desc="Se borra tu cuenta y los hogares en los que eres la única persona. No se puede deshacer.">
+      <SettingRow title="Eliminar mi cuenta" desc={<>Se borra tu cuenta y los hogares en los que eres la única persona. No se puede deshacer. Si eres dueño de un hogar con más personas, primero pásaselo a alguien o bórralo en <Link className="text-link underline" href="/ajustes?tab=cuenta">Tu cuenta</Link>; en los demás hogares sales y tus movimientos se quedan a tu nombre.</>}>
         <Button variant="destructive" onClick={() => setOpen(true)}><UserX /> Eliminar cuenta</Button>
       </SettingRow>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center justify-center gap-2"><ShieldAlert className="size-5 text-danger" /> Eliminar tu cuenta</AlertDialogTitle>
-            <AlertDialogDescription>Descarga antes tus datos si los quieres conservar. Para confirmar, escribe tu correo: <b>{user.email}</b></AlertDialogDescription>
+            <AlertDialogDescription>Descarga antes tus datos si los quieres conservar. Los hogares donde eres la única persona se borran; de los demás sales. Si eres dueño de un hogar con más personas, primero pásalo o bórralo. Para confirmar, escribe tu correo: <b>{user.email}</b></AlertDialogDescription>
           </AlertDialogHeader>
           <div className="px-6 pb-4"><Input className="h-10" value={conf} onChange={(e) => setConf(e.target.value)} placeholder={user.email} aria-label="Tu correo" /></div>
           <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel>
             <Button variant="destructive" disabled={busy === "del" || conf.trim().toLowerCase() !== user.email.toLowerCase()} onClick={async () => {
               setBusy("del")
-              try { await deleteAccount({ confirm: conf }); await createClient().auth.signOut(); router.replace("/login?eliminada=1") } catch (e) { toast.error((e as Error).message); setBusy(null) }
+              const r = await deleteAccount({ confirm: conf }).catch(() => ({ ok: false, msg: "No pudimos eliminar tu cuenta. Intenta de nuevo." }))
+              if (!r.ok) { toast.error(r.msg); setBusy(null); return }
+              await createClient().auth.signOut(); router.replace("/login?eliminada=1")
             }}>{busy === "del" && <Spinner />} Eliminar para siempre</Button>
           </AlertDialogFooter>
         </AlertDialogContent>

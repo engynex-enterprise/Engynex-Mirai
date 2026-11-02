@@ -6,6 +6,32 @@ import FHELP_RAW from "@/lib/data/legacy-fhelp.json"
 export type HelpEntry = { t: string; i: string; p: string[]; tips?: string[] }
 export const HELP: Record<string, HelpEntry> = {
   ...(HELP_RAW as Record<string, HelpEntry>),
+  "le-debo": {
+    t: "Le debo", i: "Tus créditos y deudas: con el banco, la casa de empeño, la tienda que te fía, un familiar o un almacén.",
+    p: [
+      "Toca <b>Nueva deuda</b> y escoge el tipo: <b>banco o cooperativa</b>, <b>empeño</b>, <b>fiado</b> en una tienda, <b>préstamo de una persona</b>, <b>compra a cuotas</b> en un almacén, <b>gota a gota</b> u otra.",
+      "El formulario te pregunta solo lo que aplica a ese tipo. En un crédito del banco: la entidad, cuánto te prestaron, la cuota mensual o la tasa E.A. y el plazo. En un empeño: qué objeto dejaste, en cuánto lo avaluaron y la fecha límite para recuperarlo. En un fiado: qué compraste y cuándo lo pagas.",
+      "A la derecha ves el resumen en vivo: la cuota, la primera y la última fecha, cuánto pagas en total y en intereses, y si la tasa pasa la usura (en rojo). Toca <b>Más detalle</b> para ver todas las cuotas.",
+      "Si la deuda empezó antes de usar Mirai, marca cuántas cuotas ya pagaste o cuánto debes hoy.",
+      "Registra cada pago o abono para saber cuánto te falta. Con el filtro <b>Tipo</b> ves solo tus empeños, fiados o créditos.",
+    ],
+    tips: [
+      "Un abono para \"terminar antes\" casi siempre ahorra más intereses que bajar la cuota.",
+      "En un empeño, paga o refrenda antes de la fecha límite: si no, puedes perder el objeto.",
+      "Los préstamos gota a gota suelen cobrar más que la usura, que es ilegal. Si puedes, cámbialo por un crédito en una cooperativa o un banco.",
+    ],
+  },
+  "me-deben": {
+    t: "Me deben", i: "Lo que te deben: plata que le prestaste a alguien o ventas que fiaste.",
+    p: [
+      "Toca <b>Nuevo préstamo</b> y escoge el tipo: <b>le presté a una persona</b>, <b>le fié a un cliente</b> u otro.",
+      "Elige o crea el contacto y escribe cuánto te debe y cómo te paga: en una fecha, en cuotas o con abonos cuando pueda.",
+      "Si le cobras intereses y no sabes la tasa, escribe cuánto es cada cuota y la calculamos. A la derecha ves el resumen y si la tasa pasa la usura.",
+      "Marca <b>Descargar el acuerdo de pago en PDF</b> para tener el documento listo para firmar.",
+      "Cuando te paguen, toca <b>Registrar pago</b>: cuota completa o abono. Usa <b>Enviar recordatorio</b> para cobrar por WhatsApp o correo.",
+    ],
+    tips: ["Cobrar intereses por encima de la tasa de usura es ilegal en Colombia: Mirai te avisa."],
+  },
   consejero: {
     t: "Consejero", i: "Tu asesor financiero en un chat: pregúntale lo que quieras de tu plata o cuéntale una decisión y te dice si te conviene con tus números reales.",
     p: [
@@ -86,7 +112,24 @@ export const HELP: Record<string, HelpEntry> = {
     tips: [
       "Mirai no deja invitar dos veces a la misma persona: si ya la invitaste, te ofrece reenviarle la invitación. Puedes reenviarla una vez cada 10 minutos y hasta 5 veces al día.",
       "Si invitas a alguien que ya tenías sin cuenta, al aceptar se une a ese mismo integrante con sus gastos: no queda repetido.",
-      "El dueño puede pasarle el hogar a otra persona desde el botón ⋯ (queda como Administra).",
+      "El dueño puede pasarle el hogar a otra persona con cuenta desde el botón ⋯ o con <b>Pasar el hogar</b>: escoge qué rol queda él y la otra persona acepta o rechaza en su campana (tiene 7 días).",
+    ],
+  },
+  cuenta: {
+    t: "Tu cuenta", i: "Cómo entras a Mirai, el correo de tu cuenta, tus sesiones abiertas y de qué hogares eres dueño. Tus datos están en tu cuenta, no en el correo: cambiar de correo o de cuenta de Google no borra nada.",
+    p: [
+      "En tu <b>perfil › Cuentas conectadas</b> ves cada forma de entrar: Google (con su correo), correo y contraseña, y el enlace mágico. Cada una dice cuándo la usaste por última vez.",
+      "<b>Cambiar cuenta de Google</b>: toca <b>Cambiar</b> en Google y escoge tu otra cuenta en la ventana de Google. Al volver te ofrecemos quitar la anterior. Si esa cuenta de Google ya es de otra persona en Mirai, te avisamos y no se conecta.",
+      "<b>Cambiar correo</b>: escribe el correo nuevo y te enviamos un enlace para confirmarlo (por seguridad, también uno a tu correo actual: ábrelos los dos). Mientras tanto verás <b>Pendiente de confirmar</b>, con Reenviar enlace y Cancelar el cambio.",
+      "<b>Agregar otra forma de entrar</b>: crea una contraseña o conecta otra cuenta de Google. Así entras aunque dejes de usar una. Mirai no deja quitar la última forma de entrar.",
+      "<b>Mi correo de Google ya no lo uso</b>: un paso a paso para cambiar el correo de tu cuenta, tener otra forma de entrar y quitar la cuenta de Google vieja, sin crear una cuenta nueva vacía.",
+      "En <b>Ajustes › Tu cuenta</b>: tus hogares (abrir, pasar el hogar, salir o borrar), las sesiones abiertas en cada dispositivo (cierra una o todas) y la actividad de seguridad (inicios de sesión y cambios de correo, contraseña y dueño).",
+      "<b>Pasar el hogar</b> (por ejemplo, a tu pareja): escoge a la persona (debe tener cuenta y ser del hogar), qué rol quedas tú (por defecto Administra) y escribe el nombre del hogar para confirmar. Le llega un aviso y un correo para aceptar o rechazar; hasta que acepte, sigues siendo el dueño.",
+    ],
+    tips: [
+      "Para quitar una forma de entrar te pedimos haber entrado hace poco (menos de una hora). Si no, te pedimos volver a entrar.",
+      "El plan es del hogar: si pasas el hogar, el dueño nuevo es quien lo cambia o lo paga. Si tú pagas la renovación automática, decides si sigue a tu nombre o se cancela al aceptar.",
+      "Para eliminar tu cuenta, primero pásale a alguien (o borra) los hogares donde eres dueño y hay más personas.",
     ],
   },
   admin: {
