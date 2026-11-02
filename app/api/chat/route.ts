@@ -5,12 +5,15 @@ import { supabaseServer } from "@/utils/supabase/server"
 import { AiUnavailable, aiStream, logAlgorithm, tokensFor } from "@/lib/ai/run"
 import { quickAnswer } from "@/lib/ai/router"
 import { clip } from "@/lib/ai/compact"
-import { ATIPOS, addDays, formatCOP, iso, toDay, type KeywordRuleIn } from "@/lib/domain"
+import { ATIPOS, toDay, type KeywordRuleIn } from "@/lib/domain"
 import { autoTitle, preview } from "@/lib/chat/history"
-import { continueDecision, detectDecision, detectQuickAction, preguntaValor } from "@/lib/chat/intent"
+import { continueDecision, detectActions, detectDecision, preguntaValor } from "@/lib/chat/intent"
 import { followUps, rng } from "@/lib/chat/suggestions"
 import { decisionView } from "@/lib/chat/decision-view"
-import { chatTools, resolveCategory } from "@/lib/chat/tools"
+import { chatTools, resolveCategory, type Categoria, type Categorize } from "@/lib/chat/tools"
+import { resolverAcciones } from "@/lib/chat/resolver"
+import { registraAlgo } from "@/lib/chat/permisos"
+import { classifyWith } from "@/features/ai/classify"
 import { MSG_COLS, toMsg, type ChatEvent, type ChatMeta, type Consulta, type Propuesta } from "@/lib/chat/types"
 import { analyzeInput, interpretText } from "@/features/advisor/engine"
 import { chatAi, loadChatBook } from "@/features/chat/server"
@@ -20,7 +23,8 @@ import { publicError } from "@/lib/security/errors"
 // Chat de Mirai en streaming (burbuja y /consejero). Responde una línea JSON por evento (lib/chat/types.ts › ChatEvent).
 // Orden para cada mensaje, del más barato al más caro:
 //   1. Decisión ("¿me conviene…?"): consejero con los cálculos de lib/domain (+ concepto de la IA si hay) → tarjeta.
-//   2. "Registra un gasto de 15 mil en almuerzo": tarjeta para confirmar (sin IA).
+//   2. Registrar en cualquier módulo ("gasté 15 mil en almuerzo", "le presté 200 mil a Juan a 3 meses", "pagué la cuota
+//      del carro", "ya se cobró Netflix"…): tarjeta para confirmar, sin IA (la categoría del gasto sí usa reglas + IA).
 //   3. Preguntas de datos ("¿cuánto gasté este mes?"): quickAnswer, al instante y sin tokens.
 //   4. Sin IA en el plan o apagada: aviso amable con lo que sí puede hacer.
 //   5. IA en streaming con herramientas de consulta y de propuesta (confirmación antes de escribir).
@@ -37,7 +41,6 @@ const Body = z.object({
   editId: z.string().uuid().optional(),
 })
 
-const $ = (v: number) => formatCOP(Math.round(v))
 
 /** Texto de la respuesta a una decisión: primero la respuesta natural (IA o plantillas variadas), luego lo que falta. */
 function decisionText(c: Consulta, faltan: string[]) {
@@ -63,7 +66,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ msg: "Solicitud inválida" }, { status: 400 })
   const body = parsed.data
   const sb = await supabaseServer()
-  const canEdit = ctx.household.role !== "viewer"
+  // Rol fino del hogar: "Registra sus gastos" registra gastos e ingresos; Colabora y superiores, todo (lib/chat/permisos.ts).
+  const access = ctx.household.access
+  const canEdit = registraAlgo(access)
   const ac = new AbortController()
   req.signal.addEventListener("abort", () => ac.abort())
   const enc = new TextEncoder()
@@ -119,20 +124,34 @@ export async function POST(req: Request) {
         }
 
         // ── 3. Responder ──
-        const [cb, ai] = await Promise.all([loadChatBook(sb, ctx.book.id), chatAi(ctx)])
-        const { book, facts, flags, datos, today } = cb
+        const [cb, ai] = await Promise.all([loadChatBook(sb, ctx.book.id, ctx.household.id), chatAi(ctx)])
+        const { book, facts, flags, datos, today, X } = cb
         let rulesMemo: KeywordRuleIn[] | null = null
         const rules = async () => (rulesMemo ??= ((await sb.from("keyword_rules").select("keyword,category_id").eq("book_id", ctx.book.id).is("deleted_at", null)).data ?? []) as KeywordRuleIn[])
         let content = ""
         const meta: ChatMeta = {}
         const say = (t: string) => { content += t; emit({ t: "delta", text: t }) }
         const who = { householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id }
+        // Categoría de los gastos que se proponen: la que nombró el modelo (si existe) o reglas + IA, como el formulario.
+        let catCreditos = 0
+        const categorize: Categorize = async (descripcion, valor, nombre) => {
+          const local = resolveCategory(book, await rules(), descripcion, nombre)
+          if (local.src === "ia" || !ai.allowed) return local
+          const r = await classifyWith(sb, who, [{ i: 0, descripcion, valor, veces_mes: book.expenses.filter((g) => g.descripcion.trim().toLowerCase() === descripcion.trim().toLowerCase()).length }]).catch(() => null)
+          const hit = r?.out[0]
+          catCreditos += r?.creditos ?? 0
+          const cat = hit?.category_id ? book.categories.find((c) => c.id === hit.category_id) : undefined
+          return cat ? ({ id: cat.id, nombre: cat.nombre, src: hit!.src === "ia" ? "ia" : local.src ?? "regla" } satisfies Categoria) : local
+        }
 
+        // Registrar algo ("le presté…", "pagué la cuota…") va antes que la decisión ("¿le presto…?").
+        const acts = detectActions(text)
         // Si el mensaje nuevo ya es una decisión completa (con su valor), no se mezcla con la anterior.
-        const own = detectDecision(text)
-        const comb = pendiente && !(own && +(own.input.valor ?? 0)) ? continueDecision(pendiente.txt, text) : null
+        const own = acts.length ? null : detectDecision(text)
+        const comb = !acts.length && pendiente && !(own && +(own.input.valor ?? 0)) ? continueDecision(pendiente.txt, text) : null
         const dec = comb ? detectDecision(comb) ?? own : own
-        const quick = !dec ? detectQuickAction(text) : null
+        if (!dec && acts.length && canEdit) emit({ t: "tool", label: "Preparando el registro" })
+        const quick = !dec && acts.length ? (canEdit ? await resolverAcciones(acts, { b: book, today, access, categorize, texto: text }) : { msg: "Tu rol en este hogar es **Solo mira**: puedes consultar todo, pero no registrar movimientos. Pídele al dueño del hogar que te dé permiso." }) : null
         const qa = !dec && !quick ? quickAnswer(text, facts) : null
 
         if (dec) {
@@ -159,15 +178,13 @@ export async function POST(req: Request) {
           }
         } else if (quick) {
           meta.fuente = "algoritmo"
-          if (!canEdit) say("Tu rol en este hogar es **solo lectura**: puedes consultar todo, pero no registrar movimientos. Pídele al dueño del hogar que te dé permiso de edición.")
+          if ("msg" in quick) say(quick.msg)
           else {
-            const fecha = quick.cuando === "ayer" ? iso(addDays(toDay(today), -1)) : today
-            const cat = quick.tipo === "gasto" ? resolveCategory(book, await rules(), quick.descripcion) : { id: null, nombre: null }
-            const p: Propuesta = { id: crypto.randomUUID(), tipo: quick.tipo, estado: "pendiente", datos: { valor: quick.valor, descripcion: quick.descripcion, fecha, category_id: cat.id, categoria: cat.nombre } }
-            meta.propuestas = [p]
-            emit({ t: "card", propuesta: p })
-            say(`Listo, preparé el ${quick.tipo} de **${$(quick.valor)}** (${quick.descripcion}). Revisa los datos y toca **Confirmar** para guardarlo.`)
+            meta.propuestas = [quick.propuesta]
+            emit({ t: "card", propuesta: quick.propuesta })
+            say(quick.texto)
           }
+          if (catCreditos) meta.creditos = Math.round(catCreditos * 100) / 100
           await logAlgorithm({ ...who, feature: "frase_libre", evitados: tokensFor("frase_libre", text) })
         } else if (qa) {
           meta.fuente = "algoritmo"
@@ -196,11 +213,11 @@ export async function POST(req: Request) {
           try {
             const r = await aiStream({
               ...who, feature: "chat", tono: body.tono, messages, abortSignal: ac.signal, maxSteps: 5,
-              tools: chatTools({ b: book, today, canEdit, rules, onTool: (label) => { consultas.add(label.replace(/^Revisando /, "")); emit({ t: "tool", label }) }, onPropuesta: (p) => { propuestas.push(p); emit({ t: "card", propuesta: p }) } }),
+              tools: chatTools({ b: book, today, access, rules, X, categorize, onTool: (label) => { consultas.add(label.replace(/^Revisando /, "")); emit({ t: "tool", label }) }, onPropuesta: (p) => { propuestas.push(p); emit({ t: "card", propuesta: p }) } }),
               onDelta: (t) => say(t), shown: () => propuestas.length > 0,
             })
             meta.provider = r.provider
-            if (r.creditos) meta.creditos = r.creditos
+            if (r.creditos || catCreditos) meta.creditos = Math.round(((r.creditos ?? 0) + catCreditos) * 100) / 100
           } catch (e) {
             if (!content) {
               if (e instanceof AiUnavailable) { meta.fuente = "upsell"; meta.aviso = /créditos/i.test(e.message) ? "creditos" : /plan/i.test(e.message) ? "plan" : "apagada"; say(e.message) }

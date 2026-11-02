@@ -17,9 +17,10 @@ const PARTS = new Set<string>(BOOK_PART_NAMES)
 const CHILDREN = ["fixed_expense_payments", "loan_payments", "card_purchases"]
 const DERIVED_DEPS: Record<string, (t: string) => boolean> = {
   "setup-progress": (t) => ["book_settings", "incomes", "fixed_expenses", "expenses", "goals", "assets", "loans", "categories", "profiles"].includes(t),
-  "search-index": (t) => ["contacts", "loans", "fixed_expenses", "entities"].includes(t),
+  // El buscador ⌘K (components/app/command-palette.tsx) lee estas tablas.
+  "search-index": (t) => ["contacts", "loans", "fixed_expenses", "entities", "expenses", "providers", "subscriptions", "credit_cards", "goals", "investments", "wishlist", "assets", "calendar_events"].includes(t),
   // La renta lee el libro completo (loadBookData) y sus tablas propias.
-  renta: (t) => PARTS.has(t) || CHILDREN.includes(t) || ["income_categories", "tax_assets", "tax_years", "attachments", "family_members"].includes(t),
+  renta: (t) => PARTS.has(t) || CHILDREN.includes(t) || ["card_payments", "income_categories", "tax_assets", "tax_years", "attachments", "family_members"].includes(t),
 }
 
 /** Claves a refrescar cuando cambia una tabla: la tabla, las partes del libro que la incluyen y las derivadas que la leen. */
@@ -175,7 +176,8 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
 }
 
 /** Borrado lógico con botón "Deshacer" (restaura deleted_at = null). */
-export function useSoftDelete<T extends BookTable>(table: T, label = "Registro eliminado") {
+/** `also`: tablas que un trigger cambia al borrar (p. ej. el abono devuelve el valor de la meta) y deben refrescarse. */
+export function useSoftDelete<T extends BookTable>(table: T, label = "Registro eliminado", opts: { also?: BookTable[] } = {}) {
   const bookId = useBookId()
   const qc = useQueryClient()
   const sb = createClient()
@@ -199,6 +201,7 @@ export function useSoftDelete<T extends BookTable>(table: T, label = "Registro e
       toast.error("No se pudo eliminar", { description: e.message })
     },
     onSuccess: (_d, row) => {
+      opts.also?.forEach((t) => invalidateBook(qc, bookId, t))
       const name = row.nombre ?? row.descripcion ?? row.concepto
       toast(label, {
         description: name ? `“${name}”` : undefined,
@@ -207,6 +210,7 @@ export function useSoftDelete<T extends BookTable>(table: T, label = "Registro e
           onClick: async () => {
             await setDeleted(row.id, null)
             invalidateBook(qc, bookId, table) // también el libro y las derivadas (Realtime ignora este eco propio)
+            opts.also?.forEach((t) => invalidateBook(qc, bookId, t))
             toast.success("Listo, lo recuperamos")
           },
         },

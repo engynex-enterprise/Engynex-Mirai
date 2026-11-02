@@ -15,14 +15,16 @@ import { useCanEdit } from "@/components/app/app-context"
 import { useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
 import { categoryOptions, useCategories, useEntities, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
-import { norm } from "@/lib/domain"
+import { ENTITY_TIPOS, entityIcon, findEntity, norm } from "@/lib/domain"
 import type { Row } from "@/lib/supabase/tables"
+import { cn } from "@/lib/utils"
+import { toast } from "@/components/mirai/toast"
 import { SettingSection } from "../ui"
 import { useBookSettingsSave } from "../prefs"
 
 type Kind = "cats" | "ings" | "ents" | "medios" | "rels" | "reglas"
 const GRUPOS = [{ value: "n", label: "Necesidad", icon: "house" }, { value: "g", label: "Gusto", icon: "coffee" }, { value: "a", label: "Ahorro", icon: "piggy-bank" }]
-const TIPOS_ENT = ["Banco", "Cooperativa", "Fintech", "Billetera", "Fondo", "Otro"].map((t) => ({ value: t, label: t }))
+const TIPOS_ENT = ENTITY_TIPOS.map((t) => ({ value: t, label: t }))
 /** La barra de búsqueda aparece cuando la lista ya no cabe de un vistazo. */
 const TOOLBAR_FROM = 6
 
@@ -125,13 +127,26 @@ function Categorias() {
 }
 
 // ——— Tipos de ingreso y medios de pago ———
-type Named = { id: string; nombre: string; icon: string }
+type Named = { id: string; nombre: string; icon: string; asset_id?: string | null }
 const SIMPLE_SORTS: ListSort<Named>[] = [{ value: "orden", label: "Orden guardado", by: () => 0 }, { value: "nombre", label: "Nombre (A-Z)", by: byName }]
 const namedText = (x: Named) => x.nombre
+
+/** Cuenta de la que sale la plata de un medio de pago (las cuentas de dinero del Balance). */
+function CuentaDeMedio({ x, can, onSave }: { x: Named; can: boolean; onSave: (asset: string | null) => void }) {
+  const { data: assets = [] } = useList("assets")
+  const opts = [{ value: "", label: "Sin cuenta", icon: "minus" }, ...assets.filter((a) => /^11/.test(a.cod)).map((a) => ({ value: a.id, label: a.nombre, icon: "landmark", hint: a.saldo_base != null ? "Saldo automático" : undefined }))]
+  const pick = (v: string) => {
+    onSave(v || null)
+    const a = assets.find((y) => y.id === v)
+    if (a && a.saldo_base == null) toast("Medio ligado a " + a.nombre, { description: "Para que su saldo suba y baje solo, en el Balance toca la cuenta y activa «Que el saldo se actualice solo»." })
+  }
+  return <Combobox value={x.asset_id ?? ""} onChange={pick} options={opts} disabled={!can} aria-label={`Cuenta de ${x.nombre}`} />
+}
 
 function Simple({ table, title, icon, placeholder, defIcon, desc, one, many }: {
   table: "income_categories" | "payment_methods"; title: string; icon: string; placeholder: string; defIcon: string; desc: string; one: string; many: string
 }) {
+  const cuentas = table === "payment_methods"
   const q = useList(table, { order: { column: "sort" } })
   const save = useSave(table)
   const del = useSoftDelete(table, "Eliminado")
@@ -146,11 +161,13 @@ function Simple({ table, title, icon, placeholder, defIcon, desc, one, many }: {
       {(rows?.length ?? 0) >= TOOLBAR_FROM && <ListToolbar c={c} placeholder={`Buscar ${one}`} sorts={SIMPLE_SORTS} className="pt-4" />}
       {!c.rows.length && c.filtered ? <div className="pt-4"><NoResults c={c} /></div> : (
         <ul className="grid pt-2" aria-label={title}>
+          {cuentas && <li className="hidden grid-cols-[10rem_1fr_13rem_2.25rem] gap-2 px-0.5 pt-2 text-xs font-semibold text-muted-foreground sm:grid" aria-hidden><span>Ícono</span><span>Nombre</span><span>Sale de la cuenta</span><span /></li>}
           {c.rows.map((x) => (
-            <li key={x.id} className="grid grid-cols-[3rem_1fr_auto] items-center gap-2 border-b py-2 last:border-0 sm:grid-cols-[10rem_1fr_auto]">
+            <li key={x.id} className={cn("grid grid-cols-[3rem_1fr_auto] items-center gap-2 border-b py-2 last:border-0", cuentas ? "sm:grid-cols-[10rem_1fr_13rem_2.25rem]" : "sm:grid-cols-[10rem_1fr_auto]")}>
               <Combobox value={x.icon} onChange={(v) => save.mutate({ id: x.id, icon: v } as never)} options={ICON_OPTIONS} disabled={!can} />
               <TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} />
-              <IconButton icon="trash-2" destructive label={`Eliminar ${x.nombre}`} disabled={!can} onClick={() => del.mutate(x as never)} />
+              <IconButton icon="trash-2" destructive label={`Eliminar ${x.nombre}`} className={cuentas ? "sm:order-last" : undefined} disabled={!can} onClick={() => del.mutate(x as never)} />
+              {cuentas && <div className="col-span-3 sm:col-span-1"><CuentaDeMedio x={x} can={can} onSave={(asset) => save.mutate({ id: x.id, asset_id: asset } as never)} /></div>}
             </li>
           ))}
         </ul>
@@ -174,8 +191,8 @@ function Entidades() {
   const c = useListControls(data, { text: entText, filters: ENT_FILTERS, sorts: ENT_SORTS })
   if (isPending) return <Skeleton className="h-64 rounded-lg" />
   return (
-    <SettingSection icon="landmark" title="Bancos y entidades" desc={`Bancos, cooperativas, fintech, billeteras y fondos donde tienes cuentas o créditos. ${count(data?.length ?? 0, "entidad", "entidades")}.`}>
-      <AddRow placeholder="Nueva entidad (ej. Bancolombia)" disabled={!can} taken={(n) => !!data?.some((x) => same(x.nombre, n))}
+    <SettingSection icon="landmark" title="Bancos y entidades" desc={`Bancos, cooperativas, fintech, billeteras, fondos y casas de empeño donde tienes cuentas o créditos (también en Contactos › Bancos y entidades). ${count(data?.length ?? 0, "entidad", "entidades")}.`}>
+      <AddRow placeholder="Nueva entidad (ej. Bancolombia)" disabled={!can} taken={(n) => !!findEntity(data ?? [], { nombre: n })}
         extra={<div className="sm:w-40"><Combobox value={tipo} onChange={setTipo} options={TIPOS_ENT} /></div>}
         onAdd={(nombre) => save.mutateAsync({ nombre, tipo } as never)} />
       {(data?.length ?? 0) >= TOOLBAR_FROM && <ListToolbar c={c} placeholder="Buscar por nombre o NIT" filters={ENT_FILTERS} sorts={ENT_SORTS} className="pt-4" />}
@@ -184,7 +201,7 @@ function Entidades() {
           {c.rows.map((x) => (
             <li key={x.id} className="grid grid-cols-[1fr_auto] items-center gap-2 border-b py-2 last:border-0 sm:grid-cols-[1fr_10rem_10rem_auto]">
               <div className="flex min-w-0 items-center gap-2.5">
-                <EntityLogo name={x.nombre} icon={x.tipo === "Billetera" ? "smartphone" : "landmark"} seed={x.nombre} size={32} />
+                <EntityLogo name={x.nombre} icon={entityIcon(x.tipo)} seed={x.nombre} size={32} />
                 <div className="min-w-0 flex-1"><TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} /></div>
               </div>
               <IconButton icon="trash-2" destructive label={`Eliminar ${x.nombre}`} className="sm:order-last" disabled={!can} onClick={() => del.mutate(x)} />
@@ -264,7 +281,7 @@ export function CatalogTab({ kind }: { kind: Kind }) {
   switch (kind) {
     case "cats": return <Categorias />
     case "ings": return <Simple key="ings" table="income_categories" title="Tipos de ingreso" icon="arrow-down-to-line" placeholder="Nuevo tipo (ej. Arriendos)" defIcon="coins" desc="Así agrupas lo que te entra." one="tipo" many="tipos" />
-    case "medios": return <Simple key="medios" table="payment_methods" title="Medios de pago" icon="credit-card" placeholder="Nuevo medio (ej. Nequi)" defIcon="banknote" desc="Con qué pagas tus gastos." one="medio" many="medios" />
+    case "medios": return <Simple key="medios" table="payment_methods" title="Medios de pago" icon="credit-card" placeholder="Nuevo medio (ej. Nequi)" defIcon="banknote" desc="Con qué pagas tus gastos. Si eliges la cuenta de la que sale la plata (del Balance), su saldo sube y baja solo con lo que registras con ese medio." one="medio" many="medios" />
     case "ents": return <Entidades />
     case "rels": return <Relaciones />
     case "reglas": return <Reglas />

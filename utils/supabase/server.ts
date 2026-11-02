@@ -9,6 +9,8 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 export const createClient = (cookieStore: Awaited<ReturnType<typeof cookies>>) => {
   return createServerClient<Database>(supabaseUrl!, supabaseKey!, {
+    // Igual que en el navegador: este código entiende los movimientos enlazados (ver utils/supabase/client.ts).
+    global: { headers: { "x-mirai-enlaces": "1" } },
     cookies: {
       getAll() {
         return cookieStore.getAll()

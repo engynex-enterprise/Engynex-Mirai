@@ -21,15 +21,44 @@ export type Consulta = {
   creditos?: number
 }
 
-/** Acción que el asistente propone y la persona debe confirmar antes de escribir en su libro. */
-export type PropuestaTipo = "gasto" | "ingreso" | "meta" | "recordatorio"
+/**
+ * Acción que el asistente propone y la persona debe confirmar antes de escribir en su libro. Un tipo por módulo:
+ * - gasto · ingreso (extra, una vez) · ingreso_fijo (sueldo, pensión…) · fijo (gasto fijo nuevo) · pago_fijo
+ * - suscripcion (nueva) · cobro_suscripcion ("ya se cobró") · compra_tarjeta · pago_tarjeta (el pago del mes, el total u otro valor)
+ * - prestamo (Le debo o Me deben, por tipo) · pago_cuota (cuota o abono de una deuda o de un préstamo que hiciste)
+ * - meta · abono_meta · recordatorio
+ */
+export const PROPUESTA_TIPOS = [
+  "gasto", "ingreso", "ingreso_fijo", "fijo", "pago_fijo", "suscripcion", "cobro_suscripcion", "compra_tarjeta", "pago_tarjeta",
+  "prestamo", "pago_cuota", "meta", "abono_meta", "recordatorio",
+] as const
+export type PropuestaTipo = (typeof PROPUESTA_TIPOS)[number]
 export type Propuesta = {
   id: string
   tipo: PropuestaTipo
   estado: "pendiente" | "hecho" | "cancelado"
   datos: {
     valor?: number; descripcion?: string; fecha?: string; category_id?: string | null; categoria?: string | null
+    /** De dónde salió la categoría del gasto (regla, historial, palabras clave o IA). */
+    cat_src?: "regla" | "historial" | "palabras" | "ia" | null
+    /** Medio de pago (gasto o ingreso), si la frase lo nombra. */
+    payment_method_id?: string | null; medio?: string | null
     nombre?: string; objetivo?: number; ahorrado?: number; titulo?: string; monto?: number
+    /** Frecuencia (ingreso fijo, gasto fijo, préstamo) y día del mes. */
+    frec?: string; dia?: number
+    /** Suscripción: ciclo y próximo cobro. */
+    ciclo?: "mensual" | "anual"; proximo?: string
+    /** Registro al que apunta (deuda, gasto fijo, suscripción, tarjeta o meta) y su periodo (pago de un fijo). */
+    ref_id?: string; periodo?: string
+    /** Préstamo: Le debo (pagar) o Me deben (cobrar), tipo, plazo, tasa mensual y quién. */
+    kind?: "pagar" | "cobrar"; loan_tipo?: string; plazo?: number; tasa?: number; sistema?: string; persona?: string; concepto?: string
+    contact_id?: string | null; entity_id?: string | null
+    /** Pago de una deuda: cuotas completas o un abono. */
+    pago?: "cuota" | "abono"; cuotas?: number
+    /** Pago de la tarjeta: el del mes (mínimo), el total o otro valor (pay_credit_card). */
+    pago_tarjeta?: "minimo" | "total" | "otro"
+    /** Cifras calculadas para mostrar en la tarjeta (se recalculan al confirmar). */
+    cuota?: number; saldo?: number; total?: number
   }
   /** Id del registro creado al confirmar. */
   registroId?: string

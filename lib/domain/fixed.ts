@@ -1,5 +1,6 @@
 // Gastos fijos: periodos, vencimientos y valor mensual (equivalente a b_core.js de la v4).
 import { addDays, iso, lastDay, mkey, parseDate, toDay } from "./dates"
+import { fijoValor } from "./reparto"
 import type { DateInput, FixedExpenseIn, FixedPaymentIn } from "./types"
 
 export const FFREC: Record<string, string> = {
@@ -99,4 +100,70 @@ export function fijoProxIso(f: FixedExpenseIn | null | undefined, today: DateInp
     if (p) return p.due
   }
   return iso(addDays(toDay(today), 10))
+}
+
+// ——— ¿Este gasto es el pago de un gasto fijo? ———
+
+const normF = (s: string | null | undefined) => (s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim()
+/** Palabras con sentido (3+ letras) para comparar "Arriendo apto" con "Pago arriendo noviembre". */
+const palabras = (s: string) => normF(s).split(" ").filter((w) => w.length >= 3 && !/^(pago|pague|del|las|los|mes|por|para|con)$/.test(w))
+
+export interface SugerenciaFijo {
+  fixed: FixedExpenseIn
+  /** Periodo pendiente ('YYYY-MM', 'YYYY-MM-Q1'…) y su fecha de pago. */
+  per: string
+  due: string
+  /** Valor esperado del periodo. */
+  valor: number
+}
+
+type GastoSuelto = { descripcion: string; valor: number; fecha: string; provider_id?: string | null; fixed_expense_id?: string | null; origen?: string | null }
+type FijoSug = FixedExpenseIn & { provider_id?: string | null; vmin?: number | null; vmax?: number | null; deleted_at?: string | null }
+
+/**
+ * ¿El gasto suelto que acabas de guardar es el pago de un gasto fijo que está pendiente? (p. ej. el arriendo que llegó
+ * por el correo del banco). Coincide si:
+ * - el fijo tiene el mismo proveedor, o su nombre y la descripción comparten una palabra (Arriendo ↔ "Pago arriendo"), y
+ * - el valor se parece (±15 % del valor del periodo o dentro del rango si es variable), y
+ * - hay un periodo sin pago con fecha a 40 días o menos de la del gasto.
+ * Nunca para aportes a metas (`link_type`) ni para gastos que ya están enlazados (fijo, tarjeta, préstamo, compartido).
+ * Devuelve el periodo pendiente más cercano en fecha (o `null`).
+ */
+export function sugerirPagoFijo(g: GastoSuelto, fijos: FijoSug[], today: DateInput = g.fecha): SugerenciaFijo | null {
+  if (g.fixed_expense_id || (g.origen && !["manual", "correo", "importar", "ocr", "voz"].includes(g.origen)) || !(+g.valor > 0)) return null
+  const pg = new Set(palabras(g.descripcion))
+  const f0 = parseDate(g.fecha)
+  let best: (SugerenciaFijo & { dist: number }) | null = null
+  for (const f of fijos) {
+    if (f.link_type || f.deleted_at) continue
+    const mismoProv = !!g.provider_id && f.provider_id === g.provider_id
+    if (!mismoProv && !palabras(f.nombre).some((w) => pg.has(w))) continue
+    for (let k = -1; k <= 1; k++) {
+      const d = new Date(f0.getFullYear(), f0.getMonth() + k, 1)
+      for (const p of fijoPeriods(f, d.getFullYear(), d.getMonth(), today)) {
+        if (f.inicio && p.due < iso(parseDate(f.inicio))) continue
+        if (f.payments.some((x) => x.periodo === p.per)) continue
+        const dist = Math.abs(parseDate(p.due).getTime() - f0.getTime()) / 864e5
+        if (dist > 40) continue
+        const esperado = fijoValor(f, p.per)
+        const v = +g.valor
+        const okValor = f.variable && +(f.vmin ?? 0) > 0 ? v >= +(f.vmin ?? 0) * 0.85 && v <= +(f.vmax ?? 0) * 1.15 : Math.abs(v - esperado) <= Math.max(1000, esperado * 0.15)
+        if (!okValor) continue
+        if (!best || dist < best.dist) best = { fixed: f, per: p.per, due: p.due, valor: esperado, dist }
+      }
+    }
+  }
+  if (!best) return null
+  const { dist: _d, ...r } = best
+  void _d
+  return r
+}
+
+const MESES_F = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+/** El periodo de un fijo en palabras: "noviembre", "la primera quincena de noviembre", "2026" o "" (pago único). */
+export function periodoTexto(per: string): string {
+  const m = per.match(/^(\d{4})-(\d{2})(?:-Q([12]))?$/)
+  if (m) return `${m[3] ? `la ${m[3] === "1" ? "primera" : "segunda"} quincena de ` : ""}${MESES_F[+m[2] - 1]}`
+  return /^\d{4}$/.test(per) ? per : ""
 }

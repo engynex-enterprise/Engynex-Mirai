@@ -1,7 +1,8 @@
+import { PAGES } from "@/lib/nav"
 import { describe, expect, it } from "vitest"
 import {
   ATAJOS, buildHelpIndex, cmpVer, faqId, filtrarFaq, filtrarNovedades, groupHits, helpKey, initialStack, manualSecciones,
-  novedadesNoLeidas, normText, pageIdFromPath, parseHelpKey, relacionados, releaseKey, searchHelp, tokens, type HelpRoute,
+  novedadesNoLeidas, normText, pageIdFromPath, parseHelpKey, relacionados, releaseKey, searchHelp, tokens, SECCIONES_VECINAS, type HelpRoute,
 } from "./centro-ayuda"
 import { APP_VER, FAQ, GUIDES, RELEASES, type Release } from "./ayuda"
 import { GLOSARIO } from "./glosario"
@@ -119,6 +120,16 @@ describe("preguntas, manual y relacionados", () => {
     expect(r.guias.some((g) => g.id === "nomina")).toBe(true)
     expect(r.lecciones.some((l) => l.id === "nomina")).toBe(true)
     expect(relacionados("renta").terminos.some((t) => t.id === "uvt")).toBe(true)
+  })
+  it("las secciones sin enlaces desde la ayuda tienen secciones relacionadas que existen", () => {
+    const ids = new Set(PAGES.map((p) => p.id))
+    for (const [k, v] of Object.entries(SECCIONES_VECINAS)) {
+      expect(ids.has(k), k).toBe(true)
+      for (const x of v) expect(ids.has(x), `${k} → ${x}`).toBe(true)
+    }
+    for (const id of ["puesta", "dashboard", "consejero", "proveedores", "correo", "importar", "me-deben", "contactos", "retos", "logros", "familia", "mesadas", "compartidos", "deseos", "contador", "indicadores", "reportes", "automatizaciones", "suscripciones"])
+      expect(relacionados(id).secciones.length, id).toBeGreaterThan(0)
+    expect(relacionados("dashboard").secciones[0]).toMatchObject({ id: "balance", href: "/balance" })
   })
   it("las guías nuevas van primero y se conservan las de la v4", () => {
     expect(GUIDES[0].id).toBe("primeros-pasos")

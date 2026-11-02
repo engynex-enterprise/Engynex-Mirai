@@ -1,5 +1,6 @@
 // Plantillas de automatizaciones. Las marcadas `porDefecto` se crean solas en cada libro la primera vez que se abre
-// el módulo (clave `plantilla`, sin duplicados). Las que crean movimientos empiezan pausadas.
+// el módulo (clave `plantilla`, sin duplicados). Las que crean movimientos empiezan pausadas, y también las que
+// repetirían un aviso que Mirai ya manda solo (pagos próximos y presupuesto: Ajustes › Alertas).
 import { CATALOG } from "./catalog"
 import { autoLayout } from "./layout"
 import type { FlowEdge, FlowNode, Graph, NodeData, NodeKind } from "./types"
@@ -39,16 +40,16 @@ export const TEMPLATES: Template[] = [
     ),
   },
   {
-    key: "recordatorio-pagos", nombre: "Recordatorio 3 días antes de cada pago", icon: "bell-ring", porDefecto: true, activo: true,
-    descripcion: "Tres días antes de un gasto fijo, la tarjeta, una cuota o una suscripción, te recuerda tenerlo listo.",
+    key: "recordatorio-pagos", nombre: "Recordatorio 3 días antes de cada pago", icon: "bell-ring", porDefecto: true, activo: false,
+    descripcion: "Tres días antes de un gasto fijo, la tarjeta, una cuota o una suscripción, te recuerda tenerlo listo. Mirai ya te avisa de tus pagos (Ajustes › Alertas): actívala solo si quieres un recordatorio extra.",
     graph: flow(
       [node("t", "pago_proximo", { dias: 3 }), node("a", "aviso", { titulo: "{pago} vence {cuando}", mensaje: "Ten listos {monto} para {pago}. La fecha es el {fecha}.", canales: "todos" })],
       [edge("t", "a")],
     ),
   },
   {
-    key: "presupuesto-80", nombre: "Alerta de presupuesto al 80 %", icon: "chart-pie", porDefecto: true, activo: true,
-    descripcion: "Cuando una categoría llega al 80 % de lo que presupuestaste para el mes, te avisa a tiempo.",
+    key: "presupuesto-80", nombre: "Alerta de presupuesto al 80 %", icon: "chart-pie", porDefecto: true, activo: false,
+    descripcion: "Cuando una categoría llega al 80 % de lo que presupuestaste para el mes, te avisa a tiempo. Úsala si quieres un aviso a otro porcentaje del que tienes en Ajustes › Alertas.",
     graph: flow(
       [node("t", "presupuesto", { pct: 80, category_id: null }), node("a", "aviso", { titulo: "Vas en el {pct} % de {descripcion}", mensaje: "Llevas {monto} de {tope} este mes. Frena un poco para no pasarte.", canales: "app" })],
       [edge("t", "a")],
@@ -113,6 +114,38 @@ export const TEMPLATES: Template[] = [
     graph: flow(
       [node("t", "meta_alcanzada"), node("a", "aviso", { titulo: "¡Cumpliste “{meta}”!", mensaje: "Llegaste a {monto}. Date un gusto pequeño y piensa en tu próxima meta.", canales: "todos" })],
       [edge("t", "a")],
+    ),
+  },
+  {
+    key: "cuota-pagada", nombre: "Avísame cuando se pague una cuota", icon: "hand-coins", porDefecto: false, activo: false,
+    descripcion: "Cada vez que se registra una cuota o un abono de un préstamo (lo que pagas o lo que te pagan), avisa a todo el hogar.",
+    graph: flow(
+      [node("t", "cuota", { dir: "todas" }), node("a", "aviso", { titulo: "Cuota registrada: {monto}", mensaje: "Se registró un pago de {monto} de {descripcion} el {fecha}.", canales: "app", para: "hogar" })],
+      [edge("t", "a")],
+    ),
+  },
+  {
+    key: "tarjeta-grande", nombre: "Compra grande con tarjeta de crédito", icon: "credit-card", porDefecto: false, activo: false,
+    descripcion: "Si alguien hace una compra de más de $300.000 con una tarjeta de crédito, te avisa para que no te sorprenda el extracto.",
+    graph: flow(
+      [node("t", "compra_tarjeta"), node("c", "monto", { op: "mayor", valor: 300_000 }), node("a", "aviso", { titulo: "Compra con tarjeta: {monto}", mensaje: "{descripcion} con la {tarjeta} por {monto}. Recuerda que se paga en el próximo corte.", canales: "app", para: "hogar" })],
+      [edge("t", "c"), edge("c", "a", "si")],
+    ),
+  },
+  {
+    key: "suscripcion-cobrada", nombre: "Aviso cuando se cobra una suscripción", icon: "repeat", porDefecto: false, activo: false,
+    descripcion: "Cuando marcas una suscripción como cobrada (Netflix, Spotify…), te dice cuánto fue y te invita a revisar si la sigues usando.",
+    graph: flow(
+      [node("t", "suscripcion", { evento: "cobrada" }), node("a", "aviso", { titulo: "Se cobró {descripcion}", mensaje: "Pagaste {monto} de {descripcion}. ¿La sigues usando? Si no, cancélala antes del próximo cobro.", canales: "app", para: "autor" })],
+      [edge("t", "a")],
+    ),
+  },
+  {
+    key: "debito-automatico", nombre: "Débito automático: marca un fijo como pagado", icon: "circle-check", porDefecto: false, activo: false,
+    descripcion: "Si un gasto fijo se paga solo del banco (débito automático), Mirai lo marca como pagado el día que elijas. Elige el gasto fijo y el día, y actívala.",
+    graph: flow(
+      [node("t", "programado", { frecuencia: "mensual", dia_mes: 5, hora: 8 }), node("p", "pagar_fijo", { fixed_expense_id: "", valor: "fijo" }), node("a", "aviso", { titulo: "Registramos tu débito automático", mensaje: "Marcamos tu gasto fijo como pagado. Revisa en tu banco que el cobro sí salió.", canales: "app", para: "hogar" })],
+      [edge("t", "p"), edge("p", "a")],
     ),
   },
   {

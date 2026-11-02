@@ -1,6 +1,6 @@
 // Calendario fiscal y laboral de Colombia (FPL, FCAT, fcatOf, calEst de la v4).
 import type { BookData } from "@/lib/domain"
-import { fijoMensual, salarioDesdeIngresos } from "@/lib/domain"
+import { fijoMensual, nextOcc as nextOccDomain, salarioDesdeIngresos } from "@/lib/domain"
 
 export type FCatKey = "laboral" | "dian" | "local" | "vehiculo" | "hogar" | "personal"
 export const FCAT: Record<FCatKey, { n: string; color: string; icon: string }> = {
@@ -53,14 +53,9 @@ export function FPL(y: number, today: string): Plantilla[] {
   ]
 }
 
-/** Próxima ocurrencia: una vez → su fecha; si no, mismo día este año o el siguiente si ya pasó (tolerancia 1 día). */
-export function nextOcc(c: { fecha: string; anual: boolean }, today: string) {
-  if (!c.anual) return c.fecha
-  const y = +today.slice(0, 4)
-  const md = c.fecha.slice(5)
-  const este = `${y}-${md}`
-  const ayer = new Date(new Date(today + "T12:00:00").getTime() - 864e5).toISOString().slice(0, 10)
-  return este >= ayer ? este : `${y + 1}-${md}`
+/** Próxima ocurrencia: una vez → su fecha; si no, mismo día este año o el siguiente si ya pasó (tolerancia 1 día). La regla vive en lib/domain/dates.ts. */
+export function nextOcc(c: { fecha: string; anual: boolean | null }, today: string) {
+  return nextOccDomain({ fecha: c.fecha, anual: !!c.anual }, today, 1)
 }
 
 export type TaxAsset = { tipo: string; avaluo: number; predial: number | null; imp_veh: number | null; soat: number | null; pct: number }

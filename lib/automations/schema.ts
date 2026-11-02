@@ -6,12 +6,18 @@ const money = (msg = "Escribe un valor") => z.number({ error: msg }).min(0, "No 
 const pct = (min = 1, max = 100) => z.number({ error: "Escribe el porcentaje" }).int("Usa un número entero").min(min, `Mínimo ${min} %`).max(max, `Máximo ${max} %`)
 const refId = (msg: string) => z.string({ error: msg }).min(1, msg)
 const optId = z.string().nullable()
+/** "hogar", "autor" (quien hizo el movimiento) o el user_id de una persona del hogar. */
+const para = z.string().min(1, "Elige a quién avisar").max(64)
 
 export const NODE_SCHEMAS = {
   // ── Disparadores ──
   gasto: z.object({}),
   ingreso: z.object({ fuente: z.enum(["todos", "extras", "nomina"]) }),
   pago_fijo: z.object({}),
+  cuota: z.object({ dir: z.enum(["todas", "pagar", "cobrar"]) }),
+  compra_tarjeta: z.object({ card_id: optId }),
+  suscripcion: z.object({ evento: z.enum(["cobrada", "nueva", "todas"]) }),
+  recordatorio: z.object({}),
   programado: z.object({
     frecuencia: z.enum(["diario", "semanal", "mensual", "quincena", "dia_pago"]),
     dia_semana: z.number().int().min(0).max(6),
@@ -39,6 +45,7 @@ export const NODE_SCHEMAS = {
     titulo: z.string().trim().min(1, "Escribe el título").max(80, "Máximo 80 letras"),
     mensaje: z.string().trim().min(1, "Escribe el mensaje").max(400, "Máximo 400 letras"),
     canales: z.enum(["app", "todos"]),
+    para: para.optional(),
   }),
   movimiento: z
     .object({
@@ -52,6 +59,16 @@ export const NODE_SCHEMAS = {
     })
     .refine((v) => v.modo !== "fijo" || v.valor > 0, { message: "Escribe un valor mayor que cero", path: ["valor"] })
     .refine((v) => v.tipo !== "meta" || !!v.goal_id, { message: "Elige la meta", path: ["goal_id"] }),
+  crear_ingreso: z
+    .object({
+      modo: z.enum(["fijo", "pct"]),
+      valor: money(),
+      pct: pct(1, 100),
+      descripcion: z.string().trim().min(1, "Escribe la descripción").max(120, "Máximo 120 letras"),
+      category_id: optId,
+    })
+    .refine((v) => v.modo !== "fijo" || v.valor > 0, { message: "Escribe un valor mayor que cero", path: ["valor"] }),
+  pagar_fijo: z.object({ fixed_expense_id: refId("Elige el gasto fijo"), valor: z.enum(["fijo", "monto"]) }),
   categorizar: z.object({ category_id: refId("Elige la categoría") }),
   apartar: z
     .object({ pct: pct(1, 100), destino: z.enum(["meta", "fondo"]), goal_id: optId })
@@ -63,7 +80,7 @@ export const NODE_SCHEMAS = {
   }),
   marcar_hormiga: z.object({}),
   esperar: z.object({ dias: z.number({ error: "Escribe los días" }).int().min(1, "Mínimo 1 día").max(60, "Máximo 60 días") }),
-  ia: z.object({ pregunta: z.string().trim().min(5, "Escribe qué quieres preguntar").max(300, "Máximo 300 letras"), canales: z.enum(["app", "todos"]) }),
+  ia: z.object({ pregunta: z.string().trim().min(5, "Escribe qué quieres preguntar").max(300, "Máximo 300 letras"), canales: z.enum(["app", "todos"]), para: para.optional() }),
 } satisfies Record<NodeKind, z.ZodType>
 
 const ALL_KINDS = [...TRIGGER_KINDS, ...CONDITION_KINDS, ...ACTION_KINDS] as [NodeKind, ...NodeKind[]]
@@ -92,14 +109,18 @@ export function parseGraph(v: unknown): Graph {
 export const groupOf = (kind: NodeKind) =>
   (TRIGGER_KINDS as readonly string[]).includes(kind) ? "trigger" : (CONDITION_KINDS as readonly string[]).includes(kind) ? "condition" : "action"
 
+/** Disparadores nuevos (cuotas, tarjetas, suscripciones y agenda): traen monto y descripción. */
+const MOV_V2: TriggerKind[] = ["cuota", "compra_tarjeta", "suscripcion", "recordatorio"]
 /** Disparadores que traen un monto (para "% del monto" y la condición de monto). */
 export function triggerHasMonto(t: FlowNode | undefined) {
   if (!t) return false
   if (t.kind === "programado") return ["quincena", "dia_pago"].includes(String(t.data.frecuencia))
-  return (["gasto", "ingreso", "pago_fijo", "hormiga"] as TriggerKind[]).includes(t.kind as TriggerKind)
+  return (["gasto", "ingreso", "pago_fijo", "hormiga", ...MOV_V2] as TriggerKind[]).includes(t.kind as TriggerKind)
 }
 /** Disparadores que traen un movimiento con descripción, categoría y persona. */
-export const triggerHasMov = (t: FlowNode | undefined) => !!t && (["gasto", "ingreso", "pago_fijo", "hormiga"] as string[]).includes(t.kind)
+export const triggerHasMov = (t: FlowNode | undefined) => !!t && (["gasto", "ingreso", "pago_fijo", "hormiga", ...MOV_V2] as string[]).includes(t.kind)
+/** Disparadores con alguien que hizo el movimiento (para "avisar a quien lo hizo"). */
+export const triggerHasAutor = (t: FlowNode | undefined) => !!t && (["gasto", "ingreso", "hormiga", ...MOV_V2] as string[]).includes(t.kind)
 /** Disparadores que traen un gasto (para categorizar o marcar como hormiga). */
 export const triggerHasGasto = (t: FlowNode | undefined) => !!t && (t.kind === "gasto" || t.kind === "hormiga")
 
@@ -148,10 +169,11 @@ export function validateGraph(g: Graph): { ok: boolean; issues: Issue[] } {
   for (const n of g.nodes) {
     issues.push(...nodeIssues(n))
     if (!trigger || n.type === "trigger") continue
-    const usaMonto = (n.kind === "monto") || (n.kind === "apartar") || (n.kind === "movimiento" && n.data.modo === "pct") || (n.kind === "agenda" && n.data.usar_monto === true)
+    const usaMonto = (n.kind === "monto") || (n.kind === "apartar") || ((n.kind === "movimiento" || n.kind === "crear_ingreso") && n.data.modo === "pct") || (n.kind === "agenda" && n.data.usar_monto === true) || (n.kind === "pagar_fijo" && n.data.valor === "monto")
     if (usaMonto && !triggerHasMonto(trigger)) issues.push({ nodeId: n.id, msg: "Usa el monto del disparador, pero ese disparador no trae un monto" })
     if ((n.kind === "categoria" || n.kind === "miembro" || n.kind === "texto") && !triggerHasMov(trigger)) issues.push({ nodeId: n.id, msg: "Esta condición necesita un disparador de gasto, ingreso o pago" })
     if ((n.kind === "categorizar" || n.kind === "marcar_hormiga") && !triggerHasGasto(trigger)) issues.push({ nodeId: n.id, msg: "Esta acción solo sirve cuando el disparador es un gasto" })
+    if ((n.kind === "aviso" || n.kind === "ia") && n.data.para === "autor" && !triggerHasAutor(trigger)) issues.push({ nodeId: n.id, msg: "“Quien hizo el movimiento” solo sirve con un disparador de gasto, ingreso, cuota, tarjeta, suscripción o agenda" })
     if (n.kind === "movimiento" && n.data.modo === "fijos" && !(trigger.kind === "programado" && trigger.data.frecuencia === "quincena")) issues.push({ nodeId: n.id, msg: "“Lo de tus gastos fijos” solo sirve con el disparador de quincena" })
   }
   return { ok: issues.length === 0, issues }

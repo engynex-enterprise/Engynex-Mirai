@@ -24,3 +24,19 @@ export function watchErrors(page: Page) {
 }
 
 export const shot = (page: Page, name: string, project: string) => page.screenshot({ path: `tests/.out/${name}-${project}.png`, fullPage: true })
+
+/**
+ * Crea una entidad (banco o casa de empeño) desde el selector de una deuda. Si ya existía con ese nombre (p. ej. en un
+ * reintento), el formulario la escoge sola sin abrir la ventana: así nunca se crean dos iguales.
+ */
+export async function crearEntidad(page: Page, combo: string | RegExp, nombre: string, crear: RegExp, buscar = "Buscar…") {
+  await page.getByRole("combobox", { name: combo }).click()
+  await page.getByPlaceholder(buscar).fill(nombre)
+  await page.getByRole("option", { name: crear }).first().click()
+  const btn = page.getByRole("button", { name: "Crear y usar" })
+  if (await btn.waitFor({ timeout: 4000 }).then(() => true, () => false)) {
+    await expect(page.getByRole("textbox", { name: "Nombre", exact: true })).toHaveValue(nombre)
+    await btn.click()
+  }
+  await expect(page.getByRole("combobox", { name: combo })).toContainText(nombre)
+}

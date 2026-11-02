@@ -46,7 +46,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── Planes ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-type Plan = { id: string; nombre: string; descripcion: string; precio_mes: number; precio_anio: number; funciones: string[]; anuncios: boolean; limites: { libros?: number; personas?: number }; activo: boolean; publico: boolean; destacado: boolean; orden: number }
+type Plan = { id: string; nombre: string; descripcion: string; precio_mes: number; precio_anio: number; funciones: string[]; anuncios: boolean; limites: { libros?: number; personas?: number; automatizaciones?: number }; activo: boolean; publico: boolean; destacado: boolean; orden: number }
 const NEW_PLAN: Plan = { id: "", nombre: "", descripcion: "", precio_mes: 9900, precio_anio: 99000, funciones: [], anuncios: false, limites: {}, activo: true, publico: true, destacado: false, orden: 3 }
 const slug = (x: string) => x.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30)
 
@@ -91,9 +91,10 @@ function PlanDialog({ p, isNew, open, onOpenChange }: { p: Plan; isNew: boolean;
             </label>
           ))}</div>
         </FormField>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="Libros por hogar" htmlFor="pl-l" tip={false} hint="Vacío = ilimitado"><Input id="pl-l" type="number" min={1} className="h-11" value={v.limites.libros ?? ""} onChange={(e) => set("limites", { ...v.limites, libros: e.target.value ? +e.target.value : undefined })} /></FormField>
           <FormField label="Personas por hogar" htmlFor="pl-p" tip={false} hint="Vacío = ilimitado"><Input id="pl-p" type="number" min={1} className="h-11" value={v.limites.personas ?? ""} onChange={(e) => set("limites", { ...v.limites, personas: e.target.value ? +e.target.value : undefined })} /></FormField>
+          <FormField label="Automatizaciones activas" htmlFor="pl-a" tip={false} hint="Por libro. Vacío = ilimitadas"><Input id="pl-a" type="number" min={1} className="h-11" value={v.limites.automatizaciones ?? ""} onChange={(e) => set("limites", { ...v.limites, automatizaciones: e.target.value ? +e.target.value : undefined })} /></FormField>
           <FormField label="Orden en Planes" htmlFor="pl-o" tip={false} hint="Menor = sale primero"><Input id="pl-o" type="number" className="h-11" value={v.orden} onChange={(e) => set("orden", +e.target.value || 0)} /></FormField>
         </div>
         <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -139,7 +140,7 @@ export function PlanesPanel() {
             <p className="text-2xl font-bold tabular-nums">{p.precio_mes ? precio(p.precio_mes) : "$0"} <span className="text-sm font-normal text-muted-foreground">{p.precio_mes ? `al mes · ${precio(p.precio_anio)} al año` : "para siempre"}</span></p>
             {p.descripcion && <p className="text-sm text-muted-foreground">{p.descripcion}</p>}
             <div className="flex flex-wrap gap-1">{p.funciones.length ? p.funciones.map((f) => <StatusPill key={f} tone="pagado">{FEATURES[f as keyof typeof FEATURES]?.label ?? f}</StatusPill>) : <StatusPill tone="gray">Solo lo básico</StatusPill>}{p.anuncios && <StatusPill tone="gray">Con anuncios</StatusPill>}</div>
-            <p className="text-xs text-muted-foreground">{p.limites.libros ? `${p.limites.libros} libro(s)` : "Libros ilimitados"} · {p.limites.personas ? `${p.limites.personas} personas` : "personas ilimitadas"}</p>
+            <p className="text-xs text-muted-foreground">{p.limites.libros ? `${p.limites.libros} libro(s)` : "Libros ilimitados"} · {p.limites.personas ? `${p.limites.personas} personas` : "personas ilimitadas"} · {p.limites.automatizaciones ? `${p.limites.automatizaciones} automatizaciones` : "automatizaciones ilimitadas"}</p>
             <div className="mt-auto flex gap-2 border-t pt-3">
               <Button size="sm" variant="outline" onClick={() => edit.show({ p, isNew: false })}><Pencil /> Editar</Button>
               {!["gratis", "premium"].includes(p.id) && <Button size="sm" variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => borrar(p)}><Trash2 /> Borrar</Button>}
@@ -334,7 +335,7 @@ const CANAL: Record<string, { n: string; icon: string; tone: IconTone }> = {
   email: { n: "Correo", icon: "mail", tone: "blue" }, whatsapp: { n: "WhatsApp", icon: "message-circle", tone: "green" },
   telegram: { n: "Telegram", icon: "send", tone: "violet" }, push: { n: "Push", icon: "bell-ring", tone: "amber" },
 }
-const TIPO_N: Record<string, string> = { resumen: "Resumen", prueba: "Prueba del usuario", prueba_admin: "Prueba de la consola", invitacion: "Invitación", contador: "Contador" }
+const TIPO_N: Record<string, string> = { resumen: "Resumen", prueba: "Prueba del usuario", prueba_admin: "Prueba de la consola", invitacion: "Invitación", contador: "Contador", plan: "Aviso del plan", cobro_tercero: "Cobro a quien debe" }
 
 export function EnviosPanel() {
   const { data, isPending } = useQuery({ queryKey: ["admin", "envios"], queryFn: () => adminNotifyLog() })
@@ -363,7 +364,7 @@ export function EnviosPanel() {
           { id: "canal", header: "Canal", sort: (e) => e.channel, csv: (e) => e.channel, cell: (e) => <DTPrimary media={<ToneIcon icon={CANAL[e.channel]?.icon ?? "send"} tone={CANAL[e.channel]?.tone ?? "gray"} />} title={CANAL[e.channel]?.n ?? e.channel} sub={`${TIPO_N[e.kind] ?? e.kind}${e.provider ? ` · ${e.provider}` : ""}`} /> },
           { id: "cuando", header: "Cuándo", sort: (e) => e.created_at, csv: (e) => e.created_at, cell: (e) => <DTTwoLine top={fday(e.created_at)} bottom={rel(e.created_at)} /> },
           { id: "quien", header: "Persona", sort: (e) => e.quien, csv: (e) => e.quien, cell: (e) => <DTTwoLine top={e.quien} bottom={e.destino ?? ""} /> },
-          { id: "estado", header: "Estado", sort: (e) => e.status, csv: (e) => e.status, cell: (e) => e.status === "enviado" ? <StatusPill tone="pagado" check>Enviado</StatusPill> : <Tip label={e.error ?? "Falló sin detalle"}><span className="inline-flex"><StatusPill tone="vencido">Fallido</StatusPill></span></Tip> },
+          { id: "estado", header: "Estado", sort: (e) => e.status, csv: (e) => e.status, cell: (e) => e.status === "enviado" ? <StatusPill tone="pagado" check>Enviado</StatusPill> : e.status === "enviando" ? <StatusPill tone="gray">Enviando</StatusPill> : <Tip label={e.error ?? "Falló sin detalle"}><span className="inline-flex"><StatusPill tone="vencido">Fallido</StatusPill></span></Tip> },
           { id: "detalle", header: "Detalle", csv: (e) => e.error ?? e.ref ?? "", cell: (e) => <span className={cn("line-clamp-3 max-w-md text-xs break-words", e.error ? "text-danger" : "text-muted-foreground")}>{e.error ?? (e.ref ? `Id ${e.ref}` : "")}</span> },
         ]}
       />
@@ -521,6 +522,7 @@ export function SistemaPanel() {
       <Panel title="Acceso y límites" icon="lock">
         <ToggleRow title="Registro abierto" desc="Si lo apagas, nadie nuevo puede crear cuenta (las cuentas existentes siguen entrando)." checked={s.registro_abierto} onChange={(x) => save({ registro_abierto: x }, x ? "Registro abierto" : "Registro cerrado")} />
         <ToggleRow title="Límites de los planes también en la base de datos" label="Límites en la base de datos" desc="La app ya respeta los límites. Esto los hace cumplir aunque alguien use la API directamente. Enciéndelo al publicar los planes en producción." checked={s.limites_db} onChange={(x) => save({ limites_db: x }, x ? "Límites activos en la base" : "Límites de la base apagados")} />
+        <ToggleRow title="Funciones Premium también en la base de datos" label="Premium en la base de datos" desc="Impuestos (renta, bienes y contador) y familia (mesadas y compartidos) solo se pueden guardar con un plan que los incluya, aunque alguien use la API directamente. Enciéndelo cuando producción tenga la versión que lo entiende." checked={!!s.premium_db} onChange={(x) => save({ premium_db: x }, x ? "Premium activo en la base" : "Premium de la base apagado")} />
       </Panel>
       <Panel title="Programa de referidos" icon="gift" description={`${plural(data.referidos ?? 0, "persona llegó invitada", "personas llegaron invitadas")} · ${plural(data.premiados ?? 0, "invitación premiada", "invitaciones premiadas")}. Quien invita y quien llega reciben días del plan elegido (máximo 12 premios por persona).`}>
         <ToggleRow title="Programa activo" label="Programa de referidos activo" checked={s.referidos_activo} onChange={(x) => save({ referidos_activo: x }, x ? "Referidos activos" : "Referidos en pausa")} />

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import { login, watchErrors } from "./helpers"
-import { setQaPlan } from "./qa"
+import { QA, admin, setQaPlan } from "./qa"
+import { LEGAL_VERSION } from "../../lib/legal/version"
 
 // Chat de Mirai: burbuja → sugerencias al azar → respuesta instantánea (quickAnswer, sin IA) → pantalla completa en
 // /consejero con la misma conversación → historial: renombrar y eliminar con Deshacer. Escritorio y móvil.
@@ -179,7 +180,8 @@ test("chat plan gratis: respuestas con tus datos, registrar un gasto con confirm
   await dc.getByRole("button", { name: /¿Qué significa\? En un año suma/ }).click()
   await expect(page.getByText(/por 12 meses/)).toBeVisible()
   await page.keyboard.press("Escape")
-  await dc.screenshot({ path: `tests/.out/consejero-tarjeta-${info.project.name}.png` })
+  // La tarjeta puede volver a dibujarse al terminar de llegar la respuesta: si se suelta, captura la página.
+  await dc.screenshot({ path: `tests/.out/consejero-tarjeta-${info.project.name}.png` }).catch(() => shotTo(page, "consejero-tarjeta", info.project.name))
   await dc.getByRole("button", { name: "Ver detalle financiero" }).click()
   await expect(dc.getByText("Deudas / ingreso (DTI)").first()).toBeVisible()
   expect(await dc.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(4)
@@ -192,6 +194,101 @@ test("chat plan gratis: respuestas con tus datos, registrar un gasto con confirm
   await expect(log.getByRole("link", { name: "Conoce Premium" }).last()).toBeVisible()
   await shotTo(page, "consejero-gratis", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("chat en todos los módulos (sin IA): préstamo en Me deben y cuota del carro con confirmación", async ({ page }, info) => {
+  test.setTimeout(180_000)
+  const errs = watchErrors(page)
+  await login(page, "gratis")
+  await page.evaluate(() => { sessionStorage.setItem("mirai-ad-modal", "1") })
+  // Libro de ejemplo (familia Navarro): tiene el "Crédito de vehículo" en Le debo.
+  await page.goto("/puesta")
+  await page.getByRole("button", { name: "Ver un ejemplo" }).click()
+  await expect(page.getByText("Datos de ejemplo cargados")).toBeVisible({ timeout: 60_000 })
+  await page.waitForURL(/inicio/)
+  await page.goto("/consejero")
+  await page.getByRole("button", { name: "Nueva conversación" }).first().click()
+  const box = page.getByRole("textbox", { name: "Escribe tu pregunta" })
+  const log = page.getByRole("log", { name: "Conversación con Mirai" })
+  // Sin números: el chat reconoce nombres de personas (con apellido distinto en cada corrida).
+  const juan = `Juan ${info.project.name.includes("movil") ? "Móvil" : "Escritorio"} ${["Pérez", "Gómez", "Ruiz", "Díaz", "Rojas", "Castro"][Date.now() % 6]}`
+
+  // "Le presté 200 mil a Juan a 3 meses" → tarjeta → Confirmar → aparece en Me deben
+  await box.fill(`Le presté 200 mil a ${juan} a 3 meses`)
+  await box.press("Enter")
+  const card = log.locator('[data-testid="confirm-card"][data-tipo="prestamo"]').last()
+  await expect(card.getByText("¿Registro este préstamo?")).toBeVisible({ timeout: 30_000 })
+  await expect(card.getByText(juan)).toBeVisible()
+  await expect(card.getByText(/3 cuotas mensuales/)).toBeVisible()
+  await shotTo(page, "chat-prestamo", info.project.name)
+  await card.getByRole("button", { name: "Confirmar" }).click()
+  await expect(page.getByText("Préstamo registrado").first()).toBeVisible({ timeout: 20_000 })
+  await expect(card.getByText("Guardado en tu libro")).toBeVisible()
+  await expect(card.getByRole("link", { name: /Ver en Me deben/ })).toBeVisible()
+
+  // "Pagué la cuota del carro" → la cuota del Crédito de vehículo (sinónimos) → Confirmar
+  await box.fill("Pagué la cuota del carro")
+  await box.press("Enter")
+  const cuota = log.locator('[data-testid="confirm-card"][data-tipo="pago_cuota"]').last()
+  await expect(cuota.getByText("¿Registro este pago?")).toBeVisible({ timeout: 30_000 })
+  await expect(cuota.getByText(/Crédito de vehículo/)).toBeVisible()
+  await expect(cuota.getByText("Queda debiendo")).toBeVisible()
+  await cuota.getByRole("button", { name: "Confirmar" }).click()
+  await expect(page.getByText("Pago registrado").first()).toBeVisible({ timeout: 20_000 })
+  await expect(cuota.getByText("Guardado en tu libro")).toBeVisible()
+  await shotTo(page, "chat-cuota", info.project.name)
+
+  // El préstamo quedó en Me deben
+  await page.goto("/me-deben")
+  await expect(page.getByText(juan).first()).toBeVisible({ timeout: 30_000 })
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("chat con el rol Registra sus gastos: confirma su gasto pero no un préstamo", async ({ page }, info) => {
+  test.setTimeout(150_000)
+  const errs = watchErrors(page)
+  const sb = admin()
+  const email = `qa+registra-${info.project.name}@mirai.test`
+  const password = `Qa-${Date.now()}-r!`
+  const { data: users } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const old = users.users.find((u) => u.email === email)
+  if (old) await sb.auth.admin.deleteUser(old.id)
+  const qa = users.users.find((u) => u.email === QA.email)!
+  const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", qa.id).limit(1).single()
+  const { data: u, error } = await sb.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { nombre: "Hijo Prueba", acepta_version: LEGAL_VERSION } })
+  if (error) throw error
+  await sb.from("household_members").insert({ household_id: hh!.household_id, user_id: u.user.id, role: "viewer", access_role: "registra" })
+  await sb.from("user_preferences").upsert({ user_id: u.user.id, extra: { welcome_seen: new Date().toISOString() } })
+  await setQaPlan("gratis") // sin IA: la categoría sale de las reglas y no se gastan créditos
+  try {
+    await page.goto("/login")
+    await page.getByLabel("Correo").fill(email)
+    await page.getByLabel("Contraseña", { exact: true }).fill(password)
+    await page.getByRole("button", { name: "Entrar" }).click()
+    await page.waitForURL(/inicio|puesta|consejero/, { timeout: 30_000 })
+    await page.evaluate(() => { sessionStorage.setItem("mirai-ad-modal", "1") })
+    await page.goto("/consejero")
+    await page.getByRole("button", { name: "Nueva conversación" }).first().click()
+    const box = page.getByRole("textbox", { name: "Escribe tu pregunta" })
+    const log = page.getByRole("log", { name: "Conversación con Mirai" })
+
+    await box.fill("Registra un gasto de 15 mil en almuerzo")
+    await box.press("Enter")
+    const card = log.locator('[data-testid="confirm-card"][data-tipo="gasto"]').last()
+    await expect(card.getByText("¿Registro este gasto?")).toBeVisible({ timeout: 30_000 })
+    await card.getByRole("button", { name: "Confirmar" }).click()
+    await expect(page.getByText("Gasto registrado").first()).toBeVisible({ timeout: 20_000 })
+    await expect(card.getByText("Guardado en tu libro")).toBeVisible()
+
+    await box.fill("Le presté 200 mil a Juan a 3 meses")
+    await box.press("Enter")
+    await expect(log.getByText(/Registra sus gastos/).last()).toBeVisible({ timeout: 30_000 })
+    await expect(log.locator('[data-testid="confirm-card"][data-tipo="prestamo"]')).toHaveCount(0)
+    await shotTo(page, "chat-registra", info.project.name)
+    expect(errs, errs.join("\n")).toEqual([])
+  } finally {
+    await sb.auth.admin.deleteUser(u.user.id).catch(() => {})
+  }
 })
 
 test("chat con IA real: respuesta en streaming y detener", async ({ page }, info) => {

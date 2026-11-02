@@ -9,6 +9,7 @@ import { createClient } from "@/utils/supabase/client"
 import { qk } from "@/lib/supabase/tables"
 import { gamiPending, todayBogota } from "@/lib/domain"
 import { useGami } from "./use-gami"
+import { logroNotifs } from "@/features/notify/actions"
 
 export async function confetti(n = 110) {
   if (typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -49,6 +50,8 @@ export function GamiCheck() {
     const t = setTimeout(async () => {
       const sb = createClient()
       if (badges.length) await sb.from("gami_badges").upsert(badges.map((b) => ({ book_id: bookId, badge: b.id, unlocked_at: g.today })), { onConflict: "book_id,badge", ignoreDuplicates: true })
+      // Insignias y nivel también quedan en la campana (kind "logro", sin duplicados).
+      if (!first && (badges.length || subio)) void logroNotifs({ bookId, badges: badges.map((b) => ({ id: b.id, n: b.n, d: b.d })), nivel: subio ? { n: g.L.n, name: g.L.name } : null }).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))
       if (missions.length) await sb.from("gami_missions").upsert(missions.map((m) => ({ book_id: bookId, semana: m.wk, mision: m.k })), { onConflict: "book_id,semana,mision", ignoreDuplicates: true })
       if (canEdit && (first || subio)) await sb.from("gami_state").upsert({ book_id: bookId, max_level: Math.max(g.st.maxLevel, g.L.n), init_date: g.st.init ?? g.today })
       qc.invalidateQueries({ queryKey: qk(bookId, "gami") })

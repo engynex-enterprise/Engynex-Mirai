@@ -15,6 +15,7 @@ export const LIMITS = {
   invitar: { max: 15, windowS: 86400 },        // invitaciones nuevas por persona al día
   invitarMin: { max: 5, windowS: 300 },        // y no más de 5 en 5 minutos
   pruebaAviso: { max: 6, windowS: 900 },       // "Enviarme una prueba" / "Enviar resumen ahora" cada 15 minutos
+  cobroWa: { max: 10, windowS: 86400 },        // recordatorios de cobro por WhatsApp (número de Mirai) por persona al día
   contador: { max: 10, windowS: 86400 },       // accesos nuevos para el contador al día
   portalContador: { max: 120, windowS: 600 },  // aperturas del portal por enlace cada 10 minutos
   cuentaCorreo: { max: 5, windowS: 3600 },     // pedir, reenviar o cancelar un cambio de correo por hora

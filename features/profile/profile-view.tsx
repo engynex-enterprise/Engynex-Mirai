@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
@@ -86,6 +86,8 @@ export function ProfileView() {
   const saveCfg = useBookSettingsSave()
   const gami = useGami()
   const [picker, setPicker] = useState(false)
+  // Los guardados van en fila: dos seguidos (Deshacer y luego otro cambio) no se pisan en la base.
+  const cola = useRef<Promise<unknown>>(Promise.resolve())
   const key = ["profile-full", user.id]
   const { data: p } = useQuery({ queryKey: key, queryFn: async () => (await createClient().from("profiles").select("*").eq("id", user.id).single()).data })
   const { data: identities } = useQuery({ queryKey: ["identities", user.id], queryFn: async () => (await createClient().auth.getUserIdentities()).data?.identities ?? [] })
@@ -100,8 +102,12 @@ export function ProfileView() {
   if (!p || !book) return <PageSkeleton kpis={0} />
 
   const save = async (patch: Partial<Row<"profiles">>, msg: string | false = "Guardado") => {
-    qc.setQueryData(key, { ...p, ...patch })
-    const { error } = await createClient().from("profiles").update(patch).eq("id", user.id)
+    // Una lectura vieja que llegue tarde no debe deshacer el cambio optimista; y se aplica sobre lo último, no sobre `p`.
+    await qc.cancelQueries({ queryKey: key })
+    qc.setQueryData(key, (old: typeof p) => ({ ...(old ?? p), ...patch }))
+    const run = cola.current.then(() => createClient().from("profiles").update(patch).eq("id", user.id))
+    cola.current = run.catch(() => null)
+    const { error } = await run
     if (error) return toast.error("No se pudo guardar", { description: error.message })
     if (msg) toast(msg)
     qc.invalidateQueries({ queryKey: ["profile", user.id] })

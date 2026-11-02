@@ -1,17 +1,20 @@
 "use server"
 
 import { z } from "zod"
-import { getAppContext, requireRole } from "@/lib/dal"
-import { publicError } from "@/lib/security/errors"
+import { getAppContext } from "@/lib/dal"
 import { limitError } from "@/lib/security/rate-limit"
 import { supabaseServer } from "@/utils/supabase/server"
 import { formatCOP, todayBogota } from "@/lib/domain"
+import { can } from "@/lib/household/roles"
+import { puedeProponer, registraAlgo, sinPermiso } from "@/lib/chat/permisos"
+import { TIPO_INFO, destino } from "@/lib/chat/propuestas"
 import { autoTitle, preview, smartTitle } from "@/lib/chat/history"
 import { aiText } from "@/lib/ai/run"
 import { clip } from "@/lib/ai/compact"
-import { MSG_COLS, toMsg, type ChatAdjunto, type ChatHints, type ChatMeta, type ChatMsg, type Propuesta, type PropuestaTipo } from "@/lib/chat/types"
+import { MSG_COLS, PROPUESTA_TIPOS, toMsg, type ChatAdjunto, type ChatHints, type ChatMeta, type ChatMsg, type Propuesta } from "@/lib/chat/types"
 import { readInvoice, readLoanDoc, readReceipt } from "@/features/ai/actions"
 import { chatAi, chatHintsFor } from "./server"
+import { escribir } from "./confirm"
 
 // Acciones del chat que no van por streaming: datos para las sugerencias, confirmar o cancelar una propuesta y leer un
 // adjunto (foto o PDF de una factura, recibo, comprobante o extracto). El streaming está en app/api/chat/route.ts.
@@ -23,31 +26,8 @@ export async function chatHints(): Promise<ChatHints> {
   return chatHintsFor(ctx, await supabaseServer())
 }
 
-const TABLA: Record<PropuestaTipo, { table: "expenses" | "extra_incomes" | "goals" | "calendar_events"; href: string; ok: string }> = {
-  gasto: { table: "expenses", href: "/gastos", ok: "Gasto registrado" },
-  ingreso: { table: "extra_incomes", href: "/ingresos", ok: "Ingreso registrado" },
-  meta: { table: "goals", href: "/metas", ok: "Meta creada" },
-  recordatorio: { table: "calendar_events", href: "/recordatorios", ok: "Recordatorio creado" },
-}
+type Res = { ok: true; msg: string; href: string; tablas: string[]; propuesta: Propuesta } | { ok: false; msg: string }
 
-type Res = { ok: true; msg: string; href: string; table: string; propuesta: Propuesta } | { ok: false; msg: string }
-
-/**
- * Datos de una propuesta validados en el servidor: la propuesta vive en chat_messages.meta, que la persona puede
- * editar desde el navegador, así que no se confía en ella (texto de la IA o del usuario = entrada no confiable).
- */
-const Fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-const Datos = z.object({
-  valor: z.number().positive().max(1e12).optional(),
-  descripcion: z.string().trim().max(200).optional(),
-  fecha: Fecha.optional().nullable(),
-  category_id: z.uuid().nullable().optional(),
-  nombre: z.string().trim().max(120).optional(),
-  objetivo: z.number().positive().max(1e12).optional(),
-  ahorrado: z.number().min(0).max(1e12).optional(),
-  titulo: z.string().trim().max(200).optional(),
-  monto: z.number().min(0).max(1e12).optional(),
-}).loose()
 const Ids = z.object({ messageId: z.uuid(), propId: z.uuid() })
 
 async function loadProp(messageId: string, propId: string) {
@@ -59,45 +39,25 @@ async function loadProp(messageId: string, propId: string) {
   return { sb, meta, p }
 }
 
-/** Confirma una propuesta del chat: recién aquí se escribe en el libro (con permisos de editor y RLS). */
+/**
+ * Confirma una propuesta del chat: recién aquí se escribe en el libro. El permiso depende del tipo (lib/chat/permisos.ts:
+ * "Registra sus gastos" confirma gastos e ingresos; Colabora y superiores, todo) y la escritura valida y recalcula los
+ * datos con el libro de hoy (features/chat/confirm.ts).
+ */
 export async function chatConfirm(messageId: string, propId: string): Promise<Res> {
-  let ctx
-  try { ctx = await requireRole("editor") } catch { return { ok: false, msg: "Tu rol en este hogar es de solo lectura: no puedes registrar movimientos." } }
+  const ctx = await getAppContext()
   const { sb, meta, p } = await loadProp(messageId, propId)
-  if (!p) return { ok: false, msg: "No encontramos esta propuesta. Pídela de nuevo en el chat." }
-  const T = TABLA[p.tipo]
-  if (p.estado === "hecho") return { ok: true, msg: T.ok, href: T.href, table: T.table, propuesta: p }
+  if (!p || !(PROPUESTA_TIPOS as readonly string[]).includes(p.tipo)) return { ok: false, msg: "No encontramos esta propuesta. Pídela de nuevo en el chat." }
+  const T = TIPO_INFO[p.tipo]
+  const dest = destino(p.tipo, p.datos?.kind)
+  if (p.estado === "hecho") return { ok: true, msg: T.ok, href: dest.href, tablas: T.tablas, propuesta: p }
   if (p.estado === "cancelado") return { ok: false, msg: "Esta propuesta ya se canceló." }
-  if (!TABLA[p.tipo]) return { ok: false, msg: "No encontramos esta propuesta. Pídela de nuevo en el chat." }
-  const parsed = Datos.safeParse(p.datos ?? {})
-  if (!parsed.success) return { ok: false, msg: "Los datos de la propuesta no son válidos. Pídela de nuevo en el chat." }
-  const d = parsed.data as typeof p.datos
-  // La categoría tiene que ser de este libro (si no, se guarda sin categoría).
-  if (d.category_id) {
-    const { data: cat } = await sb.from("categories").select("id").eq("id", d.category_id).eq("book_id", ctx.book.id).maybeSingle()
-    if (!cat) d.category_id = null
-  }
-  const today = todayBogota()
-  const fecha = d.fecha && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha) ? d.fecha : today
-  const id = crypto.randomUUID()
-  let error: { message: string } | null = null
-  if (p.tipo === "gasto") {
-    if (!(+(d.valor ?? 0) > 0)) return { ok: false, msg: "El gasto necesita un valor." }
-    ;({ error } = await sb.from("expenses").insert({ id, book_id: ctx.book.id, fecha, descripcion: (d.descripcion ?? "Gasto").slice(0, 80), valor: Math.round(+d.valor!), category_id: d.category_id ?? null, cat_src: d.category_id ? "regla" : null, origen: "manual" }))
-  } else if (p.tipo === "ingreso") {
-    if (!(+(d.valor ?? 0) > 0)) return { ok: false, msg: "El ingreso necesita un valor." }
-    ;({ error } = await sb.from("extra_incomes").insert({ id, book_id: ctx.book.id, fecha, descripcion: (d.descripcion ?? "Ingreso").slice(0, 80), valor: Math.round(+d.valor!) }))
-  } else if (p.tipo === "meta") {
-    if (!d.nombre?.trim() || !(+(d.objetivo ?? 0) > 0)) return { ok: false, msg: "La meta necesita un nombre y cuánto quieres juntar." }
-    ;({ error } = await sb.from("goals").insert({ id, book_id: ctx.book.id, nombre: d.nombre.slice(0, 60), objetivo: Math.round(+d.objetivo!), ahorrado: Math.round(+(d.ahorrado ?? 0)), fecha: d.fecha ?? null, icon: "target" }))
-  } else {
-    if (!d.titulo?.trim() || !d.fecha) return { ok: false, msg: "El recordatorio necesita un nombre y una fecha." }
-    ;({ error } = await sb.from("calendar_events").insert({ id, book_id: ctx.book.id, titulo: d.titulo.slice(0, 80), fecha: d.fecha, tipo: "egreso", monto: Math.round(+(d.monto ?? 0)), anual: false, nota: "Creado desde el chat de Mirai" }))
-  }
-  if (error) return { ok: false, msg: `No se pudo guardar: ${publicError(error, "intenta de nuevo.")}` }
-  const done: Propuesta = { ...p, estado: "hecho", registroId: id }
+  if (!puedeProponer(ctx.household.access, p.tipo)) return { ok: false, msg: sinPermiso(ctx.household.access, p.tipo).replace(/\*\*/g, "") }
+  const r = await escribir(ctx, sb, p)
+  if (!r.ok) return r
+  const done: Propuesta = { ...p, estado: "hecho", registroId: r.id, datos: { ...p.datos, ...r.datos } }
   await sb.from("chat_messages").update({ meta: { ...meta, propuestas: meta.propuestas!.map((x) => (x.id === p.id ? done : x)) } as never }).eq("id", messageId)
-  return { ok: true, msg: T.ok, href: T.href, table: T.table, propuesta: done }
+  return { ok: true, msg: T.ok, href: dest.href, tablas: T.tablas, propuesta: done }
 }
 
 /** Cancela una propuesta (no escribe nada en el libro). */
@@ -118,7 +78,7 @@ const KIND_RE = { prestamo: /extracto|pr[eé]stamo|cr[eé]dito|pagar[eé]|tabla 
  */
 export async function chatAttach(fd: FormData): Promise<{ ok: true; threadId: string; titulo: string; nuevo: boolean; user: ChatMsg; answer: ChatMsg } | { ok: false; msg: string }> {
   const ctx = await getAppContext()
-  if (ctx.household.role === "viewer") return { ok: false, msg: "Tu rol en este hogar es de solo lectura: no puedes registrar documentos." }
+  if (!registraAlgo(ctx.household.access)) return { ok: false, msg: "Tu rol en este hogar es de solo lectura: no puedes registrar documentos." }
   const f = fd.get("file")
   if (!(f instanceof File) || !f.size) return { ok: false, msg: "Elige una foto o un PDF" }
   if (f.size > 6 * 1024 * 1024) return { ok: false, msg: "El archivo pesa más de 6 MB." }
@@ -136,6 +96,8 @@ export async function chatAttach(fd: FormData): Promise<{ ok: true; threadId: st
     else titulo = data.titulo
   }
   const kind = KIND_RE.prestamo.test(text) ? "prestamo" : KIND_RE.comprobante.test(text) ? "comprobante" : "factura"
+  // "Registra sus gastos" lee facturas (sus gastos); los comprobantes y documentos de deudas son de quien planea.
+  if (kind !== "factura" && !can(ctx.household.access, "planear")) return { ok: false, msg: "Con tu rol puedes leer facturas y recibos de tus gastos. Los comprobantes y documentos de deudas los registra quien administra el hogar." }
   const label = kind === "prestamo" ? "documento de préstamo" : kind === "comprobante" ? "comprobante" : "factura"
   if (!threadId) {
     titulo = autoTitle(text || `Leer ${label}: ${f.name}`)
@@ -159,7 +121,7 @@ export async function chatAttach(fd: FormData): Promise<{ ok: true; threadId: st
     if (!r.ok) { meta.fuente = "error"; content = r.msg }
     else {
       const { data: cat } = r.category_id ? await sb.from("categories").select("nombre").eq("id", r.category_id).maybeSingle() : { data: null }
-      const p: Propuesta = { id: crypto.randomUUID(), tipo: "gasto", estado: "pendiente", datos: { valor: r.valor, descripcion: r.comercio, fecha: r.fecha ?? todayBogota(), category_id: r.category_id, categoria: cat?.nombre ?? null } }
+      const p: Propuesta = { id: crypto.randomUUID(), tipo: "gasto", estado: "pendiente", datos: { valor: r.valor, descripcion: r.comercio, fecha: r.fecha ?? todayBogota(), category_id: r.category_id, categoria: cat?.nombre ?? null, cat_src: r.category_id ? "ia" : null } }
       meta.propuestas = [p]
       content = `Leí la factura de **${r.comercio}** por **${formatCOP(r.valor)}**${r.fecha ? ` del ${r.fecha}` : ""}. Revisa los datos y toca **Confirmar** para registrar el gasto.`
     }
@@ -193,7 +155,8 @@ export async function chatTitle(threadId: string): Promise<{ ok: true; titulo: s
   if (!msgs?.length) return { ok: false, msg: "La conversación está vacía." }
   let titulo = smartTitle(msgs)
   let fuente: "ia" | "algoritmo" = "algoritmo"
-  if ((await chatAi(ctx)).allowed) {
+  // "Solo mira" no gasta créditos de IA del hogar: su título sale del algoritmo.
+  if (registraAlgo(ctx.household.access) && (await chatAi(ctx)).allowed) {
     try {
       const { text } = await aiText({ householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "chat_titulo", prompt: msgs.map((m) => `${m.role === "user" ? "Persona" : "Asesor"}: ${clip(m.content, m.role === "user" ? 200 : 120)}`).join("\n") })
       const t = text.replace(/^["'“«\s]+|["'”»\s.]+$/g, "").replace(/\s+/g, " ").trim()

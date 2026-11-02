@@ -67,6 +67,7 @@ export function resolveMonto(node: Pick<FlowNode, "kind" | "data">, ev: TriggerE
   const d = node.data
   if (node.kind === "apartar") return Math.round((num(ev.data.monto) * num(d.pct)) / 100)
   if (node.kind === "agenda") return d.usar_monto ? Math.round(num(ev.data.monto)) : 0
+  if (node.kind === "pagar_fijo") return d.valor === "monto" ? Math.round(num(ev.data.monto)) : 0
   if (d.modo === "pct") return Math.round((num(ev.data.monto) * num(d.pct)) / 100)
   if (d.modo === "fijos") return Math.round(num(ev.data.fijos))
   return Math.round(num(d.valor))
@@ -77,22 +78,38 @@ export function resolveParams(node: FlowNode, ev: TriggerEvent, refs: Refs = {})
   const d = node.data
   const vars = variables(ev, refs)
   switch (node.kind as ActionKind) {
-    case "aviso": return { titulo: fill(String(d.titulo ?? ""), vars), mensaje: fill(String(d.mensaje ?? ""), vars), canales: d.canales === "todos" ? "todos" : "app" }
+    case "aviso": return { titulo: fill(String(d.titulo ?? ""), vars), mensaje: fill(String(d.mensaje ?? ""), vars), canales: d.canales === "todos" ? "todos" : "app", para: paraOf(d.para) }
+    case "crear_ingreso": return { monto: resolveMonto(node, ev), descripcion: fill(String(d.descripcion ?? ""), vars).trim() || "Ingreso automático", category_id: (d.category_id as string) || null, fecha: ev.hoy }
+    case "pagar_fijo": return { fixed_expense_id: (d.fixed_expense_id as string) || null, monto: resolveMonto(node, ev), fecha: ev.hoy }
     case "movimiento": return { tipo: d.tipo as ActionParams["tipo"], monto: resolveMonto(node, ev), descripcion: fill(String(d.descripcion ?? ""), vars), category_id: (d.category_id as string) || null, goal_id: (d.goal_id as string) || null, fecha: ev.hoy }
     case "categorizar": return { category_id: String(d.category_id ?? "") }
     case "apartar": return { destino: d.destino === "fondo" ? "fondo" : "meta", goal_id: (d.goal_id as string) || null, monto: resolveMonto(node, ev), descripcion: fill(`Apartado automático de {descripcion}`, vars), fecha: ev.hoy }
     case "agenda": return { titulo: fill(String(d.titulo ?? ""), vars), fecha: addDaysIso(ev.hoy, num(d.dias)), monto: resolveMonto(node, ev) }
     case "marcar_hormiga": return {}
     case "esperar": return { dias: num(d.dias) }
-    case "ia": return { pregunta: fill(String(d.pregunta ?? ""), vars), canales: d.canales === "todos" ? "todos" : "app" }
+    case "ia": return { pregunta: fill(String(d.pregunta ?? ""), vars), canales: d.canales === "todos" ? "todos" : "app", para: paraOf(d.para) }
   }
+}
+
+const paraOf = (v: unknown) => (typeof v === "string" && v ? v : "hogar")
+
+/** A quién va el aviso, en palabras ("a todo el hogar", "a quien lo hizo", "a Ana"). */
+export function paraText(para: string | undefined, refs: Refs = {}) {
+  if (!para || para === "hogar") return "a todo el hogar"
+  if (para === "autor") return "a quien hizo el movimiento"
+  return `a ${refs.personas?.[para] ?? "una persona del hogar"}`
 }
 
 /** Lo que haría la acción, en palabras (simulación y respaldo del historial). */
 export function describeAction(node: FlowNode, p: ActionParams, refs: Refs = {}): string {
   const meta = (id: string | null | undefined) => (id && refs.metas?.[id]) || "tu meta"
   switch (node.kind as ActionKind) {
-    case "aviso": return `Enviaría el aviso “${p.titulo}”${p.mensaje ? `: ${p.mensaje}` : ""}${p.canales === "todos" ? " (app y tus canales activos)" : " (en la app)"}`
+    case "aviso": return `Enviaría el aviso “${p.titulo}”${p.mensaje ? `: ${p.mensaje}` : ""} ${paraText(p.para, refs)}${p.canales === "todos" ? " (app y sus canales activos)" : " (en la app)"}`
+    case "crear_ingreso": return p.monto ? `Registraría un ingreso de ${formatCOP(p.monto)} “${p.descripcion}”` : "No registraría nada: el monto da $0"
+    case "pagar_fijo": {
+      const f = (p.fixed_expense_id && refs.fijos?.[p.fixed_expense_id]) || "el gasto fijo"
+      return `Marcaría “${f}” como pagado en su periodo pendiente${p.monto ? ` por ${formatCOP(p.monto)}` : " por su valor"}`
+    }
     case "movimiento":
       if (!p.monto) return "No crearía nada: el monto da $0"
       if (p.tipo === "gasto") return `Crearía un gasto de ${formatCOP(p.monto)} “${p.descripcion}”`
@@ -103,7 +120,7 @@ export function describeAction(node: FlowNode, p: ActionParams, refs: Refs = {})
     case "agenda": return `Agregaría “${p.titulo}” a tu agenda el ${p.fecha}${p.monto ? ` por ${formatCOP(p.monto)}` : ""}`
     case "marcar_hormiga": return "Marcaría el gasto como hormiga"
     case "esperar": return `Esperaría ${p.dias} día${p.dias === 1 ? "" : "s"} antes de seguir`
-    case "ia": return `Le preguntaría a la IA: “${p.pregunta}” y te mandaría el consejo`
+    case "ia": return `Le preguntaría a la IA: “${p.pregunta}” y mandaría el consejo ${paraText(p.para, refs)}`
   }
 }
 

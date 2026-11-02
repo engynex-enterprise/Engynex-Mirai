@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { expectClose, legacyCall, scenario } from "./__tests__/adapt"
-import { dedCalc, fspPct, retEmpleado, smmlvFor, uvtFor, type Deducciones } from "./payroll"
+import { dedCalc, fspPct, refPorAnio, retEmpleado, smmlvFor, uvtFor, type Deducciones } from "./payroll"
 
 const HOY = "2026-10-31"
 const sc = scenario(HOY)
@@ -17,6 +17,22 @@ describe("SMMLV y UVT = v4", () => {
     expect(smmlvFor(2026, s2.book.settings.smmlv)).toBe(s2.ev("smmlv()"))
     expect(uvtFor(2026, s2.book.settings.uvt)).toBe(s2.ev("uvtHoy()"))
     expect(uvtFor(2025, {})).toBe(49799)
+  })
+})
+
+describe("SMMLV y UVT desde las tablas ref_* con respaldo", () => {
+  const ref = refPorAnio([{ year: 2027, valor: "1900000" }, { year: 2026, valor: 1750905 }, { year: 2025, valor: 0 }])
+  it("usa ref_smmlv cuando el libro no tiene sobrescritura", () => {
+    expect(ref).toEqual({ 2027: 1900000, 2026: 1750905 })
+    expect(smmlvFor(2027, {}, ref)).toBe(1900000)
+    expect(smmlvFor(2027, { 2027: 2000000 }, ref)).toBe(2000000)
+  })
+  it("sin la tabla (o sin el año) usa las constantes del código", () => {
+    expect(smmlvFor(2027, {}, null)).toBe(1750905)
+    expect(smmlvFor(2026, null, {})).toBe(1750905)
+    expect(uvtFor(2025, {}, { 2026: 52374 })).toBe(49799)
+    expect(uvtFor(2027, {}, { 2027: 55000 })).toBe(55000)
+    expect(uvtFor(2030, {}, undefined)).toBe(52374)
   })
 })
 

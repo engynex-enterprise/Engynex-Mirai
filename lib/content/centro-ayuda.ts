@@ -223,8 +223,53 @@ export function pageIdFromPath(path: string | null | undefined): string | null {
 
 export const pageHref = (id: string) => PAGES.find((p) => p.id === id)?.href ?? `/${id}`
 
-/** Contenido relacionado con una sección: preguntas, guías, lecciones y términos que llevan a ella. */
-export function relacionados(id: string): { faqs: Faq[]; guias: Guide[]; lecciones: Leccion[]; terminos: Termino[] } {
+/**
+ * Secciones que se usan junto con cada sección (el "Cómo funciona" las muestra como "Secciones relacionadas", cada una
+ * con su enlace). Cubre sobre todo las pantallas a las que no lleva ninguna pregunta, guía, lección ni término.
+ */
+export const SECCIONES_VECINAS: Record<string, string[]> = {
+  puesta: ["inicio", "ingresos", "fijos", "le-debo", "metas"],
+  inicio: ["dashboard", "gastos", "recordatorios"],
+  dashboard: ["balance", "flujo", "indicadores", "le-debo"],
+  consejero: ["indicadores", "presupuesto", "estrategia", "dashboard"],
+  balance: ["dashboard", "inversiones", "metas", "le-debo"],
+  ingresos: ["primas", "balance", "renta"],
+  gastos: ["presupuesto", "fijos", "suscripciones", "tarjetas"],
+  fijos: ["gastos", "proveedores", "recordatorios"],
+  suscripciones: ["fijos", "proveedores", "tarjetas"],
+  tarjetas: ["gastos", "estrategia", "le-debo"],
+  proveedores: ["fijos", "suscripciones", "le-debo", "gastos"],
+  correo: ["gastos", "importar", "tarjetas"],
+  importar: ["gastos", "correo", "tarjetas"],
+  "me-deben": ["contactos", "le-debo", "recordatorios"],
+  "le-debo": ["estrategia", "tarjetas", "me-deben", "contactos"],
+  contactos: ["me-deben", "le-debo", "compartidos"],
+  estrategia: ["le-debo", "tarjetas", "calculadoras"],
+  presupuesto: ["gastos", "flujo", "indicadores"],
+  flujo: ["dashboard", "balance", "presupuesto"],
+  metas: ["retos", "deseos", "balance"],
+  retos: ["metas", "logros"],
+  logros: ["retos", "metas", "puesta"],
+  primas: ["ingresos", "calendario"],
+  familia: ["mesadas", "compartidos", "perfil"],
+  mesadas: ["familia", "metas"],
+  compartidos: ["contactos", "gastos", "familia"],
+  deseos: ["metas", "calculadoras"],
+  calculadoras: ["estrategia", "inversiones", "renta"],
+  inversiones: ["balance", "metas", "calculadoras"],
+  renta: ["calendario", "contador", "gastos", "balance"],
+  calendario: ["renta", "recordatorios", "primas"],
+  contador: ["renta", "calendario"],
+  recordatorios: ["calendario", "fijos", "automatizaciones"],
+  indicadores: ["dashboard", "reportes", "consejero"],
+  reportes: ["indicadores", "dashboard", "renta"],
+  automatizaciones: ["recordatorios", "gastos", "metas"],
+}
+
+export type SeccionRel = { id: string; label: string; icon: string; href: string }
+
+/** Contenido relacionado con una sección: preguntas, guías, lecciones y términos que llevan a ella, y secciones vecinas. */
+export function relacionados(id: string): { faqs: Faq[]; guias: Guide[]; lecciones: Leccion[]; terminos: Termino[]; secciones: SeccionRel[] } {
   const href = pageHref(id)
   const goes = (go?: string) => !!go && go.split("?")[0] === id
   const linksHere = (h?: string) => !!h && h.split("?")[0] === href
@@ -233,6 +278,7 @@ export function relacionados(id: string): { faqs: Faq[]; guias: Guide[]; leccion
     guias: GUIDES.filter((g) => goes(g.go)),
     lecciones: LECCIONES.filter((l) => linksHere(l.ir?.href)),
     terminos: GLOSARIO.filter((t) => linksHere(t.ir?.href)),
+    secciones: (SECCIONES_VECINAS[id] ?? []).flatMap((x) => { const p = PAGES.find((q) => q.id === x); return p && x !== id ? [{ id: p.id, label: p.label, icon: p.icon, href: p.href }] : [] }),
   }
 }
 
@@ -241,7 +287,7 @@ export function relacionados(id: string): { faqs: Faq[]; guias: Guide[]; leccion
 export type Atajo = { id: string; keys: string[]; d: string; donde: string }
 /** "Mod" se muestra como ⌘ en Mac y Ctrl en Windows/Linux. */
 export const ATAJOS: Atajo[] = [
-  { id: "buscar", keys: ["Mod", "K"], d: "Buscar en Mirai: secciones, contactos, préstamos y gastos fijos", donde: "En cualquier pantalla" },
+  { id: "buscar", keys: ["Mod", "K"], d: "Buscar en Mirai: secciones, gastos, deudas, tarjetas, metas, proveedores y más", donde: "En cualquier pantalla" },
   { id: "agregar", keys: ["N"], d: "Agregar un gasto, ingreso, pago u otro registro", donde: "Cuando no estás escribiendo en un campo" },
   { id: "ayuda", keys: ["?"], d: "Abrir el Centro de ayuda", donde: "Cuando no estás escribiendo en un campo" },
   { id: "menu", keys: ["Mod", "B"], d: "Contraer o expandir el menú lateral", donde: "En computador" },

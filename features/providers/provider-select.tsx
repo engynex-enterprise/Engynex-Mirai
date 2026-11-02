@@ -63,7 +63,7 @@ export function ProviderSelect({ value, onChange, fallbackName, id, placeholder 
     const n = cleanProvName(nombre)
     if (!n) return
     const ya = findProvider(list, n)
-    if (ya) return pick(ya)
+    if (ya) { pick(ya); toast(`Ya tenías “${ya.nombre}”: lo usamos`, { description: "No creamos otro proveedor igual." }); return }
     setOpen(false); setQ(""); setCreating(true)
     try {
       const row = (await save.mutateAsync({ nombre: n, tipo: tipo ?? tipoSugerido(n), brand: brand ?? brandFor(n), activo: true } as never)) as Provider
@@ -147,7 +147,7 @@ export function ProviderSelect({ value, onChange, fallbackName, id, placeholder 
           </Command>
         </PopoverContent>
       </Popover>
-      <ProviderDialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)} initialName={dialog?.nombre ?? ""} initialTipo={dialog?.tipo}
+      <ProviderDialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)} initialName={dialog?.nombre ?? ""} initialTipo={dialog?.tipo} reuse
         onSaved={(row) => onChange(row.id, row)} />
     </>
   )

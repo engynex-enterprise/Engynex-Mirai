@@ -21,7 +21,7 @@ import { MoneyAutosave } from "@/components/mirai/money-autosave"
 import { Notice } from "@/components/mirai/notice"
 import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
-import { BTIP, RDK, RDOCS, RIK, TRAMOS241, bValor, calcRenta, depInfo, depsDe, loanEngine, loanName, patrimonio, rLines, titularId, topes, conv, type RdkKey, type RikKey, type TaxAssetIn } from "@/lib/domain"
+import { BTIP, DEDUCIBLES, RDK, RDOCS, RIK, TRAMOS241, bValor, calcRenta, compraEstado, depInfo, depsDe, loanName, patrimonio, rLines, saldoPrestamoAl, titularId, topes, conv, type RdkKey, type RikKey, type TaxAssetIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { rentaInput, type RentaData, type TaxYearRow } from "./data"
@@ -71,7 +71,7 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
   const [busy, setBusy] = useState<string | null>(null)
   const R = useMemo(() => rentaInput(data, y, mid), [data, y, mid])
   const C = useMemo(() => calcRenta(R, y, mid, today), [R, y, mid, today])
-  const P = useMemo(() => patrimonio(R, mid, today), [R, mid, today])
+  const P = useMemo(() => patrimonio(R, mid, today, { y }), [R, mid, today, y])
   const T = useMemo(() => topes(R, y, mid, today), [R, y, mid, today])
   const U = C.U
   const tax = R.tax ?? { ing: {}, ded: {}, docs: {}, consig: 0, consumos: 0 }
@@ -198,6 +198,12 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
       {tab === "ingresos" && (
         <Panel title="Ingresos, aportes y retenciones" icon="arrow-down-to-line" className="gap-1"
           description={<>Calculados con lo que registraste en Mirai. {!ro && "Deja vacío para usar el valor estimado (gris). Los salarios incluyen 12 meses más las primas."}</>}>
+          {(C.A.ext > 0 || C.A.apG > 0 || C.A.retG > 0) && (
+            <p className="text-sm text-muted-foreground" data-testid="renta-fuentes">
+              {C.A.ext > 0 && <>Incluye <Money value={C.A.ext} /> de ingresos extra que registraste en {y}. </>}
+              {(C.A.apG > 0 || C.A.retG > 0) && <>Los aportes y la retención usan los descuentos que guardaste en tus ingresos.</>}
+            </p>
+          )}
           <div>{RIK.map(([k, l, h]) => ingRow(k, l, h))}</div>
         </Panel>
       )}
@@ -230,12 +236,14 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
       )}
 
       {tab === "deudas" && (
-        <Panel title="Deudas al 31 de diciembre" icon="receipt" className="gap-1" description={esTit ? "Pide a cada entidad el certificado de saldo al 31 de diciembre." : undefined}>
+        <Panel title={P.corte && P.corte < today ? `Deudas al 31 de diciembre de ${y}` : "Deudas a hoy (el año aún no termina)"} icon="receipt" className="gap-1"
+          description={esTit ? (P.corte && P.corte < today ? "Préstamos y tarjetas con los pagos que registraste hasta esa fecha. Pide a cada entidad el certificado de saldo al 31 de diciembre." : "El año aún no termina: son los saldos de hoy. Pide a cada entidad el certificado de saldo al 31 de diciembre.") : undefined}>
           {!esTit ? <p className="text-sm text-muted-foreground">Las deudas registradas en Mirai se asignan al titular del libro.</p> : (
             <div>
               {data.liabilitiesNamed.map((l, i) => <Line key={i} l={l.nombre} v={conv(l.valor, l.currency, data.book.settings.trm)} />)}
-              {data.book.loans.filter((L) => L.kind === "pagar").map((L) => <Line key={L.id} l={L.concepto || loanName(L, data.book.contacts, data.book.entities)} v={loanEngine(L, today).saldo} />)}
-              {!data.liabilitiesNamed.length && !data.book.loans.some((L) => L.kind === "pagar") && <p className="py-2 text-sm text-muted-foreground">No tienes deudas registradas en Mirai.</p>}
+              {data.book.loans.filter((L) => L.kind === "pagar").map((L) => ({ L, v: saldoPrestamoAl(L, P.corte ?? today) })).filter((x) => x.v > 1).map(({ L, v }) => <Line key={L.id} l={L.concepto || loanName(L, data.book.contacts, data.book.entities)} v={v} />)}
+              {data.book.creditCards.map((t) => ({ t, v: (t.purchases || []).filter((c) => c.fecha <= (P.corte ?? today)).reduce((a, c) => a + compraEstado(t, c, P.corte ?? today).saldo, 0) })).filter((x) => x.v > 1).map(({ t, v }) => <Line key={t.id} l={`Tarjeta ${t.nombre}`} v={v} />)}
+              {P.deudas <= 0 && <p className="py-2 text-sm text-muted-foreground">No tienes deudas registradas en Mirai.</p>}
               <Line l="Total deudas" v={P.deudas} strong className="border-t" />
             </div>
           )}
@@ -268,6 +276,7 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
               <Line l="72 UVT por cada dependiente (hasta 4) — fuera del límite" v={C.dep72} />
             </div>
             {C.nD > 0 && <p className="text-xs text-muted-foreground">Desde el Decreto 2231 de 2023, un mismo dependiente sirve para el 10 % y para los 72 UVT.</p>}
+            <p className="text-xs text-muted-foreground">Los hijos de 18 a 25 años cuentan si estudian y tú les pagas la educación superior o técnica (Ley 2411 de 2024).</p>
           </Panel>
         </div>
       )}
@@ -276,13 +285,29 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
         <div className="grid gap-6 lg:grid-cols-2">
           <Panel title="Deducciones y beneficios" icon="badge-percent" className="gap-1" description="Escribe lo que pagaste en el año según tus certificados.">
             <div>
-              {RDK.map(([k, l, h, tope]) => (
-                <div key={k} className="grid gap-2 border-b py-3 last:border-0">
-                  <div><label htmlFor={`ded-${k}`} className="font-medium">{l}</label><p className="text-sm text-muted-foreground">{h}{tope ? ` (${$(tope * U)})` : ""}</p></div>
-                  {ro ? <Money value={+(tax.ded?.[k as RdkKey] ?? 0)} className="font-medium" /> : <MoneyAutosave id={`ded-${k}`} value={+(tax.ded?.[k as RdkKey] ?? 0)} onSave={(v) => save({ ded: { ...tax.ded, [k]: v } })} />}
-                </div>
-              ))}
+              {RDK.map(([k, l, h, tope]) => {
+                const manual = +(tax.ded?.[k as RdkKey] ?? 0) || 0
+                const est = C.dedAuto[k as RdkKey] || 0
+                const marca = DEDUCIBLES.find((d) => d.campo === k)
+                const ref = marca && C.ded ? C.ded[marca.value] : null
+                return (
+                  <div key={k} className="grid gap-2 border-b py-3 last:border-0" data-testid={`ded-${k}`}>
+                    <div>
+                      <p className="flex flex-wrap items-center gap-2 font-medium"><label htmlFor={`ded-${k}`}>{l}</label>{manual ? <StatusPill tone="info">Del certificado</StatusPill> : est ? <Tip label="Lo sumamos de los gastos que marcaste como deducibles en el año. Si tienes el certificado, escribe el valor exacto."><span><StatusPill tone="estimado">De tus gastos</StatusPill></span></Tip> : null}</p>
+                      <p className="text-sm text-muted-foreground">{h}{tope ? ` (${$(tope * U)})` : ""}</p>
+                    </div>
+                    {ro ? <Money value={manual || est} className="font-medium" /> : <MoneyAutosave id={`ded-${k}`} value={manual} placeholder={est ? new Intl.NumberFormat("es-CO").format(Math.round(est)) : "0"} onSave={(v) => { const ded = { ...tax.ded }; if (v) ded[k as RdkKey] = v; else delete ded[k as RdkKey]; save({ ded }) }} />}
+                    {ref && ref.n > 0 && !est && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+                        <span className="min-w-0 flex-1">Marcaste {ref.n} gasto{ref.n === 1 ? "" : "s"} por <Money value={ref.v} /> en {y}. {marca!.help.split(".")[0]}.</span>
+                        {!ro && !manual && <Button size="sm" variant="outline" onClick={() => save({ ded: { ...tax.ded, [k]: Math.round(ref.v) } })}>Usar este valor</Button>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
+            {C.ded && C.ded.dependiente.n > 0 && <p className="pt-2 text-xs text-muted-foreground">También marcaste {C.ded.dependiente.n} gasto{C.ded.dependiente.n === 1 ? "" : "s"} de dependientes (<Money value={C.ded.dependiente.v} />): no se restan por su valor, pero sirven de respaldo para tu contador.</p>}
           </Panel>
           <Panel title="Cómo quedan aplicadas" icon="list-checks" className="gap-1">
             <div>

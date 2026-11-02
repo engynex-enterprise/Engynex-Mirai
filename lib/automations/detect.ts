@@ -19,7 +19,7 @@ const num = (v: unknown) => Number(v ?? 0) || 0
 export type BookExtras = { fondo: { activo: boolean; saldo: number } }
 
 /** Fila de la cola de eventos (automation_events). */
-export type QueuedEvent = { id: string; tipo: "gasto" | "ingreso" | "pago_fijo" | string; tabla: string; row_id: string | null; datos: Record<string, unknown> }
+export type QueuedEvent = { id: string; tipo: "gasto" | "ingreso" | "pago_fijo" | "cuota" | "compra_tarjeta" | "suscripcion" | "recordatorio" | string; tabla: string; row_id: string | null; datos: Record<string, unknown> }
 
 /** Resumen de la semana en una frase (para el aviso de los lunes). */
 export function resumenSemana(b: BookData, hoy: string): string {
@@ -143,7 +143,10 @@ export function queuedEventFor(trigger: FlowNode, q: QueuedEvent, b: BookData, h
     fecha: String(x.fecha ?? hoy),
     row_id: q.row_id,
     tabla: q.tabla,
+    autor: (x.created_by as string | null) ?? null,
   }
+  // Variables propias de cada evento nuevo ({persona}, {tarjeta}…).
+  for (const k of ["persona", "tarjeta", "dir", "tipo_pago", "evento", "ciclo", "cuotas", "proximo"]) if (x[k] !== undefined && x[k] !== null) data[k] = x[k] as string
   const ev = (kind: TriggerEvent["kind"]): TriggerEvent => ({ kind, clave: `ev:${q.id}`, hoy, data })
   if (q.tipo === "gasto" && trigger.kind === "gasto") return ev("gasto")
   if (q.tipo === "gasto" && trigger.kind === "hormiga") {
@@ -152,6 +155,11 @@ export function queuedEventFor(trigger: FlowNode, q: QueuedEvent, b: BookData, h
   }
   if (q.tipo === "ingreso" && trigger.kind === "ingreso" && trigger.data.fuente !== "nomina") return ev("ingreso")
   if (q.tipo === "pago_fijo" && trigger.kind === "pago_fijo") return ev("pago_fijo")
+  const t = trigger.data
+  if (q.tipo === "cuota" && trigger.kind === "cuota") return !t.dir || t.dir === "todas" || t.dir === x.dir ? ev("cuota") : null
+  if (q.tipo === "compra_tarjeta" && trigger.kind === "compra_tarjeta") return !t.card_id || t.card_id === x.card_id ? ev("compra_tarjeta") : null
+  if (q.tipo === "suscripcion" && trigger.kind === "suscripcion") return !t.evento || t.evento === "todas" || t.evento === x.evento ? ev("suscripcion") : null
+  if (q.tipo === "recordatorio" && trigger.kind === "recordatorio") return ev("recordatorio")
   return null
 }
 
@@ -175,6 +183,27 @@ export function sampleEvent(trigger: FlowNode, b: BookData, hoy: string, extras:
       const f = b.fixedExpenses[0]
       if (f) return { kind: "pago_fijo", clave: "prueba", hoy, data: { ...base, monto: num(f.valor), descripcion: f.nombre, category_id: f.category_id ?? null } }
     }
+    if (trigger.kind === "cuota") {
+      const dir = trigger.data.dir
+      const pagos = b.loans.filter((l) => !dir || dir === "todas" || l.kind === dir).flatMap((l) => l.payments.map((p) => ({ l, p }))).sort((a, c) => (a.p.fecha < c.p.fecha ? 1 : -1))
+      const x = pagos[0]
+      if (x) {
+        const persona = b.contacts.find((c) => c.id === x.l.contact_id)?.nombre ?? b.entities.find((e) => e.id === x.l.entity_id)?.nombre ?? ""
+        return { kind: "cuota", clave: "prueba", hoy, data: { ...base, monto: num(x.p.valor), descripcion: x.l.concepto || persona || "Préstamo", persona, dir: x.l.kind, fecha: x.p.fecha } }
+      }
+    }
+    if (trigger.kind === "compra_tarjeta") {
+      const x = b.creditCards.filter((c) => !trigger.data.card_id || c.id === trigger.data.card_id).flatMap((c) => c.purchases.map((p) => ({ c, p }))).sort((a, c) => (a.p.fecha < c.p.fecha ? 1 : -1))[0]
+      if (x) return { kind: "compra_tarjeta", clave: "prueba", hoy, data: { ...base, monto: num(x.p.valor), descripcion: "Compra con tarjeta", tarjeta: x.c.nombre, fecha: x.p.fecha } }
+    }
+    if (trigger.kind === "suscripcion") {
+      const x = b.subscriptions[0]
+      if (x) return { kind: "suscripcion", clave: "prueba", hoy, data: { ...base, monto: num(x.valor), descripcion: x.nombre, evento: trigger.data.evento === "nueva" ? "nueva" : "cobrada", fecha: x.proximo } }
+    }
+    if (trigger.kind === "recordatorio") {
+      const x = [...b.calendarEvents].filter((c) => !c.template_key).sort((a, c) => (a.fecha < c.fecha ? 1 : -1))[0]
+      if (x) return { kind: "recordatorio", clave: "prueba", hoy, data: { ...base, monto: num(x.monto), descripcion: x.titulo, fecha: x.fecha } }
+    }
     const s = stateEvents(trigger, b, hoy, extras)[0]
     return s ? { ...s, clave: "prueba" } : null
   }
@@ -187,6 +216,10 @@ export function sampleEvent(trigger: FlowNode, b: BookData, hoy: string, extras:
     pago_proximo: { monto: 120_000, descripcion: "Internet (ejemplo)", pago: "Internet (ejemplo)", dias: 3, cuando: "en 3 días" },
     saldo_bajo: { monto: 150_000, descripcion: "Fondo de emergencia (ejemplo)", pct: 12 },
     meta_alcanzada: { monto: 2_000_000, descripcion: "Viaje (ejemplo)", meta: "Viaje (ejemplo)" },
+    cuota: { monto: 350_000, descripcion: "Préstamo a Carlos (ejemplo)", persona: "Carlos (ejemplo)", dir: "cobrar" },
+    compra_tarjeta: { monto: 180_000, descripcion: "Zapatos (ejemplo)", tarjeta: "Visa (ejemplo)" },
+    suscripcion: { monto: 44_900, descripcion: "Netflix (ejemplo)", evento: "cobrada" },
+    recordatorio: { monto: 0, descripcion: "Revisión del carro (ejemplo)" },
     programado: {},
   }
   return real() ?? { kind: trigger.kind as TriggerEvent["kind"], clave: "prueba", hoy, data: { ...base, ...ejemplo[trigger.kind] } }

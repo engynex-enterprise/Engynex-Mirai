@@ -1,156 +1,266 @@
 "use client"
 
-import Link from "next/link"
 import { useMemo, useState } from "react"
 import { parseAsString, useQueryState } from "nuqs"
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import Link from "next/link"
+import { Download, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { Money } from "@/components/mirai/money"
-import { StatusPill } from "@/components/mirai/status-pill"
 import { Segmented } from "@/components/mirai/choice-cards"
-import { EntityLogo } from "@/components/mirai/entity-logo"
-import { IconAction } from "@/components/mirai/list-row"
+import { SectionTitle } from "@/components/mirai/panel"
+import { Notice } from "@/components/mirai/notice"
+import { IconButton } from "@/components/mirai/tip"
+import { toast } from "@/components/mirai/toast"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useCanEdit } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { conv, quincena, totales, type FlowItem } from "@/lib/domain"
-import { fmtDate, fmtMonth, todayISO } from "@/lib/format"
+import { hallazgosBalance } from "@/lib/domain/balance"
+import { ESTADOS, GRUPOS, MODULOS, estadoIntegral, flujoIntegral, partesEstado, periodo, snapshotMes, type LineaEstado, type Modulo, type Mov } from "@/lib/domain/flujo-integral"
+import type { SaldoCuenta } from "@/lib/domain/cuentas"
+import { fmtDate, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
-import { AssetForm, PUC } from "./asset-form"
+import { AssetForm, PUC, type AssetEdit } from "./asset-form"
+import { ComposicionCard, EstadosLeyenda, FlujoColumna, HallazgosBalance, MesCard, MonthNav, TColumn, type Line } from "./balance-parts"
+import { useIntegralExtras } from "./use-integral"
 import { PatrimonioCard } from "@/features/patrimonio/patrimonio-card"
 
-type Line = { id?: string; table?: "assets" | "liabilities"; icon: string; n: string; s: string; v: number; href?: string; row?: Row<"assets"> | Row<"liabilities"> }
+type Tab = "general" | "q1" | "q2" | "mes" | "anio"
+type Filtro = "todo" | "pendiente" | "vencido" | "hecho"
 
-/** Una columna de la cuenta T (DEBE / HABER). */
-function TColumn({ title, sub, lines, total, empty, onDelete, canEdit }: { title: string; sub: string; lines: Line[]; total: number; empty: string; onDelete: (l: Line) => void; canEdit: boolean }) {
-  return (
-    <div className="grid content-start gap-1">
-      <div className="border-b-[3px] border-foreground pb-2">
-        <p className="font-semibold">{title}</p>
-        <p className="text-xs tracking-wide text-muted-foreground uppercase">{sub}</p>
-      </div>
-      {!lines.length ? <p className="py-4 text-sm text-muted-foreground">{empty}</p> : lines.map((l, i) => (
-        <div key={l.id ?? i} className="grid grid-cols-[2rem_1fr_auto_auto] items-center gap-2 border-b border-dotted py-2">
-          <EntityLogo name={l.row ? l.n : null} icon={l.icon} seed={l.n} size={32} />
-          <span className="grid min-w-0">
-            <span className="truncate font-medium">{l.href ? <Link href={l.href} className="hover:text-link">{l.n}</Link> : l.n}</span>
-            <span className="truncate text-xs text-muted-foreground">{l.s}</span>
-          </span>
-          <Money value={l.v} className="text-right font-semibold" />
-          {l.row && canEdit ? <IconAction a={{ label: `Eliminar ${l.n}`, tip: "Eliminar", icon: "trash-2", destructive: true, onClick: () => onDelete(l) }} /> : <span className="w-9" />}
-        </div>
-      ))}
-      <div className="mt-1 flex justify-between border-t-2 border-foreground pt-2 font-bold"><span>Total</span><Money value={total} /></div>
-    </div>
-  )
+/** Descarga un CSV (separado por ; y con BOM para que Excel lea las tildes). */
+function downloadCsv(name: string, rows: (string | number)[][]) {
+  const txt = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n")
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(new Blob(["﻿" + txt], { type: "text/csv;charset=utf-8" }))
+  a.download = `${name}-${todayISO()}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+  toast.success("Balance exportado", { description: "Ábrelo con Excel o Google Sheets." })
 }
 
-function FlowColumn({ title, sub, items, empty }: { title: string; sub: string; items: FlowItem[]; empty: string }) {
-  return (
-    <div className="grid content-start gap-1">
-      <div className="border-b-[3px] border-foreground pb-2"><p className="font-semibold">{title}</p><p className="text-xs tracking-wide text-muted-foreground uppercase">{sub}</p></div>
-      {!items.length ? <p className="py-4 text-sm text-muted-foreground">{empty}</p> : items.map((x, i) => (
-        <div key={i} className={cn("grid grid-cols-[2rem_1fr_auto] items-center gap-2 border-b border-dotted py-2", x.paid && "opacity-70")}>
-          <EntityLogo icon={x.icon} seed={x.n} size={32} />
-          <span className="grid min-w-0">
-            <span className="flex items-center gap-1.5 truncate font-medium">{x.n}{x.paid && <StatusPill tone="pagado" check hint="Ya está registrado como pagado o recibido.">Hecho</StatusPill>}</span>
-            <span className="truncate text-xs text-muted-foreground">{fmtDate(x.fecha, { year: false })} · {x.s}</span>
-          </span>
-          <Money value={x.v} className="text-right font-semibold" />
-        </div>
-      ))}
-    </div>
-  )
+const PERIODO: Record<Exclude<Tab, "general">, string> = { q1: "1ª quincena", q2: "2ª quincena", mes: "Mes completo", anio: "Año" }
+const ORDEN_GRUPO = Object.keys(GRUPOS)
+const FILTROS: Record<Filtro, (x: Mov) => boolean> = {
+  todo: () => true, pendiente: (x) => x.estado === "programado" || x.estado === "estimado", vencido: (x) => x.estado === "vencido", hecho: (x) => x.estado === "hecho",
 }
 
 export function BalanceView() {
   const canEdit = useCanEdit()
   const today = todayISO()
-  const [tab, setTab] = useQueryState("tab", parseAsString.withDefault("general"))
+  const [tabRaw, setTab] = useQueryState("tab", parseAsString.withDefault("general"))
+  const tab = (["general", "q1", "q2", "mes", "anio"].includes(tabRaw) ? tabRaw : "general") as Tab
+  const [modRaw, setMod] = useQueryState("modulo", parseAsString.withDefault("todos"))
+  const [filtro, setFiltro] = useState<Filtro>("todo")
   const [nuevo, setNuevo] = useNewParam()
+  const [edit, setEdit] = useState<AssetEdit | null>(null)
   const [ym, setYm] = useState(today.slice(0, 7))
   const { data: book, isPending } = useBookData()
+  const X = useIntegralExtras(book, today)
   const delA = useSoftDelete("assets", "Eliminado")
   const delP = useSoftDelete("liabilities", "Eliminado")
 
   const data = useMemo(() => {
     if (!book) return null
     const trm = book.settings.trm
-    const T = totales(book, today)
+    const E = estadoIntegral(book, today, X)
+    const tengoP = partesEstado(E.tengo)
+    const deboP = partesEstado(E.debo)
+    const C = { T: { ...E.T, P: E.P, pat: E.pat }, liquidez: E.liquidez, tengo: tengoP, debo: deboP }
     const sub = (x: { currency?: string | null; valor: number; cod?: string }) =>
-      x.currency && x.currency !== "COP" ? `${x.currency} ${new Intl.NumberFormat("es-CO").format(x.valor)} × $${new Intl.NumberFormat("es-CO").format(trm[x.currency] ?? 0)}` : `PUC ${x.cod}`
-    const act: Line[] = [
-      ...(book.assets as unknown as Row<"assets">[]).map((a) => ({ id: a.id, table: "assets" as const, row: a, icon: PUC[a.cod]?.[1] ?? "tag", n: a.nombre, s: sub({ ...a, valor: Number(a.valor) }), v: conv(Number(a.valor), a.currency, trm) })),
-      ...(T.xi ? [{ icon: "trending-up", n: "Inversiones", s: "Se calcula solo desde Inversiones", v: T.xi, href: "/inversiones" }] : []),
-      ...(T.xc ? [{ icon: "hand-coins", n: "Lo que me deben", s: "Se calcula solo desde Me deben", v: T.xc, href: "/me-deben" }] : []),
-    ]
-    const pas: Line[] = [
-      ...(book.liabilities as unknown as Row<"liabilities">[]).map((p) => ({ id: p.id, table: "liabilities" as const, row: p, icon: PUC[p.cod]?.[1] ?? "tag", n: p.nombre, s: sub({ ...p, valor: Number(p.valor) }), v: conv(Number(p.valor), p.currency, trm) })),
-      ...(T.xp ? [{ icon: "landmark", n: "Créditos y préstamos", s: "Se calcula solo desde Le debo", v: T.xp, href: "/le-debo" }] : []),
-      ...(T.xt ? [{ icon: "credit-card", n: "Tarjetas de crédito", s: "Se calcula solo desde Tarjetas", v: T.xt, href: "/tarjetas" }] : []),
-    ]
+      x.currency && x.currency !== "COP" ? `${x.currency} ${new Intl.NumberFormat("es-CO").format(x.valor)} × $${new Intl.NumberFormat("es-CO").format(trm[x.currency] ?? 0)}` : PUC[x.cod ?? ""]?.[0] ?? `PUC ${x.cod}`
+    const toLine = (l: LineaEstado): Line => {
+      const row = l.ref ? ((l.ref.table === "assets" ? book.assets : book.liabilities) as unknown as (Row<"assets"> & { cuenta?: SaldoCuenta })[]).find((r) => r.id === l.ref!.id) : undefined
+      const c = row?.cuenta
+      const s = c?.vivo ? `${PUC[row!.cod]?.[0] ?? "Cuenta"} · se actualiza con tus movimientos${c.movs.length ? ` (${c.movs.length})` : ""}` : row ? sub({ ...row, valor: Number(row.valor) }) : l.s
+      return { id: l.k, table: l.ref?.table, row, icon: row ? PUC[row.cod]?.[1] ?? l.icon : l.icon, n: l.n, s, v: l.v, href: l.href, grupo: GRUPOS[l.grupo].label, estimado: l.estimado, vivo: !!c?.vivo }
+    }
+    const byGrupo = (a: LineaEstado, b: LineaEstado) => ORDEN_GRUPO.indexOf(a.grupo) - ORDEN_GRUPO.indexOf(b.grupo) || b.v - a.v
+    const act = [...E.tengo].sort(byGrupo).map(toLine)
+    const pas = [...E.debo].sort(byGrupo).map(toLine)
     const [y, m] = ym.split("-").map(Number)
-    const q = tab === "general" ? null : quincena(book, y, m - 1, tab as "q1" | "q2" | "mes", today)
-    return { T, act, pas, q }
-  }, [book, today, tab, ym])
+    const P = periodo(book, tab === "general" ? "mes" : tab, y, m - 1)
+    const F = flujoIntegral(book, P, today, X)
+    const [ty, tm] = today.split("-").map(Number)
+    const mesHoy = P.tipo === "mes" && ym === today.slice(0, 7) ? F : flujoIntegral(book, periodo(book, "mes", ty, tm - 1), today, X)
+    const H = hallazgosBalance(book, today, mesHoy, C)
+    const vivas = book.assets.filter((a) => (a as { cuenta?: SaldoCuenta }).cuenta?.vivo).length
+    const manuales = book.assets.filter((a) => /^11/.test(String(a.cod)) && !(a as { cuenta?: SaldoCuenta }).cuenta?.vivo).length
+    return { E, C, act, pas, F, H, snap: snapshotMes(book, today, X), vivas, manuales }
+  }, [book, today, tab, ym, X])
 
   if (isPending || !data) return <PageSkeleton kpis={3} />
-  const move = (d: number) => { const [y, m] = ym.split("-").map(Number); const x = new Date(y, m - 1 + d, 1); setYm(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`) }
+  const { E, C, F } = data
+  const t = F.tot
+  const step = tab === "anio" ? 12 : 1
+  const move = (d: number) => { const [y, m] = ym.split("-").map(Number); const x = new Date(y, m - 1 + d * step, 1); setYm(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`) }
   const del = (l: Line) => (l.table === "assets" ? delA : delP).mutate(l.row as never)
+  const onEdit = (l: Line) => l.row && l.table && setEdit({ table: l.table, row: { ...(l.row as AssetEdit["row"]), valor: Number(l.row.valor) } })
+  const mod = (modRaw in MODULOS ? modRaw : "todos") as Modulo | "todos"
+  const vis = F.movs.filter((x) => (mod === "todos" || x.modulo === mod) && FILTROS[filtro](x))
+
+  const exportar = () => {
+    if (tab === "general") {
+      downloadCsv("balance", [
+        ["Lado", "Grupo", "Nombre", "Detalle", "Valor (COP)"],
+        ...data.act.map((l) => ["Lo que tengo", l.grupo ?? "", l.n, l.s, Math.round(l.v)]),
+        ["Lo que tengo", "", "Total", "", Math.round(E.A)],
+        ...data.pas.map((l) => ["Lo que debo", l.grupo ?? "", l.n, l.estimado ? `${l.s} (estimado)` : l.s, Math.round(l.v)]),
+        ["Lo que debo", "", "Total", "", Math.round(E.P)],
+        ["Patrimonio", "", "Lo que tengo − lo que debo", "", Math.round(E.pat)],
+      ])
+    } else {
+      downloadCsv(`balance-${PERIODO[tab].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]|[ªº]/g, "").replace(/\s+/g, "-")}-${tab === "anio" ? ym.slice(0, 4) : ym}`, [
+        ["Tipo", "Fecha", "Módulo", "Categoría", "Concepto", "Detalle", "Estado", "Valor (COP)"],
+        ...vis.map((x) => [x.dir === "entra" ? "Entrada" : x.clase === "ahorro" ? "Ahorro" : "Salida", x.fecha, MODULOS[x.modulo].label, x.cat, x.n, x.s, x.supuesto ? "Ya pasó" : ESTADOS[x.estado].label, Math.round(x.v)]),
+        ["Total", "", "", "", "Entra", "", "", Math.round(t.entra)],
+        ["Total", "", "", "", "Sale", "", "", Math.round(t.sale)],
+        ["Total", "", "", "", "Ahorro", "", "", Math.round(t.ahorro)],
+        ["Resultado", "", "", "", t.queda >= 0 ? "Te sobra" : "Te falta", "", "", Math.round(t.queda)],
+      ])
+    }
+  }
 
   return (
     <div className="grid gap-6">
-      <PageHeader id="balance" description="Mira lo que tienes y lo que debes, o cuánto entra y sale en cada quincena del mes."
-        actions={canEdit && tab === "general" && <Button onClick={() => setNuevo(true)}><Plus /> Agregar cuenta o bien</Button>} />
-      <Segmented value={tab} onChange={setTab} items={[
-        { value: "general", label: "Lo que tengo y lo que debo", icon: "scale" }, { value: "q1", label: "1ª quincena", icon: "calendar" },
-        { value: "q2", label: "2ª quincena", icon: "calendar" }, { value: "mes", label: "Mes completo", icon: "calendar-days" },
-      ]} />
-
-      {tab === "general" && <PatrimonioCard activos={data.T.A} deudas={data.T.P} />}
+      <PageHeader id="balance" description="Todo lo que entra y sale de cada módulo (ingresos, gastos, fijos, tarjetas, deudas, impuestos, ahorro…), lo que tienes y lo que debes."
+        actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar cuenta o bien</Button>} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Segmented value={tab} onChange={setTab} items={[
+          { value: "general", label: "Lo que tengo y lo que debo", icon: "scale" }, { value: "q1", label: "1ª quincena", icon: "calendar" },
+          { value: "q2", label: "2ª quincena", icon: "calendar" }, { value: "mes", label: "Mes completo", icon: "calendar-days" }, { value: "anio", label: "Año", icon: "calendar-range" },
+        ]} />
+        <Button variant="outline" size="sm" onClick={exportar}><Download /> Exportar</Button>
+      </div>
 
       {tab === "general" ? (
-        <Card className="shadow-card ring-0">
-          <CardContent className="grid gap-6">
-            <div className="grid gap-8 md:grid-cols-2">
-              <TColumn title="Lo que tengo" sub="Activos · Debe" lines={data.act} total={data.T.A} empty="Agrega tus cuentas, efectivo y bienes." onDelete={del} canEdit={canEdit} />
-              <TColumn title="Lo que debo" sub="Pasivos · Haber" lines={data.pas} total={data.T.P} empty="Sin deudas registradas." onDelete={del} canEdit={canEdit} />
-            </div>
-            <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-lg p-4", data.T.pat >= 0 ? "bg-success-soft" : "bg-danger-soft")}>
-              <div><p className="font-semibold">Patrimonio</p><p className="text-sm text-muted-foreground">Lo que tengo − lo que debo</p></div>
-              <Money value={data.T.pat} className={cn("text-[22px] font-extrabold", data.T.pat >= 0 ? "text-success" : "text-danger")} />
-            </div>
-            <p className="text-sm text-muted-foreground">Tus gastos del mes (arriendo, mercado, servicios) no van aquí: regístralos en Gastos fijos o Gastos. Aquí solo van bienes que tienes y deudas que debes.</p>
-          </CardContent>
-        </Card>
-      ) : data.q && (
         <>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" aria-label="Mes anterior" onClick={() => move(-1)}><ChevronLeft /></Button>
-            <p className="min-w-44 text-center font-semibold capitalize">{fmtMonth(ym)}</p>
-            <Button variant="outline" size="icon" aria-label="Mes siguiente" onClick={() => move(1)}><ChevronRight /></Button>
-            <p className="ml-2 text-sm text-muted-foreground">Del {fmtDate(data.q.a, { year: false })} al {fmtDate(data.q.b, { year: false })}</p>
-          </div>
           <KpiGrid cols={3}>
-            <Kpi icon="arrow-down-to-line" tone="income" label="Entra" value={<Money value={data.q.E} />} valueClassName="text-success" />
-            <Kpi icon="arrow-up-from-line" tone="expense" label="Sale" value={<Money value={data.q.Sa} />} valueClassName="text-danger" />
-            <Kpi icon="wallet" tone={data.q.disp >= 0 ? "green" : "red"} label={data.q.disp >= 0 ? "Te sobra" : "Te falta"} value={<Money value={Math.abs(data.q.disp)} />} valueClassName={data.q.disp >= 0 ? "text-success" : "text-danger"} sub="Disponible del periodo" />
+            <Kpi icon="wallet" tone="green" label="Lo que tengo" value={<Money value={E.A} />} sub={<>Disponible ya: <Money value={E.liquidez} /></>}
+              info="Todo lo que tienes: plata en cuentas y efectivo, lo que llevas en tus metas y tu fondo de emergencia (si no está dentro de una cuenta), casa, carro, inversiones y lo que te deben." />
+            <Kpi icon="hand-coins" tone="red" label="Lo que debo" value={<Money value={E.P} />} valueClassName={E.P ? "text-danger" : undefined}
+              sub={E.A > 0 ? `Es el ${Math.round((E.P / E.A) * 100)} % de lo que tienes` : "Créditos, tarjetas, impuestos y otras deudas"} info="Todas tus deudas hoy: créditos y préstamos de Le debo, tarjetas de crédito, impuestos que ya debes (estimados) y otras deudas." />
+            <Kpi icon="scale" tone={E.pat >= 0 ? "brand" : "red"} label="Patrimonio" value={<Money value={E.pat} />} valueClassName={E.pat >= 0 ? "text-success" : "text-danger"}
+              sub="Lo que tengo − lo que debo" info="Si hoy vendieras todo lo que tienes y pagaras todas tus deudas, esto es lo que te quedaría. Si crece mes a mes, vas bien." />
           </KpiGrid>
+          <p className="-mt-2 text-sm text-muted-foreground" data-money>
+            {E.A === 0 && E.P === 0 ? "Agrega tus cuentas y bienes para ver tu patrimonio." : E.pat >= 0
+              ? <>Si hoy vendieras todo y pagaras todas tus deudas, te quedarían <b className="text-foreground"><Money value={E.pat} /></b>.</>
+              : <>Aunque vendieras todo, te faltarían <b className="text-danger"><Money value={-E.pat} /></b> para pagar todas tus deudas.</>}
+            {E.impuestos > 0 && <> Lo que debes incluye <Money value={E.impuestos} /> de impuestos que vienen (estimados).</>}
+          </p>
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+            <MesCard q={F} ym={ym} onMove={move} onDetalle={() => setTab("mes")} canEdit={canEdit} />
+            <HallazgosBalance list={data.H} onAgregar={() => setNuevo(true)} />
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ComposicionCard tengo={C.tengo} debo={C.debo} A={E.A} P={E.P} />
+            <PatrimonioCard activos={data.snap.activos} deudas={data.snap.deudas} />
+          </div>
+
           <Card className="shadow-card ring-0">
-            <CardContent className="grid gap-8 md:grid-cols-2">
-              <FlowColumn title="Entradas" sub="Debe" items={data.q.ent} empty="Sin entradas. Registra tus ingresos en Mi dinero › Ingresos." />
-              <FlowColumn title="Salidas" sub="Haber" items={data.q.sal} empty="Sin salidas en este periodo." />
+            <CardContent className="grid gap-6">
+              <SectionTitle icon="scale" info="La cuenta T pone a un lado lo que tienes (activos) y al otro lo que debes (pasivos), con cada cuenta, inversión, préstamo, tarjeta e impuesto. Toca una cuenta tuya para actualizar su valor; lo demás se calcula solo desde su sección.">Cuenta T: el detalle</SectionTitle>
+              <div className="grid gap-8 md:grid-cols-2">
+                <TColumn title="Lo que tengo" sub="Activos · Debe" lines={data.act} total={E.A} empty="Agrega tus cuentas, efectivo y bienes." onDelete={del} onEdit={onEdit} canEdit={canEdit} />
+                <TColumn title="Lo que debo" sub="Pasivos · Haber" lines={data.pas} total={E.P} empty="Sin deudas registradas." onDelete={del} onEdit={onEdit} canEdit={canEdit} />
+              </div>
+              <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-lg p-4", E.pat >= 0 ? "bg-success-soft" : "bg-danger-soft")}>
+                <div><p className="font-semibold">Patrimonio</p><p className="text-sm text-muted-foreground">Lo que tengo − lo que debo</p></div>
+                <Money value={E.pat} className={cn("text-[22px] font-extrabold", E.pat >= 0 ? "text-success" : "text-danger")} />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {data.vivas > 0 ? "Las cuentas que dicen «se actualiza con tus movimientos» suben y bajan solas con lo que registras con sus medios de pago; tócalas para ver sus movimientos o cuadrarlas con tu banco. " : ""}
+                {data.manuales > 0 ? "En las demás cuentas toca su nombre y escribe el saldo que ves en tu banco (o activa que el saldo se actualice solo). " : ""}
+                Tus metas y tu fondo de emergencia suman como ahorro apartado, salvo que digas en qué cuenta está esa plata. Los créditos, tarjetas, inversiones, préstamos e impuestos se actualizan solos desde su sección.
+              </p>
             </CardContent>
           </Card>
         </>
+      ) : (
+        <>
+          <MonthNav ym={ym} label={tab === "anio" ? `Año ${ym.slice(0, 4)}` : undefined} onMove={move}>
+            <p className="text-sm text-muted-foreground sm:ml-2">Del {fmtDate(F.a, { year: tab === "anio" })} al {fmtDate(F.b, { year: tab === "anio" })}</p>
+          </MonthNav>
+          <KpiGrid>
+            <Kpi icon="arrow-down-to-line" tone="income" label="Entra" value={<Money value={t.entra} />} valueClassName="text-success" sub={`${F.ent.length} entrada${F.ent.length === 1 ? "" : "s"}`}
+              info="Ingresos (en su fecha de pago), ingresos extra, primas, cuotas que te pagan y préstamos que te dieron." />
+            <Kpi icon="arrow-up-from-line" tone="expense" label="Sale" value={<Money value={t.sale} />} valueClassName="text-danger"
+              sub={F.nGastos ? <>Incluye <Money value={F.gastado} /> de {F.nGastos} gasto{F.nGastos === 1 ? "" : "s"}</> : "Fijos, cuotas, tarjetas, impuestos y gastos"}
+              info="Gastos fijos, suscripciones, cuotas de tus deudas, el pago de tus tarjetas, impuestos, mesadas, los gastos que registraste y, si el periodo no ha terminado, lo que te falta por gastar según tu presupuesto. Cada peso cuenta una sola vez." />
+            <Kpi icon="piggy-bank" tone="blue" label="Ahorras" value={<Money value={t.ahorro} />} sub="Metas, fondo e inversiones"
+              info="Plata que apartas para tus metas, tu fondo de emergencia o inversiones. No es un gasto: sigue siendo tuya." />
+            <Kpi icon="wallet" tone={t.queda >= 0 ? "green" : "red"} label={t.queda >= 0 ? "Te sobra" : "Te falta"} value={<Money value={Math.abs(t.queda)} />} valueClassName={t.queda >= 0 ? "text-success" : "text-danger"} sub="Disponible del periodo"
+              info="Entra − sale − ahorras. Si es positivo, puedes llevarlo a una meta antes de que se gaste." />
+          </KpiGrid>
+          {F.momento === "pasado" && <Notice tone="info" title="Este periodo ya terminó">Cuenta lo que registraste y lo que ya pasó; ya no se estima lo que faltaba por gastar.</Notice>}
+          {(t.vencidoSale > 0 || t.vencidoEntra > 0 || t.pendienteSale > 0 || t.pendienteEntra > 0) && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-money>
+              {[
+                { k: "Por recibir", v: t.pendienteEntra, c: "text-success", f: "pendiente" as const },
+                { k: "Por pagar", v: t.pendienteSale, c: "text-foreground", f: "pendiente" as const },
+                { k: "Vencido por cobrar", v: t.vencidoEntra, c: "text-warning", f: "vencido" as const },
+                { k: "Vencido por pagar", v: t.vencidoSale, c: "text-danger", f: "vencido" as const },
+              ].map((x) => (
+                <button key={x.k} type="button" onClick={() => setFiltro(filtro === x.f ? "todo" : x.f)} className={cn("grid gap-0.5 rounded-lg bg-card p-3 text-left shadow-card hover:bg-hover", filtro === x.f && "ring-2 ring-brand/40")}>
+                  <span className="text-xs font-medium text-muted-foreground">{x.k}</span>
+                  <Money value={x.v} className={cn("font-bold", x.v ? x.c : "text-muted-foreground")} />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={mod} onValueChange={(v) => setMod(v === "todos" ? null : v)}>
+              <SelectTrigger className="h-10 w-full rounded-lg sm:w-64" aria-label="Módulo"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los módulos</SelectItem>
+                {F.porModulo.map((g) => <SelectItem key={g.modulo} value={g.modulo}>{g.label} ({g.n})</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Segmented value={filtro} onChange={(v) => setFiltro(v as Filtro)} items={[
+              { value: "todo", label: "Todo" }, { value: "pendiente", label: "Pendiente" }, { value: "vencido", label: "Vencido" }, { value: "hecho", label: "Hecho" },
+            ]} />
+          </div>
+          <Card className="shadow-card ring-0">
+            <CardContent className="grid gap-8 md:grid-cols-2">
+              <FlujoColumna title="Entradas" sub="Debe · lo que te llega" movs={vis.filter((x) => x.dir === "entra")} abiertos={tab !== "anio"} empty="Sin entradas con este filtro. Registra tus ingresos en Mi dinero › Ingresos." />
+              <FlujoColumna title="Salidas" sub="Haber · lo que pagas y ahorras" movs={vis.filter((x) => x.dir === "sale")} abiertos={tab !== "anio"} empty="Sin salidas con este filtro." />
+            </CardContent>
+          </Card>
+          {F.sinValor.length > 0 && (
+            <Notice tone="warn" title={`${F.sinValor.length} impuesto${F.sinValor.length === 1 ? "" : "s"} sin valor en este periodo`}
+              action={<Button asChild size="sm" variant="outline"><Link href="/calendario">Escribir el valor</Link></Button>}>
+              {F.sinValor.map((x) => `${x.titulo} (${fmtDate(x.fecha, { year: false })})`).join(", ")}. Escribe cuánto es en el Calendario fiscal o registra tus bienes en la Declaración de renta para estimarlo.
+            </Notice>
+          )}
+          <details className="rounded-lg bg-card p-4 text-sm shadow-card">
+            <summary className="cursor-pointer font-semibold">¿Cómo se calcula? (en palabras simples)</summary>
+            <ul className="mt-2 grid list-disc gap-1.5 pl-5 text-muted-foreground">
+              <li><b className="text-foreground">Entra</b>: tus ingresos el día que te pagan, ingresos extra, primas que escribiste en el calendario, las cuotas que te pagan y los préstamos que te dieron.</li>
+              <li><b className="text-foreground">Sale</b>: gastos, gastos fijos, suscripciones, cuotas de tus deudas, el pago de tus tarjetas, impuestos, mesadas y lo que prestaste.</li>
+              <li><b className="text-foreground">Ahorras</b>: aportes a tus metas, tu fondo de emergencia e inversiones. No es gasto: si sacas del fondo para un imprevisto, se resta.</li>
+              <li><b className="text-foreground">Nada se cuenta dos veces</b>: el pago de un gasto fijo sale una vez; lo que compras con tarjeta sale cuando pagas la tarjeta (no también como gasto); la cuota de un préstamo sale en Deudas; el cobro de una suscripción que marcaste como cobrado sale una vez.</li>
+            </ul>
+            <div className="mt-3"><EstadosLeyenda /></div>
+          </details>
+          {canEdit && (
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="soft"><Link href="/gastos?nuevo=1"><Plus /> Registrar gasto</Link></Button>
+              <IconButton label="Ver todos mis gastos" icon="receipt" href="/gastos" variant="outline" />
+              <IconButton label="Ver gráficas en el Dashboard" icon="chart-column" href="/dashboard" variant="outline" />
+            </div>
+          )}
+        </>
       )}
-      <AssetForm open={nuevo} onOpenChange={(o) => !o && setNuevo(false)} />
+      <AssetForm open={nuevo || !!edit} edit={edit} onOpenChange={(o) => { if (!o) { setNuevo(false); setEdit(null) } }} />
     </div>
   )
 }

@@ -26,11 +26,12 @@ import { SectionTitle } from "@/components/mirai/panel"
 import { IconButton } from "@/components/mirai/tip"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
-import { iso } from "@/lib/domain"
+import { conFechasDian, iso } from "@/lib/domain"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
 import { syncCalendar } from "@/features/correo/actions"
 import { ECAT, calEvents, calIcs, type CalEvent, type ECatKey } from "./events"
+import { useFechasDian } from "./use-dian"
 
 type View = "agenda" | "semana" | "mes"
 const KEY = "mirai-calp"
@@ -90,7 +91,10 @@ function EventPopover({ e, today }: { e: CalEvent; today: string }) {
 
 export function PaymentsCalendar() {
   const today = todayISO()
-  const { data: book, isPending } = useBookData()
+  const { data: libro, isPending } = useBookData()
+  // Las fechas DIAN de tu cédula aparecen solas (sin guardarlas en el calendario).
+  const dian = useFechasDian(libro?.calendarEvents)
+  const book = useMemo(() => (libro ? conFechasDian(libro, dian) : libro), [libro, dian])
   const [prefs, setPrefs] = useState(load)
   const [d, setD] = useState(today)
   const save = (p: typeof prefs) => { setPrefs(p); try { localStorage.setItem(KEY, JSON.stringify(p)) } catch {} }

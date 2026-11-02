@@ -18,15 +18,30 @@ test("retos, gastos compartidos, mesadas y primas", async ({ page }, info) => {
   await shot(page, "retos", info.project.name)
 
   await page.goto("/compartidos?nuevo=1")
-  await page.getByRole("textbox", { name: "Nombre del grupo" }).fill("Paseo")
+  const grupo = `Paseo ${info.project.name}`
+  const hotel = `Hotel ${info.project.name}`
+  await page.getByRole("textbox", { name: "Nombre del grupo" }).fill(grupo)
   await page.getByRole("textbox", { name: "¿Quiénes participan?" }).fill("Ana, Beto, Caro")
   await page.getByRole("button", { name: "Crear grupo" }).click()
   await page.getByRole("button", { name: "Anotar gasto" }).click()
+  await page.getByRole("textbox", { name: "¿Qué se pagó?" }).fill(hotel)
   await page.getByRole("textbox", { name: "Valor" }).fill("300000")
+  await page.getByRole("checkbox", { name: /Registrar mi parte en mis gastos/ }).click()
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText("Gasto anotado")).toBeVisible()
   await expect(page.getByText("Le deben").first()).toBeVisible()
   await shot(page, "compartidos", info.project.name)
+  // Mi parte quedó en Gastos; al borrar el gasto del grupo, también sale de Gastos.
+  await page.goto("/gastos")
+  await expect(page.locator("#main li", { hasText: `${hotel} (${grupo})` })).toBeVisible()
+  await page.goto("/compartidos")
+  const g = page.getByRole("radio", { name: grupo })
+  if (await g.count()) await g.first().click()
+  await page.getByRole("button", { name: `Eliminar gasto ${hotel}` }).click()
+  await expect(page.getByText("Gasto eliminado")).toBeVisible()
+  await page.goto("/gastos")
+  await expect(page.locator("#main li").first()).toBeVisible() // la lista ya cargó (tiene los datos de ejemplo)
+  await expect(page.locator("#main li", { hasText: `${hotel} (${grupo})` })).toHaveCount(0)
 
   await page.goto("/mesadas")
   await page.getByRole("button", { name: /Entregar mesada/ }).first().click()

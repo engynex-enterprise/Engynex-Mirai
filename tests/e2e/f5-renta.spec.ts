@@ -1,5 +1,16 @@
 import { expect, test } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
+import { QA, admin } from "./qa"
+
+/** Libro por defecto del usuario QA (para preparar datos con la clave secreta). */
+async function qaBook() {
+  const sb = admin()
+  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = data.users.find((u) => u.email === QA.email)!.id
+  const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
+  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at").limit(1).single()
+  return { sb, bookId: bk!.id }
+}
 
 test("renta: pestañas, bien, deducción, informe, Excel y portal del contador con notas", async ({ page, context, browser }, info) => {
   test.setTimeout(300_000)
@@ -76,5 +87,37 @@ test("renta: pestañas, bien, deducción, informe, Excel y portal del contador c
   await p3.goto(url.replace(/^https?:\/\/[^/]+/, ""))
   await expect(p3.getByText("No se pudo abrir el acceso")).toBeVisible({ timeout: 30_000 })
   await anon2.close()
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("renta: gasto marcado como deducible de salud aparece en la depuración y las deudas van al 31 de diciembre", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const { sb, bookId } = await qaBook()
+  const y = new Date().getFullYear() - 1
+  const desc = `Prepagada QA ${info.project.name}`
+  // La marca la pone el formulario de gastos (selector "¿Sirve para tu declaración?"); aquí se prepara con la clave secreta.
+  await sb.from("expenses").delete().eq("book_id", bookId).eq("descripcion", desc)
+  const { data: g, error } = await sb.from("expenses").insert({ book_id: bookId, fecha: `${y}-03-15`, descripcion: desc, valor: 351_000, deducible: "salud" }).select("id").single()
+  expect(error?.message ?? null).toBeNull()
+  // Que no haya un valor escrito a mano para la prepagada de ese año (si lo hay, manda sobre lo marcado).
+  const { data: years } = await sb.from("tax_years").select("id,ded").eq("book_id", bookId).eq("year", y)
+  for (const r of years ?? []) { const ded = { ...(r.ded as Record<string, unknown>) }; delete ded.prep; await sb.from("tax_years").update({ ded }).eq("id", r.id) }
+  try {
+    await page.goto("/renta")
+    await expect(page.getByText("Tu ruta para declarar")).toBeVisible({ timeout: 30_000 })
+    await page.getByRole("tab", { name: "Deducciones" }).click()
+    const row = page.getByTestId("ded-prep")
+    await expect(row.getByText("De tus gastos")).toBeVisible({ timeout: 15_000 })
+    await expect(row.getByRole("textbox")).toHaveAttribute("placeholder", /351\.000/)
+    // "Cómo quedan aplicadas": la medicina prepagada entra con lo marcado.
+    await expect(page.getByText("Medicina prepagada", { exact: true }).locator("..")).toContainText(/351\.000/)
+    await shot(page, "renta-deducible-salud", info.project.name)
+    await page.getByRole("tab", { name: "Deudas" }).click()
+    await expect(page.getByText(/Deudas al 31 de diciembre de \d{4}/)).toBeVisible()
+  } finally {
+    await sb.from("expenses").delete().eq("id", g!.id)
+  }
   expect(errs, errs.join("\n")).toEqual([])
 })

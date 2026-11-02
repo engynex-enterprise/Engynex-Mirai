@@ -2,7 +2,8 @@
 
 import { createHash, randomBytes } from "node:crypto"
 import { z } from "zod"
-import { requireRole } from "@/lib/dal"
+import { requirePremium, requireRole } from "@/lib/dal"
+import { bookCan } from "@/lib/plan-server"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
@@ -58,6 +59,7 @@ export async function createShare(input: z.infer<typeof New>): Promise<{ ok: boo
 /** Genera un enlace nuevo (el anterior deja de funcionar). */
 export async function rotateShare(id: string) {
   const ctx = await requireRole("admin")
+  await requirePremium("impuestos")
   if (!z.uuid().safeParse(id).success) throw new Error("Acceso no encontrado")
   const token = randomBytes(24).toString("base64url")
   const { error } = await supabaseAdmin().from("accountant_shares").update({ token_hash: hash(token), revoked_at: null }).eq("id", id).eq("book_id", ctx.book.id)
@@ -72,6 +74,7 @@ export async function revokeShare(id: string) {
 
 export async function ownerNote(shareId: string, texto: string) {
   const ctx = await requireRole("editor")
+  await requirePremium("impuestos")
   const t = texto.trim().slice(0, 2000)
   if (!t || !z.uuid().safeParse(shareId).success) return
   // El acceso tiene que ser de este mismo libro (si no, la nota aparecería en el portal de otro hogar).
@@ -87,7 +90,7 @@ export async function ownerNote(shareId: string, texto: string) {
 export type Share = { id: string; book_id: string; label: string; perms: string; expires_at: string | null; owner: string }
 
 /** Valida el token: existe, no está revocado ni vencido. */
-export async function shareByToken(token: string): Promise<Share | null> {
+async function shareByToken(token: string): Promise<Share | null> {
   if (!/^[\w-]{20,64}$/.test(token)) return null
   const db = supabaseAdmin()
   const { data } = await db.from("accountant_shares").select("id,book_id,label,perms,expires_at,revoked_at,created_by").eq("token_hash", hash(token)).maybeSingle()
@@ -96,27 +99,37 @@ export async function shareByToken(token: string): Promise<Share | null> {
   return { id: data.id, book_id: data.book_id, label: data.label, perms: data.perms, expires_at: data.expires_at, owner: prof?.nombre || "Tu cliente" }
 }
 
-export async function contadorOpen(token: string): Promise<{ share: Share; data: RentaData } | null> {
+/** Acceso válido y con el plan al día: si el hogar bajó a un plan sin "impuestos", el portal deja de abrir. */
+async function liveShare(token: string): Promise<Share | null> {
+  const share = await shareByToken(token)
+  return share && (await bookCan(share.book_id, "impuestos")) ? share : null
+}
+
+export type PortalResult = { share: Share; data: RentaData } | { bloqueado: "plan" } | null
+
+/** Abre el portal. `bloqueado: "plan"`: el enlace existe, pero el plan del cliente ya no incluye el contador. */
+export async function contadorOpen(token: string): Promise<PortalResult> {
   if (typeof token !== "string" || !(await rateLimit("portalContador", token.slice(0, 64))).ok) return null
   const share = await shareByToken(token)
   if (!share) return null
+  if (!(await bookCan(share.book_id, "impuestos"))) return { bloqueado: "plan" }
   const db = supabaseAdmin()
   const { data: cur } = await db.from("accountant_shares").select("views,created_by").eq("id", share.id).single()
   await db.from("accountant_shares").update({ views: (cur?.views ?? 0) + 1, last_access: new Date().toISOString() }).eq("id", share.id)
-  const data = await loadRentaData(db, share.book_id, cur?.created_by)
+  const data = await loadRentaData(db, share.book_id, cur?.created_by, { contador: true })
   if (share.perms !== "todo") data.book.expenses = data.book.expenses.filter((g) => g.fecha >= `${new Date().getFullYear() - 1}-01-01`)
   return { share, data }
 }
 
 export async function contadorNotes(token: string) {
-  const share = await shareByToken(token)
+  const share = await liveShare(token)
   if (!share) throw new Error("El acceso ya no está disponible")
   const { data } = await supabaseAdmin().from("accountant_notes").select("id,autor,texto,created_at").eq("share_id", share.id).is("deleted_at", null).order("created_at")
   return data ?? []
 }
 
 export async function contadorNote(token: string, texto: string) {
-  const share = await shareByToken(token)
+  const share = await liveShare(token)
   if (!share) throw new Error("El acceso ya no está disponible")
   const t = String(texto ?? "").trim().slice(0, 2000)
   if (!t) return
@@ -125,7 +138,7 @@ export async function contadorNote(token: string, texto: string) {
 }
 
 export async function contadorFileUrl(token: string, path: string) {
-  const share = await shareByToken(token)
+  const share = await liveShare(token)
   if (!share || typeof path !== "string" || !path.startsWith(`${share.book_id}/`) || path.includes("..")) return null
   const db = supabaseAdmin()
   const { data: att } = await db.from("attachments").select("id,visible_contador").eq("path", path).eq("book_id", share.book_id).is("deleted_at", null).maybeSingle()

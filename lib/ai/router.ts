@@ -10,6 +10,8 @@
 //   generan aquí.
 // - Correo del banco: los correos sin un monto no pueden ser compras y no se mandan a la IA.
 import { CONS_RE, HKW, addMonths, finCtx, formatCOP, gastosMesK, localCat, localInterp, mkey, moneyIn, norm, toDay, type AdvisorInput, type BookData, type CategoryIn, type DateInput, type LocalCatContext } from "@/lib/domain"
+import { estadoIntegral, flujoIntegral, periodo, type ExtrasIntegral } from "@/lib/domain/flujo-integral"
+import { capacidad, compromisos } from "@/lib/domain/dashboard"
 
 // ── Categorizar y gasto hormiga ──────────────────────────────────────────────────────────────────────────────────
 
@@ -76,12 +78,34 @@ export type ChatFacts = {
   metas: { nombre: string; objetivo: number; ahorrado: number }[]
   /** Nombres de todas las categorías (para responder también las que van en cero). */
   categorias?: string[]
+  /**
+   * Cifras del Balance y el Dashboard (flujo integral del mes y estado de lo que tienes y debes): el chat responde lo
+   * mismo que esas pantallas. Opcionales para poder probar quickAnswer con hechos escritos a mano.
+   */
+  integral?: {
+    entra: number; sale: number; ahorro: number; queda: number
+    tengo: number; debo: number; patrimonio: number
+    deuda_tarjetas: number; pago_tarjetas_mes: number
+    /** Lo que puedes ahorrar al mes (Dashboard › Capacidad de ahorro). */
+    libre_mes: number
+    /** Meses que aguantas sin ingresos con tu dinero disponible. */
+    colchon_meses: number
+  }
 }
 
-/** Hechos del libro para el chat: lo de finCtx + gasto por categoría del mes y del anterior (todo calculado aquí). */
-export function chatFacts(b: BookData & { fund?: { on: boolean; saldo: number } | null }, today: DateInput): ChatFacts {
-  const base = finCtx(b, today)
-  const k = mkey(toDay(today)), prevK = mkey(addMonths(toDay(today), -1))
+/**
+ * Hechos del libro para el chat, con los mismos cálculos del Balance y el Dashboard: ingreso y compromisos
+ * (`compromisos`), disponible (`estadoIntegral().liquidez`), lo que debes línea por línea (`estadoIntegral().debo`:
+ * créditos, tarjetas, otras deudas e impuestos) y el mes (`flujoIntegral`). `X` son los extras del flujo integral
+ * (estimados de impuestos, mesadas y fondo) que el servidor arma igual que el Balance (lib/chat/extras.ts).
+ */
+export function chatFacts(b: BookData & { fund?: { on?: boolean; activo?: boolean | null; saldo?: number | string | null } | null }, today: DateInput, X: ExtrasIntegral = {}): ChatFacts {
+  // El fondo llega como la fila del libro (activo, saldo; lib/book-data.ts) o ya resumido (on, saldo).
+  const fr = b.fund ?? null
+  const fondo = fr ? { on: !!(fr.activo ?? fr.on), saldo: +(fr.saldo ?? 0) || 0 } : null
+  const base = finCtx({ ...b, fund: fondo }, today)
+  const t = toDay(today)
+  const k = mkey(t), prevK = mkey(addMonths(t, -1))
   const name = new Map(b.categories.map((c) => [c.id, c.nombre]))
   const by = (kk: string) => {
     const o: Record<string, number> = {}
@@ -90,11 +114,24 @@ export function chatFacts(b: BookData & { fund?: { on: boolean; saldo: number } 
   }
   const a = by(k), p = by(prevK)
   const sum = (o: Record<string, number>) => Math.round(Object.values(o).reduce((x, y) => x + y, 0))
+  const E = estadoIntegral(b, today, X)
+  const F = flujoIntegral(b, periodo(b, "mes", t.getFullYear(), t.getMonth()), today, X)
+  const C = compromisos(b, today)
+  const cap = capacidad(b, today, C, E.liquidez, fondo ? { activo: fondo.on, saldo: fondo.saldo } : null)
+  const r = Math.round
   return {
     mes: k, gasto_mes: sum(a), gasto_mes_anterior: sum(p), por_categoria: a, por_categoria_anterior: p,
-    ingreso_mensual: base.ingreso_mensual, gastos_fijos_mes: base.gastos_fijos_mes, cuotas_deudas_mes: base.cuotas_deudas_mes, suscripciones_mes: base.suscripciones_mes,
-    disponible: base.disponible, fondo_emergencia: base.fondo_emergencia, deudas: base.deudas.map((d) => ({ nombre: d.nombre, saldo: d.saldo })), te_deben: base.te_deben,
+    ingreso_mensual: r(C.ingreso), gastos_fijos_mes: r(C.fijos), cuotas_deudas_mes: r(C.cuotas), suscripciones_mes: r(C.subs),
+    disponible: r(E.liquidez), fondo_emergencia: base.fondo_emergencia,
+    deudas: E.debo.map((d) => ({ nombre: d.n, saldo: r(d.v) })),
+    te_deben: r(E.tengo.filter((x) => x.grupo === "me-deben").reduce((s, x) => s + x.v, 0)),
     hormiga_mes: base.hormiga_mes, metas: base.metas.map((m) => ({ nombre: m.nombre, objetivo: +m.objetivo, ahorrado: +m.ahorrado })), categorias: b.categories.map((c) => c.nombre),
+    integral: {
+      entra: r(F.tot.entra), sale: r(F.tot.sale), ahorro: r(F.tot.ahorro), queda: r(F.tot.queda),
+      tengo: r(E.A), debo: r(E.P), patrimonio: r(E.pat),
+      deuda_tarjetas: r(E.debo.filter((x) => x.grupo === "tarjetas").reduce((s, x) => s + x.v, 0)), pago_tarjetas_mes: r(C.tarjetas),
+      libre_mes: r(cap.libre), colchon_meses: Math.round(cap.meses * 10) / 10,
+    },
   }
 }
 
@@ -107,6 +144,9 @@ const vs = (b: number) => (b ? ` El mes pasado completo fueron ${pesos(b)}.` : "
  */
 export function quickAnswer(q: string, f: ChatFacts): string | null {
   const n = norm(q).replace(/[¿?¡!.,]/g, " ").replace(/\s+/g, " ").trim()
+  // Antes del filtro de decisiones: "debo … tarjeta" se parece a "¿debo sacar una tarjeta?".
+  if (/^cuanto (?:debo|le debo) (?:en|de) (?:la |las |mis )?tarjetas?(?: de credito)?$/.test(n) && f.integral)
+    return f.integral.deuda_tarjetas ? `En tus tarjetas debes **${pesos(f.integral.deuda_tarjetas)}**. Este mes te toca pagar unos **${pesos(f.integral.pago_tarjetas_mes)}**.` : "No tienes deuda en tarjetas de crédito registrada en Mirai."
   if (n.length > 90 || CONS_RE.test(n) || /\b(deberia|conviene|recomiend|consejo|como (puedo|hago)|por que|estrategia|plan|ayudame a|que hago)\b/.test(n)) return null
   const pasado = /mes pasado|mes anterior/.test(n)
   const cats = pasado ? f.por_categoria_anterior : f.por_categoria
@@ -133,15 +173,22 @@ export function quickAnswer(q: string, f: ChatFacts): string | null {
     return null // categoría que no existe: mejor que la IA lo explique
   }
   if (/^cuanto (?:debo|le debo|debemos)(?: en total| en deudas)?$|^(?:cuanto|cuales) (?:son )?mis deudas$/.test(n)) {
-    if (!f.deudas.length) return "No tienes deudas registradas en Mirai. Si tienes alguna, agrégala en **Préstamos** para verla aquí."
+    if (!f.deudas.length) return "No tienes deudas registradas en Mirai. Si tienes alguna, agrégala en **Le debo** para verla aquí."
     const tot = f.deudas.reduce((s, d) => s + d.saldo, 0)
-    return `Debes **${pesos(tot)}** en total:\n${f.deudas.map((d) => `- ${d.nombre}: ${pesos(d.saldo)}`).join("\n")}`
+    const top = f.deudas.slice(0, 8)
+    return `Debes **${pesos(tot)}** en total:\n${top.map((d) => `- ${d.nombre}: ${pesos(d.saldo)}`).join("\n")}${f.deudas.length > top.length ? `\n- Y ${f.deudas.length - top.length} más (míralas en **Balance**).` : ""}`
   }
+  if (/^cual es mi patrimonio$|^cuanto (?:tengo|valgo) en total$|^cuanto es mi patrimonio$/.test(n) && f.integral)
+    return `Tienes **${pesos(f.integral.tengo)}** y debes **${pesos(f.integral.debo)}**: tu patrimonio es **${pesos(f.integral.patrimonio)}** (lo mismo que ves en **Balance**).`
   if (/^cuanto me deben$|^quien me debe$/.test(n)) return f.te_deben ? `Te deben **${pesos(f.te_deben)}** en total. El detalle está en **Préstamos › Me deben**.` : "No tienes préstamos por cobrar registrados."
   if (/^cuanto (?:gano|ganamos|me entra|recibo)(?: al mes| mensual)?$|^cual es mi (?:ingreso|salario|sueldo)$/.test(n)) return `Tu ingreso mensual registrado es **${pesos(f.ingreso_mensual)}**.`
   if (/^cuanto (?:pago|pagamos|gasto) en suscripciones$|^cuanto (?:me cuestan|cuestan) (?:mis |las )?suscripciones$/.test(n)) return `Tus suscripciones suman **${pesos(f.suscripciones_mes)}** al mes.`
   if (/^cuanto (?:pago|pagamos) (?:en|de) (?:gastos )?fijos$|^cuanto son (?:mis )?(?:gastos )?fijos$/.test(n)) return `Tus gastos fijos suman **${pesos(f.gastos_fijos_mes)}** al mes y las cuotas de deudas **${pesos(f.cuotas_deudas_mes)}**.`
   if (/^cuanto (?:tengo|dinero tengo|plata tengo)(?: disponible| ahorrado| en total)?$|^cuanta plata tengo$/.test(n)) return `Tienes **${pesos(f.disponible)}** disponibles (cuentas, efectivo e inversiones líquidas)${f.fondo_emergencia ? ` y **${pesos(f.fondo_emergencia)}** en tu fondo de emergencia` : ""}.`
+  if (/^cuanto me queda(?: este mes| libre| al mes)?$|^cuanto me sobra(?: al mes| este mes)?$/.test(n) && f.integral) {
+    const I = f.integral
+    return `Este mes entran **${pesos(I.entra)}**, salen **${pesos(I.sale)}**${I.ahorro ? ` y ahorras **${pesos(I.ahorro)}**` : ""}: ${I.queda >= 0 ? `te sobran **${pesos(I.queda)}**` : `te faltan **${pesos(-I.queda)}**`} (lo mismo que ves en **Balance**, con lo que falta pagar del mes).${I.queda < 0 ? " Revisa en qué puedes frenar o qué pago puedes mover." : ""}`
+  }
   if (/^cuanto me queda(?: este mes| libre| al mes)?$|^cuanto me sobra(?: al mes)?$/.test(n)) {
     const libre = f.ingreso_mensual - f.gastos_fijos_mes - f.cuotas_deudas_mes - f.suscripciones_mes - f.gasto_mes
     return `De tu ingreso del mes (${pesos(f.ingreso_mensual)}), después de fijos, cuotas, suscripciones y lo que llevas gastado, te quedan **${pesos(libre)}**.${libre < 0 ? " Vas en rojo: revisa en qué categoría puedes frenar." : ""}`

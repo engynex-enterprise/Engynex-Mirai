@@ -4,6 +4,7 @@ import { isHormiga, norm } from "./hormiga"
 import { annuity, loanEngine, loanName, rateFromCuota } from "./loans"
 import { formatCOP as $, pct } from "./money"
 import { subsMes } from "./subscriptions"
+import { capacidad, compromisos } from "./dashboard"
 import { cuotasMes, fijosMes, gastosBasicos, gastoVariableReal, ingresoMensual, liquidez } from "./totals"
 import type { BookData, DateInput } from "./types"
 
@@ -231,18 +232,30 @@ export function completeInterp(d: AdvisorInput, text: string, ea?: number | null
 /** Frases que piden evaluar una decisión: el chat las manda al consejero. */
 export const CONS_RE = /(quiero|voy a|pienso|debo|deberia|me conviene|me alcanza|estoy pensando|vale la pena|es buena idea).{0,40}(comprar|sacar|pedir|prestar|financiar|endeudar|tarjeta|credito|prestamo|arrendar|arriendo|invertir|cdt|empen|abonar|cuotas)|me alcanza para|puedo comprar|presto|prestarle/
 
-/** Contexto financiero resumido para la IA (finCtx de la v4). */
-export function finCtx(b: BookData & { fund?: { on: boolean; saldo: number } | null }, today: DateInput) {
+/**
+ * Contexto financiero resumido para la IA (finCtx de la v4). Usa las mismas cuentas del Dashboard (`compromisos` y
+ * `capacidad`): fijos sin los aportes a metas, el pago de las tarjetas aparte y el saldo de hoy de tus cuentas.
+ */
+export function finCtx(b: BookData & { fund?: { on?: boolean; activo?: boolean; saldo: number | string } | null }, today: DateInput) {
   const trm = b.settings.trm
   const k = mkey(toDay(today))
+  const C = compromisos(b, today)
+  const liq = liquidez(b.assets, b.investments, trm, today)
+  // El fondo llega como { on, saldo } (chat) o como el del libro ({ activo, saldo }).
+  const fondoOn = !!(b.fund?.on ?? b.fund?.activo)
+  const fondoSaldo = Number(b.fund?.saldo ?? 0) || 0
+  const K = capacidad(b, today, C, liq, b.fund ? { activo: fondoOn, saldo: fondoSaldo } : null)
   return {
-    ingreso_mensual: Math.round(ingresoMensual(b.incomes, trm)),
-    gastos_fijos_mes: Math.round(fijosMes(b.fixedExpenses)),
-    cuotas_deudas_mes: Math.round(cuotasMes(b.loans, "pagar", today)),
-    suscripciones_mes: Math.round(subsMes(b.subscriptions, trm)),
-    gasto_variable_mes: Math.round(gastoVariableReal(b.expenses, b.categories, b.fixedExpenses, today)),
-    disponible: Math.round(liquidez(b.assets, b.investments, trm, today)),
-    fondo_emergencia: Math.round(b.fund?.on ? b.fund.saldo : 0),
+    ingreso_mensual: Math.round(C.ingreso),
+    gastos_fijos_mes: Math.round(C.fijos),
+    aportes_ahorro_mes: Math.round(C.aportes),
+    cuotas_deudas_mes: Math.round(C.cuotas),
+    tarjetas_mes: Math.round(C.tarjetas),
+    suscripciones_mes: Math.round(C.subs),
+    gasto_variable_mes: Math.round(K.variable),
+    puede_ahorrar_mes: Math.round(K.libre),
+    disponible: Math.round(liq),
+    fondo_emergencia: Math.round(fondoOn ? fondoSaldo : 0),
     deudas: b.loans.filter((L) => L.kind === "pagar").map((L) => { const e = loanEngine(L, today); return { nombre: loanName(L, b.contacts, b.entities), saldo: Math.round(e.saldo), tasa_mensual: L.tasa, cuota: Math.round(e.next?.valor || 0) } }).slice(0, 8),
     te_deben: Math.round(b.loans.filter((L) => L.kind === "cobrar").reduce((a, L) => a + loanEngine(L, today).saldo, 0)),
     metas: b.goals.map((m) => ({ nombre: m.nombre, objetivo: m.objetivo, ahorrado: m.ahorrado, fecha: m.fecha })).slice(0, 6),

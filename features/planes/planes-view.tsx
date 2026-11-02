@@ -50,7 +50,7 @@ export function CheckoutButtons({ plan, periodo, cupon }: { plan: string; period
 
 const PREGUNTAS = [
   ["¿Puedo cancelar?", "Sí, cuando quieras desde Ajustes › Mi plan. Sigues con tu plan hasta que termine lo que pagaste."],
-  ["¿Qué pasa con mis datos si vuelvo a Gratis?", "No se borra nada. Las funciones de pago se pausan y tus libros extra quedan guardados."],
+  ["¿Qué pasa con mis datos si vuelvo a Gratis?", "No se borra nada. Las funciones de pago se pausan, tus libros extra quedan guardados y, si tenías más automatizaciones activas que las del plan, solo corren las más antiguas hasta que pauses otras."],
   ["¿Hay derecho de retracto?", "Sí: puedes pedir la devolución dentro de los 5 días hábiles siguientes al pago (Ley 1480), escribiéndonos desde Tu opinión."],
   ["¿Me dan factura?", "Sí, te llega la factura electrónica al correo de tu cuenta."],
 ] as const
@@ -64,7 +64,7 @@ function Incluye({ p }: { p: PlanRow }) {
       {FEATURE_LIST.filter((f) => p.funciones.includes(f)).map((f) => (
         <li key={f} className="flex items-start gap-2 text-sm"><Icon name={FEATURES[f].icon} className="mt-0.5 size-4 shrink-0 text-amber-600" /><span><b>{FEATURES[f].label}.</b> {FEATURES[f].beneficios.slice(0, 2).join(" · ")}</span></li>
       ))}
-      <li className="flex items-start gap-2 text-sm text-muted-foreground"><Icon name="info" className="mt-0.5 size-4 shrink-0" />{p.limites.libros ? `${p.limites.libros} libro${p.limites.libros === 1 ? "" : "s"} de cuentas` : "Libros de cuentas ilimitados"} · {p.limites.personas ? `hasta ${p.limites.personas} personas` : "personas ilimitadas"} por hogar</li>
+      <li className="flex items-start gap-2 text-sm text-muted-foreground"><Icon name="info" className="mt-0.5 size-4 shrink-0" />{p.limites.libros ? `${p.limites.libros} libro${p.limites.libros === 1 ? "" : "s"} de cuentas` : "Libros de cuentas ilimitados"} · {p.limites.personas ? `hasta ${p.limites.personas} personas` : "personas ilimitadas"} por hogar · {p.limites.automatizaciones ? `${p.limites.automatizaciones} automatizaciones activas` : "automatizaciones ilimitadas"}</li>
       {p.anuncios && <li className="flex items-start gap-2 text-sm text-muted-foreground"><Icon name="megaphone" className="mt-0.5 size-4 shrink-0" />Con anuncios</li>}
     </ul>
   )

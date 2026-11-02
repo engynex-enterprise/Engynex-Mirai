@@ -31,7 +31,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { CATALOG, summarize } from "@/lib/automations/catalog"
 import { autoLayout, NODE_H, NODE_W } from "@/lib/automations/layout"
 import { canUseAi } from "@/lib/automations/limits"
-import { parseGraph, triggerHasMonto, triggerOf, validateGraph } from "@/lib/automations/schema"
+import { parseGraph, triggerHasAutor, triggerHasMonto, triggerOf, validateGraph } from "@/lib/automations/schema"
 import type { FlowNode, NodeData, NodeKind } from "@/lib/automations/types"
 import { cn } from "@/lib/utils"
 import type { TestResult } from "../actions"
@@ -84,7 +84,7 @@ function Editor({ a, list }: { a: Automation; list: Automation[] | undefined }) 
   const router = useRouter()
   const { resolvedTheme } = useTheme()
   const rf = useReactFlow()
-  const { refs, categorias, metas, miembros } = useRefs()
+  const { refs, categorias, metas, miembros, fijos, tarjetas, personas } = useRefs()
   const runs = useRuns(a.id, 30)
   const save = useSave("automations")
   const del = useSoftDelete("automations", "Automatización eliminada")
@@ -263,7 +263,7 @@ function Editor({ a, list }: { a: Automation; list: Automation[] | undefined }) 
     return () => window.removeEventListener("beforeunload", f)
   }, [dirty])
 
-  const options = { categorias, metas, miembros, triggerHasMonto: triggerHasMonto(trigger) }
+  const options = { categorias, metas, miembros, fijos, tarjetas, personas, triggerHasMonto: triggerHasMonto(trigger), triggerHasAutor: triggerHasAutor(trigger) }
   const issuesOf = (nid: string) => validation.issues.filter((i) => i.nodeId === nid).map((i) => i.msg)
   const onTestResult = (r: TestResult | null) => setTested(r ? { r, key: graphKey } : null)
 

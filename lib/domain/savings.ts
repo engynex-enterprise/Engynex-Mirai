@@ -1,7 +1,8 @@
 // Fondo de emergencia, aportes programados y metas (equivalente a j_loans.js y c2_views.js de la v4).
 import { toDay } from "./dates"
 import { incomeReparto } from "./reparto"
-import type { DateInput, ExpenseIn, GoalIn, IncomeCategoryIn, IncomeIn } from "./types"
+import { gastosBasicos } from "./totals"
+import type { BookData, DateInput, ExpenseIn, GoalIn, IncomeCategoryIn, IncomeIn } from "./types"
 
 export interface PayDays {
   frec: "quincenal" | "mensual"
@@ -66,6 +67,39 @@ export function imprevistos(expenses: ExpenseIn[], imprevistosId: string | null 
 
 /** Meta del fondo de emergencia: `emergMeta` meses de gastos básicos. */
 export const metaFondo = (gastosBasicos: number, emergMeta: number): number => gastosBasicos * emergMeta
+
+/** Fondo de emergencia (`emergency_funds`): si está activo, su saldo; si no, cuenta lo que tienes disponible. */
+export type FondoRef = { activo?: boolean | null; saldo?: number | string | null } | null | undefined
+
+/**
+ * Plata con la que cuentas para emergencias: el saldo del fondo si lo activaste (un bolsillo aparte) o, si no, todo tu
+ * dinero disponible (cuentas, efectivo y ahorros). La misma regla en Metas, Dashboard y Balance.
+ */
+export const fondoDisponible = (fund: FondoRef, liquidez: number): number => (fund?.activo ? Math.max(0, Number(fund.saldo ?? 0) || 0) : liquidez)
+
+export interface FondoEstado {
+  /** Gastos básicos del mes. */
+  basicos: number
+  /** Meses de la meta (emerg_meta; 6 si no hay dato). */
+  metaMeses: number
+  meta: number
+  /** Con qué cuentas hoy (`fondoDisponible`). */
+  tiene: number
+  falta: number
+  /** Meses que aguantas sin ingresos. */
+  meses: number
+  /** ¿Sale del saldo del fondo (true) o de tu dinero disponible (false)? */
+  enFondo: boolean
+}
+
+/** Cómo va el fondo de emergencia: lo usan Metas, el Dashboard (capacidad) y las decisiones, con las mismas cifras. */
+export function fondoEstado(b: Pick<BookData, "fixedExpenses" | "loans" | "subscriptions" | "categories" | "settings">, today: DateInput, liquidez: number, fund?: FondoRef): FondoEstado {
+  const basicos = gastosBasicos(b, today)
+  const metaMeses = +b.settings.emerg_meta || 6
+  const tiene = fondoDisponible(fund, liquidez)
+  const meta = metaFondo(basicos, metaMeses)
+  return { basicos, metaMeses, meta, tiene, falta: Math.max(0, meta - tiene), meses: basicos ? tiene / basicos : 0, enFondo: !!fund?.activo }
+}
 
 /**
  * Plan de una meta: meses que faltan (mín. 1), cuánto guardar al mes y aporte sugerido redondeado a miles.

@@ -179,3 +179,21 @@ describe("pago único y fiado", () => {
     expect(loanName({ kind: "pagar", contact_id: null, entity_id: null }, [], [])).toBe("—")
   })
 })
+
+describe("fecha de la primera cuota aparte de la del préstamo", () => {
+  const base = { monto: 1_200_000, sistema: "simple", tasa: 0, frec: "mensual", plazo: 6, inicio: "2026-03-01", extra: 0, payments: [] }
+  it("sin primera: la cuota 1 cae un mes después del préstamo (como la v4)", () => {
+    const e = loanEngine(base, "2026-03-02")
+    expect(e.plan[0].fecha).toBe("2026-04-01")
+    expect(e.plan.at(-1)!.fecha).toBe("2026-09-01")
+  })
+  it("con primera: la cuota 1 cae ese día y las demás cada periodo después", () => {
+    const e = loanEngine({ ...base, primera: "2026-06-15" }, "2026-03-02")
+    expect(e.plan.map((p) => p.fecha)).toEqual(["2026-06-15", "2026-07-15", "2026-08-15", "2026-09-15", "2026-10-15", "2026-11-15"])
+    expect(e.plan[0].valor).toBe(200_000)
+  })
+  it("quincenal desde la primera fecha", () => {
+    const e = loanEngine({ ...base, frec: "quincenal", plazo: 3, primera: "2026-04-10" }, "2026-03-02")
+    expect(e.plan.map((p) => p.fecha)).toEqual(["2026-04-10", "2026-04-25", "2026-05-10"])
+  })
+})

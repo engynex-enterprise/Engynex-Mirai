@@ -5,6 +5,7 @@ import type { AppContext } from "@/lib/dal"
 import type { Database } from "@/lib/supabase/database.types"
 import type { LoadedBook } from "@/lib/book-data"
 import { aiObject, AiUnavailable, logAlgorithm, tokensFor } from "@/lib/ai/run"
+import { aiSettings } from "@/lib/ai/model"
 import { interpConfiable } from "@/lib/ai/router"
 import { toLines } from "@/lib/ai/compact"
 import { ATIPOS, asAnalyze, completeInterp, localInterp, todayBogota, type AdvisorInput, type Atipo } from "@/lib/domain"
@@ -32,9 +33,14 @@ const VerdictSchema = z.object({
 type Ctx = Pick<AppContext, "household" | "book" | "user">
 const who = (ctx: Ctx) => ({ householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id })
 
+/** Interruptor "Consejero IA" (Ajustes › Inteligencia artificial): apagado, el consejero analiza solo con tus números. */
+const consejeroOn = async (bookId: string) => (await aiSettings(bookId)).consejero !== false
+export const CONSEJERO_OFF = "El Consejero IA está apagado en Ajustes › Inteligencia artificial: ves el análisis con tus números."
+
 /** Entiende la frase: si es clara (tipo y un solo monto) basta con reglas; si no y hay IA, la IA; sin IA, reglas. */
 export async function interpretText(ctx: Ctx, text: string, useAi: boolean): Promise<{ d: AdvisorInput; src: "ia" | "local" }> {
   const t = text.trim().slice(0, 600)
+  if (useAi && !(await consejeroOn(ctx.book.id))) useAi = false
   const sure = interpConfiable(t)
   if (sure) {
     await logAlgorithm({ ...who(ctx), feature: "consejero_interpretar", evitados: tokensFor("consejero_interpretar", t) })
@@ -64,7 +70,9 @@ export async function analyzeInput(ctx: Ctx, sb: SupabaseClient<Database>, book:
   const an = asAnalyze(book, d, { estricto: cfg?.estricto, usura }, today)
   const m = an.m
   let ai: AiVerdict | null = null, aiErr: string | null = null, provider: string | undefined, creditos = 0
-  if (!useAi) aiErr = "Análisis con tus números (sin IA)."
+  const off = useAi && !(await consejeroOn(ctx.book.id))
+  if (off) { useAi = false; aiErr = CONSEJERO_OFF }
+  else if (!useAi) aiErr = "Análisis con tus números (sin IA)."
   else {
     const data = {
       quiere: ATIPOS[d.tipo].l, descripcion: d.desc, texto_original: txt,

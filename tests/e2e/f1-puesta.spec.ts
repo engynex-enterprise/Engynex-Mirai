@@ -6,7 +6,7 @@ test("puesta en marcha: progreso, omitir y deshacer", async ({ page }, info) => 
   await login(page)
   await page.goto("/puesta")
   await expect(page.getByText("pasos completados")).toBeVisible()
-  const step = page.locator("li", { hasText: "Anota tus gastos fijos" })
+  const step = page.locator("#main li", { hasText: "Anota tus gastos fijos" })
   const skip = step.getByRole("button", { name: "No tengo gastos fijos" })
   if (await skip.isVisible()) {
     await skip.click()

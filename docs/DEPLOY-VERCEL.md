@@ -34,11 +34,21 @@ Nunca pongas el prefijo `NEXT_PUBLIC_` a un secreto: todo lo que lo lleva se inc
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Config / **Sensitive** | Límite de consultas de IA por hogar y hora (también se puede configurar en consola › Integraciones globales). |
 | `NEXT_PUBLIC_SENTRY_DSN` | Config | Reporte de errores con Sentry (solo se activa si existe). |
 
-8. **Cron de avisos.** `vercel.json` ya programa `/api/cron/notify?daily=1` una vez al día (11:00 UTC = 6:00 a. m. Colombia); Vercel envía `Authorization: Bearer CRON_SECRET`. Para avisos a la hora exacta que elija cada persona, programa además el cron horario en Supabase (SQL Editor, una sola vez):
-   ```sql
-   select public.mirai_schedule_notify('https://tu-dominio', '<CRON_SECRET>');
-   ```
-   El mismo cron actualiza cada día la TRM, la tasa de usura y los festivos.
+8. **Cron de avisos (diario de Vercel + horario de pg_cron).**
+   - `vercel.json` programa `/api/cron/notify?daily=1` una vez al día (11:00 UTC = 6:00 a. m. Colombia); Vercel envía `Authorization: Bearer CRON_SECRET`.
+   - **Cron horario (programado el 2 nov 2026, una sola vez, contra producción).** Como pruebas y producción comparten la base, hay un único job `mirai-notify` (`5 * * * *`, minuto 5 de cada hora) que llama `https://mirai.engynex.com/api/cron/notify` con el `CRON_SECRET` de producción (queda solo dentro de `cron.job`, nunca en el repo). Se programa o se reprograma así (SQL Editor; reemplaza el job anterior si existe):
+     ```sql
+     select public.mirai_schedule_notify('https://mirai.engynex.com', '<CRON_SECRET de producción>');
+     -- Verificar (sin mostrar el comando, que lleva el secreto):
+     select jobname, schedule, active from cron.job;                       -- mirai-notify | 5 * * * * | true
+     select status_code, created from net._http_response order by created desc limit 5;   -- 200 (401 = secreto equivocado)
+     -- Quitarlo: select cron.unschedule('mirai-notify');
+     ```
+     Si cambias `CRON_SECRET` en Vercel, vuelve a correr `mirai_schedule_notify` con el nuevo.
+   - **Sin duplicados (v5.5).** Cada envío reclama su clave en `notification_log` antes de salir (`dedupe` + RPC `notify_claim`, estado `enviando` → `enviado`/`fallido`): el resumen es `resumen:<persona>:<libro>:<canal>:<día>`, los correos del plan `plan:<aviso>` y el cobro por WhatsApp `cobro:<préstamo>:<día>`. La campana usa `notifications (user_id, dedupe)`. Así la pasada diaria y la horaria pueden cruzarse sin repetir nada. Un canal que Mirai no ofrece o sin destino no se intenta (no llena el registro de fallos) y una clave que falla 3 veces no se reintenta ese día.
+   - **Hora de cada persona.** Cada pasada horaria marca `platform_settings.cron_horario_visto` (latido). Mientras haya latido de las últimas 3 horas y `platform_settings.cron_horario` esté encendido (por defecto), el resumen sale a la hora elegida en Ajustes › Alertas y la pasada diaria de las 6 a. m. solo envía a quien eligió las 6 o antes. Sin latido (pg_cron caído, secreto equivocado) la pasada diaria vuelve a enviar a todos, como antes. Lógica en `lib/notify/schedule.ts`.
+   - **Qué corre una vez al día** (pasada horaria de las 6 con cron horario; si no, la diaria): TRM, usura y festivos; Google Calendar de quien lo conectó (`lib/google-calendar.ts`, tabla `google_event_map`: crea, actualiza con PATCH y quita con DELETE); y el día 1, la foto del patrimonio de los libros que no la tengan (`net_worth_snapshots`, sin pisar la del Balance). A las 9: vencimientos de Premium. En cada pasada: la campana, los resúmenes que tocan, el correo de cada aviso del plan (pago aprobado o rechazado, por vencer, vencido) y las automatizaciones (con cron horario, las programadas respetan su hora también en la pasada diaria).
+   - **Antes de la v5.5** (código anterior en `main`), el cron horario ya es seguro: los resúmenes se marcaban por día en `notification_rules.last_sent` (uno por canal y día), la campana no duplica y los avisos del plan y las automatizaciones tienen su propia clave. Lo único que cambia con esa versión es que quien eligió una hora antes de las 6 lo recibe a su hora, y los canales que fallan dejan un registro por hora hasta que se publique la v5.5.
 9. **Google (Gmail y Calendar).** En Google Cloud › Credenciales, al mismo cliente OAuth agrega la URI de redirección `https://tu-dominio/api/google/callback` (y `http://localhost:3000/api/google/callback` para desarrollo). Habilita *Gmail API* y *Google Calendar API* en el proyecto. Los permisos son `gmail.readonly` y `calendar.events`; mientras la app esté en modo "Prueba" en la pantalla de consentimiento, agrega los correos de prueba.
 10. **Integraciones: quién configura qué (v5.5).** Los hogares solo configuran la **IA** (Ajustes › Inteligencia artificial: proveedor, clave propia y modelo; `?tab=integraciones` abre esa pestaña). Correo, WhatsApp, Telegram, push, datos (TRM, usura, festivos, monedas, cripto, acciones), Google, AdSense e infraestructura los configura **solo el administrador** en consola › Integraciones globales (`platform_integrations`, modo *Apagada* / *Activa* y planes). `getIntegration()` ignora la fila del hogar para esas (no se borra: queda en `integrations`). Sin fila global se usa la variable de entorno o, si el servicio no pide claves, queda disponible. Cada persona decide en Ajustes › Alertas si recibe avisos y por qué canal, y deja su correo, celular (se normaliza a +57) o vincula Telegram; ahí mismo tiene "Enviarme una prueba".
     - **Google:** Gmail (solo lectura) y Calendar son conexiones de la cuenta de cada persona (botón "Conectar con Google" en Correo del banco, OAuth con `GOOGLE_CLIENT_ID`). El administrador solo decide si el servicio está disponible; nadie pega claves.
@@ -55,7 +65,7 @@ Nunca pongas el prefijo `NEXT_PUBLIC_` a un secreto: todo lo que lo lleva se inc
 | Dirección | https://mirai.engynex.com (`engynex-mirai.vercel.app` redirige aquí) | https://engynex-mirai-pruebas.vercel.app (solo con sesión en Vercel) |
 | Ambiente de Vercel | Production | Preview (variables con rama `pruebas`) |
 | Base de datos | Supabase "Engynex Mirai" | **La misma** por ahora (ver abajo) |
-| Cron de avisos | Sí | No (Vercel solo corre crons en producción) |
+| Cron de avisos | Sí: diario de Vercel + horario de pg_cron (`mirai-notify`) | No (Vercel solo corre crons en producción y pg_cron apunta a producción) |
 
 **Flujo:** sube los cambios a `pruebas` → revisa en la dirección de pruebas → `git checkout main && git merge pruebas && git push` para publicar.
 

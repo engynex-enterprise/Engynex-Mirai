@@ -27,6 +27,7 @@ export type BannerThemeKey = keyof typeof BANNER_THEMES
 /** Módulo → tema y escena. Los que no estén aquí usan el banner verde con el tablero. */
 export const BANNERS: Record<string, { t: BannerThemeKey; m: BannerMotif }> = {
   inicio: { t: "verde", m: "dashboard" },
+  dashboard: { t: "azul", m: "dashboard" },
   puesta: { t: "naranja", m: "checklist" },
   consejero: { t: "morado", m: "chat" },
   balance: { t: "verde", m: "coins" },

@@ -12,6 +12,7 @@ import { maskDest } from "@/lib/notify/rules"
 import { formatCoPhone } from "@/lib/notify/whatsapp"
 import { siteUrl } from "@/lib/site-url"
 import { limitOf } from "@/lib/plans"
+import { planOf } from "@/lib/plan-server"
 import { ACCESS_ROLES, assignableRoles, can, deniedMsg, ROLE_INFO, ROLE_RANK, toAccess, type AccessRole } from "@/lib/household/roles"
 import { afterSend, checkDuplicate, inviteEstado, inviteText, isTestEmail, normalizeDest, resendGate, sameName, waMeLink, type LastResult } from "@/lib/household/invites"
 import { sendInviteEmail, sendInviteWhatsApp, type InviteMsg } from "./send"
@@ -387,6 +388,16 @@ export async function acceptInvitation(token: string): Promise<{ ok: boolean; ms
   const sb = await supabaseServer()
   const { data: info } = await sb.rpc("invitation_info", { p_token: token })
   const ya = !!(info as { ya_miembro?: boolean } | null)?.ya_miembro
+  // Límite de personas del plan del hogar que invita (si bajó de plan después de invitar, no entra nadie más).
+  if (!ya && typeof token === "string" && token.length <= 128) {
+    const db = supabaseAdmin()
+    const { data: inv } = await db.from("household_invitations").select("household_id").eq("token_hash", hash(token)).is("accepted_at", null).is("canceled_at", null).maybeSingle()
+    if (inv) {
+      const max = limitOf(await planOf(inv.household_id), "personas")
+      const { count } = await db.from("household_members").select("user_id", { count: "exact", head: true }).eq("household_id", inv.household_id)
+      if (max !== undefined && (count ?? 0) >= max) return { ok: false, msg: `Ese hogar ya tiene las ${max} personas que permite su plan. Pídele a quien te invitó que revise su plan en Ajustes › Mi plan.` }
+    }
+  }
   const { data: hh, error } = await sb.rpc("accept_invitation", { p_token: token })
   if (error) return { ok: false, msg: /venció|no existe/.test(error.message) ? "La invitación no existe o ya venció. Pide una nueva." : sqlMsg(error.message) }
   if (hh) {

@@ -289,7 +289,8 @@ const VAR_OPTIONS = [...WA_VARS.map((v) => ({ value: v.k, label: v.l, hint: v.ej
 
 /** Plantilla, asignación de variables e imagen para un caso (o para la plantilla por defecto). */
 function CaseEditor({ caso, cfg, onChange, state, settings, isDefault }: { caso: WaCase; cfg: WaCaseCfg; onChange: (c: WaCaseCfg) => void; state: WaState; settings: WaSettings; isDefault?: boolean }) {
-  const approved = state.templates.filter((t) => String(t.status).toUpperCase() === "APPROVED")
+  // Las de ejemplo de Meta ("Integration Test", hello_world) no se ofrecen: le llegarían a la persona en inglés y sin sus datos.
+  const approved = state.templates.filter((t) => String(t.status).toUpperCase() === "APPROVED" && !esPlantillaDeMeta(t.name))
   const names = [...new Set(approved.map((t) => t.name))]
   const eff = isDefault ? { template: cfg.template ?? "", lang: cfg.lang ?? "es_CO", map: cfg.map ?? {}, headerImage: cfg.headerImage ?? "" } : caseConfig({ ...settings, casos: { ...settings.casos, [caso]: cfg } }, caso)
   const tpl = eff.template ? pickTemplate(state.templates, eff.template, eff.lang) : null

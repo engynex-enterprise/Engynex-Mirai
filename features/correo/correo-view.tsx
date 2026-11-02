@@ -26,12 +26,13 @@ import { createClient } from "@/utils/supabase/client"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtDate } from "@/lib/format"
-import { categoryOptions, useCategories, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
+import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import { defaultPaySource, parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
 import { classifyBatch } from "@/features/expenses/use-ai-category"
 import { googleDisconnect, scanMail, type MailRow } from "./actions"
 import { MAILQ_DEFAULT } from "./query"
 
-type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null; manual?: boolean }
+type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null; manual?: boolean; pago: string }
 
 export function CorreoView() {
   const bookId = useBookId()
@@ -42,6 +43,10 @@ export function CorreoView() {
   const { data: rules = [] } = useKeywordRules()
   const { data: history = [] } = useList("expenses")
   const { data: cfg } = useSettings()
+  const { data: methods = [] } = usePaymentMethods()
+  const { data: members = [] } = useMembers()
+  const { data: cards = [] } = useList("credit_cards", { order: { column: "created_at" } })
+  const [quien, setQuien] = useState("familia")
   const [q, setQ] = useState(MAILQ_DEFAULT)
   const [state, setState] = useState<"idle" | "buscando" | "vacio" | "error" | "ok">("idle")
   const [msg, setMsg] = useState("")
@@ -64,7 +69,8 @@ export function CorreoView() {
     if (!r.ok) { setState("error"); setMsg(r.msg ?? ""); return }
     if (!r.rows.length) return setState("vacio")
     const umbral = +(cfg?.umbral ?? 25000)
-    const base: Row[] = r.rows.map((x) => { const hit = localCat(x.comercio, { rules, expenses: history, categories: cats }); return { ...x, incl: true, category_id: hit?.category_id ?? null, src: hit?.src === "regla" ? "regla" : null, hormiga: localHormiga({ descripcion: x.comercio, valor: x.valor, category_id: hit?.category_id ?? null }, cats, umbral) } })
+    const medio = ((cfg?.defaults ?? {}) as { medio?: string }).medio ?? null
+    const base: Row[] = r.rows.map((x) => { const hit = localCat(x.comercio, { rules, expenses: history, categories: cats }); return { ...x, incl: true, category_id: hit?.category_id ?? null, src: hit?.src === "regla" ? "regla" : null, hormiga: localHormiga({ descripcion: x.comercio, valor: x.valor, category_id: hit?.category_id ?? null }, cats, umbral), pago: defaultPaySource(`${x.asunto} ${x.remitente}`, cards, medio) } })
     setRows(base); setState("ok")
     // La IA decide siempre la categoría (lo de las reglas va como "categoría probable"), salvo en las filas que la
     // persona ya cambió a mano mientras respondía. Sin IA (apagada o plan Gratis) queda lo local.
@@ -77,11 +83,25 @@ export function CorreoView() {
     const sel = rows.filter((r) => r.incl)
     if (!sel.length) return toast("Elige al menos un movimiento")
     setSaving(true)
-    const { error } = await createClient().from("expenses").insert(sel.map((r) => ({ book_id: bookId, fecha: r.fecha, descripcion: r.comercio, valor: r.valor, category_id: r.category_id, hormiga: r.hormiga, hormiga_src: "ia" as const, origen: "correo" as const, external_id: `gmail:${r.id}`, cat_src: r.src })))
+    const sb = createClient()
+    const member_id = quien === "familia" ? null : quien
+    const conTarjeta = sel.filter((r) => parsePaySource(r.pago).kind === "tarjeta")
+    const sueltos = sel.filter((r) => parsePaySource(r.pago).kind === "medio")
+    // Pagados con medio de pago: gastos normales. Con tarjeta de crédito: compra de la tarjeta + su gasto (una transacción cada una).
+    const { error } = sueltos.length ? await sb.from("expenses").insert(sueltos.map((r) => ({
+      book_id: bookId, fecha: r.fecha, descripcion: r.comercio, valor: r.valor, category_id: r.category_id, currency: "COP",
+      payment_method_id: parsePaySource(r.pago).id, member_id,
+      hormiga: r.hormiga, hormiga_src: r.src === "ia" ? ("ia" as const) : ("regla" as const), origen: "correo" as const, external_id: `gmail:${r.id}`, cat_src: r.src,
+    }))) : { error: null }
+    const fallos = (await Promise.all(conTarjeta.map((r) => sb.rpc("add_card_purchase", {
+      p_card: parsePaySource(r.pago).id!, p_fecha: r.fecha, p_descripcion: r.comercio, p_valor: r.valor, p_cuotas: 1,
+      p_category: r.category_id ?? undefined, p_como_gasto: true, p_external_id: `gmail:${r.id}`, p_member: member_id ?? undefined,
+    })))).filter((x) => x.error)
     setSaving(false)
-    if (error) return toast.error("No se pudieron guardar", { description: error.message })
-    toast.success(`Registramos ${sel.length} gasto${sel.length === 1 ? "" : "s"} desde tu correo`)
-    invalidateBook(qc, bookId, "expenses"); setRows([]); setState("idle")
+    invalidateBook(qc, bookId, "expenses"); invalidateBook(qc, bookId, "credit_cards"); invalidateBook(qc, bookId, "card_purchases")
+    if (error || fallos.length) return toast.error("Algunos movimientos no se guardaron", { description: (error ?? fallos[0].error)?.message })
+    toast.success(`Registramos ${sel.length} gasto${sel.length === 1 ? "" : "s"} desde tu correo`, { description: conTarjeta.length ? `${conTarjeta.length} con tarjeta de crédito: quedaron también en la tarjeta.` : undefined })
+    setRows([]); setState("idle")
   }
 
   return (
@@ -114,14 +134,17 @@ export function CorreoView() {
           {state === "ok" && (
             <Card className="gap-3 p-5 shadow-card ring-0">
               <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold">Revisa antes de guardar ({rows.filter((r) => r.incl).length} de {rows.length}){aiBusy && <span className="flex items-center gap-1 text-sm font-normal text-muted-foreground"><Spinner /> Categorizando con IA…</span>}</h2><SubmitButton disabled={!rows.some((r) => r.incl) || !canEdit} loading={saving} onClick={save}>Guardar seleccionados</SubmitButton></div>
-              <div className="overflow-x-auto"><table className="w-full min-w-[40rem] text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="w-8 py-2" /><th className="font-medium">Fecha</th><th className="font-medium">Comercio</th><th className="font-medium">Categoría</th><th className="text-right font-medium">Valor</th></tr></thead>
+              <div className="grid gap-1 sm:max-w-xs"><label htmlFor="co-quien" className="text-sm font-medium">¿De quién son estos gastos?</label><Combobox id="co-quien" value={quien} onChange={(v) => setQuien(v ?? "familia")} options={memberOptions(members)} /></div>
+              <p className="text-xs text-muted-foreground">Si pagaste con tarjeta de crédito, elígela: la compra queda en la tarjeta (sube lo que debes) y en tus gastos, sin contarla dos veces.</p>
+              <div className="overflow-x-auto"><table className="w-full min-w-[52rem] text-sm">
+                <thead><tr className="border-b text-left text-muted-foreground"><th className="w-8 py-2" /><th className="font-medium">Fecha</th><th className="font-medium">Comercio</th><th className="font-medium">Categoría</th><th className="font-medium">¿Con qué pagaste?</th><th className="text-right font-medium">Valor</th></tr></thead>
                 <tbody>{rows.map((r, i) => (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="py-2"><Checkbox checked={r.incl} onCheckedChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, incl: v === true } : x)))} aria-label={`Incluir ${r.comercio}`} /></td>
                     <td className="whitespace-nowrap">{fmtDate(r.fecha)}</td>
                     <td><div className="flex items-center gap-2.5"><EntityLogo name={r.comercio} icon={cats.find((c) => c.id === r.category_id)?.icon ?? "receipt"} seed={r.category_id ?? r.comercio} size={32} /><div className="grid min-w-0"><p className="font-medium">{r.comercio}</p><p className="max-w-64 truncate text-xs text-muted-foreground">{r.asunto}</p>{r.hormiga && <StatusPill tone="porVencer" className="mt-1 h-5 w-fit" hint="Gasto pequeño y frecuente que se puede evitar.">hormiga</StatusPill>}</div></div></td>
                     <td className="min-w-48"><Combobox value={r.category_id ?? ""} onChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, category_id: v, src: null, manual: true } : x)))} options={categoryOptions(cats)} placeholder="Elige" /></td>
+                    <td className="min-w-44"><Combobox value={r.pago} onChange={(v) => setRows(rows.map((x, j) => (j === i ? { ...x, pago: v ?? "" } : x)))} options={paySourceOptions(methods, cards)} placeholder="Elige" aria-label={`Con qué pagaste ${r.comercio}`} /></td>
                     <td className="text-right font-medium tabular-nums"><Money value={r.valor} /></td>
                   </tr>
                 ))}</tbody>

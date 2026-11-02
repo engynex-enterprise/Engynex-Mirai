@@ -102,7 +102,7 @@ test("hogar: integrante sin cuenta, invitar sin duplicados, cambiar rol y cancel
 
   // La tabla comparativa de roles
   await page.getByRole("button", { name: "¿Qué puede hacer cada rol?" }).last().click()
-  await expect(page.getByText("Cambiar o pagar el plan").first()).toBeVisible()
+  await expect(page.getByText("Cambiar o pagar el plan").filter({ visible: true }).first()).toBeVisible()
 
   // 5) Cancelar la invitación
   await options(page, invitado)

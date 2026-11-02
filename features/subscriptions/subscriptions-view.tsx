@@ -18,12 +18,13 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { addMonths, conv, detectSubs, iso, parseDate, subMensual, subsMes } from "@/lib/domain"
+import { conv, detectSubs, iso, subMensual, subsMes } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { DUE_HINT, DUE_TONE, dueState, dueText } from "@/lib/list-helpers"
 import type { Row } from "@/lib/supabase/tables"
 import { useCategories, usePaymentMethods, useProviders, useSettings } from "@/features/catalogs/hooks"
 import { SubscriptionForm } from "./subscription-form"
+import { kickAutomations } from "@/features/automations/runner"
 
 export function SubscriptionsView() {
   const bookId = useBookId()
@@ -46,17 +47,28 @@ export function SubscriptionsView() {
   const mensual = subsMes(activas.map((s) => ({ ...s, valor: Number(s.valor), proximo: s.proximo ?? today })), trm)
   const sugeridas = useMemo(() => detectSubs(expenses.map((g) => ({ ...g, valor: Number(g.valor) })), subs), [expenses, subs])
 
-  /** "Ya se cobró": registra el gasto en Suscripciones (en COP) y avanza el próximo cobro (subdone de la v4). */
+  /**
+   * "Ya se cobró": en una sola transacción registra el gasto (en COP y solo tu parte), lo enlaza a la suscripción y
+   * avanza el próximo cobro (pay_subscription). "Deshacer" borra ese gasto y la base devuelve el próximo cobro.
+   */
   const cobrada = async (s: Row<"subscriptions">) => {
     const sb = createClient()
     const valor = Math.round(conv(Number(s.valor), s.currency, trm) / Math.max(1, s.comparte))
     const fecha = s.proximo && s.proximo <= today ? s.proximo : today
-    const { error } = await sb.from("expenses").insert({ book_id: bookId, fecha, descripcion: s.nombre, valor, category_id: s.category_id ?? cats.find((c) => c.nombre === "Suscripciones")?.id ?? null, payment_method_id: s.payment_method_id, provider_id: s.provider_id, hormiga: false })
+    const { data, error } = await sb.rpc("pay_subscription", { p_sub: s.id, p_fecha: fecha, p_valor: valor })
     if (error) return toast.error("No se pudo registrar", { description: error.message })
-    const next = iso(addMonths(parseDate(s.proximo ?? today), s.ciclo === "anual" ? 12 : 1))
-    await sb.from("subscriptions").update({ proximo: next }).eq("id", s.id)
-    toast.success("Cobro registrado", { description: `Quedó en tus gastos. Próximo cobro: ${fmtDate(next)}.` })
-    invalidateBook(qc, bookId, "subscriptions"); invalidateBook(qc, bookId, "expenses")
+    kickAutomations()
+    const r = (data ?? {}) as { expense_id?: string; proximo?: string }
+    const refresh = () => { invalidateBook(qc, bookId, "subscriptions"); invalidateBook(qc, bookId, "expenses") }
+    toast.success("Cobro registrado", {
+      description: `Quedó en tus gastos. Próximo cobro: ${r.proximo ? fmtDate(r.proximo) : "—"}.`,
+      action: r.expense_id ? { label: "Deshacer", onClick: async () => {
+        const { error: e } = await sb.from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", r.expense_id!)
+        if (e) return toast.error("No se pudo deshacer", { description: e.message })
+        refresh(); toast("Cobro deshecho", { description: `El próximo cobro vuelve a ser el ${s.proximo ? fmtDate(s.proximo) : "anterior"}.` })
+      } } : undefined,
+    })
+    refresh()
   }
 
   return (
@@ -83,7 +95,7 @@ export function SubscriptionsView() {
         </Card>
       )}
       <DataTable<Row<"subscriptions">>
-        title="Tus suscripciones" info="Servicios que se cobran solos. Usa “Ya se cobró” cuando llegue el cobro: queda en tus gastos y pasa al siguiente."
+        title="Tus suscripciones" info="Servicios que se cobran solos. Usa “Ya se cobró” cuando llegue el cobro: queda en tus gastos y pasa al siguiente. Si borras ese gasto, el cobro vuelve a quedar pendiente."
         data={subs} loading={isPending} rowKey={(s) => s.id} noun={["suscripción", "suscripciones"]} exportName="suscripciones"
         columns={[
           { id: "proximo", header: "Próximo cobro", sort: (s) => (s.activa ? s.proximo ?? "9999" : "99999"), csv: (s) => s.proximo },

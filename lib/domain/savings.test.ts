@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { catId, scenario } from "./__tests__/adapt"
 import { gastosBasicos } from "./totals"
-import { aporteDias, aporteFondoSugerido, aporteSugerido, imprevistos, metaPlan, payDays, usarFondo } from "./savings"
+import { aporteDias, aporteFondoSugerido, aporteSugerido, fondoDisponible, fondoEstado, imprevistos, metaPlan, payDays, usarFondo } from "./savings"
 
 const HOY = "2026-10-31"
 const catIng = (sc: ReturnType<typeof scenario>) => sc.S.cfg.catIngreso.map((c: { id: string; nombre: string }) => ({ id: c.id, nombre: c.nombre }))
@@ -53,4 +53,21 @@ describe("plan de una meta = V.metas de la v4", () => {
     }
   })
   it("meta vencida o del mes actual → 1 mes", () => expect(metaPlan({ objetivo: 100, ahorrado: 0, fecha: "2026-01-01" }, HOY).meses).toBe(1))
+})
+
+describe("fondoDisponible y fondoEstado: la misma cifra en Metas y Dashboard", () => {
+  const b = { settings: { emerg_meta: 6 }, fixedExpenses: [], loans: [], subscriptions: [], categories: [{ id: "n1", nombre: "Mercado", icon: "tag", tope: 1000000, grupo: "n" }] } as never
+  it("con el fondo activo cuenta su saldo; si no, el dinero disponible", () => {
+    expect(fondoDisponible({ activo: true, saldo: 800000 }, 5000000)).toBe(800000)
+    expect(fondoDisponible({ activo: true, saldo: "-5" }, 5000000)).toBe(0)
+    expect(fondoDisponible({ activo: false, saldo: 800000 }, 5000000)).toBe(5000000)
+    expect(fondoDisponible(null, 5000000)).toBe(5000000)
+    expect(fondoDisponible(undefined, 0)).toBe(0)
+  })
+  it("meta, lo que falta y los meses que aguantas", () => {
+    expect(fondoEstado(b, HOY, 5000000, { activo: true, saldo: 1500000 })).toEqual({ basicos: 1000000, metaMeses: 6, meta: 6000000, tiene: 1500000, falta: 4500000, meses: 1.5, enFondo: true })
+    expect(fondoEstado(b, HOY, 7000000)).toMatchObject({ tiene: 7000000, falta: 0, meses: 7, enFondo: false })
+    // Sin meta en los ajustes se usan 6 meses (como el Dashboard).
+    expect(fondoEstado({ ...(b as object), settings: { emerg_meta: 0 } } as never, HOY, 0).metaMeses).toBe(6)
+  })
 })

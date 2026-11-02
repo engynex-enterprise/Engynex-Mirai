@@ -3,7 +3,7 @@ import webpush from "web-push"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import type { IntegrationValue } from "@/features/integrations/store"
 import { publicSiteUrl } from "@/lib/site-url"
-import { buildTemplateMessage, caseConfig, fallbackTemplate, normalizeCoPhone, pickTemplate, plantillaDeRespaldo, templateSlots, waErrorMsg, waSettings, waValuesFromText, withBase, type MetaTemplate, type WaCase, type WaCaseCfg, type WaValues } from "./whatsapp"
+import { buildTemplateMessage, caseConfig, esPlantillaDeMeta, fallbackTemplate, normalizeCoPhone, pickTemplate, plantillaDeRespaldo, templateSlots, waErrorMsg, waSettings, waValuesFromText, withBase, type MetaTemplate, type WaCase, type WaCaseCfg, type WaValues } from "./whatsapp"
 
 // ── Telegram (Bot API) ──
 export async function telegramApi<T = unknown>(token: string, method: string, body?: Record<string, unknown>): Promise<T> {
@@ -55,8 +55,8 @@ export const clearTemplateCache = () => tplCache.clear()
 export class TemplateUnavailable extends Error {}
 
 /**
- * Plantilla de respaldo cuando la del caso no está aprobada: la por defecto, luego una propia aprobada con variable en el
- * cuerpo (primero en español) y, al final, la de ejemplo de Meta. Así el aviso llega aunque una plantilla esté en revisión.
+ * Plantilla de respaldo cuando la del caso no está aprobada: la por defecto y luego una propia aprobada con variable en el
+ * cuerpo (primero en español). Nunca las de ejemplo de Meta.
  */
 const approvedFallback = async (v: IntegrationValue, defaultName: string, skip: string) => plantillaDeRespaldo(await waTemplates(v), defaultName, skip)
 
@@ -102,19 +102,23 @@ export async function waMessage(v: IntegrationValue, dest: string, values: WaVal
   const s = waSettings(v.config)
   const c = o.override ? { ...caseConfig(s, o.caso), ...Object.fromEntries(Object.entries(o.override).filter(([, x]) => x !== undefined && x !== "")) } : caseConfig(s, o.caso)
   const vals = { ...values, enlace: withBase(values.enlace, s.enlaceBase) }
-  if (!c.template) {
+  const texto = (motivo?: string) => {
     const text = (o.text ?? vals.resumen).slice(0, 4000)
-    return { message: { messaging_product: "whatsapp", recipient_type: "individual", to: dest, type: "text", text: { body: text, preview_url: false } }, preview: [{ key: "texto", label: "Texto libre", value: text, src: "texto" }], live: false, template: null as MetaTemplate | null }
+    return { message: { messaging_product: "whatsapp", recipient_type: "individual", to: dest, type: "text", text: { body: text, preview_url: false } }, preview: [{ key: "texto", label: "Texto libre", value: text, src: "texto" }], live: false, template: null as MetaTemplate | null,
+      fallback: motivo ? { de: c.template, a: "texto libre", motivo } : null }
   }
+  // Una plantilla de ejemplo de Meta ("Integration Test", hello_world) nunca se envía a una persona en un aviso real.
+  if (!c.template || (esPlantillaDeMeta(c.template) && !o.override)) return texto(c.template ? `"${c.template}" es una plantilla de ejemplo de Meta` : undefined)
   let loaded: { tpl: MetaTemplate; live: boolean }
   let fallback: { de: string; a: string; motivo: string } | null = null
   try {
     loaded = await loadTemplate(v, c.template, c.lang, fresh)
   } catch (e) {
-    // Una prueba de la consola con plantilla escogida muestra el error; los envíos normales usan una de respaldo.
+    // Una prueba de la consola con plantilla escogida muestra el error; los envíos normales usan una de respaldo propia
+    // y, si no hay ninguna aprobada, texto libre (Meta lo entrega si la persona escribió en las últimas 24 horas).
     if (!(e instanceof TemplateUnavailable) || o.override) throw e
     const alt = await approvedFallback(v, s.template, c.template)
-    if (!alt) throw e
+    if (!alt) return texto(e.message.replace(/^WhatsApp: /, ""))
     loaded = { tpl: alt, live: true }
     fallback = { de: c.template, a: alt.name, motivo: e.message.replace(/^WhatsApp: /, "") }
   }
@@ -125,7 +129,9 @@ export async function waMessage(v: IntegrationValue, dest: string, values: WaVal
 
 /** Nota para el registro y el mensaje de éxito cuando se usó una plantilla de respaldo. */
 export const fallbackNote = (f: { de: string; a: string } | null | undefined) =>
-  f ? `Se usó la plantilla "${f.a}" porque "${f.de}" no está disponible en Meta (en revisión, rechazada o pausada).` : null
+  !f ? null : f.a === "texto libre"
+    ? `Se envió como texto libre porque "${f.de}" no está disponible en Meta (solo llega si la persona escribió al número en las últimas 24 horas).`
+    : `Se usó la plantilla "${f.a}" porque "${f.de}" no está disponible en Meta (en revisión, rechazada o pausada).`
 
 /**
  * Envía por WhatsApp con la plantilla del caso (estructura leída de Meta: encabezado, cuerpo y botones) o texto libre

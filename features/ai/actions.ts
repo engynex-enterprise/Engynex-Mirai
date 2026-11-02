@@ -1,15 +1,15 @@
 "use server"
 
 import { z } from "zod"
-import { requireRole } from "@/lib/dal"
+import { requireCan, requireRole } from "@/lib/dal"
 import { supabaseServer } from "@/utils/supabase/server"
-import { aiAllowed, aiObject, aiText, AiUnavailable, logAlgorithm, tokensFor } from "@/lib/ai/run"
+import { aiObject, aiText, AiUnavailable } from "@/lib/ai/run"
 import { aiSettings } from "@/lib/ai/model"
-import { routeClassify, type ClassifyItem, type ClassifyOut } from "@/lib/ai/router"
+import type { ClassifyItem, ClassifyOut } from "@/lib/ai/router"
+import { classifyWith } from "./classify"
 import { clip, toLines } from "@/lib/ai/compact"
 import { todayBogota } from "@/lib/domain"
 
-const GRP = { n: "necesidad", g: "gusto", a: "ahorro" } as Record<string, string>
 const MAX_IMG = 6 * 1024 * 1024
 
 async function catalog(bookId: string) {
@@ -29,7 +29,8 @@ async function image(fd: FormData) {
 
 /** Foto de la factura (leerFactura de la v4): comercio, total, fecha y categoría. */
 export async function readInvoice(fd: FormData): Promise<{ ok: true; comercio: string; valor: number; fecha: string | null; category_id: string | null } | { ok: false; msg: string }> {
-  const ctx = await requireRole("editor")
+  let ctx
+  try { ctx = await requireCan("registrarPropio") } catch (e) { return { ok: false, msg: (e as Error).message } }
   const ia = await aiSettings(ctx.book.id)
   if (ia.on === false) return { ok: false, msg: "La inteligencia artificial está apagada. Actívala en Ajustes › Inteligencia artificial." }
   if (ia.ocr === false) return { ok: false, msg: "La lectura de fotos está desactivada en Ajustes › Inteligencia artificial." }
@@ -49,41 +50,16 @@ export type { ClassifyItem, ClassifyOut } from "@/lib/ai/router"
 
 /**
  * Categoría y gasto hormiga (aiClassify de la v4). Primero reglas (tus reglas, historial, palabras clave y los casos
- * claros de hormiga) y solo los dudosos van a la IA. Devuelve null si la IA está apagada o no está en el plan.
+ * claros de hormiga) y solo los dudosos van a la IA (features/ai/classify.ts, el mismo motor del chat). Devuelve null
+ * si la IA está apagada o no está en el plan. "Solo mira" no gasta créditos: no registra gastos.
  */
 export async function classifyExpenses(items: ClassifyItem[]): Promise<ClassifyOut[] | null> {
-  const ctx = await requireRole("viewer")
-  const ia = await aiSettings(ctx.book.id)
-  if (ia.on === false || (ia.autocat === false && ia.hormiga === false) || !items.length) return null
-  if (!(await aiAllowed(ctx.household.id, ctx.book.id))) return null
-  const sb = await supabaseServer()
-  const [cats, { data: cfg }, { data: rules }, { data: hist }] = await Promise.all([
-    catalog(ctx.book.id),
-    sb.from("book_settings").select("umbral").eq("book_id", ctx.book.id).single(),
-    sb.from("keyword_rules").select("keyword,category_id").eq("book_id", ctx.book.id).is("deleted_at", null),
-    sb.from("expenses").select("descripcion,category_id").eq("book_id", ctx.book.id).is("deleted_at", null).order("created_at", { ascending: false }).limit(500),
-  ])
-  const umbral = +(cfg?.umbral ?? 25000)
-  const { done, pending } = routeClassify(items.slice(0, 60), { rules: rules ?? [], expenses: (hist ?? []).reverse(), categories: cats, umbral, needCat: ia.autocat !== false, needH: ia.hormiga !== false, siempreIA: true })
-  const catsTxt = `Categorías (nombre: tipo): ${cats.map((c) => `${c.nombre}: ${GRP[c.grupo] ?? "gusto"}`).join(", ")}\nHormiga suele ser de hasta $ ${(umbral * 2).toLocaleString("es-CO")}.`
-  const line = (p: ClassifyItem, cat?: string, que = "") => `${p.i} | ${clip(p.descripcion, 60)} | ${Math.round(p.valor)} | ${p.veces_mes} | ${cat ?? "-"} | ${que}`
-  // Lo resuelto con reglas no gasta tokens: se registra con el estimado de lo que habría costado preguntarlo.
-  if (done.length) await logAlgorithm({ householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "categorizar", evitados: tokensFor("categorizar", `${catsTxt}\n${items.filter((x) => done.some((d) => d.i === x.i)).map((x) => line(x)).join("\n")}`) })
-  if (!pending.length) return done
-  try {
-    const { object } = await aiObject({
-      householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "categorizar",
-      schema: z.object({ items: z.array(z.object({ i: z.number(), categoria: z.string().nullable(), hormiga: z.boolean().nullable(), razon: z.string() })) }),
-      prompt: `${catsTxt}\nGASTOS (i | descripción | valor | veces en el mes | categoría probable según las reglas de la persona, úsala si encaja | qué decidir):\n${pending.map((p) => line(p, p.cat, [p.askCat && "categoria", p.askH && "hormiga"].filter(Boolean).join("+"))).join("\n")}`,
-    })
-    const ai = object.items.flatMap((x): ClassifyOut[] => {
-      const p = pending.find((y) => y.i === x.i)
-      if (!p) return []
-      const aiCat = cats.find((c) => c.nombre.toLowerCase() === (x.categoria ?? "").toLowerCase())?.id ?? null
-      return [{ i: x.i, category_id: p.askCat ? aiCat : p.category_id, hormiga: p.askH ? x.hormiga : null, razon: x.razon.slice(0, 80), src: "ia" }]
-    })
-    return [...done, ...ai]
-  } catch { return done.length ? done : null }
+  let ctx
+  try { ctx = await requireCan("registrarPropio") } catch { return null }
+  if (!Array.isArray(items)) return null
+  const clean = items.slice(0, 60).map((x, j) => ({ i: Number.isFinite(+x?.i) ? +x.i : j, descripcion: String(x?.descripcion ?? "").slice(0, 200), valor: Math.max(0, +x?.valor || 0), veces_mes: Math.max(0, Math.round(+x?.veces_mes || 0)) }))
+  const r = await classifyWith(await supabaseServer(), { householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id }, clean)
+  return r?.out ?? null
 }
 
 /** Revisa con IA los gastos del mes sin veredicto de hormiga (reviewMonth de la v4), en lotes de 40. */
@@ -186,7 +162,8 @@ export async function readReceipt(fd: FormData): Promise<{ ok: true; valor: numb
 // ── Textos con IA ──
 /** Reescribe el mensaje de cobro para WhatsApp (cobroIA de la v4). */
 export async function improveCobro(msg: string, tono: "amable" | "directo" | "firme"): Promise<{ ok: boolean; text: string }> {
-  const ctx = await requireRole("viewer")
+  let ctx
+  try { ctx = await requireCan("registrarPropio") } catch (e) { return { ok: false, text: (e as Error).message } }
   if (!["amable", "directo", "firme"].includes(tono)) tono = "amable"
   msg = String(msg ?? "")
   try {
@@ -197,7 +174,8 @@ export async function improveCobro(msg: string, tono: "amable" | "directo" | "fi
 
 /** Plan para la próxima prima (priIA de la v4). */
 export async function primaPlan(data: { prima: number; deudas: { nombre: string; saldo: number; interes_mensual: number }[]; tarjetas: number; metas: { nombre: string; falta: number }[]; disponible: number; basicos: number }): Promise<{ ok: boolean; msg?: string; plan?: { resumen: string; pasos: string[]; porcentajes: { deudas: number; ahorro: number; metas: number; gusto: number } } }> {
-  const ctx = await requireRole("viewer")
+  let ctx
+  try { ctx = await requireCan("registrarPropio") } catch (e) { return { ok: false, msg: (e as Error).message } }
   try {
     const { object } = await aiObject({
       householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "prima",
@@ -214,7 +192,9 @@ export async function primaPlan(data: { prima: number; deudas: { nombre: string;
 
 /** Frase libre en Inicio cuando las reglas no entienden (EXTRA_FORM.nl de la v4). */
 export async function parseNL(text: string): Promise<{ ok: boolean; tipo?: "gasto" | "ingreso"; valor?: number; descripcion?: string; fecha?: string; category_id?: string | null }> {
-  const ctx = await requireRole("editor")
+  let ctx
+  try { ctx = await requireCan("registrarPropio") } catch { return { ok: false } }
+  text = String(text ?? "")
   const ia = await aiSettings(ctx.book.id)
   if (ia.on === false) return { ok: false }
   const cats = await catalog(ctx.book.id)

@@ -45,6 +45,8 @@ export interface CsvRow {
   category_id: string | null
   /** ¿Se importa? Por defecto los débitos (valores negativos); si no hay negativos, todas. */
   incl: boolean
+  /** Entrada de plata (valor positivo en un extracto que sí trae negativos): se importa como ingreso extra. */
+  abono?: boolean
 }
 
 export type CsvResult = { rows: CsvRow[]; skipped: number; err?: undefined } | { err: string; rows?: undefined; skipped?: undefined }
@@ -91,6 +93,35 @@ export function parseCSV(txt: string, rules: KeywordRuleIn[]): CsvResult {
     out.push({ fecha: f, descripcion: de, valor: v, category_id: classify(de, rules), incl: v < 0 })
   }
   if (!out.some((o) => o.valor < 0)) out.forEach((o) => (o.incl = true))
+  else out.forEach((o) => (o.abono = o.valor > 0))
   out.forEach((o) => (o.valor = Math.abs(o.valor)))
   return { rows: out, skipped }
+}
+
+/** Hash corto y estable (FNV-1a de 32 bits, en base 36). */
+function fnv(t: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return h.toString(36)
+}
+
+/**
+ * Id estable de un movimiento importado: `csv:` + hash de fecha, descripción, valor y si es entrada, más `n` (cuántas
+ * veces se repitió antes ese mismo movimiento en el archivo: dos cafés iguales el mismo día son dos movimientos).
+ * Subir el mismo extracto otra vez da los mismos ids, y el índice único de la base no deja duplicarlos.
+ */
+export function csvExternalId(r: Pick<CsvRow, "fecha" | "descripcion" | "valor" | "abono">, n = 0): string {
+  const d = r.descripcion.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim()
+  return `csv:${fnv(`${r.fecha}|${d}|${Math.round(Math.abs(r.valor) * 100)}|${r.abono ? "+" : "-"}`)}:${n}`
+}
+
+/** Ids estables de todas las filas de un extracto (las repetidas llevan 0, 1, 2… en el orden del archivo). */
+export function csvExternalIds(rows: Pick<CsvRow, "fecha" | "descripcion" | "valor" | "abono">[]): string[] {
+  const seen = new Map<string, number>()
+  return rows.map((r) => {
+    const base = csvExternalId(r, 0)
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    return n ? csvExternalId(r, n) : base
+  })
 }

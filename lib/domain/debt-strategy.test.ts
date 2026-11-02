@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { expectClose, scenario } from "./__tests__/adapt"
-import { byAvalancha, byBolaNieve, debtsFrom, debtStrategy, simAbono, simDebts, type DebtSimResult } from "./debt-strategy"
+import { byAvalancha, byBolaNieve, cardDebt, CARD_PREFIX, debtsFrom, debtStrategy, simAbono, simDebts, type DebtSimResult } from "./debt-strategy"
+import { tarjetaPagoMes, tarjetasDeuda } from "./cards"
+import type { CreditCardIn } from "./types"
 
 const HOY = "2026-10-31"
 
@@ -43,4 +45,36 @@ describe("simulador de abono = bloque de V.estrategia de la v4", () => {
         expectClose(r.despues, v4.e1)
         expect(r.ahorroIntereses).toBeCloseTo(v4.ah, 6)
       })
+})
+
+describe("simulador con tarjetas de crédito (v5)", () => {
+  const sc = scenario(HOY)
+  const tc: CreditCardIn = { id: "visa", nombre: "Visa", corte: 25, pago: 10, tasa: 2.5, cupo: 8_000_000, purchases: [
+    { id: "a", fecha: "2026-08-10", valor: 2_400_000, cuotas: 12 },
+    { id: "b", fecha: "2026-10-28", valor: 300_000, cuotas: 1 },
+  ] }
+  it("la tarjeta entra con su saldo, su pago del mes y la tasa ponderada", () => {
+    const d = cardDebt(tc, HOY)!
+    expect(d.id).toBe(CARD_PREFIX + "visa")
+    expect(d.s).toBeCloseTo(tarjetasDeuda([tc], HOY), 6)
+    expect(d.c).toBeCloseTo(tarjetaPagoMes(tc, HOY), 6)
+    // La compra a una cuota no causa intereses: la tasa queda por debajo de la de la tarjeta.
+    expect(d.i).toBeGreaterThan(0)
+    expect(d.i).toBeLessThan(0.025)
+    expect(cardDebt({ ...tc, purchases: [] }, HOY)).toBeNull()
+  })
+  it("sin tarjetas el resultado es el de la v4; con tarjeta se agrega al orden", () => {
+    const sin = debtsFrom(sc.book.loans, sc.book.contacts, sc.book.entities, HOY)
+    const con = debtsFrom(sc.book.loans, sc.book.contacts, sc.book.entities, HOY, [tc])
+    expect(con.length).toBe(sin.length + 1)
+    const r = debtStrategy(sc.book.loans, sc.book.contacts, sc.book.entities, 300_000, HOY, [tc])!
+    expect(r.avalancha.ord).toContain(CARD_PREFIX + "visa")
+    expect(r.avalancha.pay[CARD_PREFIX + "visa"]).toBeGreaterThan(0)
+    expect(r.base.m).toBeLessThan(600)
+  })
+  it("solo una tarjeta (sin préstamos) también se simula", () => {
+    const r = debtStrategy([], [], [], 200_000, HOY, [tc])!
+    expect(r.avalancha.m).toBeLessThanOrEqual(r.base.m)
+    expect(r.base.ti).toBeGreaterThanOrEqual(r.avalancha.ti)
+  })
 })

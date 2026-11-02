@@ -1,5 +1,15 @@
 import { expect, test } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
+import { QA, admin } from "./qa"
+
+async function qaBook() {
+  const sb = admin()
+  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = data.users.find((u) => u.email === QA.email)!.id
+  const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
+  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at").limit(1).single()
+  return { sb, uid, bookId: bk!.id }
+}
 
 test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", async ({ page }, info) => {
   test.setTimeout(180_000)
@@ -80,5 +90,48 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
 
   await tab("seguridad")
   await expect(page.getByText(/dos pasos/i).first()).toBeVisible()
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("alertas: el aviso que la persona apaga no llega a la campana (y al encenderlo sí)", async ({ page }, info) => {
+  test.setTimeout(150_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const { sb, uid, bookId } = await qaBook()
+  const nombre = `QA Arriendo ${Date.now() % 100000}`
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())
+  const en2 = new Date(`${hoy}T12:00:00`); en2.setDate(en2.getDate() + 2)
+  const pagos = page.getByRole("switch", { name: "Pagos por vencer y vencidos" })
+  const enCampana = async () => (await sb.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", uid).like("titulo", `%${nombre}%`)).count ?? 0
+  try {
+    // 1) Apagado (solo para esta persona) → abrir Mirai no crea el aviso
+    await page.goto("/ajustes?tab=alertas")
+    await expect(pagos).toBeVisible({ timeout: 30_000 })
+    if ((await pagos.getAttribute("aria-checked")) === "true") { await pagos.click(); await expect(pagos).toHaveAttribute("aria-checked", "false") }
+    await expect.poll(async () => (await sb.from("notification_rules").select("notif").eq("user_id", uid).eq("book_id", bookId).maybeSingle()).data?.notif, { timeout: 15_000 }).toMatchObject({ pagos: false })
+    await sb.from("fixed_expenses").insert({ book_id: bookId, nombre, valor: 900000, frec: "mensual", dia: en2.getDate(), inicio: hoy, created_by: uid })
+    await page.goto("/inicio")
+    await page.waitForTimeout(7000) // los avisos de la app se actualizan ~2,5 s después de abrir
+    expect(await enCampana()).toBe(0)
+    await page.getByRole("button", { name: "Notificaciones" }).first().click()
+    // Solo dentro de la campana (el nombre sí sale en Inicio, en Próximos pagos).
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await expect(page.getByRole("dialog").getByText(nombre)).toHaveCount(0)
+    await shot(page, "alertas-apagado-campana", info.project.name)
+
+    // 2) Encendido → el aviso aparece en la campana
+    await page.goto("/ajustes?tab=alertas")
+    await pagos.click()
+    await expect(pagos).toHaveAttribute("aria-checked", "true")
+    await page.goto("/inicio")
+    await expect.poll(enCampana, { timeout: 30_000 }).toBeGreaterThan(0)
+    await page.reload()
+    await page.getByRole("button", { name: "Notificaciones" }).first().click()
+    await expect(page.locator('[data-kind="pago"]').filter({ hasText: nombre }).first()).toBeVisible({ timeout: 20_000 })
+  } finally {
+    await sb.from("fixed_expenses").delete().eq("book_id", bookId).eq("nombre", nombre)
+    await sb.from("notifications").delete().eq("user_id", uid).like("titulo", `%${nombre}%`)
+    await sb.from("notification_rules").update({ notif: null }).eq("user_id", uid).eq("book_id", bookId)
+  }
   expect(errs, errs.join("\n")).toEqual([])
 })

@@ -12,7 +12,7 @@ import { createClient } from "@/utils/supabase/client"
 import { FEATURES, ahorroAnual, can, precio, type PremiumFeature } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 
-export type PlanRow = { id: string; nombre: string; descripcion: string; precio_mes: number; precio_anio: number; funciones: string[]; anuncios: boolean; limites: { libros?: number; personas?: number }; destacado: boolean; orden: number; activo: boolean; publico: boolean }
+export type PlanRow = { id: string; nombre: string; descripcion: string; precio_mes: number; precio_anio: number; funciones: string[]; anuncios: boolean; limites: { libros?: number; personas?: number; automatizaciones?: number }; destacado: boolean; orden: number; activo: boolean; publico: boolean }
 
 /** Planes visibles en /planes (los edita el administrador en la consola). */
 export function usePlans() {
@@ -66,14 +66,18 @@ export function PremiumUpsell({ feature, compact }: { feature: PremiumFeature; c
   )
 }
 
-/** Muestra la sección solo si el plan del hogar incluye la función; si no, su encabezado y la invitación. */
-export function PremiumGate({ feature, section, title, children }: { feature: PremiumFeature; section: string; title: string; children: React.ReactNode }) {
+/**
+ * Muestra la sección solo si el plan del hogar incluye la función; si no, su encabezado y la invitación.
+ * `free`: lo que sí sirve en cualquier plan dentro de esa sección (p. ej. traer el respaldo de la v4 en Importar).
+ */
+export function PremiumGate({ feature, section, title, children, free }: { feature: PremiumFeature; section: string; title: string; children: React.ReactNode; free?: React.ReactNode }) {
   const { plan } = useApp()
   if (can(plan, feature)) return children
   return (
     <div className="grid gap-6">
       <PageHeader id={section} title={title} noHelp />
       <PremiumUpsell feature={feature} />
+      {free}
     </div>
   )
 }

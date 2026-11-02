@@ -158,7 +158,14 @@ export async function importV4(sb: SB, bookId: string, householdId: string, S: a
   await ins("loan_payments", loanPays)
 
   // ── Patrimonio, inversiones, metas, calendario
-  await ins("assets", (S.activos ?? []).map((a: any) => ({ book_id: bookId, cod: String(a.cod ?? "1995"), nombre: a.nombre, valor: n(a.valor), currency: a.moneda || "COP" })))
+  // Id nuevo de cada activo: los bienes de la renta quedan enlazados (asset_id) y no se cuentan dos veces en el patrimonio.
+  const assetMap = new Map<string, string>(), assetByName = new Map<string, string>()
+  await ins("assets", (S.activos ?? []).map((a: any) => {
+    const id = uid()
+    if (a.id) assetMap.set(a.id, id)
+    if (a.nombre && !assetByName.has(lc(a.nombre))) assetByName.set(lc(a.nombre), id)
+    return { id, book_id: bookId, cod: String(a.cod ?? "1995"), nombre: a.nombre, valor: n(a.valor), currency: a.moneda || "COP" }
+  }))
   await ins("liabilities", (S.pasivos ?? []).map((a: any) => ({ book_id: bookId, cod: String(a.cod ?? "2895"), nombre: a.nombre, valor: n(a.valor), currency: a.moneda || "COP" })))
   await ins("investments", (S.inversiones ?? []).map((x: any) => ({ book_id: bookId, tipo: ["cdt", "ahorro", "fondo", "acciones", "cripto", "otro"].includes(x.tipo) ? x.tipo : "otro",
     nombre: x.nombre, entity_id: ent((cfg.entidades ?? []).find((e: any) => e.id === x.entidad)?.nombre), capital: n(x.capital), tasa: n(x.tasa), inicio: x.inicio,
@@ -210,7 +217,8 @@ export async function importV4(sb: SB, bookId: string, householdId: string, S: a
   }
   await ins("tax_assets", (S.bienes ?? []).map((b: any) => ({ book_id: bookId, tipo: ["inmueble", "vehiculo", "cuenta", "inversion", "cripto", "exterior", "cobrar", "otro"].includes(b.tipo) ? b.tipo : "otro",
     nombre: b.nombre, ident: b.ident ?? "", entidad: b.entidad ?? "", costo: n(b.costo), avaluo: n(b.avaluo), valor31: n(b.valor31), fecha_adq: b.fechaAdq || null,
-    member_id: memberMap.get(b.duenio) ?? titularId ?? null, pct: Math.min(100, Math.max(1, n(b.pct) || 100)), predial: b.predial ? n(b.predial) : null, imp_veh: b.impVeh ? n(b.impVeh) : null, soat: b.soat ? n(b.soat) : null })))
+    member_id: memberMap.get(b.duenio) ?? titularId ?? null, pct: Math.min(100, Math.max(1, n(b.pct) || 100)), predial: b.predial ? n(b.predial) : null, imp_veh: b.impVeh ? n(b.impVeh) : null, soat: b.soat ? n(b.soat) : null,
+    asset_id: (b.aid && assetMap.get(b.aid)) || (b.nombre && assetByName.get(lc(b.nombre))) || null })))
 
   return rep
 }

@@ -33,3 +33,27 @@ test("asistentes: categoría sugerida (con respaldo sin IA), entidad por NIT, le
   await expect(page.getByText("Tu salario mensual")).toBeVisible({ timeout: 30_000 })
   expect(errs, errs.join("\n")).toEqual([])
 })
+
+test("probar la conexión de la IA queda en el uso de IA (ai_usage, función prueba)", async ({ page }) => {
+  // Llama de verdad al proveedor del hogar: solo con E2E_AI=1 y un proveedor propio configurado en el hogar de QA.
+  test.skip(!process.env.E2E_AI, "Solo con E2E_AI=1: llama al proveedor de IA del hogar")
+  test.setTimeout(120_000)
+  const { admin, QA } = await import("./qa")
+  await login(page)
+  const desde = new Date(Date.now() - 5_000).toISOString()
+  await page.goto("/ajustes?tab=ia")
+  const probar = page.getByRole("button", { name: "Probar conexión" }).first()
+  await expect(probar).toBeVisible({ timeout: 30_000 })
+  await probar.click()
+  const toast = page.getByText(/Conexión exitosa|La prueba falló/).first()
+  await expect(toast).toBeVisible({ timeout: 60_000 })
+  const plataforma = await page.getByText(/no hace falta probarla/).isVisible().catch(() => false)
+  if (plataforma) return // la IA de Mirai no se prueba (no gasta sus créditos)
+  const sb = admin()
+  const { data: users } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = users.users.find((u) => u.email === QA.email)!.id
+  await expect.poll(async () => {
+    const { data } = await sb.from("ai_usage").select("id").eq("user_id", uid).eq("feature", "prueba").gte("created_at", desde)
+    return data?.length ?? 0
+  }, { timeout: 20_000 }).toBeGreaterThan(0)
+})

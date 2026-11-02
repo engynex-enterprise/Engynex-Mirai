@@ -9,11 +9,12 @@ export type PagoModo = "cuotas" | "unico" | "libre"
 /** Qué dato del interés se conoce. */
 export type InteresModo = "no" | "tasa" | "cuota"
 /**
- * Quién presta (o a quién le prestaste):
- * ent = banco o entidad · casa = casa de empeño (entidad o nombre escrito) · prov = tienda o almacén (proveedor)
- * ct = una persona (contacto guardado o nuevo) · nombre = solo un nombre (opcional) · libre = entidad o persona.
+ * Quién presta (o a quién le prestaste). Siempre es un registro que se escoge (nunca un texto suelto), así la próxima
+ * vez se reconoce y no se repite:
+ * ent = banco o entidad · casa = casa de empeño o compraventa (entidad) · prov = tienda o almacén (proveedor)
+ * ct = una persona (contacto guardado o nuevo; en el gota a gota basta el apodo) · libre = entidad o persona.
  */
-export type QuienModo = "ent" | "casa" | "prov" | "ct" | "nombre" | "libre"
+export type QuienModo = "ent" | "casa" | "prov" | "ct" | "libre"
 export type SistemaT = "frances" | "aleman" | "simple" | "americano" | "sin"
 
 export interface TipoDef {
@@ -113,6 +114,8 @@ export interface Campos {
   /** Lectura con foto (extracto, pagaré o factura) con IA. */
   foto: boolean
   quien: QuienModo
+  /** "Alguien nuevo" solo pide el nombre (o apodo) y el celular (gota a gota). */
+  ctCorto: boolean
   /** Chips de clase de crédito (banco). */
   tipoCredito: boolean
   /** "¿Para qué fue?" / "¿Qué compraste?". El empeño usa el objeto como concepto. */
@@ -157,7 +160,7 @@ const FRECS_TIPO: Record<LoanTipo, string[]> = {
   gota: ["diariohab", "diario", "semanal"], presto: TODAS, vendi: ["mensual", "quincenal", "semanal"], otro: TODAS,
 }
 const QUIEN_TIPO: Record<LoanTipo, QuienModo> = {
-  banco: "ent", empeno: "casa", fiado: "prov", persona: "ct", cuotas: "prov", gota: "nombre", presto: "ct", vendi: "ct", otro: "libre",
+  banco: "ent", empeno: "casa", fiado: "prov", persona: "ct", cuotas: "prov", gota: "ct", presto: "ct", vendi: "ct", otro: "libre",
 }
 
 /** Qué campos se muestran para el tipo, la forma de pago y el modo de interés escogidos. */
@@ -172,6 +175,7 @@ export function camposLoan(tipo: LoanTipo, kind: LoanKindT, st: { pago?: PagoMod
   return {
     foto: tipo === "banco" || tipo === "cuotas" || tipo === "otro",
     quien: QUIEN_TIPO[tipo],
+    ctCorto: tipo === "gota",
     tipoCredito: tipo === "banco",
     concepto: tipo !== "empeno",
     inicial: tipo === "cuotas",
@@ -208,8 +212,6 @@ export interface LoanFormState {
   contact?: string | null
   nombreNuevo?: string
   prov?: string | null
-  /** Nombre escrito (casa de empeño sin entidad, prestamista). */
-  acreedor?: string
   monto: number
   inicial?: number
   pago?: PagoModo
@@ -232,14 +234,14 @@ export function faltantesLoan(s: LoanFormState): Faltante[] {
   const c = camposLoan(s.tipo, s.kind, s)
   const pago = s.pago && c.pagos.includes(s.pago) ? s.pago : c.pagos[0]
   const interes = s.interes && c.intereses.includes(s.interes) ? s.interes : c.intereses[0]
+  const nuevo = s.tipo === "gota" ? "Escribe el nombre o el apodo de quien te prestó" : "Escribe el nombre de la persona"
   const persona = (q: "ex" | "new" | "ent" | undefined) =>
-    q === "new" ? (!s.nombreNuevo?.trim() ? "Escribe el nombre de la persona" : "") : q === "ent" ? (!s.entity ? "Escoge el banco o la entidad" : "") : !s.contact ? "Escoge el contacto" : ""
+    q === "new" ? (!s.nombreNuevo?.trim() ? nuevo : "") : q === "ent" ? (!s.entity ? "Escoge el banco o la entidad" : "") : !s.contact ? "Escoge el contacto" : ""
   const quienMsg = c.quien === "ent" ? (!s.entity ? "Escoge el banco o la entidad" : "")
-    : c.quien === "casa" ? (!s.entity && !s.acreedor?.trim() ? "Escoge o escribe la casa de empeño" : "")
+    : c.quien === "casa" ? (!s.entity ? "Escoge o crea la casa de empeño" : "")
     : c.quien === "prov" ? (!s.prov ? (s.tipo === "cuotas" ? "Escoge el almacén" : "Escoge la tienda o el negocio") : "")
     : c.quien === "ct" ? persona(s.quien === "ent" ? "ex" : s.quien)
-    : c.quien === "libre" ? persona(s.kind === "cobrar" && s.quien === "ent" ? "ex" : s.quien)
-    : ""
+    : persona(s.kind === "cobrar" && s.quien === "ent" ? "ex" : s.quien)
   if (quienMsg) out.push({ campo: "quien", msg: quienMsg })
   if (c.prenda === "si" && !s.obj?.trim()) out.push({ campo: "obj", msg: "Escribe qué objeto dejaste" })
   const financiado = s.monto - (c.inicial ? s.inicial || 0 : 0)
@@ -251,6 +253,13 @@ export function faltantesLoan(s: LoanFormState): Faltante[] {
   if (interes === "tasa" && !((s.tasa ?? 0) > 0) && !((s.ea ?? 0) > 0)) out.push({ campo: "tasa", msg: "Escribe el interés" })
   return out
 }
+
+/** Dónde queda guardado quien presta (o a quien le prestaste), según el tipo de registro. */
+export const DONDE = {
+  ent: "Queda en Contactos › Bancos y entidades.",
+  prov: "Queda en Proveedores.",
+  ct: "Queda en Contactos.",
+} as const
 
 export interface TextosLoan {
   titulo: string
@@ -287,7 +296,7 @@ export function textosLoan(tipo: LoanTipo | null, kind: LoanKindT, st: { frec?: 
   const base: TextosLoan = {
     titulo: C ? "Registrar un préstamo que hiciste" : "Registrar una deuda",
     quien: C ? "¿A quién le prestaste?" : "¿Quién te prestó?",
-    quienHint: "",
+    quienHint: DONDE.ct,
     monto: C ? "¿Cuánto le prestaste?" : "¿Cuánto te prestaron?",
     concepto: "¿Para qué fue?", conceptoPh: "Ej. Arreglo del carro",
     inicio: C ? "¿Cuándo le prestaste?" : "Fecha del préstamo",
@@ -307,20 +316,20 @@ export function textosLoan(tipo: LoanTipo | null, kind: LoanKindT, st: { frec?: 
   }
   switch (tipo) {
     case "banco": return {
-      ...base, titulo: "Registrar un crédito", quien: "¿Qué banco o entidad te prestó?", quienHint: "Banco, cooperativa, fondo de empleados o financiera.",
+      ...base, titulo: "Registrar un crédito", quien: "¿Qué banco o entidad te prestó?", quienHint: `Banco, cooperativa, fondo de empleados o financiera. ${DONDE.ent}`,
       monto: "¿Cuánto te prestaron?", montoHint: "El valor que te desembolsaron, sin intereses.", inicio: "Fecha del desembolso",
       plazo: st.frec === "quincenal" ? "Plazo en quincenas" : "Plazo en meses", cuota: st.frec === "quincenal" ? "Cuota quincenal" : "Cuota mensual",
       interes: "¿Qué dato tienes del crédito?", interesItems: { cuota: { label: "Sé la cuota", desc: "La que aparece en tu extracto o en la app del banco" }, tasa: { label: "Sé la tasa", desc: "Efectiva anual (E.A.) o mensual" } },
       hist: "¿Ya has pagado cuotas?", recibo: "Resumen del crédito", quienRecibo: "Entidad",
     }
     case "empeno": return {
-      ...base, titulo: "Registrar un empeño", quien: "Casa de empeño o compraventa", quienHint: "Escógela de tus entidades o escribe su nombre.",
+      ...base, titulo: "Registrar un empeño", quien: "Casa de empeño o compraventa", quienHint: `Escógela de la lista o créala con su nombre: la próxima vez solo la escoges. ${DONDE.ent}`,
       monto: "¿Cuánto te prestaron sobre el objeto?", montoHint: "Lo que te entregaron, no lo que vale el objeto.", inicio: "Fecha del empeño",
       plazo: "¿Por cuántos meses?", hist: "¿Ya has pagado intereses?", boton: "Registrar empeño", toast: "Empeño registrado.",
       recibo: "Resumen del empeño", quienRecibo: "Casa de empeño",
     }
     case "fiado": return {
-      ...base, titulo: "Registrar un fiado", quien: "Tienda o negocio", quienHint: "Escoge el negocio de tus proveedores o escribe el nombre para agregarlo.",
+      ...base, titulo: "Registrar un fiado", quien: "Tienda o negocio", quienHint: `Escoge el negocio de tus proveedores o escribe el nombre para agregarlo. ${DONDE.prov}`,
       monto: "¿Cuánto fue lo que te fiaron?", montoHint: "El valor de la compra fiada.", concepto: "¿Qué compraste?", conceptoPh: "Ej. Mercado de la semana",
       inicio: "Fecha de la compra", interes: "¿Te cobran algún recargo?", interesItems: { no: { label: "No, solo lo que compré" }, tasa: { label: "Sí, un porcentaje al mes" } },
       boton: "Registrar fiado", toast: "Fiado registrado.", recibo: "Resumen del fiado", quienRecibo: "Te fió",
@@ -331,14 +340,14 @@ export function textosLoan(tipo: LoanTipo | null, kind: LoanKindT, st: { frec?: 
       cuota: `¿De cuánto es cada cuota?`,
     }
     case "cuotas": return {
-      ...base, titulo: "Registrar una compra a cuotas", quien: "Almacén o tienda", quienHint: "Escógelo de tus proveedores o escribe el nombre para agregarlo.",
+      ...base, titulo: "Registrar una compra a cuotas", quien: "Almacén o tienda", quienHint: `Escógelo de tus proveedores o escribe el nombre para agregarlo. ${DONDE.prov}`,
       monto: "Valor de la compra", montoHint: "El precio de lo que compraste, de contado.", concepto: "¿Qué compraste?", conceptoPh: "Ej. Nevera, celular, colchón",
       inicio: "Fecha de la compra", interes: "¿Qué dato tienes?",
       interesItems: { cuota: { label: "Sé el valor de la cuota" }, tasa: { label: "Sé la tasa de interés" }, no: { label: "Sin intereses", desc: "Pagas el valor en partes iguales" } },
       boton: "Registrar compra", toast: "Compra a cuotas registrada.", recibo: "Resumen de la compra", quienRecibo: "Almacén",
     }
     case "gota": return {
-      ...base, titulo: "Registrar un préstamo gota a gota", quien: "¿Cómo se llama o cómo le dicen?", quienHint: "Opcional: para reconocerlo en tu lista.",
+      ...base, titulo: "Registrar un préstamo gota a gota", quien: "¿Quién te prestó?", quienHint: `Basta con el nombre o como le dicen (ej. Don Jaime). ${DONDE.ct}`,
       inicio: "¿Cuándo te prestaron?", plazo: diaria ? "¿Cuántos días de pago?" : "¿Cuántas cuotas?", cuota: diaria ? "¿Cuánto pagas cada día?" : `¿Cuánto pagas cada ${per}?`,
       interes: "¿Qué te dijeron?", interesItems: { cuota: { label: "Sé cuánto pago en cada cuota" }, tasa: { label: "Sé el porcentaje" } },
       quienRecibo: "Prestamista",
@@ -351,7 +360,7 @@ export function textosLoan(tipo: LoanTipo | null, kind: LoanKindT, st: { frec?: 
       recibo: "Resumen de la venta fiada", quienRecibo: "Cliente",
     }
     case "otro": return {
-      ...base, quien: C ? "¿Quién te debe?" : "¿Con quién es la deuda?", monto: C ? "¿Cuánto te deben?" : "¿Cuánto debes?",
+      ...base, quien: C ? "¿Quién te debe?" : "¿Con quién es la deuda?", quienHint: C ? DONDE.ct : "Una persona queda en Contactos; un banco o una entidad, en Contactos › Bancos y entidades.", monto: C ? "¿Cuánto te deben?" : "¿Cuánto debes?",
       concepto: C ? "¿De qué es?" : "¿De qué es la deuda?", conceptoPh: "Ej. Matrícula del colegio", inicio: "¿Desde cuándo?",
       quienRecibo: C ? "Te debe" : "Le debes a",
     }

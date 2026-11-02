@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
-import { addDaysIso, evalCondition, fill, resolveMonto, runGraph, variables } from "./engine"
+import { addDaysIso, describeAction, evalCondition, fill, resolveMonto, resolveParams, runGraph, variables } from "./engine"
+import { queuedEventFor, type QueuedEvent } from "./detect"
+import { validateGraph } from "./schema"
+import { avisoDeDisparador, destinatarios } from "./notify-rules"
+import type { BookData } from "@/lib/domain/types"
 import { TEMPLATES } from "./templates"
 import type { ActionAdapter, FlowEdge, FlowNode, Graph, NodeKind, TriggerEvent } from "./types"
 import { CATALOG } from "./catalog"
@@ -129,5 +133,85 @@ describe("motor de automatizaciones", () => {
       expect(r.status, t.key).not.toBe("error")
       expect(r.steps.length, t.key).toBeGreaterThan(1)
     }
+  })
+})
+
+describe("eventos y acciones nuevas (cuotas, tarjetas, suscripciones, agenda)", () => {
+  const book = {
+    settings: { umbral: 15000, corte_q: 15 }, categories: [], incomes: [], extraIncomes: [], expenses: [], fixedExpenses: [], subscriptions: [], loans: [],
+    creditCards: [], assets: [], liabilities: [], investments: [], goals: [], calendarEvents: [], contacts: [], entities: [],
+  } as unknown as BookData
+  const q = (tipo: string, datos: Record<string, unknown>, tabla = "loan_payments"): QueuedEvent => ({ id: "q1", tipo, tabla, row_id: "r1", datos })
+
+  it("pagar una cuota dispara “Se paga una cuota” y respeta el filtro Le debo / Me deben", () => {
+    const cobro = q("cuota", { valor: 350_000, descripcion: "Préstamo a Carlos", persona: "Carlos", dir: "cobrar", fecha: "2026-11-10", created_by: "u1" })
+    const todas = queuedEventFor(n("t", "cuota", { dir: "todas" }), cobro, book, "2026-11-10")
+    expect(todas).toMatchObject({ kind: "cuota", clave: "ev:q1", data: { monto: 350_000, persona: "Carlos", dir: "cobrar", autor: "u1", tabla: "loan_payments" } })
+    expect(queuedEventFor(n("t", "cuota", { dir: "cobrar" }), cobro, book, "2026-11-10")).not.toBeNull()
+    expect(queuedEventFor(n("t", "cuota", { dir: "pagar" }), cobro, book, "2026-11-10")).toBeNull()
+    expect(queuedEventFor(n("t", "gasto"), cobro, book, "2026-11-10")).toBeNull()
+  })
+
+  it("compra con tarjeta (por tarjeta), suscripción (cobrada o nueva) y recordatorio", () => {
+    const compra = q("compra_tarjeta", { valor: 180_000, descripcion: "Zapatos", tarjeta: "Visa", card_id: "visa" }, "card_purchases")
+    expect(queuedEventFor(n("t", "compra_tarjeta"), compra, book, "2026-11-10")?.data.tarjeta).toBe("Visa")
+    expect(queuedEventFor(n("t", "compra_tarjeta", { card_id: "visa" }), compra, book, "2026-11-10")).not.toBeNull()
+    expect(queuedEventFor(n("t", "compra_tarjeta", { card_id: "master" }), compra, book, "2026-11-10")).toBeNull()
+    const cobrada = q("suscripcion", { valor: 44_900, descripcion: "Netflix", evento: "cobrada" }, "subscriptions")
+    expect(queuedEventFor(n("t", "suscripcion", { evento: "cobrada" }), cobrada, book, "2026-11-10")).not.toBeNull()
+    expect(queuedEventFor(n("t", "suscripcion", { evento: "todas" }), cobrada, book, "2026-11-10")).not.toBeNull()
+    expect(queuedEventFor(n("t", "suscripcion", { evento: "nueva" }), cobrada, book, "2026-11-10")).toBeNull()
+    expect(queuedEventFor(n("t", "recordatorio"), q("recordatorio", { valor: 0, descripcion: "SOAT" }, "calendar_events"), book, "2026-11-10")?.data.descripcion).toBe("SOAT")
+  })
+
+  it("“cuota pagada” avisa a quien la registró y registra un ingreso con el monto", async () => {
+    const g: Graph = {
+      nodes: [n("t", "cuota"), n("a", "aviso", { titulo: "Cuota de {persona}", mensaje: "{monto}", para: "autor" }), n("i", "crear_ingreso", { modo: "pct", pct: 100, descripcion: "Cobro a {persona}" })],
+      edges: [e("t", "a"), e("a", "i")],
+    }
+    const { adapter, calls } = spy()
+    const r = await runGraph(g, ev({ monto: 350_000, persona: "Carlos", autor: "u1" }, "cuota"), { adapter })
+    expect(r.status).toBe("ok")
+    expect(calls[0]).toMatchObject({ kind: "aviso", params: { titulo: "Cuota de Carlos", para: "autor" } })
+    expect(calls[1]).toMatchObject({ kind: "crear_ingreso", params: { monto: 350_000, descripcion: "Cobro a Carlos" } })
+  })
+
+  it("marcar un fijo pagado: con el valor del fijo (monto 0) o con el del disparador", () => {
+    const t = ev({ monto: 120_000 }, "pago_proximo")
+    expect(resolveParams(n("p", "pagar_fijo", { fixed_expense_id: "arr", valor: "fijo" }), t)).toMatchObject({ fixed_expense_id: "arr", monto: 0 })
+    expect(resolveParams(n("p", "pagar_fijo", { fixed_expense_id: "arr", valor: "monto" }), t)).toMatchObject({ monto: 120_000 })
+    const d = describeAction(n("p", "pagar_fijo"), { fixed_expense_id: "arr", monto: 0 }, { fijos: { arr: "Arriendo" } })
+    expect(d).toContain("Marcaría “Arriendo” como pagado")
+  })
+
+  it("validación: pagar un fijo exige elegirlo y “quien lo hizo” necesita un movimiento", () => {
+    const sinFijo: Graph = { nodes: [n("t", "programado"), n("p", "pagar_fijo")], edges: [e("t", "p")] }
+    expect(validateGraph(sinFijo).issues.map((i) => i.msg)).toContain("Elige el gasto fijo")
+    const autorProgramado: Graph = { nodes: [n("t", "programado"), n("a", "aviso", { titulo: "x", mensaje: "y", para: "autor" })], edges: [e("t", "a")] }
+    expect(validateGraph(autorProgramado).ok).toBe(false)
+    const autorCuota: Graph = { nodes: [n("t", "cuota"), n("a", "aviso", { titulo: "x", mensaje: "y", para: "autor" })], edges: [e("t", "a")] }
+    expect(validateGraph(autorCuota).ok).toBe(true)
+  })
+
+  it("los avisos de un disparador siguen la matriz de Ajustes › Alertas y llegan a quien toca", () => {
+    expect(avisoDeDisparador("pago_proximo")).toBe("pagos")
+    expect(avisoDeDisparador("presupuesto")).toBe("presupuesto")
+    expect(avisoDeDisparador("cuota", { dir: "cobrar" })).toBe("cobros")
+    expect(avisoDeDisparador("gasto")).toBeUndefined()
+    const casa = ["u1", "u2", "u3"]
+    expect(destinatarios(casa, { para: "hogar" })).toEqual(casa)
+    expect(destinatarios(casa, { para: "autor", autor: "u2" })).toEqual(["u2"])
+    expect(destinatarios(casa, { para: "u3" })).toEqual(["u3"])
+    // La persona ya no está: le llega a quien creó la automatización; si tampoco, a todo el hogar.
+    expect(destinatarios(casa, { para: "u9", creador: "u1" })).toEqual(["u1"])
+    expect(destinatarios(casa, { para: "autor", autor: null, creador: "u9" })).toEqual(casa)
+  })
+
+  it("las plantillas que repetirían avisos de Mirai vienen en pausa", () => {
+    const def = (k: string) => TEMPLATES.find((t) => t.key === k)!
+    expect(def("recordatorio-pagos").activo).toBe(false)
+    expect(def("presupuesto-80").activo).toBe(false)
+    expect(def("gasto-alto").activo).toBe(true)
+    for (const k of ["cuota-pagada", "tarjeta-grande", "suscripcion-cobrada", "debito-automatico"]) expect(def(k).porDefecto, k).toBe(false)
   })
 })

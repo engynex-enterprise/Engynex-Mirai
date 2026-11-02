@@ -19,7 +19,7 @@ const FUNCS = [
   ["autocat", "Categoría automática", "Elige la categoría mientras escribes el gasto."],
   ["hormiga", "Detectar gastos hormiga", "Marca los gastos pequeños y frecuentes."],
   ["ocr", "Leer fotos y documentos", "Facturas, extractos, pagarés y comprobantes."],
-  ["consejero", "Consejero IA", "Analiza si te alcanza antes de gastar o prestar."],
+  ["consejero", "Consejero IA", "Da su concepto sobre si te alcanza antes de gastar o prestar (también en el chat). Apagado, el análisis usa solo tus números."],
   ["asist", "Asistentes inteligentes", "Crear categorías, identificar bancos por NIT y detectar ciudades."],
 ] as const
 

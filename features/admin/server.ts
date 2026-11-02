@@ -361,7 +361,7 @@ export async function adminSystem() {
 }
 
 const Settings = z.object({
-  aviso_global: z.string().trim().max(300).optional(), aviso_tono: z.enum(["info", "warn", "ok"]).optional(), registro_abierto: z.boolean().optional(), limites_db: z.boolean().optional(),
+  aviso_global: z.string().trim().max(300).optional(), aviso_tono: z.enum(["info", "warn", "ok"]).optional(), registro_abierto: z.boolean().optional(), limites_db: z.boolean().optional(), premium_db: z.boolean().optional(),
   referidos_activo: z.boolean().optional(), referidos_plan: z.string().regex(/^[a-z0-9-]{2,30}$/).optional(), referidos_dias: z.number().int().min(1).max(365).optional(),
 })
 

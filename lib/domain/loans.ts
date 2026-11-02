@@ -56,6 +56,14 @@ export function addPeriod(inicio: string, frec: string, k: number, vence?: strin
     : addMonths(d, k)
 }
 
+/**
+ * Fecha programada de la cuota `k` de un préstamo. Si se pactó desde cuándo se empieza a pagar (`primera`), la cuota 1
+ * cae ese día y las demás cada periodo después; si no, la cuota 1 cae un periodo después del préstamo (como en la v4).
+ */
+export function fechaCuota(L: { inicio: string; frec: string; vence?: string | null; primera?: string | null }, k: number): Date {
+  return L.primera && L.frec !== "unico" ? addPeriod(L.primera, L.frec, k - 1) : addPeriod(L.inicio, L.frec, k, L.vence)
+}
+
 /** Cuota fija de una anualidad: S·i / (1 − (1+i)^−n). */
 export const annuity = (S: number, i: number, n: number): number => (n <= 0 ? S : i === 0 ? S / n : (S * i) / (1 - Math.pow(1 + i, -n)))
 
@@ -97,7 +105,7 @@ export interface LoanEngine {
   extraFut: number
 }
 
-type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null }
+type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null; primera?: string | null }
 
 /**
  * Simula el préstamo cuota a cuota aplicando los pagos registrados en orden de fecha.
@@ -135,7 +143,7 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
       const q = next()
       if (!q) continue
       S -= q.cap; k++; nRem--; intPag += q.int; pagado += q.valor
-      hist.push({ id: p.id, tipo: "cuota", n: k, fecha: iso(parseDate(p.fecha)), prog: iso(addPeriod(L.inicio, L.frec, k, L.vence)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+      hist.push({ id: p.id, tipo: "cuota", n: k, fecha: iso(parseDate(p.fecha)), prog: iso(fechaCuota(L, k)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
     } else {
       const v = Math.min(+p.valor || 0, S)
       if (v <= 0) continue
@@ -157,7 +165,7 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
     while (S > 0.5 && nRem > 0 && plan.length < 1200) {
       const q = next()!
       j++; S -= q.cap; nRem--
-      plan.push({ n: j, fecha: iso(addPeriod(L.inicio, L.frec, j, L.vence)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+      plan.push({ n: j, fecha: iso(fechaCuota(L, j)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
     }
     ;({ S, nRem, k, C, capF, base } = sv)
   }
@@ -188,11 +196,13 @@ export interface LoanPreviewInput {
   extra?: number | null
   /** Pago único: fecha pactada. */
   vence?: string | null
+  /** Fecha de la primera cuota, si no es un periodo después del préstamo. */
+  primera?: string | null
 }
 
 /** Vista previa al crear un préstamo: primera y última cuota, total, intereses, fecha final y tasa E.A. */
 export function previewLoan(p: LoanPreviewInput, today: DateInput) {
-  const L = { monto: p.monto, sistema: p.sistema, tasa: p.tasa, frec: p.frec, plazo: p.frec === "unico" ? 1 : p.plazo, inicio: p.inicio || iso(toDay(today)), payments: [], extra: p.extra || 0, vence: p.vence ?? null }
+  const L = { monto: p.monto, sistema: p.sistema, tasa: p.tasa, frec: p.frec, plazo: p.frec === "unico" ? 1 : p.plazo, inicio: p.inicio || iso(toDay(today)), payments: [], extra: p.extra || 0, vence: p.vence ?? null, primera: p.primera ?? null }
   const e = loanEngine(L, today)
   const first = e.plan[0]
   const last = e.plan[e.plan.length - 1]

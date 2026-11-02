@@ -71,6 +71,15 @@ describe("quickAnswer", () => {
     expect(quickAnswer("¿cómo van mis metas?", facts)).toContain("50 %")
     expect(quickAnswer("¿Cuánto me queda?", facts)).toContain("940.000") // 4M − 1,2M − 300k − 60k − 1,5M
   })
+  it("con las cifras del flujo integral responde lo mismo que el Balance (mes, tarjetas y patrimonio)", () => {
+    const f: ChatFacts = { ...facts, integral: { entra: 5_000_000, sale: 4_200_000, ahorro: 300_000, queda: 500_000, tengo: 20_000_000, debo: 8_000_000, patrimonio: 12_000_000, deuda_tarjetas: 800_000, pago_tarjetas_mes: 250_000, libre_mes: 400_000, colchon_meses: 1.5 } }
+    expect(quickAnswer("¿Cuánto me queda?", f)).toMatch(/entran \*\*\$\s5\.000\.000\*\*.*te sobran \*\*\$\s500\.000\*\*/)
+    expect(quickAnswer("¿Cuánto me queda?", { ...f, integral: { ...f.integral!, queda: -200_000 } })).toMatch(/te faltan \*\*\$\s200\.000\*\*/)
+    expect(quickAnswer("¿Cuánto debo en tarjetas?", f)).toContain("800.000")
+    expect(quickAnswer("¿Cuál es mi patrimonio?", f)).toContain("12.000.000")
+    // Sin las cifras integrales (hechos a mano) no inventa: esas preguntas van a la IA.
+    expect(quickAnswer("¿Cuál es mi patrimonio?", facts)).toBeNull()
+  })
   it("deja a la IA los consejos, decisiones y lo que no entiende", () => {
     expect(quickAnswer("¿Debería pagar primero la tarjeta o ahorrar?", facts)).toBeNull()
     expect(quickAnswer("Quiero comprar un celular de 2 millones", facts)).toBeNull()

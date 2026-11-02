@@ -31,7 +31,10 @@ import {
 } from "@/features/catalogs/hooks"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
 import { ProviderSelect } from "@/features/providers/provider-select"
-import { categoriaSugerida } from "@/lib/domain"
+import { categoriaSugerida, periodoTexto, sugerirPagoFijo } from "@/lib/domain"
+import { DEDUCIBLES } from "@/lib/domain/renta"
+import { useBookData } from "@/features/book/use-book-data"
+import { useCanEdit } from "@/components/app/app-context"
 import { isHormiga, localCat, localHormiga } from "./logic"
 import { classifyExpenses, readInvoice } from "@/features/ai/actions"
 import { useList } from "@/hooks/use-book-data"
@@ -46,6 +49,8 @@ const schema = z.object({
   payment_method_id: z.string().nullable(),
   provider_id: z.string().nullable(),
   usarFondo: z.boolean(),
+  /** Deducción de renta a la que puede servir (expenses.deducible); null = no aplica. */
+  deducible: z.string().nullable(),
 })
 type Values = z.infer<typeof schema>
 
@@ -90,6 +95,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const aiCache = useRef(new Map<string, { category_id: string | null; hormiga: boolean | null; razon: string }>())
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
+  const { data: book } = useBookData()
+  const canEdit = useCanEdit()
   const defaults = (cfg?.defaults ?? {}) as { cat?: string; medio?: string; quien?: string }
 
   const form = useForm<Values>({
@@ -98,11 +105,11 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       ? {
           descripcion: expense.descripcion, valor: Number(expense.valor), category_id: expense.category_id ?? "",
           hormigaMode: expense.hormiga_src === "manual" ? (expense.hormiga ? "si" : "no") : "auto",
-          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, usarFondo: false,
+          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, usarFondo: false, deducible: expense.deducible ?? null,
         }
       : {
           descripcion: preset?.descripcion ?? "", valor: 0, category_id: preset?.category_id || defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
-          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, usarFondo: true,
+          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, usarFondo: true, deducible: null,
         },
   })
   const { errors, isSubmitting } = form.formState
@@ -182,6 +189,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       hormiga_razon: v.hormigaMode === "auto" && aiH ? aiH.razon : null,
       cat_src: catManual && catSrc !== "ia" ? ("manual" as const) : catSrc,
       provider_id: v.provider_id,
+      deducible: v.deducible || null,
     }
     const { data, error } = await sb.from("expenses").upsert(row).select().single()
     if (error) return toast.error("No se pudo guardar el gasto", { description: error.message })
@@ -192,7 +200,27 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       if (fe) toast.error("El gasto se guardó, pero no se pudo descontar del fondo", { description: fe.message })
       else toast.success("Imprevisto registrado", { description: `Gasto registrado y pagado con tu fondo de emergencia. Te quedan ${fmtMoney(Number(queda))} en el fondo.` })
     } else {
-      toast.success(expense ? "Gasto actualizado" : isHormiga(data, cats, umbral) ? "Gasto hormiga registrado" : "Gasto registrado")
+      // ¿Es el pago de un gasto fijo pendiente (p. ej. el arriendo)? Se pregunta y se enlaza sin duplicar.
+      const sug = !expense && canEdit && book ? sugerirPagoFijo(data, book.fixedExpenses) : null
+      const titulo = expense ? "Gasto actualizado" : isHormiga(data, cats, umbral) ? "Gasto hormiga registrado" : "Gasto registrado"
+      if (!sug) toast.success(titulo)
+      else {
+        const cual = [sug.fixed.nombre, periodoTexto(sug.per)].filter(Boolean).join(" de ")
+        toast.success(titulo, {
+          description: `¿Es el pago de ${cual}? Si lo es, lo marcamos como pagado y no se cuenta dos veces.`,
+          duration: 12000,
+          action: { label: "Sí, es ese pago", onClick: async () => {
+            const { error: le } = await sb.rpc("link_expense_fixed", { p_expense: data.id, p_fixed: sug.fixed.id, p_periodo: sug.per })
+            if (le) return toast.error("No se pudo enlazar", { description: le.message })
+            qc.invalidateQueries({ queryKey: ["b", bookId] })
+            toast.success(`${sug.fixed.nombre} quedó pagado`, { description: "Usamos este gasto como el pago: no se cuenta dos veces.", action: { label: "Deshacer", onClick: async () => {
+              const { error: ue } = await sb.rpc("unlink_expense_fixed", { p_expense: data.id })
+              if (ue) return toast.error("No se pudo deshacer", { description: ue.message })
+              qc.invalidateQueries({ queryKey: ["b", bookId] })
+            } } })
+          } },
+        })
+      }
     }
     qc.invalidateQueries({ queryKey: ["b", bookId] })
     form.reset()
@@ -247,6 +275,14 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
                 )} />
               </FormField>
             </div>
+            <FormField label="¿Sirve para tu declaración de renta? (opcional)" htmlFor="g-deducible"
+              tip="Algunos gastos bajan el impuesto de renta: la medicina prepagada, los intereses del crédito de vivienda o del ICETEX. Márcalos y Mirai los suma en Declaración de renta."
+              hint={DEDUCIBLES.find((d) => d.value === w.deducible)?.help}>
+              <Controller control={form.control} name="deducible" render={({ field }) => (
+                <Combobox id="g-deducible" value={field.value ?? "no"} onChange={(v) => field.onChange(v && v !== "no" ? v : null)}
+                  options={[{ value: "no", label: "No aplica" }, ...DEDUCIBLES.map((d) => ({ value: d.value, label: d.label }))]} />
+              )} />
+            </FormField>
             {isImprevisto && !expense && (fondo?.activo && fondo.saldo > 0 ? (
               <label className="flex items-start gap-3 rounded-lg border border-dashed p-3">
                 <Controller control={form.control} name="usarFondo" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={(c) => field.onChange(c === true)} className="mt-0.5" />} />

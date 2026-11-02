@@ -49,6 +49,8 @@ type Props = {
   initialName?: string
   initialTipo?: ProviderTipo
   onSaved?: (row: Row<"providers">) => void
+  /** Desde un selector: si ya existe uno con el mismo nombre o NIT, lo usa en vez de pedir otro nombre. */
+  reuse?: boolean
 }
 
 /** Crear o editar un proveedor (a quién le pagas): nombre, tipo, categoría por defecto y datos de contacto. */
@@ -63,7 +65,7 @@ export function ProviderDialog(props: Props) {
   )
 }
 
-function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, formId }: Props & { formId: string }) {
+function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, reuse, formId }: Props & { formId: string }) {
   const { data: list = [] } = useProviders()
   const { data: cats = [] } = useCategories()
   const { data: methods = [] } = usePaymentMethods()
@@ -84,8 +86,15 @@ function Body({ onOpenChange, provider, initialName = "", initialTipo, onSaved, 
 
   async function onSubmit(v: Values) {
     const n = cleanProvName(v.nombre)
-    const dup = findProvider(list, n)
-    if (dup && dup.id !== provider?.id) { form.setError("nombre", { message: `Ya tienes “${dup.nombre}”. Búscalo en la lista.` }); return }
+    const nit = v.nit.replace(/\D/g, "")
+    const dup = findProvider(list, n) ?? (nit.length >= 6 ? list.find((p) => (p.nit ?? "").replace(/\D/g, "") === nit) : undefined)
+    if (dup && dup.id !== provider?.id) {
+      if (reuse && !provider) {
+        toast(`Ya tenías “${dup.nombre}”: lo usamos`, { description: "No creamos otro proveedor igual." })
+        onSaved?.(dup); onOpenChange(false); return
+      }
+      form.setError("nombre", { message: `Ya tienes “${dup.nombre}”${nit && findProvider(list, n) !== dup ? " con ese NIT" : ""}. Búscalo en la lista.` }); return
+    }
     const row = await save.mutateAsync({
       ...(provider ? { id: provider.id } : {}),
       nombre: n, tipo: isProviderTipo(v.tipo) ? v.tipo : "otro", category_id: v.category_id || null, referencia: v.referencia.trim(), nit: v.nit.trim(),

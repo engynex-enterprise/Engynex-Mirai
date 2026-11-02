@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { rulesOf, scenario } from "./__tests__/adapt"
-import { parseCSV, pdate, pnum } from "./csv"
+import { csvExternalId, csvExternalIds, parseCSV, pdate, pnum } from "./csv"
 
 const HOY = "2026-10-31"
 const sc = scenario(HOY)
@@ -35,4 +35,28 @@ describe("parseCSV = v4", () => {
       expect(v5.skipped).toBe(v4.skipped)
       expect(v5.rows!.map((r) => ({ fecha: r.fecha, desc: r.descripcion, valor: r.valor, cat: catName(r.category_id), incl: r.incl }))).toEqual(v4.rows)
     })
+})
+
+describe("csvExternalId: id estable de cada movimiento importado", () => {
+  const txt = "Fecha;Descripción;Valor\n05/10/2026;JUAN VALDEZ;-9.800\n05/10/2026;JUAN VALDEZ;-9.800\n06/10/2026;PAGO NOMINA;4.750.000\n"
+  it("el mismo extracto da los mismos ids; los repetidos se numeran", () => {
+    const a = csvExternalIds(parseCSV(txt, rules).rows!)
+    const b = csvExternalIds(parseCSV(txt, rules).rows!)
+    expect(a).toEqual(b)
+    expect(new Set(a).size).toBe(3)
+    expect(a[0]).toMatch(/^csv:[0-9a-z]+:0$/)
+    expect(a[1]).toMatch(/:1$/)
+  })
+  it("cambia si cambia la fecha, el valor o el sentido; no por mayúsculas, tildes ni espacios", () => {
+    const r = { fecha: "2026-10-05", descripcion: "Café Juan  Valdez", valor: 9800 }
+    expect(csvExternalId(r)).toBe(csvExternalId({ ...r, descripcion: "CAFE JUAN VALDEZ" }))
+    expect(csvExternalId(r)).not.toBe(csvExternalId({ ...r, fecha: "2026-10-06" }))
+    expect(csvExternalId(r)).not.toBe(csvExternalId({ ...r, valor: 9900 }))
+    expect(csvExternalId(r)).not.toBe(csvExternalId({ ...r, abono: true }))
+  })
+  it("las entradas de plata de un extracto con débitos quedan marcadas como abono", () => {
+    const rows = parseCSV(txt, rules).rows!
+    expect(rows.map((x) => !!x.abono)).toEqual([false, false, true])
+    expect(parseCSV("Fecha;Descripción;Valor\n01/10/2026;Netflix;44900\n", rules).rows![0].abono).toBeUndefined()
+  })
 })

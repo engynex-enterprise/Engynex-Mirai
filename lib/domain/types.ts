@@ -15,6 +15,10 @@ export type Trm = Record<string, number>
 
 export type Grupo = "n" | "g" | "a"
 
+/**
+ * Interruptores de cada tipo de aviso (`book_settings.notif` y, por persona, `notification_rules.notif`).
+ * Un tipo sin dato está encendido (`avisoOn` en lib/domain/agenda.ts).
+ */
 export interface NotifFlags {
   pagos?: boolean
   cobros?: boolean
@@ -22,6 +26,14 @@ export interface NotifFlags {
   presupuesto?: boolean
   inversiones?: boolean
   metas?: boolean
+  /** Fecha de corte y uso del cupo de las tarjetas de crédito. */
+  tarjetas?: boolean
+  /** Empeños y garantías con fecha límite. */
+  empenos?: boolean
+  /** Mesadas por entregar. */
+  mesadas?: boolean
+  /** Saldos de los gastos compartidos. */
+  compartidos?: boolean
 }
 
 /** Ajustes del libro (`book_settings`) que usan los cálculos. */
@@ -139,7 +151,12 @@ export type InvestmentIn = Pick<Row<"investments">, "tipo" | "nombre" | "capital
 
 export type GoalIn = Pick<Row<"goals">, "id" | "nombre" | "objetivo" | "ahorrado"> & { fecha: string | null }
 
-export type CalendarEventIn = Pick<Row<"calendar_events">, "id" | "titulo" | "fecha" | "tipo" | "monto">
+export type CalendarEventIn = Pick<Row<"calendar_events">, "id" | "titulo" | "fecha" | "tipo" | "monto"> & {
+  /** false = de una sola vez (no se repite cada año). Sin dato = anual, como en la v4. */
+  anual?: boolean | null
+  template_key?: string | null
+  nota?: string | null
+}
 
 export type ContactIn = Pick<Row<"contacts">, "id" | "nombre">
 export type EntityIn = Pick<Row<"entities">, "id" | "nombre">

@@ -30,7 +30,8 @@ import { useApp, useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
 import {
-  FRECS, SISTEMAS, TASA_EMPENO, TIPOS_CREDITO, camposLoan, faltantesLoan, histPlan, loanEngine, norm, normProv, previewLoan, rateFromCuota, sistemaDe,
+  CASA_EMPENO, FRECS, SISTEMAS, addPeriod, TASA_EMPENO, TIPOS_CREDITO, camposLoan, faltantesLoan, findContact, findEntity, histPlan, loanEngine, norm, normProv, previewLoan,
+  rateFromCuota, sistemaDe,
   textosLoan, tipoDef, tipoDefaults, tiposDe,
   type Campos, type HistMode, type InteresModo, type LoanTipo, type PagoModo, type Sistema, type TextosLoan,
 } from "@/lib/domain"
@@ -74,20 +75,21 @@ const menosPeriodo = (iso: string, frec: string) => {
   return plusMonths(iso, -1)
 }
 const num = (s: string) => +s.replace(",", ".") || 0
+const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 
 /** Orden de los bloques del formulario en cada tipo (cada bloque se dibuja solo si aplica). */
-type Bloque = "riesgo" | "foto" | "quien" | "credito" | "obj" | "monto" | "inicial" | "concepto" | "inicio" | "primera" | "pago" | "cuotas" | "vence"
+type Bloque = "riesgo" | "foto" | "quien" | "credito" | "obj" | "monto" | "inicial" | "concepto" | "inicio" | "primera" | "pago" | "cuotas" | "desde" | "vence"
   | "interes" | "extra" | "empeno" | "prenda" | "nota" | "pdf" | "hist" | "provlink"
 const ORDEN: Record<LoanTipo, Bloque[]> = {
-  banco: ["foto", "quien", "credito", "monto", "inicio", "interes", "cuotas", "extra", "concepto", "hist", "provlink"],
+  banco: ["foto", "quien", "credito", "monto", "inicio", "interes", "cuotas", "desde", "extra", "concepto", "hist", "provlink"],
   empeno: ["quien", "obj", "monto", "inicio", "interes", "cuotas", "empeno", "hist", "provlink"],
   fiado: ["quien", "monto", "concepto", "inicio", "pago", "vence", "interes"],
-  persona: ["quien", "monto", "concepto", "inicio", "pago", "cuotas", "vence", "interes", "nota", "pdf", "hist", "provlink"],
+  persona: ["quien", "monto", "concepto", "inicio", "pago", "cuotas", "desde", "vence", "interes", "nota", "pdf", "hist", "provlink"],
   cuotas: ["foto", "quien", "concepto", "monto", "inicial", "cuotas", "primera", "interes", "extra", "hist"],
   gota: ["riesgo", "quien", "monto", "inicio", "cuotas", "interes", "nota", "hist"],
-  presto: ["quien", "monto", "concepto", "inicio", "pago", "cuotas", "vence", "interes", "prenda", "nota", "pdf", "hist", "provlink"],
-  vendi: ["quien", "concepto", "monto", "inicio", "pago", "cuotas", "vence", "interes", "nota", "pdf", "hist", "provlink"],
-  otro: ["foto", "quien", "monto", "concepto", "inicio", "pago", "cuotas", "vence", "interes", "prenda", "nota", "hist", "provlink"],
+  presto: ["quien", "monto", "concepto", "inicio", "pago", "cuotas", "desde", "vence", "interes", "prenda", "nota", "pdf", "hist", "provlink"],
+  vendi: ["quien", "concepto", "monto", "inicio", "pago", "cuotas", "desde", "vence", "interes", "nota", "pdf", "hist", "provlink"],
+  otro: ["foto", "quien", "monto", "concepto", "inicio", "pago", "cuotas", "desde", "vence", "interes", "prenda", "nota", "hist", "provlink"],
 }
 
 export function LoanForm(props: Props) {
@@ -144,7 +146,6 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const [quien, setQuien] = useState<"ex" | "new" | "ent">(contactId || preCt ? "ex" : preProv ? "new" : contacts.length ? "ex" : "new")
   const [contact, setContact] = useState<string | null>(contactId ?? preCt?.id ?? null)
   const [entity, setEntity] = useState<string | null>(null)
-  const [acreedor, setAcreedor] = useState("")
   const [nc, setNc] = useState({ nombre: preProv && isC && !preCt ? preProv.nombre : "", docTipo: "CC", doc: "", telefono: preProv?.telefono ?? "", email: preProv?.correo ?? "", relacion: "" })
   const [prov, setProv] = useState<string | null>(providerId ?? null)
   const [addr, setAddr] = useState<Address>(emptyAddress)
@@ -154,6 +155,8 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const [credito, setCredito] = useState("")
   const [inicio, setInicio] = useState(today)
   const [primera, setPrimera] = useState(plusMonths(today, 1))
+  // Desde cuándo se empieza a pagar (null = un periodo después del préstamo, lo de siempre).
+  const [desde, setDesde] = useState<string | null>(null)
   const [pago, setPago] = useState<PagoModo>(d0?.pago ?? "cuotas")
   const [frec, setFrec] = useState(d0?.frec ?? "mensual")
   const [vence, setVence] = useState(plusDays(today, 30))
@@ -174,6 +177,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const [nota, setNota] = useState("")
   const [pdf, setPdf] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** Ventana de nueva entidad abierta con lo escrito (null = cerrada). */
   const [newEnt, setNewEnt] = useState<string | null>(null)
   const [ocr, setOcr] = useState<{ busy: boolean; msg: string | null }>({ busy: false, msg: null })
   const fotoRef = useRef<HTMLInputElement>(null)
@@ -203,12 +207,12 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
       if (p) { setProv(p.id); got.push(p.nombre) } else got.push(`el almacén “${d.acreedor}” (escógelo o agrégalo arriba)`)
     } else if (!isC && d.acreedor && !d.acreedor_es_persona) {
       const nit = (d.acreedor_nit ?? "").replace(/\D/g, "")
-      let e = entities.find((x) => (nit && x.nit === nit) || norm(x.nombre) === norm(d.acreedor!) || (x.nombre.length > 4 && norm(d.acreedor!).includes(norm(x.nombre))))
+      let e = findEntity(entities, { nombre: d.acreedor, nit }) ?? entities.find((x) => x.nombre.length > 4 && norm(d.acreedor!).includes(norm(x.nombre)))
       if (!e) { const row = await sbSave.mutateAsync({ nombre: d.acreedor.slice(0, 60), nit, tipo: "Banco" } as never); e = row as never; got.push(`creamos la entidad “${d.acreedor}”`) }
       setQuien("ent"); setEntity(e!.id); got.push(e!.nombre)
     } else {
       const who = isC ? d.deudor : d.acreedor
-      const c = who ? contacts.find((x) => norm(x.nombre) === norm(who)) : null
+      const c = who ? findContact(contacts, { nombre: who, doc: isC ? d.deudor_documento : null }) : null
       if (c) { setQuien("ex"); setContact(c.id); got.push(c.nombre) }
       else if (who) { setQuien("new"); setNc((x) => ({ ...x, nombre: who, doc: (isC ? d.deudor_documento : d.acreedor_nit) ?? "" })); got.push(who) }
     }
@@ -234,6 +238,10 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const T = textosLoan(tipo, kind, { frec: frecEf, pago: pagoEf })
   const def = tipoDef(tipo)
   const inicioEf = tipo === "cuotas" ? menosPeriodo(primera, frecEf) : inicio
+  // La fecha del préstamo y la de la primera cuota pueden ser muy distintas ("me prestó en marzo y empiezo a pagar en junio").
+  const desdeAuto = isoLocal(addPeriod(inicioEf, frecEf, 1))
+  const conDesde = !!tipo && !unico && ORDEN[tipo].includes("desde")
+  const primeraEf = conDesde && desde && desde !== desdeAuto ? desde : null
   const financiado = Math.max(0, monto - (C?.inicial ? inicial : 0))
   const sis: Sistema = tipo && C ? sistemaDe(tipo, intEf, sistema, C) : "sin"
 
@@ -243,7 +251,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
     let t = 0
     if (intEf === "tasa") { const e = num(ea); t = e && C?.ea ? (sis === "simple" ? e / 12 : (Math.pow(1 + e / 100, 1 / 12) - 1) * 100) : num(tasa) }
     else if (intEf === "cuota") t = rateFromCuota(financiado, cuotaV, n, frecEf)
-    return { monto: financiado, plazo: n, frec: frecEf, tasa: +t.toFixed(4), sistema: sis, inicio: inicioEf, extra: C?.extra ? extra : 0, vence: unico ? vence : null }
+    return { monto: financiado, plazo: n, frec: frecEf, tasa: +t.toFixed(4), sistema: sis, inicio: inicioEf, extra: C?.extra ? extra : 0, vence: unico ? vence : null, primera: primeraEf }
   })()
 
   const prev = tipo && financiado > 0 ? previewLoan(params, today) : null
@@ -253,19 +261,21 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
     : histPlan({ ...params, payments: [] }, { mode: hist, ncuotas: +ncuotas || 0, saldoHoy: hist === "saldo" ? saldoHoy || null : null, fultPago: fult }, today)
   const histE = financiado && conHist ? loanEngine({ ...params, payments: histPays.map((p) => ({ ...p, valor: p.valor ?? 0 })) }, today) : null
 
-  // Quién: persona (contacto guardado o nuevo), entidad, casa de empeño, proveedor o solo un nombre.
+  // Quién: siempre un registro que se escoge (contacto guardado o nuevo, entidad, casa de empeño o proveedor).
   const usaPersona = !!C && (C.quien === "ct" || (C.quien === "libre" && quien !== "ent"))
   const usaEntidad = !!C && (C.quien === "ent" || C.quien === "casa" || (C.quien === "libre" && quien === "ent" && !isC))
+  // "Alguien nuevo" que ya está en Contactos (mismo nombre o documento): se sugiere escogerlo y, si no, se usa al guardar.
+  const ctYa = usaPersona && quien === "new" && nc.nombre.trim() ? findContact(contacts, { nombre: nc.nombre, doc: nc.doc }) : undefined
   const quienNombre = !C ? "" : C.quien === "prov" ? providers.find((p) => p.id === prov)?.nombre ?? ""
-    : C.quien === "nombre" ? acreedor.trim()
-    : usaEntidad ? entities.find((x) => x.id === entity)?.nombre ?? (C.quien === "casa" ? acreedor.trim() : "")
+    : usaEntidad ? entities.find((x) => x.id === entity)?.nombre ?? ""
     : quien === "new" ? nc.nombre.trim() : contacts.find((c) => c.id === contact)?.nombre ?? ""
   // Si el contacto o la entidad se llama igual que un proveedor, se sugiere enlazarlo (sin hacerlo solo).
   const sugerido = !prov && C?.quien !== "prov" ? suggestLoanProvider(quienNombre, providers, normProv) : undefined
-  const faltan = faltantesLoan({
-    tipo, kind, quien: C?.quien === "libre" && isC && quien === "ent" ? "ex" : quien, entity, contact, nombreNuevo: nc.nombre, prov, acreedor,
+  const faltan0 = faltantesLoan({
+    tipo, kind, quien: C?.quien === "libre" && isC && quien === "ent" ? "ex" : quien, entity, contact, nombreNuevo: nc.nombre, prov,
     monto, inicial, pago: pagoEf, interes: intEf, tasa: num(tasa), ea: C?.ea ? num(ea) : 0, cuota: cuotaV, plazo: +plazo, inicio: inicioEf, vence, obj: pr.obj,
   })
+  const faltan = primeraEf && primeraEf < inicioEf ? [...faltan0, { campo: "desde", msg: "La primera cuota debe ser después de la fecha del préstamo" }] : faltan0
   const conPrenda = C?.prenda === "si" || (C?.prenda === "opcional" && prenda === "si")
   const verPdf = !!C?.pdf && usaPersona
 
@@ -277,22 +287,28 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
     let cid: string | null = null
     let ctRow: Row<"contacts"> | null = null
     if (usaPersona) {
-      if (quien === "new") {
+      if (quien === "new" && ctYa) {
+        // Ya existía: se usa ese contacto y se completan los datos que le faltaban (sin borrar los que tenía).
+        cid = ctYa.id; ctRow = ctYa
+        const doc = nc.doc.replace(/\D/g, "")
+        const patch = { ...(!ctYa.telefono && nc.telefono.trim() ? { telefono: nc.telefono.trim() } : {}), ...(!ctYa.email && nc.email.trim() ? { email: nc.email.trim() } : {}), ...(!ctYa.doc && doc ? { doc, doc_tipo: nc.docTipo } : {}) }
+        if (Object.keys(patch).length) await sb.from("contacts").update(patch).eq("id", ctYa.id)
+        toast(`Ya tenías a “${ctYa.nombre}” en Contactos: lo usamos`, { description: "No creamos otro contacto igual." })
+      } else if (quien === "new") {
         const { data, error } = await sb.from("contacts").insert({ book_id: bookId, tipo: "persona", nombre: nc.nombre.trim(), doc_tipo: nc.docTipo, doc: nc.doc.replace(/\D/g, ""), telefono: nc.telefono, email: nc.email, relacion: nc.relacion, direccion: addr, ciudad: addr.ciudad }).select("*").single()
         if (error) { setBusy(false); return toast.error("No se pudo crear el contacto", { description: error.message }) }
         cid = data.id; ctRow = data as Row<"contacts">
       } else { cid = contact; ctRow = contacts.find((c) => c.id === contact) as Row<"contacts"> | undefined ?? null }
     }
     const prendaObj = conPrenda ? { obj: pr.obj.trim() || "Objeto en garantía", valor: pr.valor, limite: limiteEf, ref: pr.ref.trim() } : null
-    const nombreLibre = C.quien === "nombre" ? acreedor.trim() || "Prestamista" : C.quien === "casa" && !entity ? acreedor.trim() : null
     const cred = TIPOS_CREDITO.find((x) => x.value === credito)
     const conceptoF = concepto.trim() || (tipo === "empeno" ? prendaObj?.obj : tipo === "banco" ? cred?.concepto : tipo === "fiado" ? "Fiado" : tipo === "cuotas" ? "Compra a cuotas" : tipo === "vendi" ? "Venta fiada" : tipo === "gota" ? "Gota a gota" : "") || ""
     const notaF = [nota.trim(), C.inicial && inicial > 0 ? `Valor de la compra ${fmtMoney(monto)} con cuota inicial de ${fmtMoney(inicial)}.` : ""].filter(Boolean).join(" ")
     const { data: L, error } = await sb.from("loans").insert({
       book_id: bookId, kind, tipo, concepto: conceptoF, monto: financiado, sistema: params.sistema, tasa: params.tasa, frec: params.frec, plazo: params.plazo, inicio: inicioEf,
       extra: params.extra, contact_id: cid, entity_id: usaEntidad ? entity : null, prenda: prendaObj, cuota_fija: intEf === "cuota" ? cuotaV : null,
-      tasa_ea: intEf === "tasa" && C.ea ? num(ea) || null : null, provider_id: prov, vence: unico ? vence : null, fiado: tipo === "fiado",
-      ...(nombreLibre ? { acreedor: nombreLibre } : {}), ...(notaF ? { nota: notaF } : {}),
+      tasa_ea: intEf === "tasa" && C.ea ? num(ea) || null : null, provider_id: prov, vence: unico ? vence : null, fiado: tipo === "fiado", ...(primeraEf ? { primera: primeraEf } : {}),
+      ...(notaF ? { nota: notaF } : {}),
     }).select("id").single()
     if (error) { setBusy(false); return toast.error("No se pudo guardar", { description: error.message }) }
     if (histPays.length) await sb.from("loan_payments").insert(histPays.map((p) => ({ book_id: bookId, loan_id: L.id, fecha: p.fecha, tipo: p.tipo, valor: p.valor ?? 0, modo: p.modo ?? null, nota: "Pago anterior a Mirai" })))
@@ -325,25 +341,47 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
     libre: { label: isC ? "Abonos cuando pueda" : "Abonos cuando pueda(s)", desc: "Sin cuotas fijas: registras cada abono cuando se haga.", icon: "piggy-bank" },
   }
 
+  /** Escribió un nombre en "Escoge el contacto": si ya existe lo escoge; si no, pasa a "Alguien nuevo" con ese nombre. */
+  const crearContacto = (t: string) => {
+    const ya = t ? findContact(contacts, { nombre: t }) : undefined
+    if (ya) { setContact(ya.id); return toast(`Ya tenías a “${ya.nombre}”: lo escogimos`) }
+    setQuien("new"); setNc((x) => ({ ...x, nombre: t }))
+  }
+  /** Crear entidad o casa de empeño desde el selector: si ya existe una igual, la escoge en vez de abrir la ventana. */
+  const crearEntidad = (t: string) => {
+    const ya = t ? findEntity(entities, { nombre: t, nit: /^\d{6,}$/.test(t) ? t : null }) : undefined
+    if (ya) { if (C?.quien === "libre") setQuien("ent"); setEntity(ya.id); return toast(`Ya tenías “${ya.nombre}”: la usamos`, { description: "No creamos otra igual." }) }
+    setNewEnt(t || " ")
+  }
+  const corto = !!C?.ctCorto
   const personaFields = (
     <>
-      {quien === "ex" && <FormField label="Contacto" htmlFor="l-ct" required><Combobox id="l-ct" value={contact} onChange={setContact} options={contactOptions(contacts)} emptyText="No tienes contactos. Elige “Alguien nuevo”." /></FormField>}
+      {quien === "ex" && (
+        <FormField label="Contacto" htmlFor="l-ct" required>
+          <Combobox id="l-ct" value={contact} onChange={setContact} options={contactOptions(contacts)} emptyText="No está en tus contactos." createLabel="Agregar a" onCreate={crearContacto} />
+        </FormField>
+      )}
       {quien === "new" && (
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Nombre completo" htmlFor="l-cn" required><Input id="l-cn" className="h-11" value={nc.nombre} onChange={(e) => setNc({ ...nc, nombre: e.target.value })} /></FormField>
+          <FormField label={corto ? "Nombre o apodo" : "Nombre completo"} htmlFor="l-cn" required tip={false}
+            hint={ctYa ? <>Ya tienes a <b>“{ctYa.nombre}”</b> en Contactos. <button type="button" className="font-semibold text-link hover:underline" onClick={() => { setQuien("ex"); setContact(ctYa.id) }}>Escogerlo</button> (si guardas así, también lo usamos).</> : undefined}>
+            <Input id="l-cn" className="h-11" value={nc.nombre} placeholder={corto ? "Ej. Don Jaime" : "Ej. Andrés Navarro"} onChange={(e) => setNc({ ...nc, nombre: e.target.value })} />
+          </FormField>
           <FormField label="Celular" htmlFor="l-ctel"><Input id="l-ctel" className="h-11" type="tel" value={nc.telefono} onChange={(e) => setNc({ ...nc, telefono: e.target.value })} /></FormField>
+          {!corto && <>
           <FormField label="Tipo de documento" htmlFor="l-cdt"><Combobox id="l-cdt" value={nc.docTipo} onChange={(v) => setNc({ ...nc, docTipo: v })} options={DOC_TIPOS} /></FormField>
           <FormField label="Número de documento" htmlFor="l-cdoc"><Input id="l-cdoc" className="h-11" inputMode="numeric" value={nc.doc} onChange={(e) => setNc({ ...nc, doc: e.target.value })} /></FormField>
           <FormField label="Correo" htmlFor="l-cmail"><Input id="l-cmail" className="h-11" type="email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} /></FormField>
           <FormField label="Relación" htmlFor="l-crel"><Combobox id="l-crel" value={nc.relacion} onChange={(v) => setNc({ ...nc, relacion: v })} options={(cfg?.relaciones ?? []).map((r) => ({ value: r, label: r }))} /></FormField>
           <div className="sm:col-span-2"><AddressFields value={addr} onChange={setAddr} idPrefix="lc" /></div>
+          </>}
         </div>
       )}
     </>
   )
   const entidadField = (label: string) => (
     <FormField label={label} htmlFor="l-ent" required hint={T.quienHint || undefined}>
-      <Combobox id="l-ent" value={entity} onChange={setEntity} options={entityOptions(entities)} createLabel="Crear banco o entidad" onCreate={(t) => setNewEnt(t || " ")} onCreateAI={(t) => setNewEnt(t || " ")} />
+      <Combobox id="l-ent" value={entity} onChange={setEntity} options={entityOptions(entities)} createLabel="Crear banco o entidad" onCreate={crearEntidad} onCreateAI={(t) => setNewEnt(t || " ")} />
     </FormField>
   )
 
@@ -363,24 +401,21 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
       case "quien":
         if (C.quien === "ent") return entidadField(T.quien)
         if (C.quien === "casa") return (
-          <FormField label={T.quien} htmlFor="l-ent" required hint={<>{T.quienHint}{acreedor && !entity && <> <button type="button" className="font-semibold text-link hover:underline" onClick={() => setNewEnt(acreedor)}>Guardarla como entidad</button></>}</>}>
-            <Combobox id="l-ent" value={entity ?? (acreedor ? "__nombre" : null)} placeholder="Escoge o escribe el nombre"
-              onChange={(v) => { if (v !== "__nombre") { setEntity(v); setAcreedor("") } }}
-              options={[...entityOptions(entities), ...(acreedor && !entity ? [{ value: "__nombre", label: acreedor, hint: "Nombre escrito" }] : [])]}
-              createLabel="Usar el nombre" onCreate={(t) => { if (t) { setAcreedor(t); setEntity(null) } else setNewEnt(" ") }} />
+          <FormField label={T.quien} htmlFor="l-ent" required hint={T.quienHint}>
+            {/* Las casas de empeño primero; también se puede escoger otra entidad (un banco que presta sobre joyas). */}
+            <Combobox id="l-ent" value={entity} onChange={setEntity} placeholder="Escoge o crea la casa de empeño" searchPlaceholder="Buscar o escribir el nombre…"
+              options={entityOptions([...entities].sort((a, b) => Number(b.tipo === CASA_EMPENO) - Number(a.tipo === CASA_EMPENO)))}
+              emptyText="No está en tu lista. Créala abajo." createLabel="Crear casa de empeño" onCreate={crearEntidad} />
           </FormField>
         )
         if (C.quien === "prov") return (
-          <FormField label={T.quien} htmlFor="l-prov" required tip={T.quienHint}>
+          <FormField label={T.quien} htmlFor="l-prov" required tip={false} hint={T.quienHint}>
             <ProviderSelect id="l-prov" value={prov} placeholder={tipo === "cuotas" ? "Escoge o agrega el almacén" : "Escoge o agrega la tienda"} onChange={(id) => setProv(id)} />
           </FormField>
         )
-        if (C.quien === "nombre") return (
-          <FormField label={T.quien} htmlFor="l-acr" hint={T.quienHint}><Input id="l-acr" className="h-11" value={acreedor} onChange={(e) => setAcreedor(e.target.value)} placeholder="Ej. Don Jaime" /></FormField>
-        )
         return (
           <div className="grid gap-4">
-            <FormField label={T.quien} tip={false}>
+            <FormField label={T.quien} tip={false} hint={T.quienHint || undefined}>
               <Segmented value={quien} onChange={(v) => setQuien(v as typeof quien)} items={[
                 ...(C.quien === "libre" && !isC ? [{ value: "ent", label: "Banco o entidad", icon: "landmark" }] : []),
                 { value: "ex", label: "Un contacto guardado", icon: "user-round" }, { value: "new", label: "Alguien nuevo", icon: "user-plus" },
@@ -420,7 +455,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
         <FormField label={T.concepto} htmlFor="l-conc" tip={false}><Input id="l-conc" className="h-11" value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder={T.conceptoPh} /></FormField>
       )
       case "inicio": return (
-        <FormField label={T.inicio} htmlFor="l-ini" tip={false} hint={!unico && prev?.plan[0] ? `La primera cuota sería el ${fmtDate(prev.plan[0].fecha, { long: true })}.` : undefined}>
+        <FormField label={T.inicio} htmlFor="l-ini" tip={false} hint={!unico && !conDesde && prev?.plan[0] ? `La primera cuota sería el ${fmtDate(prev.plan[0].fecha, { long: true })}.` : undefined}>
           <DatePicker id="l-ini" value={inicio} onChange={(v) => setInicio(v ?? today)} />
         </FormField>
       )
@@ -435,6 +470,15 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
             setPago(v as PagoModo)
             if (v !== "cuotas" && !(vence > inicio)) setVence(plusDays(inicio, v === "libre" ? 90 : 30))
           }} items={C.pagos.map((p) => ({ value: p, ...PAGO_ITEMS[p] }))} />
+        </FormField>
+      )
+      case "desde": return conDesde && (
+        <FormField label={isC ? "¿Desde cuándo te empieza a pagar?" : "¿Desde cuándo empiezas a pagar?"} htmlFor="l-desde" tip={false}
+          error={primeraEf && primeraEf < inicioEf ? "Debe ser después de la fecha del préstamo." : undefined}
+          hint={prev?.plan.length ? (prev.plan.length === 1 ? `Un solo pago el ${fmtDate(prev.plan[0].fecha, { long: true })}.`
+            : `${prev.plan.length} cuotas, una cada ${FRECS[frecEf]?.per ?? "periodo"}: la primera el ${fmtDate(prev.plan[0].fecha, { long: true })} y la última el ${fmtDate(prev.plan.at(-1)!.fecha, { long: true })}.`)
+            : "La fecha de la primera cuota. Puede ser muy distinta de la fecha del préstamo."}>
+          <DatePicker id="l-desde" value={primeraEf ?? desdeAuto} quick="futuro" onChange={(v) => setDesde(v)} />
         </FormField>
       )
       case "cuotas": return !unico && (
@@ -601,7 +645,8 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
             financiado={financiado} usura={usura} pago={pagoEf} obj={conPrenda ? pr.obj.trim() : ""} avaluo={pr.valor} limite={conPrenda ? limiteEf : null} histE={histE} />
         </div>
       )}
-      <EntityDialog open={newEnt !== null} onOpenChange={(o) => !o && setNewEnt(null)} initial={newEnt?.trim() ?? ""} onCreated={(id) => { if (C?.quien === "libre") setQuien("ent"); setEntity(id); setAcreedor("") }} />
+      <EntityDialog open={newEnt !== null} onOpenChange={(o) => !o && setNewEnt(null)} initial={newEnt?.trim() ?? ""} initialTipo={tipo === "empeno" ? CASA_EMPENO : undefined}
+        onCreated={(id) => { if (C?.quien === "libre") setQuien("ent"); setEntity(id) }} />
     </>
   )
 }

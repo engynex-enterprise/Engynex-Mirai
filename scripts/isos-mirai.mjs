@@ -147,6 +147,15 @@ const NEW = {
       + `<path d="M128 76C112 46 76 34 70 54C64 74 100 80 128 76Z" fill="url(#${k}-3)" /><path d="M128 76C144 46 180 34 186 54C192 74 156 80 128 76Z" fill="url(#${k}-3)" />`
       + `<path d="M84 56Q92 64 116 72" fill="none" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="6" stroke-linecap="round" />`,
   },
+  // Dashboard: tablero azul con pantalla clara, barras verde, cyan y naranja y una línea de tendencia.
+  dashboard: {
+    g: [["azul", "0.2 0 0.8 1"], ["claro"], ["verde", "0 0 0 1"], ["cyan", "0 0 0 1"], ["naranja", "0 0 0 1"]],
+    svg: (k) => shade("M54 34H202Q226 34 226 58V198Q226 222 202 222H54Q30 222 30 198V58Q30 34 54 34Z", `${k}-1`)
+      + `<path d="M62 56H194Q206 56 206 68V188Q206 200 194 200H62Q50 200 50 188V68Q50 56 62 56Z" fill="url(#${k}-2)" />`
+      + [[66, 140, 3], [98, 116, 4], [130, 128, 3], [162, 88, 5]].map(([x, y, g]) => `<path d="M${x} ${y + 8}Q${x} ${y} ${x + 8} ${y}H${x + 16}Q${x + 24} ${y} ${x + 24} ${y + 8}V184H${x}Z" fill="url(#${k}-${g})" />`).join("")
+      + `<path d="M78 124L110 100L142 112L174 72" fill="none" stroke="#1F2B4B" stroke-opacity=".55" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />`
+      + `<path d="M164 72a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z" fill="#1F2B4B" fill-opacity=".7" />`,
+  },
   // Centro de ayuda: salvavidas rojo y blanco.
   ayuda: {
     g: [["rojo", "0.2 0 0.8 1"], ["claro"]],

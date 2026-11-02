@@ -2,7 +2,8 @@
 // (equivalente a `sim()` y al bloque de abono de V.estrategia en c_views.js de la v4).
 import { iso, toDay } from "./dates"
 import { loanEngine, loanName, type LoanEngine } from "./loans"
-import type { ContactIn, DateInput, EntityIn, LoanIn } from "./types"
+import { compraEstado, tarjetaPagoMes } from "./cards"
+import type { ContactIn, CreditCardIn, DateInput, EntityIn, LoanIn } from "./types"
 
 export interface DebtSim {
   /** Id del préstamo (o su posición si no tiene id). */
@@ -30,15 +31,38 @@ export interface DebtSimResult {
   names: Record<string, string>
 }
 
-/** Deudas por pagar con saldo, listas para simular. */
-export function debtsFrom(loans: LoanIn[], contacts: ContactIn[], entities: EntityIn[], today: DateInput): DebtSim[] {
-  return loans
+/** Prefijo del id de una tarjeta en la simulación (los préstamos usan su propio id). */
+export const CARD_PREFIX = "tc:"
+
+/**
+ * Una tarjeta como deuda para simular: saldo de todas sus compras, tasa mensual ponderada por saldo (las compras a una
+ * cuota no causan intereses) y pago mínimo = las cuotas que factura este mes. Sin saldo, null.
+ */
+export function cardDebt(t: CreditCardIn, today: DateInput): DebtSim | null {
+  let s = 0, si = 0
+  for (const c of t.purchases || []) {
+    const e = compraEstado(t, c, today)
+    if (e.saldo <= 0) continue
+    s += e.saldo
+    si += e.saldo * (e.n > 1 ? (+t.tasa || 0) / 100 : 0)
+  }
+  if (s <= 1) return null
+  return { id: CARD_PREFIX + t.id, n: `Tarjeta ${t.nombre}`, s, i: s ? si / s : 0, c: tarjetaPagoMes(t, today) }
+}
+
+/**
+ * Deudas por pagar con saldo, listas para simular: préstamos de Le debo y, si se pasan, las tarjetas de crédito.
+ * Los pasivos escritos a mano en Balance no entran: no tienen tasa ni cuota (la vista los lista aparte).
+ */
+export function debtsFrom(loans: LoanIn[], contacts: ContactIn[], entities: EntityIn[], today: DateInput, cards: CreditCardIn[] = []): DebtSim[] {
+  const prest = loans
     .filter((L) => L.kind === "pagar")
     .map((L, ix) => {
       const e = loanEngine(L, today)
       return { id: L.id ?? String(ix), n: loanName(L, contacts, entities) + (L.concepto ? " · " + L.concepto : ""), s: e.saldo, i: e.i, c: e.next ? e.next.valor - (+(L.extra ?? 0) || 0) : 0 }
     })
     .filter((d) => d.s > 1)
+  return [...prest, ...cards.map((t) => cardDebt(t, today)).filter((d): d is DebtSim => !!d)]
 }
 
 /**
@@ -94,9 +118,9 @@ export const byAvalancha = (a: DebtSim, b: DebtSim) => b.i - a.i
 /** Bola de nieve: el dinero extra va primero a la deuda más pequeña. */
 export const byBolaNieve = (a: DebtSim, b: DebtSim) => a.s - b.s
 
-/** Compara pagar solo las cuotas, avalancha y bola de nieve con `extra` pesos más al mes. */
-export function debtStrategy(loans: LoanIn[], contacts: ContactIn[], entities: EntityIn[], extra: number, today: DateInput) {
-  const D = debtsFrom(loans, contacts, entities, today)
+/** Compara pagar solo las cuotas, avalancha y bola de nieve con `extra` pesos más al mes (préstamos y tarjetas). */
+export function debtStrategy(loans: LoanIn[], contacts: ContactIn[], entities: EntityIn[], extra: number, today: DateInput, cards: CreditCardIn[] = []) {
+  const D = debtsFrom(loans, contacts, entities, today, cards)
   const base = simDebts(D, 0, () => 0, false)
   const avalancha = simDebts(D, extra, byAvalancha)
   const bola = simDebts(D, extra, byBolaNieve)

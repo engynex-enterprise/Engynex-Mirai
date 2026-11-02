@@ -19,6 +19,8 @@ import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { useSettings } from "@/features/catalogs/hooks"
 import { notifyChannels, sendDigestNow, sendTestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/actions"
+import { calendarStatus, syncCalendar } from "@/features/correo/actions"
+import { BrandLogo } from "@/components/mirai/brand-logo"
 import { currentPush, disablePush, enablePush, pushSupported } from "@/features/notify/push-client"
 import { AVISOS, CANALES, defaultMatriz, onFor, type CanalKey, type Canales, type Matriz } from "@/lib/notify/rules"
 import { formatCoPhone, normalizeCoPhone } from "@/lib/notify/whatsapp"
@@ -28,7 +30,7 @@ import { useBookSettingsSave } from "../prefs"
 
 const HORAS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h === 0 ? 12 : h > 12 ? h - 12 : h}:00 ${h < 12 ? "a. m." : "p. m."}` }))
 
-type RuleRow = { matriz: Matriz; canales: Canales; hora: number; frecuencia: string; silencio: { on?: boolean; desde?: number; hasta?: number }; ocultar_montos: boolean; email_to: string | null; whatsapp_to: string | null; last_sent: Record<string, string> }
+type RuleRow = { matriz: Matriz; canales: Canales & { gcal?: boolean }; hora: number; frecuencia: string; silencio: { on?: boolean; desde?: number; hasta?: number }; ocultar_montos: boolean; email_to: string | null; whatsapp_to: string | null; last_sent: Record<string, string>; notif: Record<string, boolean> | null }
 
 function useRule() {
   const { user, book } = useApp()
@@ -38,7 +40,7 @@ function useRule() {
     queryKey: key,
     queryFn: async () => {
       const { data } = await createClient().from("notification_rules").select("*").eq("user_id", user.id).eq("book_id", book.id).maybeSingle()
-      return (data ?? { matriz: {}, canales: { app: true, popup: true }, hora: 7, frecuencia: "diario", silencio: { on: false, desde: 22, hasta: 7 }, ocultar_montos: false, email_to: null, whatsapp_to: null, last_sent: {} }) as unknown as RuleRow
+      return (data ?? { matriz: {}, canales: { app: true, popup: true }, hora: 7, frecuencia: "diario", silencio: { on: false, desde: 22, hasta: 7 }, ocultar_montos: false, email_to: null, whatsapp_to: null, last_sent: {}, notif: null }) as unknown as RuleRow
     },
   })
   const save = async (p: Partial<RuleRow>, quiet?: boolean) => {
@@ -115,6 +117,33 @@ function PushDevice() {
   )
 }
 
+/** Google Calendar: Mirai lleva tus pagos y cobros y los mantiene al día cada mañana (lib/google-calendar.ts). */
+function GoogleCalendarSection({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  const qc = useQueryClient()
+  const { data: st } = useQuery({ queryKey: ["gcal-status"], queryFn: () => calendarStatus(), staleTime: 60_000 })
+  const [busy, setBusy] = useState(false)
+  const sync = async () => {
+    setBusy(true); const r = await syncCalendar(); setBusy(false)
+    toast[r.ok ? "success" : "error"](r.ok ? r.msg : "No se pudo sincronizar", r.ok ? undefined : { description: r.msg })
+    qc.invalidateQueries({ queryKey: ["gcal-status"] })
+  }
+  return (
+    <SettingSection icon="calendar-check" title="Google Calendar" desc="Tus pagos y cobros de los próximos 45 días en tu calendario. Si cambias un monto, pagas o borras algo, lo actualizamos solos cada mañana.">
+      {!st ? <Spinner /> : !st.plan ? <p className="pt-3 text-sm text-muted-foreground">Llevar tus pagos a Google Calendar está en Mirai Premium.</p> : !st.conectado ? (
+        <div className="flex flex-wrap items-center gap-3 pt-3">
+          <p className="text-sm text-muted-foreground">Aún no conectas tu Google Calendar.</p>
+          <Button variant="outline" size="sm" asChild><a href={`/api/google/connect?s=calendar&back=${encodeURIComponent("/ajustes?tab=alertas")}`}><BrandLogo k="google-calendar" size={16} bare /> Conectar Google Calendar</a></Button>
+        </div>
+      ) : <>
+        <SettingRow title="Mantener mis pagos en Google Calendar" desc={st.eventos ? `Mirai lleva ${st.eventos} evento${st.eventos === 1 ? "" : "s"} en tu calendario.` : "Cada mañana revisamos tus pagos y cobros."}>
+          <Switch checked={on} onCheckedChange={onChange} aria-label="Mantener mis pagos en Google Calendar" />
+        </SettingRow>
+        <div className="pt-4"><Button variant="outline" size="sm" disabled={busy} onClick={sync}>{busy ? <Spinner /> : <BrandLogo k="google-calendar" size={16} bare />} Sincronizar ahora</Button></div>
+      </>}
+    </SettingSection>
+  )
+}
+
 export function AlertasTab() {
   const { rule, save } = useRule()
   const { data: cfg } = useSettings()
@@ -125,10 +154,12 @@ export function AlertasTab() {
   const [wa, setWa] = useState<string | null>(null)
   if (!rule || !cfg) return <SettingSkeleton sections={3} rows={4} />
 
-  const notif = (cfg.notif ?? {}) as Record<string, boolean>
+  // Interruptores por persona (notification_rules.notif); lo del libro (book_settings.notif) es el valor por defecto.
+  const bookNotif = (cfg.notif ?? {}) as Record<string, boolean>
+  const notif: Record<string, boolean> = { ...bookNotif, ...(rule.notif ?? {}) }
   const matriz = Object.keys(rule.matriz ?? {}).length ? rule.matriz : defaultMatriz()
   const can = rule.canales ?? {}
-  const setCan = (k: keyof Canales, v: boolean) => save({ canales: { ...can, [k]: v } })
+  const setCan = (k: keyof RuleRow["canales"], v: boolean) => save({ canales: { ...can, [k]: v } })
   const setMat = (a: string, c: CanalKey, v: boolean) => save({ matriz: { ...matriz, [a]: { ...matriz[a as keyof Matriz], [c]: v } } }, true)
   // Canales que Mirai ofrece (los configura el administrador). Mientras carga no se marcan como no disponibles.
   const ok = (c: "email" | "telegram" | "push" | "whatsapp") => !ready || ready[c]
@@ -144,7 +175,7 @@ export function AlertasTab() {
         </Notice>
       )}
 
-      <SettingSection icon="table" title="¿Qué te avisamos y por dónde?" desc="Apaga un aviso con su interruptor o elige por qué canal te llega.">
+      <SettingSection icon="table" title="¿Qué te avisamos y por dónde?" desc="Apaga un aviso con su interruptor o elige por qué canal te llega. Es solo para ti: las demás personas del hogar tienen sus propios avisos.">
         <div className="-mx-2 overflow-x-auto" role="region" aria-label="Avisos por canal" tabIndex={0}>
           <table className="w-full min-w-[34rem] text-sm">
             <thead><tr className="text-left text-muted-foreground">
@@ -158,7 +189,7 @@ export function AlertasTab() {
                   <tr key={a.k} className={cn("border-t", !on && "opacity-55")}>
                     <td className="px-2 py-3">
                       <div className="flex items-start gap-2">
-                        <Switch checked={on} aria-label={a.t} onCheckedChange={(v) => saveCfg.mutate({ notif: { ...notif, [a.k]: v } })} />
+                        <Switch checked={on} aria-label={a.t} onCheckedChange={(v) => save({ notif: { ...(rule.notif ?? {}), [a.k]: v } })} />
                         <div><p className="font-medium">{a.t}</p><p className="text-xs text-muted-foreground">{a.d}</p></div>
                       </div>
                     </td>
@@ -192,8 +223,10 @@ export function AlertasTab() {
 
       <SettingSection icon="clock" title="Resumen fuera de la app" desc="Te enviamos un resumen con lo pendiente, aunque no abras Mirai.">
         <SettingRow title="¿Cada cuánto?"><div className="w-64"><Combobox value={rule.frecuencia} onChange={(v) => save({ frecuencia: v })} options={[{ value: "diario", label: "Un resumen al día" }, { value: "semanal", label: "Un resumen a la semana (lunes)" }, { value: "nunca", label: "No enviar resúmenes" }]} /></div></SettingRow>
-        <SettingRow title="Hora del resumen" desc="Hora de Colombia."><div className="w-40"><Combobox value={String(rule.hora)} onChange={(v) => save({ hora: +v })} options={HORAS} /></div></SettingRow>
+        <SettingRow title="Hora del resumen" desc="Hora de Colombia. Te llega a esa hora, una sola vez al día."><div className="w-40"><Combobox value={String(rule.hora)} onChange={(v) => save({ hora: +v })} options={HORAS} /></div></SettingRow>
       </SettingSection>
+
+      <GoogleCalendarSection on={can.gcal !== false} onChange={(v) => setCan("gcal", v)} />
 
       <SettingSection icon="mail" title="Correo electrónico">
         <SettingRow title="Enviar resumen por correo" desc="Te llega al correo con lo que tienes pendiente."><Switch checked={!!can.email} disabled={!can.email && !ok("email")} onCheckedChange={(v) => setCan("email", v)} aria-label="Enviar resumen por correo" /></SettingRow>

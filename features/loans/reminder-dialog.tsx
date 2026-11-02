@@ -18,6 +18,8 @@ import { fmtDate, fmtMoney } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { cobroTexto, normalizarCobros } from "@/lib/domain/cobros"
 import { createClient } from "@/utils/supabase/client"
+import { Checkbox } from "@/components/ui/checkbox"
+import { cobroWaStatus, sendCobroWhatsApp } from "@/features/notify/actions"
 
 type Tono = "amable" | "directo" | "firme"
 type Pago = "no" | "principal" | "todas"
@@ -36,7 +38,31 @@ export function cobroMsg(e: LoanEngine, concepto: string, contacto: string, yo: 
   return `Hola ${n}. El pago${conc} por ${tot} está atrasado desde el ${fecha}${e.mora ? ` (${e.mora} días)` : ""}. Necesito que lo pongamos al día lo antes posible. Saldo total pendiente: ${saldo}. Por favor respóndeme hoy con la fecha de pago.`
 }
 
-export function ReminderDialog({ open, onOpenChange, engine, concepto, contact }: { open: boolean; onOpenChange: (o: boolean) => void; engine: LoanEngine; concepto: string; contact: Row<"contacts"> | null }) {
+/**
+ * Enviar el recordatorio desde el número oficial de Mirai (plantilla aprobada por Meta). Opcional: solo aparece si la
+ * plantilla existe, y pide confirmar que la persona aceptó recibirlo.
+ */
+function MiraiWhatsApp({ loanId, contacto, open }: { loanId?: string; contacto: string; open: boolean }) {
+  const { data: st } = useQuery({ queryKey: ["cobro-wa-status"], enabled: open && !!loanId, staleTime: 5 * 60_000, queryFn: () => cobroWaStatus() })
+  const [ok, setOk] = useState(false)
+  const [busy, setBusy] = useState(false)
+  if (!loanId || !st?.disponible) return null
+  return (
+    <div className="grid gap-2 rounded-xl border p-3">
+      <p className="flex items-center gap-2 text-sm font-semibold"><MessageCircle className="size-4 text-muted-foreground" aria-hidden /> Enviar desde el WhatsApp de Mirai</p>
+      <p className="text-xs text-muted-foreground">Le llega a {contacto} un mensaje oficial de Mirai con la cuota, a tu nombre. Uno por día.</p>
+      {!st.verificado ? <p className="text-sm text-muted-foreground">{st.motivo ?? "Primero verifica tu WhatsApp en Ajustes › Alertas (envíate una prueba)."} <Link href="/ajustes?tab=alertas" className="font-semibold text-link hover:underline">Ir a Alertas</Link></p> : <>
+        <label className="flex items-start gap-2 text-sm"><Checkbox checked={ok} onCheckedChange={(v) => setOk(v === true)} className="mt-0.5" aria-label="Confirmo que aceptó recibir recordatorios" />{contacto} aceptó que le recuerde sus pagos por WhatsApp.</label>
+        <Button variant="outline" className="w-fit" disabled={!ok || busy} onClick={async () => {
+          setBusy(true); const r = await sendCobroWhatsApp({ loanId, consentimiento: true }); setBusy(false)
+          toast[r.ok ? "success" : "error"](r.ok ? "Recordatorio enviado" : "No se pudo enviar", { description: r.msg })
+        }}>{busy ? <Spinner /> : <MessageCircle />} Enviar desde Mirai</Button>
+      </>}
+    </div>
+  )
+}
+
+export function ReminderDialog({ open, onOpenChange, engine, concepto, contact, loanId }: { open: boolean; onOpenChange: (o: boolean) => void; engine: LoanEngine; concepto: string; contact: Row<"contacts"> | null; loanId?: string }) {
   const { user } = useApp()
   const [tono, setTono] = useState<Tono>(engine.mora > 0 ? "firme" : "amable")
   const [msg, setMsg] = useState(() => cobroMsg(engine, concepto, contact?.nombre ?? "", user.nombre, engine.mora > 0 ? "firme" : "amable"))
@@ -75,6 +101,7 @@ export function ReminderDialog({ open, onOpenChange, engine, concepto, contact }
           {wa ? <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5a]"><a href={wa} target="_blank" rel="noreferrer"><MessageCircle /> Abrir WhatsApp</a></Button>
             : <p className="text-sm text-muted-foreground">Agrega el celular del contacto para enviar por WhatsApp.</p>}
         </div>
+        {tel && <MiraiWhatsApp loanId={loanId} contacto={contact?.nombre.split(" ")[0] || "tu contacto"} open={open} />}
       </div>
     </ResponsiveDialog>
   )

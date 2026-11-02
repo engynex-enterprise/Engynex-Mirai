@@ -21,7 +21,7 @@ test("gastos: registrar, hormiga, borrar y deshacer", async ({ page }, info) => 
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText("Gasto hormiga registrado")).toBeVisible()
 
-  const row = page.locator("li", { hasText: desc })
+  const row = page.locator("#main li", { hasText: desc })
   await expect(row).toBeVisible()
   await expect(row.getByText("hormiga")).toBeVisible()
   await shot(page, "gastos-lista", info.project.name)
@@ -32,9 +32,9 @@ test("gastos: registrar, hormiga, borrar y deshacer", async ({ page }, info) => 
 
   // Eliminar y deshacer
   await row.getByRole("button", { name: "Eliminar gasto" }).click()
-  await expect(page.locator("li", { hasText: desc })).toHaveCount(0)
+  await expect(page.locator("#main li", { hasText: desc })).toHaveCount(0)
   await page.getByRole("button", { name: "Deshacer" }).click()
-  await expect(page.locator("li", { hasText: desc })).toBeVisible()
+  await expect(page.locator("#main li", { hasText: desc })).toBeVisible()
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow).toBeLessThanOrEqual(0)

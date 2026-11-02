@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { expectClose, fixedOf, legacyCall, scenario } from "./__tests__/adapt"
-import { fijoMensual, fijoPeriods, fijoProxIso, fijoStatus } from "./fixed"
+import { fijoMensual, fijoPeriods, fijoProxIso, fijoStatus, periodoTexto, sugerirPagoFijo } from "./fixed"
 
 const HOY = "2026-10-31"
 
@@ -58,4 +58,43 @@ describe("fijoStatus, fijoProxIso y fijoMensual = v4", () => {
     })
   }
   it("fijoProxIso sin fijo → hoy + 10", () => expect(fijoProxIso(null, HOY)).toBe("2026-11-10"))
+})
+
+describe("sugerirPagoFijo: un gasto suelto que es el pago de un fijo pendiente", () => {
+  const arriendo = { id: "f1", nombre: "Arriendo apartamento", valor: 1500000, frec: "mensual", dia: 5, payments: [] as { periodo: string; fecha: string; valor: number }[] }
+  const gasto = { descripcion: "Pago arriendo noviembre", valor: 1500000, fecha: "2026-11-04" }
+
+  it("coincide por palabra del nombre, valor parecido y periodo pendiente cercano", () => {
+    expect(sugerirPagoFijo(gasto, [arriendo])).toMatchObject({ per: "2026-11", due: "2026-11-05", valor: 1500000 })
+    expect(sugerirPagoFijo({ ...gasto, valor: 1600000 }, [arriendo])?.per).toBe("2026-11")
+  })
+  it("o por el mismo proveedor aunque el nombre no se parezca", () => {
+    expect(sugerirPagoFijo({ ...gasto, descripcion: "Transferencia", provider_id: "p1" }, [{ ...arriendo, provider_id: "p1" }])?.per).toBe("2026-11")
+    expect(sugerirPagoFijo({ ...gasto, descripcion: "Transferencia" }, [arriendo])).toBeNull()
+  })
+  it("si el periodo ya está pagado propone el siguiente cercano; si el valor no se parece, nada", () => {
+    const pagado = { ...arriendo, payments: [{ periodo: "2026-11", fecha: "2026-11-03", valor: 1500000 }] }
+    expect(sugerirPagoFijo({ ...gasto, fecha: "2026-11-28" }, [pagado])?.per).toBe("2026-12")
+    expect(sugerirPagoFijo({ ...gasto, valor: 300000 }, [arriendo])).toBeNull()
+  })
+  it("nunca para aportes a metas ni para gastos ya enlazados (fijo, tarjeta, préstamo, compartido)", () => {
+    expect(sugerirPagoFijo(gasto, [{ ...arriendo, link_type: "meta" }])).toBeNull()
+    expect(sugerirPagoFijo({ ...gasto, fixed_expense_id: "f9" }, [arriendo])).toBeNull()
+    for (const origen of ["tarjeta", "prestamo", "compartido", "aporte"]) expect(sugerirPagoFijo({ ...gasto, origen }, [arriendo])).toBeNull()
+    expect(sugerirPagoFijo({ ...gasto, origen: "correo" }, [arriendo])?.per).toBe("2026-11")
+  })
+  it("variable: dentro del rango (con margen)", () => {
+    const luz = { id: "f2", nombre: "Luz", valor: 100000, frec: "mensual", dia: 20, variable: true, vmin: 80000, vmax: 120000, payments: [] }
+    expect(sugerirPagoFijo({ descripcion: "Luz Enel", valor: 130000, fecha: "2026-11-18" }, [luz])?.per).toBe("2026-11")
+    expect(sugerirPagoFijo({ descripcion: "Luz Enel", valor: 200000, fecha: "2026-11-18" }, [luz])).toBeNull()
+  })
+})
+
+describe("periodoTexto", () => {
+  it("mes, quincena, año y único", () => {
+    expect(periodoTexto("2026-11")).toBe("noviembre")
+    expect(periodoTexto("2026-11-Q2")).toBe("la segunda quincena de noviembre")
+    expect(periodoTexto("2026")).toBe("2026")
+    expect(periodoTexto("U")).toBe("")
+  })
 })

@@ -113,7 +113,7 @@ export function AutomationsView() {
   const toggle = useToggleActive(data)
   const duplicate = useDuplicate()
   const { create, pending } = useCreateAutomation()
-  const { limit, activas } = useActiveLimit(data)
+  const { limit, activas, plan: planNombre, enPausaPorPlan } = useActiveLimit(data)
   const [nuevo, setNuevo] = useState(false)
   const [tab, setTab] = useState("mias")
   const seeded = useRef(false)
@@ -163,10 +163,13 @@ export function AutomationsView() {
     {
       id: "estado", header: "Estado", sort: (a) => (a.activo ? 1 : 0), csv: (a) => (a.activo ? "Activa" : "Pausada"),
       cell: (a) => (
-        <label className="flex items-center gap-2">
-          <Switch checked={a.activo} disabled={!can} onCheckedChange={(v) => toggle(a, v)} aria-label={`${a.activo ? "Pausar" : "Activar"} ${a.nombre}`} />
-          <span className="text-sm font-medium">{a.activo ? "Activa" : "Pausada"}</span>
-        </label>
+        <span className="grid gap-1">
+          <label className="flex items-center gap-2">
+            <Switch checked={a.activo} disabled={!can} onCheckedChange={(v) => toggle(a, v)} aria-label={`${a.activo ? "Pausar" : "Activar"} ${a.nombre}`} />
+            <span className="text-sm font-medium">{a.activo ? "Activa" : "Pausada"}</span>
+          </label>
+          {enPausaPorPlan.includes(a.id) && <StatusPill tone="warn" className="w-fit">No corre: pasa el límite de tu plan</StatusPill>}
+        </span>
       ),
     },
     {
@@ -187,15 +190,17 @@ export function AutomationsView() {
         actions={can && <Button onClick={() => setNuevo(true)}><Plus /> Nueva automatización</Button>} />
 
       <KpiGrid className="xl:grid-cols-3">
-        <Kpi icon="workflow" tone="green" label="Activas" value={limit === null ? activas : `${activas} de ${limit}`} sub={limit === null ? "Sin límite en tu plan" : "Plan Gratis"} loading={isPending} />
+        <Kpi icon="workflow" tone="green" label="Activas" value={limit === null ? activas : `${activas} de ${limit}`} sub={limit === null ? "Sin límite en tu plan" : `Plan ${planNombre}`} loading={isPending} />
         <Kpi icon="zap" tone="blue" label="Veces que han corrido" value={ejecuciones.toLocaleString("es-CO")} sub={`${data?.length ?? 0} automatizaciones en este libro`} loading={isPending} />
         <Kpi icon="clock" tone="violet" label="Última ejecución" value={ultima ? fechaHora(ultima.ultima_ejecucion) : "Nunca"} sub={ultima?.nombre ?? "Aún no ha corrido ninguna"} loading={isPending} />
       </KpiGrid>
 
       {limit !== null && (
-        <Notice tone="info" title={`Con el plan Gratis puedes tener ${limit} automatizaciones activas a la vez`}
+        <Notice tone={enPausaPorPlan.length ? "warn" : "info"} title={`Con el plan ${planNombre} puedes tener ${limit} automatizaciones activas a la vez`}
           action={<Button size="sm" variant="soft" asChild><Link href="/planes"><Sparkles /> Ver Premium</Link></Button>}>
-          Con Premium son ilimitadas y puedes pedirle consejos a la IA dentro de tus flujos.
+          {enPausaPorPlan.length
+            ? `Tienes ${activas} activas: solo corren las ${limit} más antiguas. Pausa las que no uses o cambia de plan para que corran todas.`
+            : "Con Premium son ilimitadas y puedes pedirle consejos a la IA dentro de tus flujos."}
         </Notice>
       )}
 

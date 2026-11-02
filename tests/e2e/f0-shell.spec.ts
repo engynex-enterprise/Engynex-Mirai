@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
-import { QA, setQaWelcome } from "./qa"
+import { QA, admin, setQaWelcome } from "./qa"
+import { login } from "./helpers"
 
 const errors = (page: Page) => {
   const list: string[] = []
@@ -29,6 +30,8 @@ test("registro muestra medidor y exige aceptar la política", async ({ page }) =
 
 test("login → bienvenida → shell con menú, Ctrl K y Agregar", async ({ page }) => {
   const errs = errors(page)
+  // Este usuario puede quedar en el plan Gratis: que la ventana de anuncio (campañas reales de la consola) no tape la prueba.
+  await page.addInitScript(() => { try { sessionStorage.setItem("mirai-ad-modal", "1") } catch {} })
   await page.goto("/login")
   await page.getByLabel("Correo").fill(QA.email)
   await page.getByLabel("Contraseña", { exact: true }).fill(QA.password)
@@ -82,5 +85,57 @@ test("login → bienvenida → shell con menú, Ctrl K y Agregar", async ({ page
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow, "sin scroll horizontal").toBeLessThanOrEqual(0)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("⌘K encuentra un proveedor y una meta; Agregar → Suscripción abre el formulario", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = errors(page)
+  await login(page)
+  const sb = admin()
+  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = data.users.find((u) => u.email === QA.email)!.id
+  const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
+  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at").limit(1).single()
+  const bookId = bk!.id, tag = info.project.name.replace(/\W+/g, "")
+  const prov = `Ferretería Buscador ${tag}`, meta = `Viaje Buscador ${tag}`
+  await sb.from("providers").delete().eq("book_id", bookId).eq("nombre", prov)
+  await sb.from("goals").delete().eq("book_id", bookId).eq("nombre", meta)
+  const { data: p } = await sb.from("providers").insert({ book_id: bookId, nombre: prov, tipo: "comercio" }).select("id").single()
+  const { data: g } = await sb.from("goals").insert({ book_id: bookId, nombre: meta, objetivo: 3_000_000, ahorrado: 0 }).select("id").single()
+  try {
+    await page.goto("/inicio")
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 20_000 })
+    await page.keyboard.press("Control+k")
+    const input = page.getByPlaceholder("Buscar secciones, contactos, préstamos…")
+    await expect(input).toBeVisible()
+    await input.fill(prov)
+    const opt = page.getByRole("option", { name: new RegExp(prov) })
+    await expect(opt).toBeVisible({ timeout: 15_000 })
+    await page.screenshot({ path: `tests/.out/buscar-proveedor-${info.project.name}.png` })
+    await opt.click()
+    await expect(page).toHaveURL(new RegExp(`/proveedores\\?id=${p!.id}`))
+
+    await page.keyboard.press("Escape")
+    await page.keyboard.press("Control+k")
+    await input.fill(meta)
+    await page.getByRole("option", { name: new RegExp(meta) }).click()
+    await expect(page).toHaveURL(/\/metas/)
+
+    // Agregar (tecla N) → Suscripción abre "Nueva suscripción".
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    await page.keyboard.press("n")
+    const add = page.getByRole("dialog", { name: "¿Qué quieres agregar?" })
+    await expect(add).toBeVisible()
+    await expect(add.getByRole("button", { name: /Compra con tarjeta/ })).toBeVisible()
+    await expect(add.getByRole("button", { name: /Proveedor/ })).toBeVisible()
+    await page.screenshot({ path: `tests/.out/agregar-grupos-${info.project.name}.png` })
+    await add.getByRole("button", { name: /Suscripción/ }).click()
+    await expect(page).toHaveURL(/\/suscripciones\?nuevo=1/)
+    await expect(page.getByRole("dialog", { name: "Nueva suscripción" })).toBeVisible({ timeout: 15_000 })
+  } finally {
+    await sb.from("providers").delete().eq("id", p!.id)
+    await sb.from("goals").delete().eq("id", g!.id)
+  }
   expect(errs, errs.join("\n")).toEqual([])
 })

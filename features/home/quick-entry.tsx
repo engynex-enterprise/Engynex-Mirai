@@ -7,24 +7,28 @@ import { toast } from "@/components/mirai/toast"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import { UserAvatar } from "@/components/mirai/user-avatar"
-import { useApp } from "@/components/app/app-context"
+import { useApp, useCanRecord } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtMoney } from "@/lib/format"
 import { parseEntry } from "./parse-entry"
-import { parseNL } from "@/features/ai/actions"
-import { useCategories, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
+import { classifyExpenses, parseNL } from "@/features/ai/actions"
+import { useCategories, useKeywordRules, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import { medioEnTexto } from "@/lib/chat/acciones"
 
 /** Compositor de Inicio: escribe lo que pasó y queda registrado. */
 export function QuickEntry() {
   const { user, book } = useApp()
+  // "Solo mira" no registra: la entrada rápida no se muestra (antes solo la frenaba la RLS con un error).
+  const canRecord = useCanRecord()
   const qc = useQueryClient()
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const { data: cats = [] } = useCategories()
   const { data: rules = [] } = useKeywordRules()
   const { data: cfg } = useSettings()
+  const { data: methods = [] } = usePaymentMethods()
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const first = user.apodo || user.nombre.split(" ")[0]
 
@@ -38,16 +42,25 @@ export function QuickEntry() {
     }
     if (!p) { setBusy(false); return toast.error("No entendí el valor", { description: "Escribe algo como “gasté 15 mil en almuerzo ayer”." }) }
     const sb = createClient()
+    // "…por Nequi", "en efectivo": el medio del catálogo que nombra la frase (mueve la cuenta ligada a ese medio).
+    const payment_method_id = medioEnTexto(text, methods)?.id ?? null
     if (p.tipo === "ingreso") {
-      const { data, error } = await sb.from("extra_incomes").insert({ book_id: book.id, fecha: p.fecha, descripcion: p.descripcion, valor: p.valor }).select("id").single()
+      const { data, error } = await sb.from("extra_incomes").insert({ book_id: book.id, fecha: p.fecha, descripcion: p.descripcion, valor: p.valor, payment_method_id }).select("id").single()
       setBusy(false)
       if (error) return toast.error("No se pudo registrar", { description: error.message })
       toast.success("Ingreso registrado", { description: `${p.descripcion}: ${fmtMoney(p.valor)}`, action: { label: "Deshacer", onClick: () => sb.from("extra_incomes").update({ deleted_at: new Date().toISOString() }).eq("id", data.id).then(() => invalidateBook(qc, book.id, "extra_incomes")) } })
       invalidateBook(qc, book.id, "extra_incomes")
     } else {
-      const cat = localCat(p.descripcion, { rules, expenses: history, categories: cats })
+      let cat: { category_id: string; src: string } | null = localCat(p.descripcion, { rules, expenses: history, categories: cats })
+      // Si las reglas no están seguras (nada o solo palabras clave), la IA decide la categoría (como el formulario).
+      if (!cat || cat.src === "palabras") {
+        const t = p.descripcion.trim().toLowerCase()
+        const ai = await classifyExpenses([{ i: 0, descripcion: p.descripcion, valor: p.valor, veces_mes: history.filter((g) => (g.descripcion ?? "").trim().toLowerCase() === t).length }]).catch(() => null)
+        const hit = ai?.[0]
+        if (hit?.category_id) cat = { category_id: hit.category_id, src: hit.src === "ia" ? "ia" : cat?.src ?? "regla" }
+      }
       const category_id = cat?.category_id ?? p.category_id ?? cats.find((c) => c.nombre === "Otros")?.id ?? null
-      const { data, error } = await sb.from("expenses").insert({ book_id: book.id, fecha: p.fecha, descripcion: p.descripcion, valor: p.valor, category_id, cat_src: cat?.src ?? null, origen: "voz", hormiga: false }).select("id").single()
+      const { data, error } = await sb.from("expenses").insert({ book_id: book.id, fecha: p.fecha, descripcion: p.descripcion, valor: p.valor, category_id, cat_src: cat?.src ?? (p.category_id ? "ia" : null), origen: "voz", hormiga: false, payment_method_id }).select("id").single()
       setBusy(false)
       if (error) return toast.error("No se pudo registrar", { description: error.message })
       const h = localHormiga({ descripcion: p.descripcion, valor: p.valor, category_id, fixed_expense_id: null } as never, cats, Number(cfg?.umbral ?? 25000))
@@ -60,6 +73,7 @@ export function QuickEntry() {
     setText("")
   }
 
+  if (!canRecord) return null
   return (
     <div className="grid gap-2">
       <form data-tour="quick" className="flex items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) submit() }}>

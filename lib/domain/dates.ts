@@ -88,3 +88,18 @@ export function proxDia(d: number, today: DateInput): Date {
 export function todayBogota(now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(now)
 }
+
+/**
+ * Próxima ocurrencia de una fecha del calendario (recordatorio o fecha fiscal):
+ * - de una sola vez (`anual === false`): su propia fecha;
+ * - anual (o sin dato, como en la v4): el mismo día de este año o del siguiente si ya pasó.
+ * `tol` = días de gracia antes de pasar al año siguiente (el Calendario fiscal deja ver la de ayer: 1).
+ */
+export function nextOcc(c: { fecha: string; anual?: boolean | null }, today: DateInput, tol = 1): string {
+  if (c.anual === false) return String(c.fecha).slice(0, 10)
+  const t = toDay(today)
+  const d = parseDate(c.fecha)
+  const y = t.getFullYear()
+  const este = new Date(y, d.getMonth(), Math.min(d.getDate(), lastDay(y, d.getMonth())))
+  return iso(days(t, este) >= -tol ? este : new Date(y + 1, d.getMonth(), Math.min(d.getDate(), lastDay(y + 1, d.getMonth()))))
+}

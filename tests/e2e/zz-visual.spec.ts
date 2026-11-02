@@ -34,7 +34,7 @@ test("capturas: banner de cada módulo", async ({ page }, info) => {
   test.setTimeout(900_000)
   await login(page)
   // /consejero es un chat a pantalla completa (sin banner): sus capturas están en f14-chat.spec.ts.
-  const ids = ["puesta", "inicio", "balance", "ingresos", "gastos", "fijos", "tarjetas", "suscripciones", "correo", "importar",
+  const ids = ["puesta", "inicio", "dashboard", "balance", "ingresos", "gastos", "fijos", "tarjetas", "suscripciones", "correo", "importar",
     "me-deben", "le-debo", "contactos", "estrategia", "presupuesto", "flujo", "metas", "retos", "logros", "primas", "familia", "mesadas",
     "compartidos", "inversiones", "renta", "calendario", "contador", "recordatorios", "indicadores", "reportes", "novedades", "faq", "manual", "ajustes"]
   for (const id of ids) {

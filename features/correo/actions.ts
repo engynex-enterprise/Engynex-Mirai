@@ -1,18 +1,16 @@
 "use server"
 
-import { createHash } from "node:crypto"
 import { z } from "zod"
 import { requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { supabaseServer } from "@/utils/supabase/server"
-import { googleFetch, googleToken } from "@/lib/google"
+import { googleFetch } from "@/lib/google"
+import { calSyncMsg, calendarConnected, syncCalendarFor } from "@/lib/google-calendar"
 import { aiObject } from "@/lib/ai/run"
 import { mailMayBePurchase } from "@/lib/ai/router"
 import { clip } from "@/lib/ai/compact"
 import { aiSettings } from "@/lib/ai/model"
-import { loadBookData } from "@/lib/book-data"
-import { agenda, todayBogota } from "@/lib/domain"
-import { getIntegration } from "@/features/integrations/store"
+import { todayBogota } from "@/lib/domain"
 import { MAILQ_DEFAULT } from "./query"
 import { can } from "@/lib/plans"
 
@@ -67,25 +65,29 @@ export async function googleDisconnect() {
   await supabaseAdmin().from("google_connections").delete().eq("user_id", ctx.user.id)
 }
 
-/** Lleva los próximos pagos y cobros (45 días) a Google Calendar. Ids estables: no duplica. */
+/**
+ * Lleva los próximos pagos y cobros (45 días) a Google Calendar y los mantiene al día: crea los nuevos, actualiza los que
+ * cambiaron de monto y quita los que ya pagaste o borraste (lib/google-calendar.ts). Ids estables: no duplica.
+ * El cron diario hace lo mismo solo, para quien conectó Calendar.
+ */
 export async function syncCalendar(): Promise<{ ok: boolean; msg: string }> {
   const ctx = await requireRole("viewer")
   if (!can(ctx.plan, "banco")) return { ok: false, msg: "Llevar tus pagos a Google Calendar no está incluido en tu plan." }
   try {
-    await googleToken(ctx.user.id, "calendar")
-    const cfg = await getIntegration(ctx.household.id, "google_calendar")
-    const cal = encodeURIComponent(String(cfg?.config.calendarId || "primary"))
-    const sb = await supabaseServer()
-    const today = todayBogota()
-    const items = agenda(await loadBookData(sb, ctx.book.id), today).filter((x) => x.d >= 0 && x.d <= 45)
-    let n = 0
-    for (const x of items) {
-      const id = createHash("sha1").update(`${ctx.book.id}|${x.k}|${x.id}|${x.fecha}`).digest("hex").slice(0, 32) // base32hex válido (0-9a-f)
-      const end = new Date(`${x.fecha}T12:00:00`); end.setDate(end.getDate() + 1)
-      const body = { id, summary: `${x.dir === "cobrar" ? "Cobrar" : "Pagar"}: ${x.titulo}`, description: `${x.sub}\nValor: $${Math.round(x.monto).toLocaleString("es-CO")}\nDesde Mirai`, start: { date: x.fecha }, end: { date: end.toISOString().slice(0, 10) }, reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 9 * 60 }] } }
-      try { await googleFetch(ctx.user.id, "calendar", `https://www.googleapis.com/calendar/v3/calendars/${cal}/events`, { method: "POST", body: JSON.stringify(body) }); n++ }
-      catch (e) { if (!/already exists|duplicate|409/i.test((e as Error).message)) throw e }
-    }
-    return { ok: true, msg: n ? `Llevamos ${n} pago${n === 1 ? "" : "s"} a tu Google Calendar.` : "Tu calendario ya estaba al día." }
+    const { data: rule } = await supabaseAdmin().from("notification_rules").select("ocultar_montos").eq("user_id", ctx.user.id).eq("book_id", ctx.book.id).maybeSingle()
+    const r = await syncCalendarFor({ userId: ctx.user.id, bookId: ctx.book.id, householdId: ctx.household.id, today: todayBogota(), ocultarMontos: !!rule?.ocultar_montos })
+    return { ok: true, msg: calSyncMsg(r) }
   } catch (e) { return { ok: false, msg: (e as Error).message } }
+}
+
+/** Estado de Google Calendar para Ajustes › Alertas: si está conectado, si el plan lo incluye y cuántos eventos lleva Mirai. */
+export async function calendarStatus(): Promise<{ conectado: boolean; plan: boolean; eventos: number }> {
+  try {
+    const ctx = await requireRole("viewer")
+    const [conectado, { count }] = await Promise.all([
+      calendarConnected(ctx.user.id),
+      supabaseAdmin().from("google_event_map").select("key", { count: "exact", head: true }).eq("user_id", ctx.user.id).eq("book_id", ctx.book.id),
+    ])
+    return { conectado, plan: can(ctx.plan, "banco"), eventos: count ?? 0 }
+  } catch { return { conectado: false, plan: false, eventos: 0 } }
 }

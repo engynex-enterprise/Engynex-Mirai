@@ -40,10 +40,11 @@ export const WA_VARS = [
   { k: "enlace", l: "Enlace a Mirai", ej: "https://mirai.engynex.com/inicio" },
   { k: "invita", l: "Quién invita (invitaciones al hogar)", ej: "Alberto" },
   { k: "hogar", l: "Nombre del hogar (invitaciones al hogar)", ej: "Hogar Navarro" },
+  { k: "cobra", l: "Quién cobra (recordatorio a quien te debe)", ej: "Alberto Navarro" },
 ] as const
 export type WaVar = (typeof WA_VARS)[number]["k"]
 /** Datos que solo tienen algunos casos (invitaciones): opcionales para no cambiar los demás envíos. */
-type WaOptional = "invita" | "hogar"
+type WaOptional = "invita" | "hogar" | "cobra"
 /** Valores que Mirai puede poner en la plantilla. */
 export type WaValues = Record<Exclude<WaVar, WaOptional>, string> & Partial<Record<WaOptional, string>>
 type Role = WaVar
@@ -67,6 +68,7 @@ export const WA_CASES = [
   { k: "inversiones", n: "Inversión por vencer", d: "Cuando el resumen solo trae CDT o inversiones por vencer.", icon: "trending-up" },
   { k: "metas", n: "Metas", d: "Cuando el resumen solo trae metas cerca de su fecha.", icon: "target" },
   { k: "automatizacion", n: "Aviso de automatización", d: "Mensajes de las automatizaciones del hogar que avisan por todos los canales.", icon: "workflow" },
+  { k: "cobro_tercero", n: "Recordatorio a quien te debe", d: "Cuando alguien, desde Me deben, le envía a la persona que le debe el recordatorio de su cuota desde el número de Mirai. Solo sale con una plantilla propia aprobada para este caso (nunca con la de respaldo). Variables: nombre de quien debe, quién cobra, concepto (detalle), monto, fecha y enlace.", icon: "hand-coins" },
   { k: "invitacion", n: "Invitación al hogar", d: "Cuando alguien invita a una persona a su hogar por celular. Variables: quién invita, el hogar y el enlace para aceptar. Si no hay una plantilla propia aprobada, la persona la envía desde su WhatsApp.", icon: "user-plus" },
   { k: "prueba", n: "Mensaje de prueba", d: "“Enviarme una prueba” en Ajustes › Alertas y “Enviar prueba” de la consola.", icon: "send" },
 ] as const
@@ -84,6 +86,7 @@ export function sampleValues(caso: WaCase, base = "https://mirai.engynex.com"): 
     inversiones: { titulo: "CDT Bancolombia", detalle: "Vence el 10 nov", monto: "$5.000.000", cantidad: "1", resumen: "CDT Bancolombia $5.000.000 vence el 10 nov", enlace: `${base}/inversiones` },
     metas: { titulo: "Viaje a Cartagena", detalle: "Faltan 15 días y vas en el 70 %", monto: "$2.100.000", cantidad: "1", resumen: "Viaje a Cartagena: vas en el 70 %", enlace: `${base}/metas` },
     automatizacion: { titulo: "Gasto grande registrado", detalle: "Se registró un gasto de $850.000 en Tecnología", monto: "$850.000", cantidad: "1", resumen: "Gasto grande registrado: $850.000 en Tecnología", enlace: `${base}/automatizaciones` },
+    cobro_tercero: { nombre: "Juan", cobra: "Alberto Navarro", titulo: "Cuota del préstamo", detalle: "Préstamo para la moto", monto: "$200.000", fecha: "5 de noviembre", cantidad: "1", resumen: "Alberto Navarro te recuerda la cuota de $200.000 del préstamo para la moto (5 de noviembre)", enlace: `${base}/inicio` },
     invitacion: { nombre: "Ana", invita: "Alberto", hogar: "Hogar Navarro", titulo: "Invitación al hogar", detalle: "Alberto te invitó a su hogar en Mirai", monto: "", cantidad: "1", resumen: "Alberto te invitó a su hogar \"Hogar Navarro\" en Mirai", enlace: `${base}/invitacion/ejemplo` },
     prueba: { titulo: "Mensaje de prueba", detalle: "Así te llegarán los avisos", monto: "", cantidad: "0", resumen: "Este es un mensaje de prueba de Mirai. Así te llegará el resumen de tus pagos y cobros", enlace: `${base}/inicio` },
   }
@@ -332,18 +335,17 @@ export function waSettings(config: Record<string, unknown> | null | undefined): 
 export const esPlantillaDeMeta = (name: string | null | undefined) => /^(hello_world|3p_direct_integration_test_template|sample_)/i.test(String(name ?? "").trim())
 
 /**
- * Plantilla de respaldo cuando la del caso no está aprobada: la por defecto, luego una propia aprobada con variable en el
- * cuerpo (primero en español) y, al final, la de ejemplo de Meta.
+ * Plantilla de respaldo cuando la del caso no está aprobada: la por defecto y luego una propia aprobada con variable en el
+ * cuerpo (primero en español). Sin ninguna, el aviso va como texto libre (llega si la persona escribió en las últimas 24 h).
  */
 export function plantillaDeRespaldo(list: MetaTemplate[], defaultName: string, skip: string): MetaTemplate | null {
-  const ok = list.filter((t) => String(t.status ?? "").toUpperCase() === "APPROVED" && t.name !== skip)
-  const conVariable = (t: MetaTemplate) => !esPlantillaDeMeta(t.name) && templateSlots(t).some((x) => x.comp === "body")
+  // Nunca las de ejemplo de Meta (hello_world, "Integration Test"): le llegaban a la persona en inglés y sin sus datos.
+  const ok = list.filter((t) => String(t.status ?? "").toUpperCase() === "APPROVED" && t.name !== skip && !esPlantillaDeMeta(t.name))
+  const conVariable = (t: MetaTemplate) => templateSlots(t).some((x) => x.comp === "body")
   return [
-    defaultName && defaultName !== skip ? ok.find((t) => t.name === defaultName) : undefined,
+    defaultName && defaultName !== skip ? ok.find((t) => t.name === defaultName && conVariable(t)) : undefined,
     ok.find((t) => conVariable(t) && String(t.language ?? "").startsWith("es")),
     ok.find(conVariable),
-    ok.find((t) => esPlantillaDeMeta(t.name)),
-    ok[0],
   ].find(Boolean) ?? null
 }
 

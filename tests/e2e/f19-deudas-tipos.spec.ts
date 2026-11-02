@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { login, shot, watchErrors } from "./helpers"
+import { crearEntidad, login, shot, watchErrors } from "./helpers"
 
 // Registrar una deuda según su tipo: cada tipo muestra solo sus campos, con sus propias palabras, y el resumen de la
 // derecha (al final en el celular) se arma en vivo. Corre en escritorio (1366 px) y en móvil (400 px).
@@ -21,12 +21,8 @@ test("deuda con el banco: entidad, cuota mensual, plazo, resumen y detalle de cu
   await expect(page.getByRole("textbox", { name: "Nombre completo" })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Leer con foto" })).toBeVisible()
   const banco = `Cooperativa QA ${info.project.name}`
-  await page.getByRole("combobox", { name: /banco o entidad/i }).click()
-  await page.getByPlaceholder("Buscar…").fill(banco)
-  await page.getByRole("option", { name: /Crear banco o entidad/ }).first().click()
-  await expect(page.getByRole("textbox", { name: "Nombre", exact: true })).toHaveValue(banco)
-  await page.getByRole("button", { name: "Crear y usar" }).click()
-  await expect(page.getByRole("combobox", { name: /banco o entidad/i })).toContainText(banco)
+  await expect(page.getByText(/Queda en Contactos › Bancos y entidades/)).toBeVisible()
+  await crearEntidad(page, /banco o entidad/i, banco, /Crear banco o entidad/)
   await page.getByRole("radio", { name: "Vehículo" }).click()
   await expect(page.getByRole("spinbutton", { name: "Plazo en meses" })).toHaveValue("60")
   await page.getByRole("textbox", { name: "¿Cuánto te prestaron?" }).fill("20000000")
@@ -100,6 +96,9 @@ test("préstamo de una persona: alguien nuevo, cuotas sin intereses y nota del a
   await page.getByRole("textbox", { name: "¿Cuánto te prestó?" }).fill("600000")
   await expect(page.getByRole("radio", { name: "En cuotas" })).toHaveAttribute("aria-checked", "true")
   await page.getByRole("radio", { name: "3", exact: true }).click()
+  // La fecha del préstamo y desde cuándo se empieza a pagar van por separado; el aviso dice dónde caen las cuotas.
+  await expect(page.getByText("¿Desde cuándo empiezas a pagar?")).toBeVisible()
+  await expect(page.getByText(/3 cuotas, una cada mes: la primera el .* y la última el/)).toBeVisible()
   // Sin intereses por defecto: no hay campos de tasa.
   await expect(page.getByRole("textbox", { name: "Interés mensual (%)" })).toHaveCount(0)
   await page.getByRole("textbox", { name: "Nota del acuerdo (opcional)" }).fill("Le pago cuando me llegue la prima")
@@ -118,6 +117,8 @@ test("préstamo de una persona: alguien nuevo, cuotas sin intereses y nota del a
   await expect(page.getByRole("heading", { name: nombre })).toBeVisible()
   await expect(page.getByText("Le pago cuando me llegue la prima")).toBeVisible()
   await expect(page.getByText("0 de 3 cuotas")).toBeVisible()
+  await page.getByRole("tab", { name: "Datos" }).click()
+  await expect(page.getByText("Primera cuota")).toBeVisible()
   expect(errs, errs.join("\n")).toEqual([])
 })
 
@@ -132,11 +133,119 @@ test("cambiar de tipo cambia los campos y el botón", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "¿Qué objeto dejaste?" })).toHaveCount(0)
   await expect(page.getByRole("textbox", { name: "Cuota inicial (opcional)" })).toBeVisible()
   await expect(page.getByRole("button", { name: "Registrar compra" })).toBeDisabled()
-  // El gota a gota muestra el aviso de riesgo (no se promueve).
+  // El gota a gota muestra el aviso de riesgo (no se promueve) y quien presta es un contacto (basta el apodo).
   await page.getByRole("radio", { name: "Gota a gota o prestamista" }).click()
   await expect(page.getByText("Ten mucho cuidado con este préstamo")).toBeVisible()
+  await page.getByRole("radio", { name: "Alguien nuevo" }).click()
+  await expect(page.getByRole("textbox", { name: "Nombre o apodo" })).toHaveAttribute("placeholder", "Ej. Don Jaime")
+  await expect(page.getByRole("textbox", { name: "Número de documento" })).toHaveCount(0)
+  await expect(page.getByText(/Basta con el nombre o como le dicen.*Queda en Contactos/)).toBeVisible()
   await page.getByRole("textbox", { name: "¿Cuánto te prestaron?" }).fill("500000")
   await page.getByRole("textbox", { name: "¿Cuánto pagas cada día?" }).fill("25000")
   await expect(page.getByTestId("loan-usura")).toContainText("Supera la tasa de usura")
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("empeño en la misma compraventa: la segunda vez se escoge la que ya existe y no se repite", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const casa = `Compraventa La Repetida ${info.project.name}`
+  const combo = "Casa de empeño o compraventa"
+  const buscar = "Buscar o escribir el nombre…"
+  const empeno = async (obj: string) => {
+    await page.getByRole("textbox", { name: "¿Qué objeto dejaste?" }).fill(obj)
+    await page.getByRole("textbox", { name: "¿Cuánto te prestaron sobre el objeto?" }).fill("300000")
+    await page.getByRole("button", { name: "Registrar empeño" }).click()
+    await expect(page.getByText("Empeño registrado.")).toBeVisible()
+    await expect(page.getByTestId("loan-titulo")).toHaveText(`Empeño: ${obj}`)
+  }
+  // Primer empeño: la compraventa se crea como entidad (tipo Casa de empeño).
+  await page.goto("/le-debo?nuevo=1&empeno=1")
+  await crearEntidad(page, combo, casa, /Crear casa de empeño/, buscar)
+  await empeno("Anillo")
+  // Segundo empeño: al escribir el nombre (con otras mayúsculas) aparece la que ya existe…
+  await page.goto("/le-debo?nuevo=1&empeno=1")
+  await page.getByRole("combobox", { name: combo }).click()
+  await page.getByPlaceholder(buscar).fill(casa.toUpperCase())
+  await expect(page.getByRole("option", { name: new RegExp(`^${casa}`) }).first()).toBeVisible()
+  // …y aunque toque "Crear", se usa la existente en vez de crear otra.
+  await page.getByRole("option", { name: /Crear casa de empeño/ }).click()
+  await expect(page.getByText(`Ya tenías “${casa}”: la usamos`)).toBeVisible()
+  await expect(page.getByRole("button", { name: "Crear y usar" })).toHaveCount(0)
+  await expect(page.getByRole("combobox", { name: combo })).toContainText(casa)
+  await empeno("Reloj")
+  // En Contactos › Bancos y entidades queda una sola, con sus deudas.
+  await page.goto("/contactos?tab=entidades")
+  await expect(page.getByRole("tab", { name: /Bancos y entidades/ })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("link", { name: "Ver en Proveedores" })).toBeVisible()
+  await page.getByPlaceholder("Buscar por nombre o NIT").fill(casa)
+  const cards = page.locator("[id^=e-]", { hasText: casa })
+  await expect(cards).toHaveCount(1)
+  await expect(cards).toContainText("Casa de empeño")
+  await expect(cards).toContainText(/\d+ deudas/)
+  await shot(page, "contactos-entidades", info.project.name)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("gota a gota: el prestamista queda en Contactos y no se repite", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const apodo = `Don Jaime ${info.project.name}`
+  await page.goto("/le-debo?nuevo=1&tipo=gota")
+  await page.getByRole("radio", { name: "Gota a gota o prestamista" }).click()
+  await page.getByRole("radio", { name: "Alguien nuevo" }).click()
+  // Sin nombre no se puede guardar.
+  await page.getByRole("textbox", { name: "¿Cuánto te prestaron?" }).fill("500000")
+  await page.getByRole("textbox", { name: "¿Cuánto pagas cada día?" }).fill("25000")
+  await expect(page.getByRole("button", { name: "Registrar deuda" })).toBeDisabled()
+  const nombre = page.getByRole("textbox", { name: "Nombre o apodo" })
+  await nombre.fill(apodo)
+  // Se crea el contacto al guardar (en un reintento, si ya estaba, se usa ese mismo).
+  await page.getByRole("button", { name: "Registrar deuda" }).click()
+  await expect(page.getByText("Deuda registrada.")).toBeVisible()
+  await expect(page.getByTestId("loan-titulo")).toHaveText(`Gota a gota · ${apodo}`)
+  // La segunda vez, al escribir el mismo apodo se sugiere el contacto que ya existe.
+  await page.goto("/le-debo?nuevo=1&tipo=gota")
+  await page.getByRole("radio", { name: "Gota a gota o prestamista" }).click()
+  await page.getByRole("radio", { name: "Alguien nuevo" }).click()
+  await page.getByRole("textbox", { name: "Nombre o apodo" }).fill(apodo.toLowerCase())
+  await expect(page.getByText(`Ya tienes a “${apodo}” en Contactos.`).first()).toBeVisible()
+  await page.getByRole("button", { name: "Escogerlo" }).click()
+  await expect(page.getByRole("combobox", { name: "Contacto" })).toContainText(apodo)
+  await page.keyboard.press("Escape")
+  await page.goto("/contactos")
+  await expect(page.locator("[id^=c-]", { hasText: apodo })).toHaveCount(1)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("deudas con la misma entidad: una sola tarjeta en la lista y una pestaña por deuda", async ({ page }, info) => {
+  test.setTimeout(150_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const ent = `Banco Agrupado ${info.project.name} ${Date.now() % 1000}`
+  for (const [i, [monto, cuota, plazo]] of [["8000000", "300000", "36"], ["2000000", "110000", "24"]].entries()) {
+    await page.goto("/le-debo?nuevo=1")
+    await page.getByRole("radio", { name: "Banco, cooperativa o financiera" }).click()
+    await page.getByRole("combobox", { name: /banco o entidad/i }).click()
+    await page.getByPlaceholder("Buscar…").fill(ent)
+    if (i === 0) { await page.getByRole("option", { name: /Crear banco o entidad/ }).first().click(); await page.getByRole("button", { name: "Crear y usar" }).click() }
+    else await page.getByRole("option", { name: ent }).first().click()
+    await page.getByRole("textbox", { name: "¿Cuánto te prestaron?" }).fill(monto)
+    await page.getByRole("radio", { name: /Sé la cuota/ }).click()
+    await page.getByRole("textbox", { name: "Cuota mensual" }).fill(cuota)
+    await page.getByRole("spinbutton", { name: "Plazo en meses" }).fill(plazo)
+    await page.getByRole("button", { name: "Registrar deuda" }).click()
+    await expect(page.getByText("Deuda registrada.").first()).toBeVisible()
+  }
+  const lista = page.getByTestId("data-table")
+  await expect(lista.locator("li", { hasText: ent })).toHaveCount(1)
+  await expect(lista.locator("li", { hasText: ent }).getByTestId("loan-tipo")).toContainText("2 deudas")
+  const tabs = page.getByRole("tablist", { name: "Deudas con esta entidad" })
+  await expect(tabs.getByRole("tab")).toHaveCount(2)
+  await tabs.getByRole("tab").nth(1).click()
+  await expect(tabs.getByRole("tab").nth(1)).toHaveAttribute("aria-selected", "true")
+  await shot(page, "deudas-agrupadas", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
 })

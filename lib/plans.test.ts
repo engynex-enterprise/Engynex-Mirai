@@ -20,7 +20,7 @@ describe("planes", () => {
     expect(vigente(null, now)).toBe(false)
   })
   it("secciones Premium del menú", () => {
-    expect(featureOfSection("consejero")).toBe("ia")
+    expect(featureOfSection("consejero")).toBeUndefined() // funciona en Gratis con algoritmos
     expect(featureOfSection("renta")).toBe("impuestos")
     expect(featureOfSection("gastos")).toBeUndefined()
   })

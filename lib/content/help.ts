@@ -6,6 +6,42 @@ import FHELP_RAW from "@/lib/data/legacy-fhelp.json"
 export type HelpEntry = { t: string; i: string; p: string[]; tips?: string[] }
 export const HELP: Record<string, HelpEntry> = {
   ...(HELP_RAW as Record<string, HelpEntry>),
+  balance: {
+    t: "Balance y quincenas",
+    i: "Todo lo que entra y sale de cada módulo de Mirai (ingresos, gastos, fijos, suscripciones, tarjetas, deudas, préstamos, impuestos, mesadas y ahorro), lo que tienes y lo que debes.",
+    p: [
+      "Arriba ves <b>lo que tengo</b>, <b>lo que debo</b> y tu <b>patrimonio</b>: lo que te quedaría si vendieras todo y pagaras todas tus deudas. Lo que debes incluye los impuestos que ya debes aunque no hayan vencido (renta, predial, vehicular), marcados como <b>Estimado</b>.",
+      "En <b>Tu mes</b> ves lo que entra, lo que sale, lo que ahorras y lo que te queda. Los gastos que registras en <b>Gastos</b> se suman solos; con las flechas cambias de mes.",
+      "En las pestañas <b>1ª quincena</b>, <b>2ª quincena</b>, <b>Mes completo</b> y <b>Año</b> ves cada entrada y salida con su fecha, agrupada por módulo y categoría. Filtra por módulo o por <b>Pendiente</b>, <b>Vencido</b> y <b>Hecho</b>; toca un movimiento para ir a su sección.",
+      "Cada movimiento tiene una etiqueta: <b>Hecho</b> (registrado o recibido), <b>Programado</b> (aún no llega), <b>Vencido</b> (pasó sin registrar el pago), <b>Estimado</b> (Mirai lo calculó) y <b>Ya pasó</b> (su fecha pasó y Mirai lo cuenta como hecho).",
+      "Toca <b>Agregar cuenta o bien</b> para sumar tus cuentas bancarias, efectivo, casa o carro, y deudas sin cuotas. Los préstamos, inversiones, tarjetas e impuestos se suman solos desde sus secciones.",
+      "Al agregar una cuenta (banco, Nequi, efectivo) deja encendido <b>Que el saldo se actualice solo</b> y elige con qué medios de pago la usas: los gastos, ingresos y pagos que registres con esos medios suben o bajan su saldo. Toca la cuenta para ver sus movimientos o <b>cuadrarla</b> con el saldo que ves en tu banco.",
+      "Tus <b>metas</b> y tu <b>fondo de emergencia</b> suman en lo que tienes como <b>ahorro apartado</b>. Si esa plata está dentro de una de tus cuentas, dilo en la meta (o en el fondo) para no contarla dos veces.",
+      "Con <b>Exportar</b> descargas lo que ves en un archivo para Excel.",
+    ],
+    tips: [
+      "Nada se cuenta dos veces: el pago de un gasto fijo sale una vez, lo que compras con tarjeta sale cuando pagas la tarjeta y la cuota de un préstamo sale en Deudas.",
+      "Lo que ahorras (metas, fondo de emergencia, inversiones) va aparte de lo que gastas: sigue siendo tu plata.",
+      "Si tu patrimonio crece cada mes, vas por buen camino. Míralo en la gráfica de patrimonio o en el Dashboard.",
+    ],
+  },
+  dashboard: {
+    t: "Dashboard",
+    i: "Tus números en gráficas para decidir: cuánto entra y sale cada mes, en qué se va la plata, cómo va tu patrimonio, tus deudas y qué te conviene hacer.",
+    p: [
+      "Escoge el <b>periodo</b> arriba (este mes, el mes pasado, los últimos 3 o 12 meses o este año). Las tarjetas de arriba y las gráficas de en qué se va la plata cambian con él.",
+      "<b>Entra y sale mes a mes</b>: los últimos 12 meses. Si las barras de lo que sale pasan a las de lo que entra, ese mes gastaste más de lo que ganaste.",
+      "<b>En qué se va la plata</b>: tus gastos por categoría (las compras con tarjeta incluidas) y por módulo.",
+      "<b>Tus deudas</b>: cuánto debes, cuándo terminas de pagar cada una y cuánto te falta pagar de intereses. La gráfica muestra cómo baja lo que debes si pagas las cuotas.",
+      "<b>Tus compromisos</b>: qué parte de tu ingreso se va en fijos, cuotas, tarjetas y suscripciones; cuánto puedes ahorrar al mes y cuántos meses aguantas sin ingresos.",
+      "<b>Próximos pagos</b>, <b>impuestos que vienen</b> y <b>tus metas</b> con su avance.",
+      "<b>Decisiones</b>: recomendaciones con su impacto en pesos (por ejemplo, qué deuda pagar primero y cuánto ahorras en intereses). Toca cada una para ir a donde lo haces.",
+    ],
+    tips: [
+      "Toca una gráfica o pasa el dedo por ella para ver el valor de cada mes.",
+      "Todo sale de lo que registras en Mirai: mientras más completo, más acertadas las recomendaciones. Los impuestos y lo que falta por gastar son estimados.",
+    ],
+  },
   "le-debo": {
     t: "Le debo", i: "Tus créditos y deudas: con el banco, la casa de empeño, la tienda que te fía, un familiar o un almacén.",
     p: [

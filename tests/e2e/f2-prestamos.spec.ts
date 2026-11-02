@@ -41,7 +41,8 @@ test("me deben: préstamo con interés, pagos previos, registrar y deshacer pago
   await expect(page.getByText("Cuota registrada")).toBeVisible()
   await expect(page.getByText("3 de 6 cuotas")).toBeVisible()
   await page.getByRole("tab", { name: "Pagos recibidos" }).click()
-  await page.getByRole("button", { name: "Deshacer" }).first().click()
+  // En el celular la barra inferior y los avisos pueden quedar encima del botón: se pulsa directo.
+  await page.getByRole("tabpanel").getByRole("button", { name: "Deshacer" }).first().dispatchEvent("click")
   await expect(page.getByText("2 de 6 cuotas")).toBeVisible()
   expect(errs, errs.join("\n")).toEqual([])
 })
@@ -54,11 +55,22 @@ test("le debo: registrar empeño con objeto y fecha límite", async ({ page }, i
   await expect(page.getByRole("button", { name: "Registrar empeño" })).toHaveCount(0)
   await page.getByRole("button", { name: "Nueva deuda" }).first().click()
   await page.getByRole("radio", { name: "Empeño" }).click()
-  // La casa de empeño puede ser solo un nombre escrito.
+  // La casa de empeño siempre es una entidad (nunca un nombre suelto): se crea ahí mismo y queda para la próxima vez.
+  await expect(page.getByText("Queda en Contactos › Bancos y entidades.")).toBeVisible()
   const casa = `Compraventa ${info.project.name}`
   await page.getByRole("combobox", { name: "Casa de empeño o compraventa" }).click()
-  await page.getByPlaceholder("Buscar…").fill(casa)
-  await page.getByRole("option", { name: /Usar el nombre/ }).click()
+  await page.getByPlaceholder("Buscar o escribir el nombre…").fill(casa)
+  await expect(page.getByRole("option", { name: /Usar el nombre/ })).toHaveCount(0)
+  await page.getByRole("option", { name: /Crear casa de empeño/ }).click()
+  // La ventana arranca con el nombre escrito y el tipo "Casa de empeño" (en un reintento ya existe y se escoge sola).
+  const crear = page.getByRole("button", { name: "Crear y usar" })
+  if (await crear.waitFor({ timeout: 4000 }).then(() => true, () => false)) {
+    await expect(page.getByRole("heading", { name: "Nueva casa de empeño" })).toBeVisible()
+    await expect(page.getByRole("textbox", { name: "Nombre", exact: true })).toHaveValue(casa)
+    await expect(page.getByRole("combobox", { name: "Tipo de entidad" })).toContainText("Casa de empeño")
+    await crear.click()
+  }
+  await expect(page.getByRole("combobox", { name: "Casa de empeño o compraventa" })).toContainText(casa)
   await page.getByRole("textbox", { name: "¿Qué objeto dejaste?" }).fill("Cadena de oro")
   await page.getByRole("textbox", { name: "¿En cuánto lo avaluaron?" }).fill("900000")
   await page.getByRole("textbox", { name: "¿Cuánto te prestaron sobre el objeto?" }).fill("500000")

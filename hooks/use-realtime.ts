@@ -4,18 +4,26 @@ import { useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/client"
+import { useApp } from "@/components/app/app-context"
 import { invalidateBook, isLocalEcho } from "./use-book-data"
 
 /** Tablas sincronizadas en vivo (deben estar en la publicación supabase_realtime). */
 const LIVE_TABLES = [
   "book_settings", "categories", "income_categories", "entities", "payment_methods", "keyword_rules",
   "incomes", "extra_incomes", "fixed_expenses", "expenses", "fixed_expense_payments", "subscriptions",
-  "credit_cards", "card_purchases", "contacts", "loans", "loan_payments", "assets", "liabilities",
+  "credit_cards", "card_purchases", "card_payments", "contacts", "loans", "loan_payments", "assets", "liabilities",
   "investments", "goals", "emergency_funds", "fund_movements", "calendar_events", "shared_groups",
   "shared_group_expenses", "allowances", "allowance_movements", "savings_challenges", "tax_years",
   "tax_assets", "attachments", "accountant_notes", "advisor_consultations", "gami_badges", "wishlist", "net_worth_snapshots",
-  "automations", "automation_runs", "providers",
+  "automations", "automation_runs", "providers", "goal_movements",
 ] as const
+
+/**
+ * Tablas del hogar (filtro por `household_id`): integrantes de la familia y personas con acceso. Están en la
+ * publicación supabase_realtime; al cambiar se refresca todo lo del hogar (["h", hogar]) y lo que las usa en el libro
+ * (dependientes de la renta, por miembro…).
+ */
+const HOUSEHOLD_TABLES = ["family_members", "household_members"] as const
 
 export type PresenceUser = { id: string; nombre: string; avatar: string | null; path: string; at: string }
 export type LiveStatus = "conectando" | "en-vivo" | "sin-conexion"
@@ -27,13 +35,14 @@ type ChangePayload = { new?: { id?: string } | null; old?: { id?: string } | nul
 
 /**
  * Un canal por libro: Postgres Changes (refresca la caché de TanStack Query cuando alguien
- * de la familia cambia algo) + Presence (quién está conectado y en qué pantalla).
+ * de la familia cambia algo, también los integrantes del hogar) + Presence (quién está conectado y en qué pantalla).
  * - Ignora el eco de lo que este navegador acaba de guardar (useSave/useSoftDelete ya refrescan).
  * - Agrupa las ráfagas por tabla y solo invalida las consultas que leen esa tabla (invalidateBook).
  * - Si la conexión se cae y vuelve, recarga el libro: pudo perderse algún cambio mientras tanto.
  */
 export function useBookRealtime(bookId: string, me: Omit<PresenceUser, "at" | "path">, path: string) {
   const qc = useQueryClient()
+  const householdId = useApp().household.id
   const [status, setStatus] = useState<LiveStatus>("conectando")
   const [online, setOnline] = useState<PresenceUser[]>([])
   const channel = useRef<RealtimeChannel | null>(null)
@@ -52,6 +61,13 @@ export function useBookRealtime(bookId: string, me: Omit<PresenceUser, "at" | "p
     for (const table of LIVE_TABLES) {
       ch.on("postgres_changes", { event: "*", schema: "public", table, filter: `book_id=eq.${bookId}` }, (p: ChangePayload) => {
         if (isLocalEcho(table, p.new?.id ?? p.old?.id)) return
+        dirty.add(table)
+        timer ??= setTimeout(flush, BURST_MS)
+      })
+    }
+    for (const table of HOUSEHOLD_TABLES) {
+      ch.on("postgres_changes", { event: "*", schema: "public", table, filter: `household_id=eq.${householdId}` }, () => {
+        void qc.invalidateQueries({ queryKey: ["h", householdId] })
         dirty.add(table)
         timer ??= setTimeout(flush, BURST_MS)
       })
@@ -80,7 +96,7 @@ export function useBookRealtime(bookId: string, me: Omit<PresenceUser, "at" | "p
       if (timer) clearTimeout(timer)
       void sb.removeChannel(ch)
     }
-  }, [bookId, me.id, qc])
+  }, [bookId, householdId, me.id, qc])
 
   useEffect(() => {
     if (status === "en-vivo") channel.current?.track({ ...me, path, at: new Date().toISOString() })

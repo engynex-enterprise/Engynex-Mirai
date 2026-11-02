@@ -11,6 +11,8 @@ import { Kbd } from "@/components/ui/kbd"
 import { TONE, type IconTone } from "@/components/mirai/tone-icon"
 import { cn } from "@/lib/utils"
 import { PAGES, PAGE_TABS } from "@/lib/nav"
+import { fmtDate, fmtMoney } from "@/lib/format"
+import { loanTipo, tipoDef, tiposDe } from "@/lib/domain/loan-tipos"
 
 /** Palabras extra de cada sección (la descripción de su pestaña: "gastos hormiga", "Netflix"…). */
 const TAB_DESC = new Map(Object.values(PAGE_TABS).flat().map((t) => [t.id, t.desc]))
@@ -34,34 +36,74 @@ function Glyph({ name, tone = "gray", children }: { name?: string; tone?: IconTo
   return <span aria-hidden className={cn("grid size-7 shrink-0 place-items-center rounded-md [&>svg]:size-4", TONE[tone])}>{children ?? <Icon name={name ?? "circle"} />}</span>
 }
 
-/** Buscador global (Ctrl/⌘ K): secciones, contactos, préstamos y gastos fijos. */
+/** Un resultado de registro del libro: [clave, texto que se busca, título, detalle, ícono, color, enlace]. */
+type Hit = { k: string; v: string; t: string; sub?: string; icon: string; tone: IconTone; href: string }
+type Group = { heading: string; hits: Hit[] }
+
+/** Agregar una deuda o un préstamo de un tipo ya escogido (?nuevo=<tipo>, lo lee features/loans/loans-view.tsx). */
+const LOAN_ADDS = [...tiposDe("pagar").map((t) => ({ ...t, href: `/le-debo?nuevo=${t.value}`, k: "Deuda" })), ...tiposDe("cobrar").filter((t) => t.value !== "otro").map((t) => ({ ...t, href: `/me-deben?nuevo=${t.value}`, k: "Préstamo" }))]
+
+const n = (v: unknown) => Number(v ?? 0)
+
+/** Arma los grupos de registros del libro que el buscador muestra (todos los módulos). */
+async function searchIndex(bookId: string): Promise<Group[]> {
+  const sb = createClient()
+  const q = <T,>(p: PromiseLike<{ data: T[] | null }>) => Promise.resolve(p).then((r) => r.data ?? []).catch(() => [] as T[])
+  const by = (t: string, cols: string, lim = 200) => sb.from(t as never).select(cols).eq("book_id" as never, bookId as never).is("deleted_at" as never, null).limit(lim)
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const [c, l, f, g, pr, su, tc, me, en, inv, de, ac, ev] = await Promise.all([
+    q<any>(by("contacts", "id,nombre,ciudad")),
+    q<any>(by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,contacts(nombre),entities(nombre),providers(nombre)")),
+    q<any>(by("fixed_expenses", "id,nombre,valor")),
+    q<any>(by("expenses", "id,descripcion,fecha,valor", 150).order("fecha", { ascending: false })),
+    q<any>(by("providers", "id,nombre,tipo,activo")),
+    q<any>(by("subscriptions", "id,nombre,valor,activa")),
+    q<any>(by("credit_cards", "id,nombre")),
+    q<any>(by("goals", "id,nombre,objetivo")),
+    q<any>(by("entities", "id,nombre,tipo")),
+    q<any>(by("investments", "id,nombre,tipo")),
+    q<any>(by("wishlist", "id,nombre,precio")),
+    q<any>(by("assets", "id,nombre,valor")),
+    q<any>(by("calendar_events", "id,titulo,fecha", 100)),
+  ])
+  const money = (v: unknown) => fmtMoney(n(v))
+  return [
+    { heading: "Contactos", hits: c.map((x: any) => ({ k: x.id, v: `contacto ${x.nombre} ${x.ciudad ?? ""}`, t: x.nombre, sub: x.ciudad, icon: "user", tone: "blue", href: `/contactos?id=${x.id}` })) },
+    { heading: "Préstamos y deudas", hits: l.map((x: any) => {
+      const name = x.contacts?.nombre ?? x.entities?.nombre ?? x.providers?.nombre ?? "Préstamo", tipo = tipoDef(loanTipo(x))?.corto ?? ""
+      const cobrar = x.kind === "cobrar"
+      return { k: x.id, v: `${cobrar ? "préstamo me debe" : "deuda le debo"} ${tipo} ${name} ${x.concepto ?? ""}`, t: name, sub: `${cobrar ? "Me debe" : "Le debo"}${tipo ? ` · ${tipo}` : ""}${x.concepto ? ` · ${x.concepto}` : ""}`, icon: cobrar ? "hand-coins" : "landmark", tone: cobrar ? "green" : "red", href: `/${cobrar ? "me-deben" : "le-debo"}?id=${x.id}` }
+    }) },
+    { heading: "Tarjetas de crédito", hits: tc.map((x: any) => ({ k: x.id, v: `tarjeta de credito ${x.nombre}`, t: x.nombre, sub: "Tarjeta", icon: "credit-card", tone: "red", href: "/tarjetas" })) },
+    { heading: "Gastos fijos", hits: f.map((x: any) => ({ k: x.id, v: `fijo ${x.nombre}`, t: x.nombre, sub: money(x.valor), icon: "house", tone: "amber", href: `/fijos?id=${x.id}` })) },
+    { heading: "Suscripciones", hits: su.map((x: any) => ({ k: x.id, v: `suscripcion ${x.nombre}`, t: x.nombre, sub: `${money(x.valor)}${x.activa === false ? " · pausada" : ""}`, icon: "repeat", tone: "violet", href: "/suscripciones" })) },
+    { heading: "Proveedores", hits: pr.map((x: any) => ({ k: x.id, v: `proveedor ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo || "Proveedor", icon: "store", tone: "amber", href: `/proveedores?id=${x.id}` })) },
+    { heading: "Metas", hits: me.map((x: any) => ({ k: x.id, v: `meta ahorro ${x.nombre}`, t: x.nombre, sub: `Meta de ${money(x.objetivo)}`, icon: "piggy-bank", tone: "green", href: "/metas" })) },
+    { heading: "Inversiones", hits: inv.map((x: any) => ({ k: x.id, v: `inversion ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo?.toUpperCase?.() === "CDT" ? "CDT" : x.tipo, icon: "trending-up", tone: "violet", href: "/inversiones" })) },
+    { heading: "Cuentas y bienes", hits: ac.map((x: any) => ({ k: x.id, v: `cuenta bien activo ${x.nombre}`, t: x.nombre, sub: money(x.valor), icon: "wallet", tone: "green", href: "/balance" })) },
+    { heading: "Bancos y entidades", hits: en.map((x: any) => ({ k: x.id, v: `entidad banco ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo, icon: "landmark", tone: "navy", href: "/ajustes?tab=ents" })) },
+    { heading: "Lista de deseos", hits: de.map((x: any) => ({ k: x.id, v: `deseo ${x.nombre}`, t: x.nombre, sub: money(x.precio), icon: "heart", tone: "red", href: "/deseos" })) },
+    { heading: "Recordatorios y fechas", hits: ev.map((x: any) => ({ k: x.id, v: `recordatorio fecha ${x.titulo}`, t: x.titulo, sub: x.fecha ? fmtDate(x.fecha) : undefined, icon: "calendar", tone: "blue", href: "/calendario" })) },
+    { heading: "Gastos recientes", hits: g.map((x: any) => ({ k: x.id, v: `gasto ${x.descripcion} ${x.fecha}`, t: x.descripcion || "Gasto", sub: `${x.fecha ? fmtDate(x.fecha) : ""} · ${money(x.valor)}`, icon: "receipt", tone: "gray", href: `/gastos?mes=${String(x.fecha).slice(0, 7)}` })) },
+  ].filter((gr) => gr.hits.length) as Group[]
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/** Buscador global (Ctrl/⌘ K): secciones, todos los registros del libro (gastos, deudas, tarjetas, metas…), ayuda y acciones. */
 export function CommandPalette() {
   const open = useShell((s) => s.search)
   const setOpen = useShell((s) => s.setSearch)
   const router = useRouter()
   const bookId = useBookId()
   const { resolvedTheme, setTheme } = useTheme()
-  const { data } = useQuery({
-    queryKey: ["b", bookId, "search-index"],
-    enabled: open,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const sb = createClient()
-      const [c, l, f] = await Promise.all([
-        sb.from("contacts").select("id,nombre,ciudad").eq("book_id", bookId).is("deleted_at", null).limit(200),
-        sb.from("loans").select("id,kind,concepto,contacts(nombre),entities(nombre)").eq("book_id", bookId).is("deleted_at", null).limit(200),
-        sb.from("fixed_expenses").select("id,nombre").eq("book_id", bookId).is("deleted_at", null).limit(200),
-      ])
-      return { contacts: c.data ?? [], loans: l.data ?? [], fixed: f.data ?? [] }
-    },
-  })
+  const { data } = useQuery({ queryKey: ["b", bookId, "search-index"], enabled: open, staleTime: 60_000, queryFn: () => searchIndex(bookId) })
   const go = (href: string) => { setOpen(false); router.push(href) }
   const setHelp = useShell((s) => s.setHelp)
   // Cierra el buscador y luego abre el Centro de ayuda (dos ventanas a la vez bloquean los clics).
   const help = (k: string) => { setOpen(false); setTimeout(() => setHelp(k), 150) }
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen} title="Buscar en Mirai" description="Secciones, contactos, préstamos y gastos fijos">
+    <CommandDialog open={open} onOpenChange={setOpen} title="Buscar en Mirai" description="Secciones, gastos, deudas, tarjetas, metas, proveedores y más">
       <Command loop>
       <CommandInput placeholder="Buscar secciones, contactos, préstamos…" />
       <CommandList>
@@ -74,37 +116,16 @@ export function CommandPalette() {
             </CommandItem>
           ))}
         </CommandGroup>
-        {!!data?.contacts.length && (
-          <CommandGroup heading="Contactos">
-            {data.contacts.map((c) => (
-              <CommandItem key={c.id} value={`contacto ${c.nombre}`} onSelect={() => go(`/contactos?id=${c.id}`)}>
-                <Glyph name="user" tone="blue" /> {c.nombre} <span className="ml-auto text-xs text-muted-foreground">{c.ciudad}</span>
+        {data?.map((gr) => (
+          <CommandGroup key={gr.heading} heading={gr.heading}>
+            {gr.hits.map((h) => (
+              <CommandItem key={h.k} value={`${h.v} ${h.k}`} onSelect={() => go(h.href)}>
+                <Glyph name={h.icon} tone={h.tone} /> <span className="min-w-0 truncate">{h.t}</span>
+                {h.sub ? <span className="ml-auto shrink-0 text-xs text-muted-foreground" data-money={/\$/.test(h.sub) || undefined}>{h.sub}</span> : null}
               </CommandItem>
             ))}
           </CommandGroup>
-        )}
-        {!!data?.loans.length && (
-          <CommandGroup heading="Préstamos">
-            {data.loans.map((l) => {
-              const name = l.contacts?.nombre ?? l.entities?.nombre ?? "Préstamo"
-              return (
-                <CommandItem key={l.id} value={`préstamo ${name} ${l.concepto}`} onSelect={() => go(`/${l.kind === "cobrar" ? "me-deben" : "le-debo"}?id=${l.id}`)}>
-                  <Glyph name={l.kind === "cobrar" ? "hand-coins" : "landmark"} tone={l.kind === "cobrar" ? "green" : "red"} /> {name}
-                  <span className="ml-auto text-xs text-muted-foreground">{l.kind === "cobrar" ? "Me debe" : "Le debo"}{l.concepto ? ` · ${l.concepto}` : ""}</span>
-                </CommandItem>
-              )
-            })}
-          </CommandGroup>
-        )}
-        {!!data?.fixed.length && (
-          <CommandGroup heading="Gastos fijos">
-            {data.fixed.map((f) => (
-              <CommandItem key={f.id} value={`fijo ${f.nombre}`} onSelect={() => go(`/fijos?id=${f.id}`)}>
-                <Glyph name="house" tone="amber" /> {f.nombre}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
+        ))}
         <CommandGroup heading="Centro de ayuda">
           <CommandItem value="centro de ayuda soporte como funciona manual" onSelect={() => help("@")}><Glyph tone="violet"><LifeBuoy /></Glyph> Abrir el Centro de ayuda <span className="ml-auto text-xs text-muted-foreground">?</span></CommandItem>
           {HELP_ITEMS.map(([k, label, icon, words]) => (
@@ -114,8 +135,13 @@ export function CommandPalette() {
         <CommandSeparator />
         <CommandGroup heading="Acciones">
           {ADD_ITEMS.map((a) => (
-            <CommandItem key={a.href} value={`agregar ${a.label}`} onSelect={() => go(a.href)}>
+            <CommandItem key={a.href} value={`agregar nuevo ${a.label} ${a.hint} ${a.words ?? ""}`} onSelect={() => go(a.href)}>
               <Glyph tone="navy"><Plus /></Glyph> Agregar {a.label.toLowerCase()}
+            </CommandItem>
+          ))}
+          {LOAN_ADDS.map((t) => (
+            <CommandItem key={t.href} value={`agregar ${t.k} ${t.label} ${t.corto} ${t.desc}`} onSelect={() => go(t.href)}>
+              <Glyph name={t.icon} tone="navy" /> Agregar {t.k.toLowerCase()}: {t.label.toLowerCase()}
             </CommandItem>
           ))}
           <CommandItem value="modo oscuro claro tema" onSelect={() => { setTheme(resolvedTheme === "dark" ? "light" : "dark"); setOpen(false) }}>

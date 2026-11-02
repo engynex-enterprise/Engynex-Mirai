@@ -2,11 +2,13 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { Copy, HandCoins, Plus } from "lucide-react"
+import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { Copy, HandCoins, Plus, Store } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/mirai/page-header"
 import { EmptyState } from "@/components/mirai/empty-state"
 import { EntityLogo } from "@/components/mirai/entity-logo"
@@ -18,6 +20,9 @@ import { useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useIdParam, useNewParam } from "@/hooks/use-new-param"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
+import { ENTITY_TIPOS, entityIcon } from "@/lib/domain"
+import { useEntities } from "@/features/catalogs/hooks"
+import { EntityDialog } from "@/features/catalogs/entity-dialog"
 import { ContactForm, DOC_TIPOS, toAddress } from "./contact-form"
 
 /** Degradado del avatar según el nombre (av() de la v4: c0..c4). */
@@ -38,9 +43,38 @@ function CopyRow({ label, value }: { label: string; value?: string | null }) {
   )
 }
 
+const TABS = ["personas", "entidades"] as const
+type Tab = (typeof TABS)[number]
+
+/** Contactos en dos pestañas: Personas (contactos) y Bancos y entidades (?tab=entidades). */
 export function ContactsView() {
   const canEdit = useCanEdit()
+  const [tab, setTab] = useQueryState("tab", parseAsStringLiteral(TABS).withDefault("personas").withOptions({ history: "replace" }))
   const [nuevo, setNuevo] = useNewParam()
+  const [nuevaEnt, setNuevaEnt] = useState(false)
+  const { data: contacts } = useList("contacts", { order: { column: "nombre" } })
+  const { data: entities } = useEntities()
+  const n = (x: unknown[] | undefined) => (x ? <span className="rounded-full bg-secondary px-1.5 text-xs tabular-nums">{x.length}</span> : null)
+  return (
+    <div className="grid gap-6">
+      <PageHeader id="contactos" description="Las personas, bancos y entidades con las que tienes deudas o préstamos. Guárdalos una vez y escógelos cada vez que registres uno."
+        actions={canEdit && (tab === "entidades"
+          ? <Button onClick={() => setNuevaEnt(true)}><Plus /> Nueva entidad</Button>
+          : <Button onClick={() => setNuevo(true)}><Plus /> Nuevo contacto</Button>)} />
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-5">
+        <TabsList className="w-full sm:w-fit">
+          <TabsTrigger value="personas">Personas {n(contacts)}</TabsTrigger>
+          <TabsTrigger value="entidades">Bancos y entidades {n(entities)}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="personas"><Personas nuevo={nuevo} setNuevo={setNuevo} /></TabsContent>
+        <TabsContent value="entidades"><Entidades nueva={nuevaEnt} setNueva={setNuevaEnt} /></TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+function Personas({ nuevo, setNuevo }: { nuevo: boolean; setNuevo: (o: boolean) => void }) {
+  const canEdit = useCanEdit()
   const [id, setId] = useIdParam()
   const [editing, setEditing] = useState<Row<"contacts"> | null>(null)
   const { data: contacts, isPending } = useList("contacts", { order: { column: "nombre" } })
@@ -55,9 +89,7 @@ export function ContactsView() {
   }
 
   return (
-    <div className="grid gap-6">
-      <PageHeader id="contactos" description="Las personas y empresas con las que tienes préstamos. Guarda sus datos una vez y úsalos cada vez que registres un préstamo."
-        actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Nuevo contacto</Button>} />
+    <>
       <DataTable<Row<"contacts">>
         bare title="Tus contactos" info="Personas y empresas con las que tienes préstamos. Toca un dato para copiarlo."
         data={contacts} loading={isPending} rowKey={(c) => c.id} noun={["contacto", "contactos"]} exportName="contactos"
@@ -114,6 +146,86 @@ export function ContactsView() {
         }}
       />
       <ContactForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null); if (id) setId(null) } }} contact={editing} />
+    </>
+  )
+}
+
+type Ent = Row<"entities">
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
+
+/** Bancos, cooperativas, casas de empeño y demás entidades del libro, con lo que tienes en cada una. */
+function Entidades({ nueva, setNueva }: { nueva: boolean; setNueva: (o: boolean) => void }) {
+  const canEdit = useCanEdit()
+  const [id] = useIdParam()
+  const [editing, setEditing] = useState<Ent | null>(null)
+  const { data: entities, isPending } = useEntities()
+  const { data: loans = [] } = useList("loans")
+  const { data: cards = [] } = useList("credit_cards")
+  const { data: invs = [] } = useList("investments")
+  const del = useSoftDelete("entities", "Entidad eliminada")
+
+  const uso = (e: Ent) => ({ deudas: loans.filter((l) => l.entity_id === e.id).length, tarjetas: cards.filter((c) => c.entity_id === e.id).length, inversiones: invs.filter((i) => i.entity_id === e.id).length })
+  const usoN = (e: Ent) => { const u = uso(e); return u.deudas + u.tarjetas + u.inversiones }
+  const usoTxt = (e: Ent) => {
+    const u = uso(e)
+    return [u.deudas && plural(u.deudas, "deuda", "deudas"), u.tarjetas && plural(u.tarjetas, "tarjeta", "tarjetas"), u.inversiones && plural(u.inversiones, "inversión", "inversiones")].filter(Boolean).join(" · ")
+  }
+  const tipos = ENTITY_TIPOS.filter((t) => entities?.some((e) => e.tipo === t))
+  const remove = (e: Ent) => {
+    if (usoN(e)) return toast.error("Esta entidad está en uso", { description: `Tiene ${usoTxt(e)}. Cámbialas a otra entidad o elimínalas primero.` })
+    del.mutate(e)
+  }
+
+  return (
+    <div className="grid gap-4">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-secondary/60 p-3 text-sm">
+        <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span>Las tiendas y almacenes donde te fían o compras a cuotas están en Proveedores.</span>
+        <Link href="/proveedores" className="font-semibold text-link hover:underline">Ver en Proveedores</Link>
+      </p>
+      <DataTable<Ent>
+        bare title="Bancos y entidades" info="Bancos, cooperativas, fintech, fondos y casas de empeño. Las escoges al registrar deudas, tarjetas e inversiones."
+        data={entities} loading={isPending} rowKey={(e) => e.id} noun={["entidad", "entidades"]} exportName="entidades"
+        listClassName="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+        columns={[
+          { id: "nombre", header: "Nombre", sort: (e) => e.nombre.toLowerCase(), csv: (e) => e.nombre },
+          { id: "tipo", header: "Tipo", sort: (e) => e.tipo, csv: (e) => e.tipo },
+          { id: "nit", header: "NIT", csv: (e) => e.nit },
+          { id: "uso", header: "En uso", sort: usoN, csv: usoN },
+        ]}
+        initialSort={{ id: "nombre", dir: "asc" }}
+        search={{ placeholder: "Buscar por nombre o NIT", text: (e) => `${e.nombre} ${e.nit} ${e.tipo}` }}
+        filters={[
+          ...(tipos.length > 1 ? [{ id: "tipo", label: "Tipo", options: tipos.map((t) => ({ value: t, label: t })), match: (e: Ent, v: string) => e.tipo === v }] : []),
+          { id: "uso", label: "En uso", options: [{ value: "si", label: "Con deudas, tarjetas o inversiones" }, { value: "no", label: "Sin uso" }], match: (e, v) => (usoN(e) > 0) === (v === "si") },
+        ]}
+        emptyState={<Card className="shadow-card ring-0"><EmptyState iso="contactos" title="Aún no tienes entidades" description="Agrega tu banco, cooperativa o casa de empeño para escogerla al registrar una deuda." action={canEdit && <Button onClick={() => setNueva(true)}><Plus /> Agregar entidad</Button>} /></Card>}
+        item={(e) => {
+          const txt = usoTxt(e)
+          return (
+            <li key={e.id} id={`e-${e.id}`} className="grid">
+              <Card className={cn("h-full gap-3 p-5 shadow-card ring-0", id === e.id && "ring-2 ring-brand")}>
+                <div className="flex items-center gap-3">
+                  <EntityLogo name={e.nombre} icon={entityIcon(e.tipo)} seed={e.nombre} size={44} />
+                  <div className="grid min-w-0 flex-1">
+                    <span className="truncate font-semibold">{e.nombre}</span>
+                    <span className="truncate text-sm text-muted-foreground">{e.tipo}</span>
+                  </div>
+                  {canEdit && <IconAction a={{ label: `Editar ${e.nombre}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(e) }} />}
+                </div>
+                <CopyRow label="NIT" value={e.nit} />
+                <p className="text-sm text-muted-foreground">{txt || "Sin deudas, tarjetas ni inversiones"}</p>
+                {canEdit && (
+                  <div className="mt-auto flex justify-end">
+                    <IconAction a={{ label: `Eliminar ${e.nombre}`, tip: "Eliminar entidad", icon: "trash-2", destructive: true, onClick: () => remove(e) }} />
+                  </div>
+                )}
+              </Card>
+            </li>
+          )
+        }}
+      />
+      <EntityDialog open={nueva || !!editing} onOpenChange={(o) => { if (!o) { setNueva(false); setEditing(null) } }} entity={editing} />
     </div>
   )
 }

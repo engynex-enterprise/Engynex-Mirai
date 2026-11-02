@@ -5,19 +5,25 @@ import type { Database, Json } from "@/lib/supabase/database.types"
 import { loadBookData, type LoadedBook } from "@/lib/book-data"
 import { formatCOP } from "@/lib/domain/money"
 import { todayBogota } from "@/lib/domain/dates"
+import { fijoStatus } from "@/lib/domain/fixed"
+import { fijoValor } from "@/lib/domain/reparto"
 import { horaBogota } from "@/lib/notify/digest"
 import { aiText } from "@/lib/ai/run"
+import { planOf } from "@/lib/plan-server"
+import type { PlanInfo } from "@/lib/plans"
 import { runGraph } from "./engine"
 import { queuedEventFor, scheduledEvent, stateEvents, type BookExtras, type QueuedEvent } from "./detect"
+import { runnable } from "./limits"
 import { parseGraph, triggerOf } from "./schema"
 import { notifyHousehold } from "./notify"
-import { EVENT_TRIGGERS, STATE_TRIGGERS, type ActionAdapter, type Refs, type RunResult, type TriggerEvent } from "./types"
+import { avisoDeDisparador } from "./notify-rules"
+import { EVENT_TRIGGERS, STATE_TRIGGERS, V2_PENDING_AT, type ActionAdapter, type Refs, type RunResult, type TriggerEvent } from "./types"
 
 type Db = SupabaseClient<Database>
 type AutoRow = Database["public"]["Tables"]["automations"]["Row"]
 
 /** Todo lo que necesita el motor para un libro (con la clave de servicio: el servidor actúa en nombre de la automatización). */
-export type BookCtx = { db: Db; bookId: string; householdId: string; book: LoadedBook; extras: BookExtras; refs: Refs }
+export type BookCtx = { db: Db; bookId: string; householdId: string; book: LoadedBook; extras: BookExtras; refs: Refs; plan: PlanInfo; /** Dueño del hogar (si la automatización no tiene creador). */ owner: string | null }
 
 export async function loadCtx(bookId: string): Promise<BookCtx> {
   const db = supabaseAdmin()
@@ -27,14 +33,20 @@ export async function loadCtx(bookId: string): Promise<BookCtx> {
     db.from("emergency_funds").select("activo,saldo").eq("book_id", bookId).maybeSingle(),
   ])
   if (!bk) throw new Error("No existe el libro")
-  const { data: fam } = await db.from("family_members").select("id,nombre").eq("household_id", bk.household_id).is("deleted_at", null)
+  const [{ data: fam }, plan, { data: own }] = await Promise.all([
+    db.from("family_members").select("id,nombre,user_id").eq("household_id", bk.household_id).is("deleted_at", null),
+    planOf(bk.household_id),
+    db.from("household_members").select("user_id").eq("household_id", bk.household_id).eq("role", "owner").limit(1).maybeSingle(),
+  ])
   return {
-    db, bookId, householdId: bk.household_id, book,
+    db, bookId, householdId: bk.household_id, book, plan, owner: own?.user_id ?? null,
     extras: { fondo: { activo: !!fondo?.activo, saldo: Number(fondo?.saldo ?? 0) } },
     refs: {
       categorias: Object.fromEntries(book.categories.map((c) => [c.id, c.nombre])),
       metas: Object.fromEntries(book.goals.map((g) => [g.id, g.nombre])),
       miembros: Object.fromEntries((fam ?? []).map((m) => [m.id, m.nombre])),
+      fijos: Object.fromEntries(book.fixedExpenses.map((f) => [f.id, f.nombre])),
+      personas: Object.fromEntries((fam ?? []).filter((m) => m.user_id).map((m) => [m.user_id!, m.nombre])),
     },
   }
 }
@@ -64,12 +76,44 @@ async function aportar(ctx: BookCtx, a: AutoRow, destino: "meta" | "fondo", goal
 
 /** Acciones de verdad sobre la base (todas limitadas al libro de la automatización). */
 export function makeAdapter(ctx: BookCtx, a: AutoRow, runKey: string): ActionAdapter {
+  // A quién y con qué tipo de aviso (matriz de Ajustes › Alertas) sale cada aviso de esta automatización.
+  // Las acciones que escriben actúan como quien creó la automatización (o el dueño del hogar).
+  const actor = a.created_by ?? ctx.owner
+  const avisoTo = (ev: TriggerEvent, para: string | undefined) => ({
+    para, autor: ev.data.autor ? String(ev.data.autor) : null, creador: a.created_by, aviso: avisoDeDisparador(ev.kind, ev.data),
+  })
   return {
     async run(kind, p, ev, node) {
       const rowId = ev.data.row_id ? String(ev.data.row_id) : null
       switch (kind) {
         case "aviso":
-          return notifyHousehold({ householdId: ctx.householdId, bookId: ctx.bookId, titulo: p.titulo ?? "Aviso", mensaje: p.mensaje ?? "", canales: p.canales ?? "app", dedupe: `auto:${runKey}:${node.id}` })
+          return notifyHousehold({ householdId: ctx.householdId, bookId: ctx.bookId, titulo: p.titulo ?? "Aviso", mensaje: p.mensaje ?? "", canales: p.canales ?? "app", dedupe: `auto:${runKey}:${node.id}`, ...avisoTo(ev, p.para) })
+        case "crear_ingreso": {
+          if (!p.monto || p.monto <= 0) return "El monto da $0: no se registró nada"
+          // Con la marca de automatización: este ingreso no vuelve a disparar automatizaciones (sin bucles).
+          if (!actor) throw new Error("El hogar no tiene dueño: no se puede registrar el ingreso")
+          const { error } = await ctx.db.rpc("automation_create_income", {
+            p_user: actor, p_book: ctx.bookId, p_fecha: p.fecha ?? ev.hoy, p_descripcion: p.descripcion || "Ingreso automático", p_valor: p.monto, p_category: p.category_id ?? undefined,
+          })
+          if (error) throw new Error(error.message)
+          return `Se registró el ingreso “${p.descripcion}” por ${formatCOP(p.monto)}`
+        }
+        case "pagar_fijo": {
+          const f = ctx.book.fixedExpenses.find((x) => x.id === p.fixed_expense_id)
+          if (!f) throw new Error("El gasto fijo ya no existe: elige otro en la automatización")
+          const st = fijoStatus(f, ev.hoy)
+          const per = st.venc[0] ?? st.prox
+          if (!per) return `“${f.nombre}” ya está al día: no había nada pendiente`
+          const valor = p.monto && p.monto > 0 ? p.monto : Math.round(fijoValor(f, per.per))
+          if (!valor) throw new Error(`“${f.nombre}” no tiene valor: usa el monto del disparador`)
+          const q = per.per.endsWith("Q1") ? " (1ª quincena)" : per.per.endsWith("Q2") ? " (2ª quincena)" : ""
+          // Actúa como quien creó la automatización: la base revisa su rol y la auditoría queda a su nombre.
+          if (!actor) throw new Error("El hogar no tiene dueño: no se puede registrar el pago")
+          const { error } = await ctx.db.rpc("automation_pay_fixed", { p_user: actor, p_fixed: f.id!, p_periodo: per.per, p_fecha: ev.hoy, p_valor: valor, p_desc_suffix: q })
+          if (error) throw new Error(/ya está pagado/.test(error.message) ? `“${f.nombre}” ya estaba pagado en ese periodo` : error.message)
+          f.payments.push({ periodo: per.per, fecha: ev.hoy, valor })
+          return `“${f.nombre}”${q} quedó pagado por ${formatCOP(valor)}`
+        }
         case "movimiento": {
           if (!p.monto || p.monto <= 0) return "El monto da $0: no se creó nada"
           if (p.tipo === "gasto") {
@@ -108,11 +152,11 @@ export function makeAdapter(ctx: BookCtx, a: AutoRow, runKey: string): ActionAda
           const gastoMes = b.expenses.filter((x) => x.fecha.startsWith(ev.hoy.slice(0, 7))).reduce((t, x) => t + Number(x.valor), 0)
           const contexto = `Datos del libro (estimados): gastos registrados este mes ${formatCOP(gastoMes)}; ${b.goals.length} metas; fondo de emergencia ${formatCOP(ctx.extras.fondo.saldo)}. ${String(ev.data.resumen ?? "")}`
           const { text } = await aiText({
-            householdId: ctx.householdId, bookId: ctx.bookId, maxOutputTokens: 400,
+            householdId: ctx.householdId, bookId: ctx.bookId, userId: a.created_by, feature: "automatizacion", maxOutputTokens: 400,
             system: "Eres el consejero financiero de Mirai para familias en Colombia sin conocimientos financieros. Responde en español de Colombia con tuteo, en máximo 3 frases cortas, concretas y amables. Montos en pesos colombianos. No inventes datos.",
             prompt: `${p.pregunta}\n\n${contexto}`,
           })
-          await notifyHousehold({ householdId: ctx.householdId, bookId: ctx.bookId, titulo: "Consejo de la IA", mensaje: text.trim().slice(0, 1000), canales: p.canales ?? "app", dedupe: `auto:${runKey}:${node.id}` })
+          await notifyHousehold({ householdId: ctx.householdId, bookId: ctx.bookId, titulo: "Consejo de la IA", mensaje: text.trim().slice(0, 1000), canales: p.canales ?? "app", dedupe: `auto:${runKey}:${node.id}`, ...avisoTo(ev, p.para) })
           return `Consejo enviado: ${text.trim().slice(0, 140)}`
         }
       }
@@ -149,8 +193,22 @@ export async function execute(ctx: BookCtx, a: AutoRow, ev: TriggerEvent): Promi
   return r
 }
 
+/**
+ * Reclama los eventos pendientes de forma atómica: solo quien logra marcarlos los procesa. Los de la versión publicada
+ * esperan con procesado_at null; los eventos nuevos (cuotas, tarjetas, suscripciones, agenda) con la marca epoch, para
+ * que el código viejo no los consuma sin entenderlos.
+ */
+async function claim(db: Db, bookId: string, pending: string | null): Promise<QueuedEvent[]> {
+  const sel = db.from("automation_events").select("id").eq("book_id", bookId)
+  const { data: pend } = await (pending === null ? sel.is("procesado_at", null) : sel.eq("procesado_at", pending)).order("created_at").limit(100)
+  if (!pend?.length) return []
+  const upd = db.from("automation_events").update({ procesado_at: new Date().toISOString() }).in("id", pend.map((p) => p.id))
+  const { data } = await (pending === null ? upd.is("procesado_at", null) : upd.eq("procesado_at", pending)).select("*")
+  return (data ?? []).map((e) => ({ id: e.id, tipo: e.tipo, tabla: e.tabla, row_id: e.row_id, datos: (e.datos ?? {}) as Record<string, unknown> }))
+}
+
 async function activeAutos(db: Db, bookId: string, kinds?: string[]) {
-  let q = db.from("automations").select("*").eq("book_id", bookId).eq("activo", true).is("deleted_at", null)
+  let q = db.from("automations").select("*").eq("book_id", bookId).eq("activo", true).is("deleted_at", null).order("created_at")
   if (kinds) q = q.in("disparador", kinds)
   const { data } = await q
   return (data ?? []) as AutoRow[]
@@ -173,15 +231,12 @@ export async function processBook(bookId: string, opts: { state?: boolean; sched
   const db = supabaseAdmin()
   const out: string[] = []
   const hoy = todayBogota()
-  // Reclama los eventos pendientes de forma atómica: solo quien logra marcarlos los procesa.
-  const { data: pend } = await db.from("automation_events").select("id").eq("book_id", bookId).is("procesado_at", null).order("created_at").limit(100)
-  let events: QueuedEvent[] = []
-  if (pend?.length) {
-    const { data } = await db.from("automation_events").update({ procesado_at: new Date().toISOString() }).in("id", pend.map((p) => p.id)).is("procesado_at", null).select("*")
-    events = (data ?? []).map((e) => ({ id: e.id, tipo: e.tipo, tabla: e.tabla, row_id: e.row_id, datos: (e.datos ?? {}) as Record<string, unknown> }))
-  }
-  const autos = await activeAutos(db, bookId)
-  if (!autos.length) return out
+  const events = [...(await claim(db, bookId, null)), ...(await claim(db, bookId, V2_PENDING_AT))]
+  const activas = await activeAutos(db, bookId)
+  if (!activas.length) return out
+  // Si el hogar bajó de plan y quedó sobre el límite, solo corren las primeras N (las demás siguen en la lista).
+  const plan = await planOf((await db.from("books").select("household_id").eq("id", bookId).single()).data?.household_id ?? "")
+  const autos = runnable(plan, activas)
   const needsState = opts.state !== false && autos.some((a) => (STATE_TRIGGERS as string[]).includes(a.disparador))
   const needsSchedule = !!opts.schedule && autos.some((a) => a.disparador === "programado")
   if (!events.length && !needsState && !needsSchedule) return out
@@ -222,6 +277,12 @@ async function resumeWaiting(out: string[]) {
     }
     const ctx = ctxs.get(run.book_id) ?? (await loadCtx(run.book_id))
     ctxs.set(run.book_id, ctx)
+    const permitidas = runnable(ctx.plan, await activeAutos(db, run.book_id))
+    if (!permitidas.some((x) => x.id === a.id)) {
+      // Bajó de plan: no se pierde, se reanuda cuando vuelva a estar dentro del límite.
+      await db.from("automation_runs").update({ reanudar_at: new Date(Date.now() + 86_400_000).toISOString() }).eq("id", run.id)
+      continue
+    }
     const ev = { ...(run.evento as unknown as TriggerEvent), hoy: todayBogota() }
     const nodes = Array.isArray(run.pendientes) ? (run.pendientes as string[]) : []
     let r: RunResult

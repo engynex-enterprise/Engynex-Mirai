@@ -221,13 +221,13 @@ export function DataTable<T>({
   // Modo lista: filas seguidas con la misma clave van bajo un mismo título (p. ej. "Hoy · 2 de noviembre").
   const grouped = list && group && (!group.sorts || (sort && group.sorts.includes(sort.id)))
   const listBody = () => {
-    if (!grouped) return <ul className={listClassName ?? "-mx-2 grid"}>{pageRows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
+    if (!grouped) return <ul className={cn("grid-cols-[minmax(0,1fr)]", listClassName ?? "-mx-2 grid")}>{pageRows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
     const gs: { key: string; rows: T[] }[] = []
     for (const r of pageRows) { const k = group!.by(r); const last = gs.at(-1); if (last?.key === k) last.rows.push(r); else gs.push({ key: k, rows: [r] }) }
     return gs.map((g, i) => (
       <section key={`${g.key}-${i}`} className="grid gap-1">
         <h3 className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground uppercase">{group!.label(g.key, g.rows)}</h3>
-        <ul className={listClassName ?? "-mx-2 grid"}>{g.rows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
+        <ul className={cn("grid-cols-[minmax(0,1fr)]", listClassName ?? "-mx-2 grid")}>{g.rows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
       </section>
     ))
   }
@@ -239,7 +239,8 @@ export function DataTable<T>({
   const tip = (label: string, el: React.ReactElement) => (narrow ? <Tooltip><TooltipTrigger asChild>{el}</TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip> : el)
   const Wrap = bare ? "div" : Card
   return (
-    <Wrap className={cn(bare ? "grid" : "gap-0 overflow-hidden p-0 shadow-card ring-0")} data-testid="data-table">
+    // minmax(0,1fr): un texto largo sin saltos (truncate) no ensancha la tabla más allá de su caja.
+    <Wrap className={cn(bare ? "grid min-w-0 grid-cols-[minmax(0,1fr)]" : "min-w-0 gap-0 overflow-hidden p-0 shadow-card ring-0")} data-testid="data-table">
       {/* Barra superior: título + buscador + Filtros + Ordenar + Exportar + crear */}
       <div className={cn("flex flex-wrap items-center", narrow ? "gap-2 pt-4 pb-3" : "gap-3 pt-5 pb-4 sm:pt-6", pad)}>
         <div className={cn("mr-auto grid min-w-0", !narrow && "lg:mr-6")}>

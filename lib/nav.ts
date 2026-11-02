@@ -6,7 +6,7 @@ export type NavSection = { sec: string; entries: (NavLeaf | NavGroup)[] }
 const leaf = (id: string, label: string, icon: string): NavLeaf => ({ id, label, icon, href: `/${id}` })
 
 export const NAV: NavSection[] = [
-  { sec: "General", entries: [leaf("puesta", "Puesta en marcha", "rocket"), leaf("inicio", "Inicio", "house"), leaf("consejero", "Consejero IA", "sparkles")] },
+  { sec: "General", entries: [leaf("puesta", "Puesta en marcha", "rocket"), leaf("inicio", "Inicio", "house"), leaf("dashboard", "Dashboard", "layout-dashboard"), leaf("consejero", "Consejero IA", "sparkles")] },
   {
     sec: "Finanzas",
     entries: [

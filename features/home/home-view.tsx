@@ -19,7 +19,9 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
 import { UserAvatar } from "@/components/mirai/user-avatar"
-import { agenda, cuotasMes, days, hormigas, loanEngine, loanName, notifs, parseDate, quincena, totales, type AgendaItem } from "@/lib/domain"
+import { agenda, cuotasMes, days, hormigas, loanEngine, loanName, notifs, parseDate, type AgendaItem } from "@/lib/domain"
+import { estadoIntegral, flujoIntegral, periodo } from "@/lib/domain/flujo-integral"
+import { useIntegralExtras } from "@/features/balance/use-integral"
 import { edad, fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
@@ -93,6 +95,7 @@ export function HomeView() {
   const today = todayISO()
   const { user } = useApp()
   const { data: book, isPending } = useBookData()
+  const X = useIntegralExtras(book, today)
   const { data: setup } = useSetupProgress()
   const { data: members = [] } = useMembers()
   const setBell = useShell((s) => s.setBell)
@@ -105,8 +108,12 @@ export function HomeView() {
     if (!book) return null
     const [y, m, day] = today.split("-").map(Number)
     const which = day <= book.settings.corte_q ? "q1" : "q2"
-    const T = totales(book, today)
-    const q = quincena(book, y, m - 1, which, today)
+    // El mismo cálculo del Balance y el Dashboard (flujo integral): "Te queda esta quincena" y "Ver detalle" dan lo mismo.
+    const E = estadoIntegral(book, today, X)
+    const T = { ...E.T, pat: E.pat }
+    const F = flujoIntegral(book, periodo(book, which, y, m - 1), today, X)
+    const item = (x: (typeof F.movs)[number]) => ({ icon: x.icon, n: x.n, v: x.v, paid: x.estado === "hecho" && !x.supuesto })
+    const q = { E: F.tot.entra, Sa: F.tot.sale + F.tot.ahorro, disp: F.tot.queda, ent: F.ent.map(item), sal: F.sal.map(item) }
     const H = hormigas(book, today)
     const ag = agenda(book, today).filter((x) => x.d <= 15).slice(0, 6)
     const N = notifs(book, today).slice(0, 4)
@@ -119,7 +126,7 @@ export function HomeView() {
     const next = agenda(book, today).find((x) => x.d >= 0 && x.dir === "pagar")
     const goal = book.goals.filter((g) => +g.objetivo > 0).sort((a, b) => +b.ahorrado / +b.objetivo - +a.ahorrado / +a.objetivo)[0]
     return { T, q, which, H, ag, N, loans, feed, next, goal, cuotas: cuotasMes(book.loans, "pagar", today), mesName: monthName(m) }
-  }, [book, today])
+  }, [book, today, X])
 
   if (isPending || !d || !book) return <PageSkeleton kpis={4} />
   const memberName = (id: string | null) => (id ? members.find((m) => m.id === id)?.nombre : null) ?? "La familia"

@@ -53,6 +53,12 @@ export function PaginaHelp({ id }: { id: string }) {
           {rel.terminos.slice(0, 4).map((t) => <RowButton key={t.id} icon="library" tone={DOC_TONE.glosario} title={t.t} sub={`Glosario · ${GLOSARIO_CATS[t.cat].label}`} onClick={() => go({ v: "glosario", id: t.id })} />)}
         </section>
       )}
+      {rel.secciones.length > 0 && (
+        <section className="grid gap-1" aria-label="Secciones relacionadas">
+          <GroupLabel>Secciones relacionadas</GroupLabel>
+          {rel.secciones.map((x) => <RowButton key={x.id} icon={x.icon} title={x.label} sub="Ver cómo funciona y abrir la sección" onClick={() => go({ v: "pagina", id: x.id })} />)}
+        </section>
+      )}
     </article>
   )
 }

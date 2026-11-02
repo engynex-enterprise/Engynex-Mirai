@@ -1,6 +1,6 @@
 // Excel de la renta (rExcel de la v4) en .xlsx con exceljs, una hoja por tema.
 import ExcelJS from "exceljs"
-import { RDK, RIK, bValor, conv, depInfo, depsDe, inv, loanEngine, loanName, rLines, type Renta, type patrimonio } from "@/lib/domain"
+import { RDK, RIK, bValor, compraEstado, conv, depInfo, depsDe, inv, loanName, rLines, saldoPrestamoAl, type Renta, type patrimonio } from "@/lib/domain"
 import { todayISO } from "@/lib/format"
 import type { RentaData } from "./data"
 
@@ -23,9 +23,14 @@ export async function downloadRentaXlsx({ data, y, mid, C, P }: { data: RentaDat
   sheet("Bienes", ["Tipo", "Nombre", "Identificación", "Entidad", "Costo fiscal", "Avalúo", "Saldo 31 dic", "%", "Valor a declarar"], P.B.map((b) => [BT[b.tipo] ?? b.tipo, b.nombre, b.ident ?? "", b.entidad ?? "", b.costo, b.avaluo, b.valor31, b.pct, (bValor(b) * b.pct) / 100]))
   sheet("Cuentas", ["Cuenta", "Moneda", "Valor"], data.book.assets.map((a) => [a.nombre ?? a.cod, a.currency ?? "COP", conv(a.valor, a.currency, trm)]))
   sheet("Inversiones", ["Inversión", "Capital", "Valor hoy", "Rendimientos", "Retención"], data.book.investments.map((x) => { const r = inv(x, today); return [x.nombre, x.capital, r.valor, r.bruto, r.ret] }))
-  sheet("Deudas", ["Deuda", "Saldo"], [...data.liabilitiesNamed.map((l) => [l.nombre, conv(l.valor, l.currency, trm)] as [string, number]), ...data.book.loans.filter((L) => L.kind === "pagar").map((L) => [L.concepto || loanName(L, data.book.contacts, data.book.entities), loanEngine(L, today).saldo] as [string, number])])
+  const corte = P.corte ?? today
+  sheet(`Deudas al ${corte}`, ["Deuda", "Saldo"], [
+    ...data.liabilitiesNamed.map((l) => [l.nombre, conv(l.valor, l.currency, trm)] as [string, number]),
+    ...data.book.loans.filter((L) => L.kind === "pagar").map((L) => [L.concepto || loanName(L, data.book.contacts, data.book.entities), saldoPrestamoAl(L, corte)] as [string, number]),
+    ...data.book.creditCards.map((t) => [`Tarjeta ${t.nombre}`, (t.purchases || []).filter((c) => c.fecha <= corte).reduce((a, c) => a + compraEstado(t, c, corte).saldo, 0)] as [string, number]).filter((r) => r[1] > 1),
+  ])
   sheet("Dependientes", ["Nombre", "Documento", "Nacimiento", "Motivo"], depsDe(data.members, mid, today).map((m) => [m.nombre, m.doc ?? "", m.nacimiento ?? "", depInfo(m, today).why]))
-  sheet("Deducciones", ["Concepto", "Valor"], RDK.map(([k, l]) => [l, +(tax?.ded?.[k] ?? 0)]))
+  sheet("Deducciones", ["Concepto", "Valor"], RDK.map(([k, l]) => [l, +(tax?.ded?.[k] ?? 0) || C.dedAuto[k] || 0]))
   const cat = new Map(data.book.categories.map((c) => [c.id, c.nombre]))
   sheet(`Gastos ${y}`, ["Fecha", "Descripción", "Categoría", "Valor"], data.book.expenses.filter((g) => g.fecha.startsWith(yr)).sort((a, b) => a.fecha.localeCompare(b.fecha)).map((g) => [g.fecha, g.descripcion, cat.get(g.category_id ?? "") ?? "", +g.valor]))
   const buf = await wb.xlsx.writeBuffer()

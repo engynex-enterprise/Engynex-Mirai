@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { CalendarClock, PiggyBank, Plus, Siren, Umbrella } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -21,12 +21,14 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { aporteFondoSugerido, fijoStatus, gastosBasicos, imprevistos, liquidez, metaFondo, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
+import { aporteFondoSugerido, fijoStatus, imprevistos, liquidez, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
+import { fondoEstado } from "@/lib/domain/savings"
+import { Combobox } from "@/components/mirai/combobox"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
-import { useCategories, useIncomeCategories } from "@/features/catalogs/hooks"
+import { methodOptions, useCategories, useIncomeCategories, usePaymentMethods } from "@/features/catalogs/hooks"
 import { PayFixedDialog } from "@/features/fixed/pay-fixed-dialog"
 import { FixedForm, type FixedRow } from "@/features/fixed/fixed-form"
 import { AporteDialog, FundDialog, GoalDialog, type AporteTarget } from "./goal-dialogs"
@@ -61,7 +63,8 @@ export function GoalsView() {
   const canEdit = useCanEdit()
   const qc = useQueryClient()
   const today = todayISO()
-  const [nuevo, setNuevo] = useNewParam()
+  // ?nuevo=abono (menú Agregar y ⌘K) no abre "Nueva meta" si hay metas por cumplir: cada una tiene su campo para abonar.
+  const [nuevo, setNuevo, nuevoV] = useNewParam()
   const [editing, setEditing] = useState<Row<"goals"> | null>(null)
   const [fund, setFund] = useState<"guardar" | "usar" | null>(null)
   const [aporte, setAporte] = useState<AporteTarget | null>(null)
@@ -69,42 +72,65 @@ export function GoalsView() {
   const [resched, setResched] = useState<FixedRow | null>(null)
   const [abono, setAbono] = useState<Record<string, number>>({})
   const [abonando, setAbonando] = useState<string | null>(null)
+  const [medio, setMedio] = useState<Record<string, string>>({})
   const { data: book, isPending } = useBookData()
   const { data: cats = [] } = useCategories()
   const { data: incCats = [] } = useIncomeCategories()
+  const { data: methods = [] } = usePaymentMethods()
   const { data: movs = [] } = useList("fund_movements", { order: { column: "fecha", ascending: false } })
-  const { data: ef } = useQuery({ queryKey: ["b", bookId, "emergency_funds"], queryFn: async () => (await createClient().from("emergency_funds").select("*").eq("book_id", bookId).maybeSingle()).data })
   const del = useSoftDelete("goals", "Meta eliminada")
+  const delMov = useSoftDelete("goal_movements", "Abono eliminado", { also: ["goals"] })
+  const ef = book?.fund ?? null
 
   const d = useMemo(() => {
     if (!book) return null
-    const bas = gastosBasicos(book, today)
-    const meta = metaFondo(bas, book.settings.emerg_meta)
     const liq = liquidez(book.assets, book.investments, book.settings.trm, today)
+    // La misma cuenta del Dashboard (capacidad → fondoEstado): con el fondo activo cuenta su saldo; si no, tu dinero disponible.
+    const FE = fondoEstado(book, today, liq, book.fund)
     const pd0 = payDays(book.incomes, incCats as never)
     const pd = { ...pd0, txt: pd0.txt || "cada mes el día 30" }
     const imp = imprevistos(book.expenses, cats.find((c) => c.nombre === "Imprevistos")?.id, today)
     const fixed = book.fixedExpenses as unknown as FixedRow[]
-    return { bas, meta, liq, pd, imp, fondoFijo: fixed.find((f) => f.link_type === "fondo"), metaFijo: (id: string) => fixed.find((f) => f.link_type === "meta" && f.link_id === id) }
+    const cuentas = book.assets.filter((a) => /^11/.test(String(a.cod))).map((a) => ({ value: (a as { id: string }).id, label: (a as { nombre?: string }).nombre ?? "Cuenta", icon: "landmark" }))
+    const abonos = (id: string) => book.goalMovements.filter((m) => m.goal_id === id).sort((a, b) => (b.created_at ?? b.fecha).localeCompare(a.created_at ?? a.fecha))
+    return { bas: FE.basicos, meta: FE.meta, metaMeses: FE.metaMeses, tiene: FE.tiene, falta: FE.falta, meses: FE.meses, liq, pd, imp, cuentas, abonos, fondoFijo: fixed.find((f) => f.link_type === "fondo"), metaFijo: (id: string) => fixed.find((f) => f.link_type === "meta" && f.link_id === id) }
   }, [book, today, incCats, cats])
   if (isPending || !book || !d) return <PageSkeleton kpis={0} />
   const saldo = Number(ef?.saldo ?? 0)
-  const tiene = ef?.activo ? saldo : d.liq
-  const falta = Math.max(0, d.meta - tiene)
-  const meses = d.bas ? tiene / d.bas : 0
+  const { tiene, falta, meses } = d
   const goals = book.goals as unknown as Row<"goals">[]
+  // Solo si alguna cuenta lleva el saldo con sus medios tiene sentido preguntar de dónde sale el abono.
+  const mediosConCuenta = methods.filter((m) => m.asset_id)
 
   const planOf = (g: G) => metaPlan({ objetivo: Number(g.objetivo), ahorrado: Number(g.ahorrado), fecha: g.fecha }, today)
+  const refrescar = () => ["goals", "goal_movements"].forEach((t) => invalidateBook(qc, bookId, t))
+  // Abono en una sola transacción (goal_contribute): queda el movimiento con su fecha, cuenta como ahorro y se puede deshacer.
   const abonar = async (g: Row<"goals">) => {
     const v = abono[g.id]
     if (!v) return toast.error("Escribe cuánto guardaste")
     setAbonando(g.id)
-    const { error } = await createClient().from("goals").update({ ahorrado: Number(g.ahorrado) + v }).eq("id", g.id)
+    const sb = createClient()
+    const { data, error } = await sb.rpc("goal_contribute", { p_goal: g.id, p_valor: v, p_fecha: today, p_medio: medio[g.id] || undefined })
     setAbonando(null)
     if (error) return toast.error("No se pudo abonar", { description: error.message })
-    toast.success("¡Bien! Abono registrado", { description: `Llevas ${fmtMoney(Number(g.ahorrado) + v)} de ${fmtMoney(Number(g.objetivo))}.` })
+    const r = data as { id: string; ahorrado: number; objetivo: number }
+    toast.success("¡Bien! Abono registrado", {
+      description: `Llevas ${fmtMoney(Number(r.ahorrado))} de ${fmtMoney(Number(r.objetivo))}.`,
+      action: { label: "Deshacer", onClick: async () => {
+        const { error: e2 } = await sb.from("goal_movements").update({ deleted_at: new Date().toISOString() }).eq("id", r.id)
+        if (e2) return toast.error("No se pudo deshacer", { description: e2.message })
+        refrescar()
+        toast.success("Listo, quitamos el abono")
+      } },
+    })
     setAbono((a) => ({ ...a, [g.id]: 0 }))
-    invalidateBook(qc, bookId, "goals")
+    refrescar()
+  }
+  const fondoEn = async (asset: string) => {
+    const { error } = await createClient().from("emergency_funds").update({ asset_id: asset || null }).eq("book_id", bookId)
+    if (error) return toast.error("No se pudo guardar", { description: error.message })
+    invalidateBook(qc, bookId, "emergency_funds")
+    toast.success(asset ? "Listo: tu fondo está en esa cuenta" : "Listo: tu fondo es ahorro aparte", { description: asset ? "Ya suma en el saldo de la cuenta, así que no se cuenta dos veces en tu patrimonio." : "Suma como ahorro apartado en lo que tienes." })
   }
 
   return (
@@ -114,13 +140,13 @@ export function GoalsView() {
       <Card className="shadow-card ring-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Umbrella className="size-5 text-brand" /> Fondo de emergencia</CardTitle>
-          <CardAction><StatusPill tone={!d.bas ? "gray" : meses >= book.settings.emerg_meta ? "pagado" : meses >= 1 ? "porVencer" : "vencido"}>{d.bas ? `${meses.toFixed(1).replace(".", ",")} meses cubiertos` : "Faltan datos"}</StatusPill></CardAction>
+          <CardAction><StatusPill tone={!d.bas ? "gray" : meses >= d.metaMeses ? "pagado" : meses >= 1 ? "porVencer" : "vencido"}>{d.bas ? `${meses.toFixed(1).replace(".", ",")} meses cubiertos` : "Faltan datos"}</StatusPill></CardAction>
         </CardHeader>
         <CardContent className="grid gap-4">
           <p className="text-sm text-muted-foreground">Es un colchón para imprevistos (perder el trabajo, una enfermedad, un daño en la casa). Lo recomendado es tener guardados {book.settings.emerg_meta} meses de tus gastos básicos.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-md bg-muted p-3"><p className="text-xs text-muted-foreground">{ef?.activo ? "Tienes guardado en el fondo" : "Tienes disponible (todas tus cuentas)"}</p><Money value={tiene} className="text-lg font-semibold" /></div>
-            <div className="rounded-md bg-muted p-3"><p className="text-xs text-muted-foreground">Meta ({book.settings.emerg_meta} meses)</p><Money value={d.meta} className="text-lg font-semibold" /></div>
+            <div className="rounded-md bg-muted p-3"><p className="text-xs text-muted-foreground">Meta ({d.metaMeses} meses)</p><Money value={d.meta} className="text-lg font-semibold" /></div>
             <div className="rounded-md bg-muted p-3"><p className="text-xs text-muted-foreground">Te falta</p><Money value={falta} className={cn("text-lg font-semibold", falta > 0 ? "text-warning" : "text-success")} /></div>
           </div>
           <Progress value={d.meta ? Math.min(100, (tiene / d.meta) * 100) : 0} className="h-2.5 [&>div]:bg-lime" />
@@ -128,6 +154,14 @@ export function GoalsView() {
             <p className="font-semibold">{ef?.activo ? "Tu bolsillo de emergencias" : "Separa un bolsillo para imprevistos"}</p>
             <p className="text-sm text-muted-foreground">Ten el dinero de emergencias aparte (un bolsillo de Nequi, una cuenta de ahorros) para no gastarlo sin darte cuenta. Cuando ocurra un imprevisto, regístralo aquí y sale del fondo.</p>
             {canEdit && <div className="flex flex-wrap gap-2"><Button onClick={() => setFund("guardar")}><PiggyBank /> Guardar dinero</Button>{saldo > 0 && <Button variant="outline" onClick={() => setFund("usar")}><Siren /> Usar para un imprevisto</Button>}</div>}
+            {ef?.activo && d.cuentas.length > 0 && (
+              <div className="grid gap-1.5 sm:max-w-md">
+                <label htmlFor="fondo-cuenta" className="text-sm font-medium">¿En qué cuenta tienes tu fondo?</label>
+                <Combobox id="fondo-cuenta" value={ef.asset_id ?? ""} onChange={fondoEn} disabled={!canEdit}
+                  options={[{ value: "", label: "Aparte (no está en mis cuentas)", icon: "piggy-bank" }, ...d.cuentas]} />
+                <p className="text-xs text-muted-foreground">Si está dentro de una de tus cuentas, ya suma en su saldo y no se cuenta dos veces en tu patrimonio.</p>
+              </div>
+            )}
             <AporteRow fixed={d.fondoFijo} today={today} onPay={setPaying} onEdit={() => setAporte({ t: "fondo" })} onNew={() => setAporte({ t: "fondo" })} sugerido={d.pd.txt} label="al fondo" />
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md bg-muted p-3"><p className="text-xs text-muted-foreground">Imprevistos este mes</p><Money value={d.imp.mes} className="font-semibold" /></div>
@@ -183,10 +217,29 @@ export function GoalsView() {
                 </div>
                 {!lograda && <AporteRow fixed={d.metaFijo(g.id)} today={today} onPay={setPaying} onEdit={() => setAporte({ t: "meta", id: g.id, nombre: g.nombre, mensual: p.mensual })} onNew={() => setAporte({ t: "meta", id: g.id, nombre: g.nombre, mensual: p.mensual })} sugerido={d.pd.txt} label="a esta meta" />}
                 {canEdit && !lograda && (
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1"><MoneyInput value={abono[g.id] ?? 0} onChange={(v) => setAbono((a) => ({ ...a, [g.id]: v }))} placeholder="¿Cuánto guardaste?" aria-label={`Abono a ${g.nombre}`} /></div>
-                    <SubmitButton className="h-11" disabled={!(abono[g.id] > 0)} loading={abonando === g.id} loadingText="Abonando…" onClick={() => abonar(g)}>Abonar</SubmitButton>
+                  <div className="grid gap-2">
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1"><MoneyInput value={abono[g.id] ?? 0} onChange={(v) => setAbono((a) => ({ ...a, [g.id]: v }))} placeholder="¿Cuánto guardaste?" aria-label={`Abono a ${g.nombre}`} /></div>
+                      <SubmitButton className="h-11" disabled={!(abono[g.id] > 0)} loading={abonando === g.id} loadingText="Abonando…" onClick={() => abonar(g)}>Abonar</SubmitButton>
+                    </div>
+                    {mediosConCuenta.length > 0 && (
+                      <Combobox value={medio[g.id] ?? ""} onChange={(v) => setMedio((m) => ({ ...m, [g.id]: v }))} aria-label={`¿De dónde sale el abono a ${g.nombre}?`}
+                        options={[{ value: "", label: "No sale de ninguna cuenta", icon: "piggy-bank" }, ...methodOptions(mediosConCuenta).map((o) => ({ ...o, label: `Sale de ${o.label}` }))]} />
+                    )}
                   </div>
+                )}
+                {d.abonos(g.id).length > 0 && (
+                  <ul className="grid divide-y text-sm" aria-label={`Abonos a ${g.nombre}`}>
+                    {d.abonos(g.id).slice(0, 3).map((m) => (
+                      <li key={m.id} className="flex items-center justify-between gap-2 py-1.5">
+                        <span className="grid"><span>{m.tipo === "retiro" ? "Retiro" : "Abono"}{m.nota ? ` · ${m.nota}` : ""}</span><span className="text-xs text-muted-foreground">{fmtDate(m.fecha)}</span></span>
+                        <span className="flex items-center gap-1">
+                          <span className={cn("font-semibold", m.tipo === "retiro" ? "text-danger" : "text-success")}>{m.tipo === "retiro" ? "−" : "+"}<Money value={Number(m.valor)} /></span>
+                          {canEdit && <IconAction a={{ label: `Quitar abono de ${fmtMoney(Number(m.valor))}`, tip: "Quitar este abono", icon: "trash-2", destructive: true, onClick: () => delMov.mutate({ id: m.id, nombre: `Abono a ${g.nombre}` }) }} />}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </Card>
             </li>
@@ -194,8 +247,8 @@ export function GoalsView() {
         }}
       />
 
-      <GoalDialog open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} goal={editing} />
-      <FundDialog tipo={fund} onOpenChange={(o) => !o && setFund(null)} saldo={saldo} metaTxt={`Meta recomendada: ${book.settings.emerg_meta} meses de tus gastos básicos (${fmtMoney(d.meta)}).`} />
+      <GoalDialog open={(nuevo && (nuevoV !== "abono" || !goals.some((g) => Number(g.ahorrado) < Number(g.objetivo)))) || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} goal={editing} cuentas={d.cuentas} />
+      <FundDialog tipo={fund} onOpenChange={(o) => !o && setFund(null)} saldo={saldo} metaTxt={`Meta recomendada: ${d.metaMeses} meses de tus gastos básicos (${fmtMoney(d.meta)}).`} />
       <AporteDialog target={aporte} existing={aporte?.t === "fondo" ? d.fondoFijo ?? null : aporte?.t === "meta" ? d.metaFijo(aporte.id) ?? null : null} payDays={d.pd}
         sugerencia={aporte?.t === "meta" ? aporte.mensual : aporteFondoSugerido(d.bas)} onOpenChange={(o) => !o && setAporte(null)} />
       <PayFixedDialog fixed={paying} onOpenChange={(o) => !o && setPaying(null)} onReschedule={setResched} />

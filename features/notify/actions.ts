@@ -6,9 +6,15 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { getIntegration } from "@/features/integrations/store"
 import { telegramApi } from "@/lib/notify/channels"
 import { avisosPara, channelStatus, defaultRule, deliver, horaBogota, NOT_READY, sendDigest, testMsg, upsertAppNotifs, type Canal, type Rule } from "@/lib/notify/digest"
-import { normalizeCoPhone } from "@/lib/notify/whatsapp"
+import { caseConfig, formatCoPhone, normalizeCoPhone, waSettings, waValuesFromText } from "@/lib/notify/whatsapp"
+import { sendWhatsApp, fallbackNote } from "@/lib/notify/channels"
+import { claimSend, finishSend } from "@/lib/notify/log"
+import { maskDest } from "@/lib/notify/rules"
+import { formatCOP, loanEngine, todayBogota } from "@/lib/domain"
+import { siteUrl } from "@/lib/site-url"
 import { enSilencio } from "@/lib/notify/rules"
 import { limitError } from "@/lib/security/rate-limit"
+import { z } from "zod"
 
 async function myRule() {
   const ctx = await getAppContext()
@@ -94,4 +100,92 @@ export async function openAppNotifs(): Promise<{ id: string; t: string; b: strin
     if (rule.canales?.popup === false || enSilencio(horaBogota(), rule.silencio)) return []
     return list.filter((n) => n.lvl === "bad" || n.lvl === "warn").slice(0, 6).map((n) => ({ id: n.id, t: n.t, b: n.b, go: n.go, lvl: n.lvl }))
   } catch { return [] }
+}
+
+const LogroIn = z.object({
+  bookId: z.string().uuid(),
+  badges: z.array(z.object({ id: z.string().max(60), n: z.string().max(120), d: z.string().max(300) })).max(20),
+  nivel: z.object({ n: z.number().int().min(1).max(200), name: z.string().max(80) }).nullable(),
+})
+
+/** Insignias nuevas y subida de nivel → campana (kind "logro"). Sin duplicados: una por insignia y nivel. */
+export async function logroNotifs(input: z.infer<typeof LogroIn>): Promise<{ ok: boolean }> {
+  try {
+    const d = LogroIn.parse(input)
+    const ctx = await getAppContext()
+    if (ctx.book.id !== d.bookId) return { ok: false }
+    const rows = [
+      ...d.badges.map((b) => ({ user_id: ctx.user.id, book_id: d.bookId, kind: "logro", titulo: `Insignia: ${b.n}`, cuerpo: b.d, href: "/logros", dedupe: `${d.bookId}:logro:${b.id}` })),
+      ...(d.nivel ? [{ user_id: ctx.user.id, book_id: d.bookId, kind: "logro", titulo: `¡Subiste al nivel ${d.nivel.n}!`, cuerpo: `Ahora eres ${d.nivel.name}. ¡Sigue así!`, href: "/logros", dedupe: `${d.bookId}:nivel:${d.nivel.n}` }] : []),
+    ]
+    if (rows.length) await supabaseAdmin().from("notifications").upsert(rows, { onConflict: "user_id,dedupe", ignoreDuplicates: true })
+    return { ok: true }
+  } catch { return { ok: false } }
+}
+
+// ── Recordatorio de cobro por WhatsApp desde el número de Mirai (Me deben) ─────────────────────────────────────────
+
+/**
+ * ¿Se puede enviar el recordatorio desde el número de Mirai? Hace falta: WhatsApp activo, una plantilla PROPIA aprobada para
+ * el caso "Recordatorio a quien te debe" (consola › WhatsApp) y que la persona tenga su WhatsApp verificado (ya recibió
+ * algún mensaje de Mirai en su número).
+ */
+export async function cobroWaStatus(): Promise<{ disponible: boolean; verificado: boolean; motivo?: string }> {
+  try {
+    const ctx = await requireRole("editor")
+    const v = await getIntegration(ctx.household.id, "whatsapp")
+    const c = v?.secrets.token && v.config.phoneId ? caseConfig(waSettings(v.config), "cobro_tercero") : null
+    if (!c?.propia) return { disponible: false, verificado: false, motivo: "Mirai todavía no tiene lista la plantilla de WhatsApp para recordar cobros." }
+    const { data: rule } = await supabaseAdmin().from("notification_rules").select("whatsapp_to").eq("user_id", ctx.user.id).eq("book_id", ctx.book.id).maybeSingle()
+    const mio = normalizeCoPhone(rule?.whatsapp_to)
+    const { count } = mio ? await supabaseAdmin().from("notification_log").select("id", { count: "exact", head: true }).eq("user_id", ctx.user.id).eq("channel", "whatsapp").eq("status", "enviado") : { count: 0 }
+    return { disponible: true, verificado: !!mio && (count ?? 0) > 0, motivo: mio ? undefined : "Primero escribe tu número de WhatsApp en Ajustes › Alertas y envíate una prueba." }
+  } catch { return { disponible: false, verificado: false } }
+}
+
+const CobroIn = z.object({ loanId: z.string().uuid(), consentimiento: z.literal(true) })
+
+/**
+ * Envía a la persona que te debe el recordatorio de su cuota desde el número de Mirai, con la plantilla aprobada del caso
+ * "cobro_tercero" (nunca con una de respaldo: el mensaje debe decir que es un cobro y de parte de quién). Requiere que
+ * confirmes que esa persona aceptó recibirlo. Uno por préstamo al día; queda en el registro de envíos.
+ */
+export async function sendCobroWhatsApp(input: z.infer<typeof CobroIn>): Promise<{ ok: boolean; msg: string }> {
+  try {
+    const d = CobroIn.safeParse(input)
+    if (!d.success) return { ok: false, msg: "Confirma que la persona aceptó recibir el recordatorio por WhatsApp." }
+    const ctx = await requireRole("editor")
+    const st = await cobroWaStatus()
+    if (!st.disponible) return { ok: false, msg: st.motivo ?? "El envío por WhatsApp desde Mirai no está disponible." }
+    if (!st.verificado) return { ok: false, msg: st.motivo ?? "Primero verifica tu WhatsApp: en Ajustes › Alertas envíate una prueba." }
+    const lim = await limitError("cobroWa", ctx.user.id, "Enviaste muchos recordatorios hoy")
+    if (lim) return { ok: false, msg: lim }
+    const db = supabaseAdmin()
+    const { data: L } = await db.from("loans").select("*, loan_payments(*)").eq("id", d.data.loanId).eq("book_id", ctx.book.id).is("deleted_at", null).maybeSingle()
+    if (!L || L.kind !== "cobrar") return { ok: false, msg: "No encontramos ese préstamo en Me deben." }
+    const { data: contact } = L.contact_id ? await db.from("contacts").select("nombre,telefono").eq("id", L.contact_id).maybeSingle() : { data: null }
+    const to = normalizeCoPhone(contact?.telefono)
+    if (!contact || !to) return { ok: false, msg: "El contacto necesita un celular de Colombia válido (10 dígitos)." }
+    const hoy = todayBogota()
+    const e = loanEngine({ ...L, extra: Number(L.extra ?? 0), payments: (L.loan_payments ?? []).filter((p: { deleted_at?: string | null }) => !p.deleted_at) } as never, hoy)
+    const cu = e.vencidas.length ? e.vencidas : e.next ? [e.next] : []
+    if (!cu.length) return { ok: false, msg: "Este préstamo no tiene cuotas pendientes." }
+    const monto = formatCOP(cu.reduce((a, c) => a + c.valor, 0))
+    const fecha = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long" }).format(new Date(`${cu[0].fecha}T12:00:00`))
+    const quien = ctx.user.nombre || "Tu contacto"
+    const concepto = L.concepto || "el préstamo"
+    const resumen = `${quien} te recuerda la cuota de ${monto} de ${concepto} (${e.vencidas.length ? `venció el ${fecha}` : `para el ${fecha}`})`
+    const v = (await getIntegration(ctx.household.id, "whatsapp"))!
+    const claim = await claimSend({ dedupe: `cobro:${L.id}:${hoy}`, userId: ctx.user.id, householdId: ctx.household.id, bookId: ctx.book.id, channel: "whatsapp", kind: "cobro_tercero" })
+    if (!claim) return { ok: false, msg: "Hoy ya le enviaste este recordatorio desde Mirai." }
+    try {
+      const r = await sendWhatsApp(v, to, waValuesFromText(resumen, { nombre: contact.nombre.split(" ")[0] ?? "", cobra: quien, titulo: `Cuota de ${concepto}`, detalle: concepto, monto, fecha, enlace: siteUrl() }), { caso: "cobro_tercero", text: resumen, override: { template: caseConfig(waSettings(v.config), "cobro_tercero").template } })
+      await finishSend(claim, { status: "enviado", provider: "whatsapp", source: v.source ?? null, destino: maskDest("whatsapp", to), ref: r.id, error: fallbackNote(r.fallback) })
+      return { ok: true, msg: `Recordatorio enviado al WhatsApp de ${contact.nombre} (${formatCoPhone(to)}).` }
+    } catch (err) {
+      const msg = (err as Error).message || "Error desconocido"
+      await finishSend(claim, { status: "fallido", provider: "whatsapp", source: v.source ?? null, destino: maskDest("whatsapp", to), error: msg })
+      return { ok: false, msg }
+    }
+  } catch (e) { return { ok: false, msg: (e as Error).message } }
 }

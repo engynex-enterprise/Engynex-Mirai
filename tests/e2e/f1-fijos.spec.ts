@@ -13,7 +13,7 @@ test("gastos fijos: rango variable, pagar, ajustar rango y deshacer", async ({ p
   await shot(page, "fijo-form", info.project.name)
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText(`${nombre} guardado`)).toBeVisible()
-  const row = page.locator("li", { hasText: nombre })
+  const row = page.locator("#main li", { hasText: nombre })
   await expect(row.getByText("varía según consumo")).toBeVisible()
   await expect(row.getByText(/Servicios públicos/)).toBeVisible()
   await shot(page, "fijos", info.project.name)
@@ -23,17 +23,25 @@ test("gastos fijos: rango variable, pagar, ajustar rango y deshacer", async ({ p
   await page.getByRole("textbox", { name: "Valor pagado" }).fill("230000")
   await page.getByRole("button", { name: "Registrar pago" }).click()
   await expect(page.getByText(/superó tu máximo habitual/)).toBeVisible()
-  const paid = page.locator("li", { hasText: nombre }).filter({ hasText: "Pagado el" })
+  const paid = page.locator("#main li", { hasText: nombre }).filter({ hasText: "Pagado el" })
   await expect(paid).toBeVisible()
 
   await page.goto("/gastos")
-  await expect(page.locator("li", { hasText: nombre }).getByText("fijo")).toBeVisible()
+  await expect(page.locator("#main li", { hasText: nombre }).getByText("fijo")).toBeVisible()
+  // Editar el valor del gasto que salió del pago: el pago del fijo (y el flujo del Balance) toman el valor nuevo.
+  await page.locator("#main li", { hasText: nombre }).getByText(nombre).first().click()
+  await page.getByRole("textbox", { name: "Valor" }).fill("240000")
+  await page.getByRole("button", { name: "Guardar" }).click()
+  await expect(page.getByText("Gasto actualizado")).toBeVisible()
+  await page.goto("/balance?tab=mes")
+  await expect(page.getByText("Disponible del periodo")).toBeVisible()
+  await expect(page.locator("#main li", { hasText: nombre }).filter({ hasText: /240\.000/ }).first()).toBeVisible()
   await page.goto("/fijos")
-  const paid2 = page.locator("li", { hasText: nombre }).filter({ hasText: "Pagado el" })
+  const paid2 = page.locator("#main li", { hasText: nombre }).filter({ hasText: "Pagado el" })
   if (info.project.name === "movil") { await paid2.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: "Deshacer pago" }).click() }
   else await paid2.getByRole("button", { name: "Deshacer pago" }).click()
   await expect(page.getByText("Pago deshecho")).toBeVisible()
-  await expect(page.locator("li", { hasText: nombre }).filter({ hasText: "Pagado el" })).toHaveCount(0)
+  await expect(page.locator("#main li", { hasText: nombre }).filter({ hasText: "Pagado el" })).toHaveCount(0)
   expect(errs, errs.join("\n")).toEqual([])
 })
 
@@ -52,7 +60,7 @@ test("gastos fijos: quincenal con un valor distinto en cada quincena", async ({ 
   await shot(page, "fijo-quincenas-form", info.project.name)
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText(`${nombre} guardado`)).toBeVisible()
-  const row = page.locator("li", { hasText: nombre })
+  const row = page.locator("#main li", { hasText: nombre })
   await expect(row.getByText(/\+.*al mes/).filter({ visible: true }).last()).toBeVisible()
   // Al pagar, el valor sugerido es el de la quincena escogida.
   if (info.project.name === "movil") { await row.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: `Pagar ${nombre}` }).click() }

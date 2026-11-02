@@ -20,6 +20,9 @@ import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
 import { loanEngine, type LoanIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
+import { Combobox } from "@/components/mirai/combobox"
+import { methodOptions, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import { kickAutomations } from "@/features/automations/runner"
 
 export function PayLoanDialog({ loan, name, onOpenChange }: { loan: (LoanIn & { id: string }) | null; name: string; onOpenChange: (o: boolean) => void }) {
   return (
@@ -41,6 +44,11 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
   const [fecha, setFecha] = useState(today)
   const [modo, setModo] = useState<"plazo" | "cuota">(loan.sistema === "americano" ? "cuota" : "plazo")
   const [busy, setBusy] = useState(false)
+  const { data: methods = [] } = usePaymentMethods()
+  const { data: cfg } = useSettings()
+  const defMedio = ((cfg?.defaults ?? {}) as { medio?: string }).medio
+  // De qué medio salió la plata (o a cuál llegó, si te pagan): así la cuenta ligada a ese medio se mueve sola.
+  const [medio, setMedio] = useState<string | null>(methods.find((m) => m.id === defMedio)?.id ?? null)
   const [ocr, setOcr] = useState<{ busy: boolean; msg: string | null }>({ busy: false, msg: null })
   const fotoRef = useRef<HTMLInputElement>(null)
   /** Lee el comprobante (ocrPago de la v4): si coincide con cuotas completas, las marca; si no, abono. */
@@ -74,12 +82,13 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
   const submit = async () => {
     if (tipo === "abono" && !valor) return toast.error("Escribe el valor del abono")
     setBusy(true)
-    const rows: { book_id: string; loan_id: string; fecha: string; tipo: "cuota" | "abono"; valor: number; modo?: "plazo" | "cuota" }[] = tipo === "cuota"
-      ? e0.plan.slice(0, n).map((p) => ({ book_id: bookId, loan_id: loan.id, fecha, tipo: "cuota" as const, valor: p.valor }))
-      : [{ book_id: bookId, loan_id: loan.id, fecha, tipo: "abono" as const, valor: Math.min(valor, e0.saldo), modo }]
+    const rows: { book_id: string; loan_id: string; fecha: string; tipo: "cuota" | "abono"; valor: number; modo?: "plazo" | "cuota"; payment_method_id: string | null }[] = tipo === "cuota"
+      ? e0.plan.slice(0, n).map((p) => ({ book_id: bookId, loan_id: loan.id, fecha, tipo: "cuota" as const, valor: p.valor, payment_method_id: medio }))
+      : [{ book_id: bookId, loan_id: loan.id, fecha, tipo: "abono" as const, valor: Math.min(valor, e0.saldo), modo, payment_method_id: medio }]
     const { error } = await createClient().from("loan_payments").insert(rows)
     setBusy(false)
     if (error) return toast.error("No se pudo registrar", { description: error.message })
+    kickAutomations()
     toast.success(tipo === "cuota" ? (n > 1 ? `${n} cuotas registradas` : "Cuota registrada") : "Abono registrado", { description: e1.done ? "¡Queda saldado!" : `${isC ? "Te debe" : "Debes"} ${fmtMoney(e1.saldo)}.` })
     invalidateBook(qc, bookId, "loans"); invalidateBook(qc, bookId, "loan_payments")
     onOpenChange(false)
@@ -114,7 +123,12 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
           )}
         </>
       )}
-      <FormField label="Fecha del pago" htmlFor="pl-f"><DatePicker id="pl-f" value={fecha} onChange={(v) => setFecha(v ?? today)} /></FormField>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField label="Fecha del pago" htmlFor="pl-f"><DatePicker id="pl-f" value={fecha} onChange={(v) => setFecha(v ?? today)} /></FormField>
+        <FormField label={isC ? "¿A dónde te llegó la plata?" : "¿Con qué pagaste?"} htmlFor="pl-medio" tip={isC ? "La cuenta o el medio en que recibiste el pago (opcional)." : "La cuenta o el medio del que salió la plata (opcional)."}>
+          <Combobox id="pl-medio" value={medio} onChange={setMedio} options={methodOptions(methods)} placeholder="Elige el medio" />
+        </FormField>
+      </div>
       {sim.length > 0 && (
         <div className="rounded-lg border-l-4 border-lime bg-brand-soft p-3 text-sm" aria-live="polite">
           <p>Quedará así: <b><Money value={e1.saldo} /></b></p>

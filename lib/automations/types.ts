@@ -2,9 +2,9 @@
 
 export type NodeGroup = "trigger" | "condition" | "action"
 
-export const TRIGGER_KINDS = ["gasto", "ingreso", "pago_fijo", "programado", "presupuesto", "hormiga", "pago_proximo", "saldo_bajo", "meta_alcanzada"] as const
+export const TRIGGER_KINDS = ["gasto", "ingreso", "pago_fijo", "cuota", "compra_tarjeta", "suscripcion", "recordatorio", "programado", "presupuesto", "hormiga", "pago_proximo", "saldo_bajo", "meta_alcanzada"] as const
 export const CONDITION_KINDS = ["monto", "categoria", "miembro", "fecha", "texto"] as const
-export const ACTION_KINDS = ["aviso", "movimiento", "categorizar", "apartar", "agenda", "marcar_hormiga", "esperar", "ia"] as const
+export const ACTION_KINDS = ["aviso", "movimiento", "crear_ingreso", "pagar_fijo", "categorizar", "apartar", "agenda", "marcar_hormiga", "esperar", "ia"] as const
 
 export type TriggerKind = (typeof TRIGGER_KINDS)[number]
 export type ConditionKind = (typeof CONDITION_KINDS)[number]
@@ -12,7 +12,10 @@ export type ActionKind = (typeof ACTION_KINDS)[number]
 export type NodeKind = TriggerKind | ConditionKind | ActionKind
 
 /** Disparadores que llegan por la cola de eventos (al registrar algo). */
-export const EVENT_TRIGGERS: TriggerKind[] = ["gasto", "ingreso", "pago_fijo", "hormiga"]
+export const EVENT_TRIGGERS: TriggerKind[] = ["gasto", "ingreso", "pago_fijo", "hormiga", "cuota", "compra_tarjeta", "suscripcion", "recordatorio"]
+/** Eventos que la versión publicada no conoce: la base los encola con procesado_at = epoch (no los toma el código viejo). */
+export const V2_EVENT_TIPOS = ["cuota", "compra_tarjeta", "suscripcion", "recordatorio"] as const
+export const V2_PENDING_AT = "1970-01-01T00:00:00Z"
 /** Disparadores que se revisan por estado del libro (cron y después de cada evento). */
 export const STATE_TRIGGERS: TriggerKind[] = ["presupuesto", "pago_proximo", "saldo_bajo", "meta_alcanzada", "ingreso"]
 
@@ -60,6 +63,10 @@ export type Refs = {
   categorias?: Record<string, string>
   metas?: Record<string, string>
   miembros?: Record<string, string>
+  /** Gastos fijos (id → nombre). */
+  fijos?: Record<string, string>
+  /** Personas con cuenta en el hogar (user_id → nombre), para "avisar a una persona". */
+  personas?: Record<string, string>
 }
 
 export type StepResult = {
@@ -96,6 +103,9 @@ export type ActionParams = {
   dias?: number
   fecha?: string
   pregunta?: string
+  /** A quién avisar: todo el hogar, quien hizo el movimiento o una persona (user_id). */
+  para?: string
+  fixed_expense_id?: string | null
 }
 
 /** Ejecuta las acciones de verdad (servidor) o las imita (pruebas). Devuelve un texto corto del resultado. */

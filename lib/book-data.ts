@@ -1,11 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BookData, SettingsIn } from "@/lib/domain"
+import { conSaldos, type FondoIn, type GoalMovIn, type MedioIn } from "@/lib/domain/cuentas"
 import type { Database } from "@/lib/supabase/database.types"
 
 const alive = <T extends { deleted_at?: string | null }>(rows: T[] | null | undefined) => (rows ?? []).filter((r) => !r.deleted_at)
 const num = (v: unknown) => Number(v ?? 0)
 
-export type LoadedBook = BookData & { raw: { settings: Record<string, unknown> } }
+/**
+ * El libro armado. Además de `BookData` trae los medios de pago (con la cuenta a la que están ligados), los abonos a
+ * metas y el fondo de emergencia: con eso las cuentas con saldo automático llegan ya con el saldo de hoy en `valor`
+ * (lib/domain/cuentas.ts) y el flujo integral cuenta los abonos como ahorro.
+ */
+export type LoadedBook = BookData & { raw: { settings: Record<string, unknown> }; paymentMethods: MedioIn[]; goalMovements: GoalMovIn[]; fund: FondoIn | null }
 
 /**
  * Partes del libro: cada una es UNA consulta y se guarda en caché por separado (features/book/use-book-data.ts).
@@ -21,7 +27,7 @@ export const BOOK_PARTS = {
   fixed_expenses: { select: "*, fixed_expense_payments(*)", deps: ["fixed_expense_payments"] },
   subscriptions: { select: "*", deps: [] },
   loans: { select: "*, loan_payments(*)", deps: ["loan_payments"] },
-  credit_cards: { select: "*, card_purchases(*)", deps: ["card_purchases"] },
+  credit_cards: { select: "*, card_purchases(*), card_payments(*)", deps: ["card_purchases", "card_payments"] },
   assets: { select: "*", deps: [] },
   liabilities: { select: "*", deps: [] },
   investments: { select: "*", deps: [] },
@@ -29,6 +35,9 @@ export const BOOK_PARTS = {
   calendar_events: { select: "*", deps: [] },
   contacts: { select: "*", deps: [] },
   entities: { select: "*", deps: [] },
+  payment_methods: { select: "*", deps: [] },
+  goal_movements: { select: "*", deps: [] },
+  emergency_funds: { select: "*", deps: [] },
 } as const satisfies Record<string, { select: string; deps: readonly string[] }>
 
 export type BookPart = keyof typeof BOOK_PARTS
@@ -43,10 +52,13 @@ export function partsForTable(table: string): BookPart[] {
 export type PartRows = any[]
 export type BookParts = Record<BookPart, PartRows>
 
-/** Una parte del libro (filas vivas). book_settings devuelve un arreglo de una fila. */
+/** Partes de una sola fila por libro y sin borrado lógico. */
+const SINGLE: readonly string[] = ["book_settings", "emergency_funds"]
+
+/** Una parte del libro (filas vivas). book_settings y emergency_funds devuelven un arreglo de una fila (o vacío). */
 export async function loadBookPart(sb: SupabaseClient<Database>, bookId: string, part: BookPart, signal?: AbortSignal): Promise<PartRows> {
   let q = sb.from(part as never).select(BOOK_PARTS[part].select).eq("book_id" as never, bookId as never)
-  if (part !== "book_settings") q = q.is("deleted_at" as never, null)
+  if (!SINGLE.includes(part)) q = q.is("deleted_at" as never, null)
   if (signal) q = q.abortSignal(signal)
   const { data, error } = await q
   if (error) throw new Error(error.message)
@@ -54,15 +66,21 @@ export async function loadBookPart(sb: SupabaseClient<Database>, bookId: string,
   return (data ?? []) as any[]
 }
 
-/** Arma el libro en la forma de lib/domain a partir de sus partes. Función pura (sirve en navegador y servidor). */
-export function assembleBook(p: BookParts): LoadedBook {
+const hoyBogota = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())
+
+/**
+ * Arma el libro en la forma de lib/domain a partir de sus partes (sirve en navegador y servidor). `today` es para el
+ * saldo de las cuentas que lo llevan solas (por defecto, hoy en Colombia).
+ */
+export function assembleBook(p: BookParts, today: string = hoyBogota()): LoadedBook {
   const s = p.book_settings[0]
   const st: SettingsIn = {
     umbral: num(s.umbral), limite: num(s.limite), trm: s.trm as Record<string, number>, pct: s.pct as SettingsIn["pct"],
     emerg_meta: s.emerg_meta, anticipo: s.anticipo, corte_q: s.corte_q, alerta_pres: s.alerta_pres,
     notif: s.notif as SettingsIn["notif"], uvt: s.uvt as Record<string, number>, smmlv: s.smmlv as Record<string, number>, nomina: (s.nomina ?? {}) as SettingsIn["nomina"],
   }
-  return {
+  const f = (p.emergency_funds ?? [])[0]
+  return conSaldos({
     raw: { settings: s as Record<string, unknown> },
     settings: st,
     categories: p.categories,
@@ -72,7 +90,7 @@ export function assembleBook(p: BookParts): LoadedBook {
     fixedExpenses: p.fixed_expenses.map((f) => ({ ...f, payments: alive(f.fixed_expense_payments) })),
     subscriptions: p.subscriptions.filter((x) => x.activa !== false && x.proximo),
     loans: p.loans.map((l) => ({ ...l, extra: num(l.extra), payments: alive(l.loan_payments) })),
-    creditCards: p.credit_cards.map((c) => ({ ...c, cupo: num(c.cupo), purchases: alive(c.card_purchases) })),
+    creditCards: p.credit_cards.map((c) => ({ ...c, cupo: num(c.cupo), purchases: alive(c.card_purchases), ...(c.card_payments ? { pagos: alive(c.card_payments) } : {}) })),
     assets: p.assets,
     liabilities: p.liabilities,
     investments: p.investments,
@@ -80,11 +98,14 @@ export function assembleBook(p: BookParts): LoadedBook {
     calendarEvents: p.calendar_events,
     contacts: p.contacts,
     entities: p.entities,
-  }
+    paymentMethods: p.payment_methods ?? [],
+    goalMovements: (p.goal_movements ?? []).map((m) => ({ ...m, valor: num(m.valor) })),
+    fund: f ? { activo: !!f.activo, saldo: num(f.saldo), asset_id: f.asset_id ?? null } : null,
+  }, today)
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Carga todo el libro en la forma que esperan los cálculos de lib/domain (16 consultas en paralelo). Navegador y servidor (cron, IA, reportes). */
+/** Carga todo el libro en la forma que esperan los cálculos de lib/domain (una consulta por parte, en paralelo). Navegador y servidor (cron, IA, reportes). */
 export async function loadBookData(sb: SupabaseClient<Database>, bookId: string): Promise<LoadedBook> {
   const rows = await Promise.all(BOOK_PART_NAMES.map((p) => loadBookPart(sb, bookId, p)))
   return assembleBook(Object.fromEntries(BOOK_PART_NAMES.map((p, i) => [p, rows[i]])) as BookParts)

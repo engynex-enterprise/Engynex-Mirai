@@ -1,9 +1,11 @@
 import "server-only"
 import { supabaseAdmin } from "@/lib/supabase/admin"
-import { extendVence, precio } from "@/lib/plans"
+import type { Json } from "@/lib/supabase/database.types"
+import { precio } from "@/lib/plans"
+import { payEffect, type PayState } from "./state"
 
+export type { PayState }
 export type Periodo = "mes" | "anio"
-export type PayState = "pendiente" | "aprobado" | "rechazado" | "reembolsado" | "anulado"
 export type Proveedor = "mercadopago" | "wompi" | "manual"
 
 /** Pasarelas configuradas en este despliegue (si faltan las llaves, los botones de pago se muestran deshabilitados). */
@@ -31,9 +33,20 @@ export async function notifyOwners(householdId: string, titulo: string, cuerpo: 
   await supabaseAdmin().from("notifications").upsert(ids.map((user_id) => ({ user_id, kind: "plan", titulo, cuerpo, href: "/ajustes?tab=plan", dedupe })), { onConflict: "user_id,dedupe", ignoreDuplicates: true })
 }
 
+/** Lo que devuelve apply_plan_payment (la transacción de la base). */
+export type ApplyResult = {
+  subscription_id: string | null; payment_id: string; prev_estado: PayState | null; estado: PayState
+  first_approval: boolean; revoked: boolean; vence_at: string | null; cupon_contado: boolean
+}
+
+const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" })
+
 /**
- * Registra un pago y, si quedó aprobado por primera vez, extiende Premium del hogar un mes o un año.
- * Es idempotente: las pasarelas reenvían la misma notificación varias veces.
+ * Registra un pago y, si quedó aprobado por primera vez, extiende el plan del hogar un mes o un año.
+ * Todo pasa en UNA transacción de la base (apply_plan_payment, con candado por referencia y por hogar): dos
+ * notificaciones simultáneas de la pasarela extienden una sola vez; un aviso viejo no retrocede el estado; el cupón
+ * cuenta en el primer pago de la suscripción; un reembolso o una anulación quita el periodo.
+ * Solo lo llaman los webhooks con la firma verificada (app/api/pagos/*) y la consola.
  */
 export async function applyPayment(p: {
   householdId: string; proveedor: Proveedor; referencia: string; periodo: Periodo; monto: number; estado: PayState
@@ -41,41 +54,24 @@ export async function applyPayment(p: {
 }) {
   const plan = p.plan ?? "premium"
   const db = supabaseAdmin()
-  const { data: prev } = await db.from("plan_payments").select("id,estado,subscription_id,cupon").eq("proveedor", p.proveedor).eq("referencia", p.referencia).maybeSingle()
-  const firstApproval = p.estado === "aprobado" && prev?.estado !== "aprobado"
-
-  // Suscripción a la que pertenece el pago: la de Mercado Pago por su id, o la del hogar con esa pasarela.
-  let subId = prev?.subscription_id ?? null
-  if (!subId) {
-    const q = db.from("plan_subscriptions").select("id").eq("household_id", p.householdId).eq("proveedor", p.proveedor)
-    const { data: sub } = await (p.subscriptionRef ? q.eq("proveedor_ref", p.subscriptionRef) : q.order("created_at", { ascending: false })).limit(1).maybeSingle()
-    subId = sub?.id ?? null
-  }
-  if (!subId && p.estado === "aprobado") {
-    const { data: sub, error } = await db.from("plan_subscriptions").insert({ household_id: p.householdId, plan, proveedor: p.proveedor, proveedor_ref: p.subscriptionRef ?? null, periodo: p.periodo, estado: "activa" }).select("id").single()
-    if (error) throw new Error(error.message)
-    subId = sub.id
-  }
-
-  const row = {
-    household_id: p.householdId, subscription_id: subId, proveedor: p.proveedor, referencia: p.referencia, periodo: p.periodo, monto: Math.round(p.monto),
-    estado: p.estado, metodo: p.metodo ?? null, pagador: p.pagador ?? null, raw: (p.raw ?? {}) as never, paid_at: p.estado === "aprobado" ? new Date().toISOString() : null,
-    plan, cupon: p.cupon ?? prev?.cupon ?? null, ...(p.nota ? { nota: p.nota } : {}),
-  }
-  const { error } = await db.from("plan_payments").upsert(row, { onConflict: "proveedor,referencia" })
+  const { data, error } = await db.rpc("apply_plan_payment", {
+    p_household: p.householdId, p_proveedor: p.proveedor, p_referencia: p.referencia, p_periodo: p.periodo, p_monto: Math.round(p.monto), p_estado: p.estado,
+    p_metodo: p.metodo ?? undefined, p_pagador: p.pagador ?? undefined, p_raw: (p.raw ?? {}) as Json, p_subscription_ref: p.subscriptionRef ?? undefined,
+    p_plan: plan, p_cupon: p.cupon ?? undefined, p_nota: p.nota ?? undefined,
+  })
   if (error) throw new Error(error.message)
+  const r = data as unknown as ApplyResult
+  const fx = payEffect(r.prev_estado, r.estado)
 
-  if (firstApproval && subId) {
-    // Se extiende desde el vencimiento más lejano del hogar (si paga antes de que se acabe, no pierde días).
-    const { data: subs } = await db.from("plan_subscriptions").select("vence_at").eq("household_id", p.householdId).in("estado", ["activa", "cancelada", "cortesia"]).order("vence_at", { ascending: false, nullsFirst: false }).limit(1)
-    const vence = extendVence(subs?.[0]?.vence_at ?? null, p.periodo)
-    await db.from("plan_subscriptions").update({ estado: "activa", plan, periodo: p.periodo, vence_at: vence.toISOString() }).eq("id", subId)
-    const cupon = p.cupon ?? prev?.cupon
-    if (cupon) { const { data: c } = await db.from("coupons").select("usos").eq("codigo", cupon).maybeSingle(); if (c) await db.from("coupons").update({ usos: c.usos + 1 }).eq("codigo", cupon) }
+  if (r.first_approval && r.vence_at) {
     const { data: pl } = await db.from("plans").select("nombre").eq("id", plan).maybeSingle()
-    await notifyOwners(p.householdId, `¡Bienvenido a Mirai ${pl?.nombre ?? "Premium"}!`, `Recibimos tu pago de ${precio(p.monto)}. Tu plan está activo hasta el ${vence.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}.`, `pay-ok-${p.proveedor}-${p.referencia}`)
-  } else if (p.estado === "rechazado" && prev?.estado !== "rechazado") {
+    await notifyOwners(p.householdId, `¡Bienvenido a Mirai ${pl?.nombre ?? "Premium"}!`, `Recibimos tu pago de ${precio(p.monto)}. Tu plan está activo hasta el ${fechaLarga(r.vence_at)}.`, `pay-ok-${p.proveedor}-${p.referencia}`)
+  } else if (r.revoked) {
+    await notifyOwners(p.householdId, r.estado === "anulado" ? "Tu pago se anuló" : "Tu pago fue reembolsado", r.vence_at && new Date(r.vence_at) > new Date()
+      ? `Quitamos ese periodo de tu plan: ahora está activo hasta el ${fechaLarga(r.vence_at)}.`
+      : "Quitamos ese periodo de tu plan y volviste al plan Gratis. Tus datos siguen intactos; puedes pagar de nuevo en Ajustes › Mi plan.", `pay-rev-${p.proveedor}-${p.referencia}`)
+  } else if (fx.rejected) {
     await notifyOwners(p.householdId, "Tu pago no se aprobó", "El banco o la pasarela rechazó el pago de tu plan. Intenta de nuevo o usa otro medio en Ajustes › Mi plan.", `pay-ko-${p.proveedor}-${p.referencia}`)
   }
-  return { subscriptionId: subId, firstApproval }
+  return { subscriptionId: r.subscription_id, firstApproval: r.first_approval, revoked: r.revoked, estado: r.estado }
 }

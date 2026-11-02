@@ -25,24 +25,28 @@ import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
 const plus12 = () => { const d = new Date(todayISO() + "T12:00:00"); d.setMonth(d.getMonth() + 12); return d.toISOString().slice(0, 10) }
 const refresh = (qc: ReturnType<typeof useQueryClient>, bookId: string) => ["goals", "emergency_funds", "fund_movements", "expenses", "fixed_expenses"].forEach((t) => invalidateBook(qc, bookId, t))
 
-export function GoalDialog({ open, onOpenChange, goal }: { open: boolean; onOpenChange: (o: boolean) => void; goal?: Row<"goals"> | null }) {
+type CuentaOpt = { value: string; label: string; icon?: string }
+
+/** `cuentas`: tus cuentas de dinero, para decir dónde está la plata de la meta (y no contarla dos veces). */
+export function GoalDialog({ open, onOpenChange, goal, cuentas = [] }: { open: boolean; onOpenChange: (o: boolean) => void; goal?: Row<"goals"> | null; cuentas?: CuentaOpt[] }) {
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} mdesc="meta" title={goal ? "Editar meta" : "Nueva meta"}>
-      {open && <GoalBody goal={goal} onOpenChange={onOpenChange} />}
+      {open && <GoalBody goal={goal} onOpenChange={onOpenChange} cuentas={cuentas} />}
     </ResponsiveDialog>
   )
 }
-function GoalBody({ goal, onOpenChange }: { goal?: Row<"goals"> | null; onOpenChange: (o: boolean) => void }) {
+function GoalBody({ goal, onOpenChange, cuentas }: { goal?: Row<"goals"> | null; onOpenChange: (o: boolean) => void; cuentas: CuentaOpt[] }) {
   const save = useSave("goals")
   const [nombre, setNombre] = useState(goal?.nombre ?? "")
   const [icon, setIcon] = useState(goal?.icon ?? "target")
   const [objetivo, setObjetivo] = useState(Number(goal?.objetivo ?? 0))
   const [ahorrado, setAhorrado] = useState(Number(goal?.ahorrado ?? 0))
   const [fecha, setFecha] = useState<string | null>(goal?.fecha ?? plus12())
+  const [donde, setDonde] = useState(goal?.asset_id ?? "")
   const submit = async () => {
     if (!nombre.trim()) return toast.error("Escribe el nombre de la meta")
     if (!objetivo) return toast.error("Escribe cuánto necesitas")
-    await save.mutateAsync({ ...(goal ? { id: goal.id } : {}), nombre: nombre.trim(), icon, objetivo, ahorrado, fecha } as never)
+    await save.mutateAsync({ ...(goal ? { id: goal.id } : {}), nombre: nombre.trim(), icon, objetivo, ahorrado, fecha, asset_id: donde || null } as never)
     toast.success(goal ? "Meta actualizada" : "Meta creada")
     onOpenChange(false)
   }
@@ -54,6 +58,9 @@ function GoalBody({ goal, onOpenChange }: { goal?: Row<"goals"> | null; onOpenCh
         <FormField label="¿Cuánto necesitas?" htmlFor="m-o" required><MoneyInput id="m-o" value={objetivo} onChange={setObjetivo} /></FormField>
         <FormField label="¿Cuánto llevas ahorrado?" htmlFor="m-a"><MoneyInput id="m-a" value={ahorrado} onChange={setAhorrado} /></FormField>
         <FormField label="¿Para cuándo?" htmlFor="m-f"><DatePicker id="m-f" value={fecha} onChange={setFecha} quick="futuro" /></FormField>
+        <FormField label="¿Dónde tienes esta plata?" htmlFor="m-d" tip="Si la plata de la meta está dentro de una de tus cuentas, elígela: ya suma en el saldo de esa cuenta y no se cuenta dos veces en tu patrimonio. Si la guardas aparte (alcancía, bolsillo, CDT que no registraste), suma como ahorro apartado.">
+          <Combobox id="m-d" value={donde} onChange={setDonde} options={[{ value: "", label: "Aparte (no está en mis cuentas)", icon: "piggy-bank" }, ...cuentas]} />
+        </FormField>
       </div>
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!nombre.trim() || !(objetivo > 0)} loading={save.isPending} onClick={submit}>Guardar meta</SubmitButton></div>
     </FieldGroup>

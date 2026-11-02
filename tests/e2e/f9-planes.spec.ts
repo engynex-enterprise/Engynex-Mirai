@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto"
 import { expect, test } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
 import { QA, admin, setQaPlan } from "./qa"
@@ -225,4 +226,42 @@ test("página pública: qué es Mirai y planes con precio", async ({ page }, inf
   await page.getByRole("link", { name: /Crear cuenta gratis/ }).first().click()
   await expect(page).toHaveURL(/registro/)
   expect(errs).toEqual([])
+})
+
+test("contador: con el plan Gratis un enlace que ya existía queda no disponible (también en el servidor)", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page, "gratis")
+  const sb = admin()
+  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  const uid = data.users.find((u) => u.email === QA.email)!.id
+  const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
+  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("created_at").limit(1).single()
+  // Un acceso creado cuando el hogar era Premium (la app ya no deja crearlo en Gratis).
+  const token = randomBytes(24).toString("base64url")
+  const { data: share } = await sb.from("accountant_shares").insert({ book_id: bk!.id, label: `Contador QA ${info.project.name}`, email: "", perms: "renta", token_hash: createHash("sha256").update(token).digest("hex"), created_by: uid }).select("id").single()
+  try {
+    await page.goto(`/contador/${token}`)
+    await expect(page.getByRole("heading", { name: "Acceso no disponible por ahora" })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/ya no incluye el acceso para su contador/)).toBeVisible()
+    await shot(page, "contador-no-disponible", info.project.name)
+    // Con Premium, el mismo enlace vuelve a abrir el portal.
+    await setQaPlan("premium")
+    await page.goto(`/contador/${token}`)
+    await expect(page.getByText(/^Notas con /).first()).toBeVisible({ timeout: 30_000 })
+  } finally {
+    await sb.from("accountant_shares").delete().eq("id", share!.id)
+    await setQaPlan("premium")
+  }
+  expect(errs).toEqual([])
+})
+
+test("plan gratis: el respaldo de la versión 4 se puede traer en Importar", async ({ page }) => {
+  test.setTimeout(120_000)
+  await login(page, "gratis")
+  await page.goto("/importar")
+  await expect(page.getByText("Automatización bancaria es parte de Mirai Premium")).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId("respaldo-v4")).toBeVisible()
+  await expect(page.getByText("Subir respaldo (.json)")).toBeVisible()
+  await setQaPlan("premium")
 })

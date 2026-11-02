@@ -13,3 +13,9 @@ export async function planOf(householdId: string): Promise<PlanInfo> {
 export async function householdCan(householdId: string, f: PremiumFeature) {
   return can(await planOf(householdId), f)
 }
+
+/** ¿El plan del hogar dueño del libro incluye la función? (portal del contador y procesos sin sesión). */
+export async function bookCan(bookId: string, f: PremiumFeature) {
+  const { data } = await supabaseAdmin().from("books").select("household_id").eq("id", bookId).maybeSingle()
+  return !!data && (await householdCan(data.household_id, f))
+}

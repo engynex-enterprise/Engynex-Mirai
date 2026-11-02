@@ -11,6 +11,13 @@ async function Inner({ params }: { params: Promise<{ token: string }> }) {
   await connection()
   const { token } = await params
   const r = await contadorOpen(token)
+  if (r && "bloqueado" in r) return (
+    <div className="mx-auto grid max-w-md justify-items-center gap-3 py-24 text-center">
+      <IsoIcon k="contador" size={64} />
+      <h1 className="text-xl font-semibold">Acceso no disponible por ahora</h1>
+      <p className="text-muted-foreground">El plan de tu cliente ya no incluye el acceso para su contador. Cuando lo vuelva a activar, este mismo enlace funcionará de nuevo.</p>
+    </div>
+  )
   if (!r) return (
     <div className="mx-auto grid max-w-md justify-items-center gap-3 py-24 text-center">
       <IsoIcon k="contador" size={64} />

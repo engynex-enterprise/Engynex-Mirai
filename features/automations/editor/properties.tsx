@@ -13,7 +13,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { FormField } from "@/components/mirai/field"
 import { MoneyInput } from "@/components/mirai/money-input"
 import { Segmented } from "@/components/mirai/choice-cards"
-import { CATALOG, FRECUENCIAS, GROUPS, TIPOS_PAGO, VARIABLES } from "@/lib/automations/catalog"
+import { CATALOG, DIR_CUOTA, EVENTOS_SUSCRIPCION, FRECUENCIAS, GROUPS, PARA, TIPOS_PAGO, VARIABLES } from "@/lib/automations/catalog"
 import { NODE_SCHEMAS } from "@/lib/automations/schema"
 import { DIAS_SEMANA } from "@/lib/domain/reparto"
 import type { FlowNode, NodeData } from "@/lib/automations/types"
@@ -22,7 +22,13 @@ import { StepIcon, GROUP_STYLE } from "../shared"
 
 type Opt = { value: string; label: string; icon?: string }
 type Vals = Record<string, unknown>
-export type PropsOptions = { categorias: Opt[]; metas: Opt[]; miembros: Opt[]; triggerHasMonto: boolean }
+export type PropsOptions = {
+  categorias: Opt[]; metas: Opt[]; miembros: Opt[]; triggerHasMonto: boolean
+  /** Gastos fijos, tarjetas y personas con cuenta (user_id) para los pasos nuevos. */
+  fijos?: Opt[]; tarjetas?: Opt[]; personas?: Opt[]
+  /** El disparador trae a quien hizo el movimiento (para "Quien hizo el movimiento"). */
+  triggerHasAutor?: boolean
+}
 
 /** Chips que se tocan para elegir varios valores (días, tipos de pago, categorías). */
 function Chips<T extends string | number>({ value, onChange, items, label }: { value: T[]; onChange: (v: T[]) => void; items: { value: T; label: string }[]; label: string }) {
@@ -79,12 +85,49 @@ function Fields({ kind, control, register, setValue, getValues, err, o }: {
       {area ? <Textarea id={id(name)} rows={3} {...register(name)} /> : <Input id={id(name)} className="h-11" {...register(name)} />}
     </FormField>
   )
-  const canales = <FormField label="¿Por dónde?" tip={false} hint="“Todos” usa los canales que cada persona tenga activos en Ajustes › Avisos.">{seg("canales", [{ value: "app", label: "Solo en la app" }, { value: "todos", label: "App y mis canales" }])}</FormField>
+  const canales = <FormField label="¿Por dónde?" tip={false} hint="“Todos” usa los canales que cada persona tenga activos en Ajustes › Alertas (y respeta su horario de silencio).">{seg("canales", [{ value: "app", label: "Solo en la app" }, { value: "todos", label: "App y sus canales" }])}</FormField>
+  const para = (
+    <FormField label="¿A quién?" htmlFor={id("para")} tip={false} error={err("para")} hint="Solo las personas con cuenta en Mirai reciben avisos.">
+      <Controller control={control} name="para" render={({ field }) => (
+        <Combobox id={id("para")} value={String(field.value || "hogar")} onChange={(v) => field.onChange(v || "hogar")}
+          options={[...PARA.filter((x) => x.value !== "autor" || o.triggerHasAutor).map((x) => ({ value: x.value, label: x.label })), ...(o.personas ?? [])]} />
+      )} />
+    </FormField>
+  )
   const dias = DIAS_SEMANA.map((d, i) => ({ value: i, label: d.slice(0, 3) }))
 
   switch (kind) {
-    case "gasto": case "pago_fijo": case "hormiga": case "marcar_hormiga":
+    case "gasto": case "pago_fijo": case "hormiga": case "marcar_hormiga": case "recordatorio":
       return <p className="text-sm text-muted-foreground">Este paso no necesita datos.</p>
+    case "cuota":
+      return <FormField label="¿Qué cuotas?" tip={false} hint="Le debo: lo que tú pagas. Me deben: lo que te pagan a ti.">{seg("dir", DIR_CUOTA.map((x) => ({ value: x.value, label: x.label })))}</FormField>
+    case "compra_tarjeta":
+      return <FormField label="Tarjeta" htmlFor={id("card_id")} tip={false}>{combo("card_id", o.tarjetas ?? [], "Cualquier tarjeta", "Cualquier tarjeta")}</FormField>
+    case "suscripcion":
+      return <FormField label="¿Cuándo?" tip={false} hint="“Cuando se cobra”: al tocar Ya se cobró en Suscripciones.">{seg("evento", EVENTOS_SUSCRIPCION.map((x) => ({ value: x.value, label: x.label })))}</FormField>
+    case "crear_ingreso":
+      return (
+        <Controller control={control} name="modo" render={({ field: m }) => (
+          <>
+            <FormField label="¿Cuánto?" tip={false}><Segmented value={String(m.value)} onChange={m.onChange} items={[{ value: "pct", label: "% del monto" }, { value: "fijo", label: "Un valor fijo" }]} /></FormField>
+            {m.value === "pct" && <FormField label="Porcentaje" htmlFor={id("pct")} tip={false} error={err("pct")} hint={o.triggerHasMonto ? "Del monto que trae el disparador." : "Ojo: el disparador elegido no trae un monto."}><Num id={id("pct")} register={register} name="pct" min={1} max={100} suffix="%" /></FormField>}
+            {m.value === "fijo" && <FormField label="Valor" htmlFor={id("valor")} tip={false} error={err("valor")}>{money("valor")}</FormField>}
+            <FormField label="Categoría" htmlFor={id("category_id")} tip={false}>{combo("category_id", o.categorias, "Sin categoría", "Sin categoría")}</FormField>
+            {text("descripcion", "Descripción")}
+          </>
+        )} />
+      )
+    case "pagar_fijo":
+      return (
+        <>
+          <FormField label="Gasto fijo" htmlFor={id("fixed_expense_id")} tip={false} error={err("fixed_expense_id")} hint="Se paga el periodo pendiente más antiguo (o el próximo), igual que al tocar Pagar.">
+            {combo("fixed_expense_id", o.fijos ?? [], "Elige el gasto fijo")}
+          </FormField>
+          <FormField label="¿Con qué valor?" tip={false} hint={o.triggerHasMonto ? undefined : "Este disparador no trae un monto: usa el valor del gasto fijo."}>
+            {seg("valor", [{ value: "fijo", label: "El del gasto fijo" }, ...(o.triggerHasMonto ? [{ value: "monto", label: "El monto del disparador" }] : [])])}
+          </FormField>
+        </>
+      )
     case "ingreso":
       return <FormField label="¿Qué ingresos?" tip={false}>{seg("fuente", [{ value: "todos", label: "Todos" }, { value: "extras", label: "Ingresos extra" }, { value: "nomina", label: "Días de pago" }])}</FormField>
     case "programado":
@@ -154,7 +197,7 @@ function Fields({ kind, control, register, setValue, getValues, err, o }: {
     case "texto":
       return <FormField label="Palabras" htmlFor={id("contiene")} tip={false} error={err("contiene")} hint="Sepáralas con coma. No importan tildes ni mayúsculas."><Input id={id("contiene")} className="h-11" placeholder="rappi, domicilio" {...register("contiene")} /></FormField>
     case "aviso":
-      return <>{text("titulo", "Título")}{text("mensaje", "Mensaje", true)}{canales}</>
+      return <>{text("titulo", "Título")}{text("mensaje", "Mensaje", true)}{para}{canales}</>
     case "movimiento":
       return (
         <Controller control={control} name="tipo" render={({ field }) => (
@@ -199,7 +242,7 @@ function Fields({ kind, control, register, setValue, getValues, err, o }: {
     case "esperar":
       return <FormField label="Esperar" htmlFor={id("dias")} tip={false} error={err("dias")} hint="Después sigue con el siguiente paso."><Num id={id("dias")} register={register} name="dias" min={1} max={60} suffix="días" /></FormField>
     case "ia":
-      return <>{text("pregunta", "¿Qué le preguntas a la IA?", true)}{canales}</>
+      return <>{text("pregunta", "¿Qué le preguntas a la IA?", true)}{para}{canales}</>
   }
 }
 

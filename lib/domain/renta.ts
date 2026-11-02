@@ -3,10 +3,11 @@
 import { conv } from "./money"
 import { inv } from "./investments"
 import { loanEngine } from "./loans"
-import { fspPct, retEmpleado, smmlvFor, uvtFor } from "./payroll"
-import { pagosMes } from "./reparto"
-import { toDay } from "./dates"
-import type { BookData, DateInput } from "./types"
+import { compraEstado } from "./cards"
+import { dedCalc, fspPct, retEmpleado, smmlvFor, uvtFor, type Deducciones, type NominaRef } from "./payroll"
+import { dedAMes, pagosMes } from "./reparto"
+import { iso, toDay } from "./dates"
+import type { BookData, CreditCardIn, DateInput, ExpenseIn, ExtraIncomeIn, LoanIn } from "./types"
 
 /** UVT por año gravable (DIAN). 2024: Res. 187/2023 · 2025: Res. 193/2024 · 2026: Res. 238/2025. */
 export const UVTD: Record<number, number> = { 2024: 47065, 2025: 49799, 2026: 52374 }
@@ -66,17 +67,51 @@ export interface TaxAssetIn {
 }
 export interface TaxYearIn { ing: Partial<Record<RikKey, number | string | null>>; ded: Partial<Record<RdkKey, number | string | null>>; docs: Record<string, boolean>; consig: number; consumos: number }
 
+/** Marca "deducible" de un gasto (`expenses.deducible`). */
+export type Deducible = "salud" | "educacion" | "vivienda" | "dependiente"
+export const DEDUCIBLES: { value: Deducible; label: string; campo: RdkKey | null; help: string }[] = [
+  { value: "salud", label: "Salud: prepagada, póliza o plan complementario", campo: "prep", help: "Solo cuenta lo que pagas a medicina prepagada, pólizas de salud o planes complementarios, tuyos o de tu familia. Tope: 16 UVT al mes. Las consultas, los medicamentos y los copagos no se restan de la renta." },
+  { value: "vivienda", label: "Vivienda: intereses del crédito o leasing", campo: "intViv", help: "Solo se restan los intereses de tu crédito de vivienda o leasing habitacional, no la cuota completa. El banco te da un certificado con ese valor: úsalo. Tope: 1.200 UVT al año. El arriendo de tu casa no se resta." },
+  { value: "educacion", label: "Educación: intereses ICETEX", campo: "icetex", help: "Solo se restan los intereses de tu crédito ICETEX para tus propios estudios (tope 100 UVT al año). Las matrículas y pensiones del colegio o la universidad no se restan." },
+  { value: "dependiente", label: "Gasto de un dependiente (respaldo)", campo: null, help: "Lo que gastas en tus dependientes no se resta por su valor: la deducción sale de tener dependientes registrados. Guarda estos gastos como respaldo para tu contador." },
+]
+
+type ExpenseR = ExpenseIn & { deducible?: string | null; currency?: string | null }
+type ExtraR = ExtraIncomeIn & { member_id?: string | null; cat?: string; currency?: string | null }
+type IncomeR = BookData["incomes"][number] & { cat?: string; bruto?: number | null; deducciones?: unknown }
+
 /** Datos que necesita la renta además del libro. Los ingresos deben traer `cat` (nombre del tipo de ingreso) y `bruto`. */
 export interface RentaInput {
-  book: Omit<BookData, "incomes" | "assets"> & { incomes: (BookData["incomes"][number] & { cat?: string; bruto?: number | null })[]; assets: (BookData["assets"][number] & { id?: string; nombre?: string })[] }
+  book: Omit<BookData, "incomes" | "assets" | "expenses" | "extraIncomes"> & {
+    incomes: IncomeR[]
+    assets: (BookData["assets"][number] & { id?: string; nombre?: string })[]
+    /** Gastos; `deducible` (opcional) marca los que sirven para una deducción. */
+    expenses: ExpenseR[]
+    /** Ingresos extra; `cat` es el nombre de su categoría de ingreso. */
+    extraIncomes: ExtraR[]
+  }
   members: RentaMember[]
   bienes: TaxAssetIn[]
   tax: TaxYearIn | null
   uvtOverrides?: Record<string, number> | null
   smmlvOverrides?: Record<string, number> | null
+  /** Valores oficiales de las tablas `ref_uvt` y `ref_smmlv` (respaldo: las constantes del código). */
+  uvtRef?: Record<string, number> | null
+  smmlvRef?: Record<string, number> | null
 }
 
-export const uvtY = (y: number, ov?: Record<string, number> | null, today?: DateInput) => +(ov ?? {})[y] || UVTD[y] || uvtFor(toDay(today ?? new Date()).getFullYear(), ov)
+/**
+ * Opciones de los cálculos. `v4: true` reproduce exactamente la v4 (pruebas de paridad): sin ingresos extra, sin los
+ * descuentos guardados de cada ingreso, sin gastos deducibles, con saldos a hoy, sin la deuda de tarjetas y con la
+ * edad de 23 años para hijos que estudian. Por defecto se usan todos los datos de la v5 (ver NOTAS.md).
+ */
+export interface RentaOpts {
+  deps?: "2023" | "v4"
+  v4?: boolean
+}
+
+export const uvtY = (y: number, ov?: Record<string, number> | null, today?: DateInput, ref?: Record<string, number> | null) =>
+  +(ov ?? {})[y] || +(ref ?? {})[y] || UVTD[y] || uvtFor(toDay(today ?? new Date()).getFullYear(), ov, ref)
 export const titularId = (m: RentaMember[]) => (m.find((x) => x.es_titular) ?? m.find((x) => /titular/i.test(x.rol)) ?? m[0])?.id ?? "familia"
 const esDe = (memberId: string | null | undefined, mid: string, tit: string) => memberId === mid || (mid === tit && (!memberId || memberId === "familia"))
 
@@ -94,8 +129,14 @@ function edad(nac: string | null | undefined, today: DateInput) {
   return a
 }
 
+/**
+ * Edad máxima de un hijo que estudia para ser dependiente: 25 años desde la Ley 2411 de 2024 (modificó el art. 387 ET:
+ * hijos de 18 a 25 años a quienes el padre o la madre les paga la educación superior o técnica). La v4 usaba 23.
+ */
+export const EDAD_ESTUDIA = 25
+
 /** ¿Cuenta como dependiente? (depInfo de la v4; la edad se calcula a hoy, como en la v4). */
-export function depInfo(m: RentaMember, today: DateInput): { rel: string; e: number | null; ok: boolean; why: string } {
+export function depInfo(m: RentaMember, today: DateInput, edadMax = EDAD_ESTUDIA): { rel: string; e: number | null; ok: boolean; why: string } {
   const rel = m.dep_rel || (/hij/i.test(m.rol) ? "hijo" : /c[oó]nyuge|pareja/i.test(m.rol) ? "conyuge" : /padre|madre/i.test(m.rol) ? "padre" : /herman/i.test(m.rol) ? "hermano" : "")
   const e = edad(m.nacimiento, today)
   if (!m.dep_de) return { rel, e, ok: false, why: "No marcado como dependiente" }
@@ -103,8 +144,8 @@ export function depInfo(m: RentaMember, today: DateInput): { rel: string; e: num
     if (m.discapacidad) return { rel, e, ok: true, why: "Hijo con dependencia por discapacidad" }
     if (e === null) return { rel, e, ok: true, why: "Agrega la fecha de nacimiento para confirmar" }
     if (e < 18) return { rel, e, ok: true, why: `Menor de 18 años (${e})` }
-    if (e <= 23 && m.estudia) return { rel, e, ok: true, why: `${e} años y estudia (educación superior o técnica)` }
-    return { rel, e, ok: false, why: e <= 23 ? `${e} años: solo cuenta si estudia` : `${e} años: solo cuenta con discapacidad` }
+    if (e <= edadMax && m.estudia) return { rel, e, ok: true, why: `${e} años y estudia (educación superior o técnica)` }
+    return { rel, e, ok: false, why: e <= edadMax ? `${e} años: solo cuenta si estudia` : `${e} años: solo cuenta con discapacidad` }
   }
   if (rel === "conyuge" || rel === "padre" || rel === "hermano") {
     const ok = !!m.sin_ingresos || !!m.discapacidad
@@ -112,7 +153,7 @@ export function depInfo(m: RentaMember, today: DateInput): { rel: string; e: num
   }
   return { rel, e, ok: false, why: "Este parentesco no da deducción" }
 }
-export const depsDe = (members: RentaMember[], mid: string, today: DateInput) => members.filter((m) => m.dep_de === mid && depInfo(m, today).ok)
+export const depsDe = (members: RentaMember[], mid: string, today: DateInput, edadMax = EDAD_ESTUDIA) => members.filter((m) => m.dep_de === mid && depInfo(m, today, edadMax).ok)
 
 /** Tabla del artículo 241 del Estatuto Tributario (u en UVT → impuesto en UVT). */
 export function tarifa241(u: number) {
@@ -126,25 +167,113 @@ export function tarifa241(u: number) {
 }
 export const TRAMOS241: [number, number, number, number][] = [[0, 1090, 0, 0], [1090, 1700, 19, 0], [1700, 4100, 28, 116], [4100, 8670, 33, 788], [8670, 18970, 35, 2296], [18970, 31000, 37, 5901], [31000, Infinity, 39, 10352]]
 
-/** Ingresos estimados con lo registrado en Mirai (rentaAuto de la v4). */
-export function rentaAuto(R: RentaInput, mid: string, today: DateInput) {
+/** Fecha de corte del año gravable: el 31 de diciembre, o hoy si ese día todavía no llega. */
+export function corteRenta(y: number, today: DateInput) {
+  const t = iso(toDay(today)), fin = `${y}-12-31`
+  return fin < t ? fin : t
+}
+
+/** Saldo de un préstamo a una fecha: solo cuentan los pagos registrados hasta ese día (0 si empezó después). */
+export function saldoPrestamoAl(L: LoanIn, fecha: string) {
+  if (L.inicio && String(L.inicio).slice(0, 10) > fecha) return 0
+  return loanEngine({ ...L, payments: L.payments.filter((p) => String(p.fecha).slice(0, 10) <= fecha) }, fecha).saldo
+}
+
+/** Deuda de las tarjetas a una fecha: compras hechas hasta ese día con sus cuotas facturadas hasta ahí. */
+export function deudaTarjetasAl(cards: CreditCardIn[], fecha: string) {
+  return (cards || []).reduce((a, t) => a + (t.purchases || []).filter((c) => String(c.fecha).slice(0, 10) <= fecha).reduce((b, c) => b + compraEstado(t, c, fecha).saldo, 0), 0)
+}
+
+const txtDe = (x: { cat?: string; concepto?: string; descripcion?: string }) => `${x.cat ?? ""} ${x.concepto ?? x.descripcion ?? ""}`
+const RE_SAL = /salari/i
+const RE_HON = /honorar|independ|servicio|freelance|contrato/i
+
+/** Ingresos extra del año clasificados como en la declaración (por la categoría y la descripción). */
+function extrasDe(R: RentaInput, y: number, mid: string) {
+  const tit = titularId(R.members), trm = R.book.settings.trm, yr = String(y)
+  const o = { lab: 0, hon: 0, ces: 0, arr: 0, fin: 0, pen: 0, otr: 0 }
+  for (const x of R.book.extraIncomes ?? []) {
+    if (!String(x.fecha).startsWith(yr) || !esDe(x.member_id, mid, tit)) continue
+    const v = conv(+x.valor || 0, x.currency, trm), t = txtDe(x)
+    const k: keyof typeof o = /cesant/i.test(t) ? "ces" : /salari|sueldo|n[oó]mina|prima|bonifica|comisi/i.test(t) ? "lab" : RE_HON.test(t) ? "hon"
+      : /arriend|alquiler/i.test(t) ? "arr" : /pensi[oó]n|mesada/i.test(t) ? "pen" : /inter[eé]s|rendimiento|cdt|dividendo/i.test(t) ? "fin" : "otr"
+    o[k] += v
+  }
+  return { ...o, total: o.lab + o.hon + o.ces + o.arr + o.fin + o.pen + o.otr }
+}
+
+/**
+ * Aportes obligatorios (salud, pensión y fondo de solidaridad) y retención de un año con los descuentos que la
+ * persona guardó en el ingreso (`incomes.deducciones`), calculados igual que el formulario de ingresos.
+ */
+function dedGuardadas(x: IncomeR, ref: NominaRef) {
+  const D = x.deducciones as Deducciones | null | undefined, bruto = +(x.bruto ?? 0)
+  if (!D || typeof D !== "object" || !bruto) return null
+  const Dm = dedAMes(D, x.frec)
+  const r = x.frec === "anual" ? dedCalc(bruto, "anual", Dm, ref) : dedCalc(bruto * pagosMes(x), "mensual", Dm, ref)
+  const veces = x.frec === "anual" ? 1 : 12
+  let aportes = 0, ret = 0
+  for (const i of r.items) {
+    if (/^(salud|pensi[oó]n|fondo de solidaridad)/i.test(i.n)) aportes += i.v * veces
+    else if (/^retenci[oó]n/i.test(i.n)) ret += i.v * veces
+  }
+  return { aportes, ret }
+}
+
+/**
+ * Ingresos estimados con lo registrado en Mirai (rentaAuto de la v4). Sin `v4`, además:
+ * - suma los ingresos extra del año `y` (por persona y tipo);
+ * - si el ingreso tiene sus descuentos guardados, usa esos aportes y esa retención (procedimiento 2, valor fijo…)
+ *   en lugar de estimarlos con el 8 % y la tabla del art. 383.
+ */
+export function rentaAuto(R: RentaInput, mid: string, today: DateInput, o: { y?: number; v4?: boolean } = {}) {
   const tit = titularId(R.members), trm = R.book.settings.trm, yNow = toDay(today).getFullYear()
   const sal = salarioDe(R, mid)
-  const txt = (x: { cat?: string; concepto: string }) => `${x.cat ?? ""} ${x.concepto}`
   const mine = R.book.incomes.filter((x) => esDe(x.member_id, mid, tit))
   const mensual = (x: (typeof mine)[number]) => conv(x.valor, x.currency, trm) * pagosMes(x)
-  const by = (re: RegExp) => mine.filter((x) => re.test(txt(x)) && !/salari/i.test(txt(x))).reduce((a, x) => a + mensual(x), 0) * 12
-  const hon = by(/honorar|independ|servicio|freelance|contrato/i), arr = by(/arriend/i), pen = by(/pensi[oó]n/i)
-  const otr = mine.filter((x) => !/salari|honorar|independ|servicio|freelance|contrato|arriend|pensi[oó]n/i.test(txt(x))).reduce((a, x) => a + mensual(x), 0) * 12
-  const fin = mid === tit ? R.book.investments.reduce((a, x) => a + inv(x, today).bruto, 0) : 0
+  const by = (re: RegExp) => mine.filter((x) => re.test(txtDe(x)) && !RE_SAL.test(txtDe(x))).reduce((a, x) => a + mensual(x), 0) * 12
+  let hon = by(RE_HON), arr = by(/arriend/i), pen = by(/pensi[oó]n/i)
+  let otr = mine.filter((x) => !/salari|honorar|independ|servicio|freelance|contrato|arriend|pensi[oó]n/i.test(txtDe(x))).reduce((a, x) => a + mensual(x), 0) * 12
+  let fin = mid === tit ? R.book.investments.reduce((a, x) => a + inv(x, today).bruto, 0) : 0
   const retInv = mid === tit ? R.book.investments.reduce((a, x) => a + inv(x, today).ret, 0) : 0
-  const lab = sal * 13, ces = sal * 1.12
-  const smm = smmlvFor(yNow, R.smmlvOverrides), U0 = uvtFor(yNow, R.uvtOverrides)
+  let lab = sal * 13, ces = sal * 1.12
+  const smm = smmlvFor(yNow, R.smmlvOverrides, R.smmlvRef), U0 = uvtFor(yNow, R.uvtOverrides, R.uvtRef)
   const fsp = sal ? fspPct(sal, smm, R.book.settings.nomina?.fsp) / 100 : 0
-  const aportes = sal * 12 * (0.08 + fsp) + hon * 0.4 * 0.285
+  if (o.v4) {
+    const aportes = sal * 12 * (0.08 + fsp) + hon * 0.4 * 0.285
+    let retLab = 0
+    try { retLab = sal ? retEmpleado(sal, sal * (0.08 + fsp), U0) * 12 : 0 } catch { retLab = 0 }
+    return { lab, hon, ces, arr, fin, pen, otr, aportes: Math.round(aportes), ret: Math.round(retLab + retInv), volun: 0, afc: 0, sal, ext: 0, apG: 0, retG: 0 }
+  }
+  // Descuentos guardados: los ingresos que los tienen no se estiman.
+  const ref: NominaRef = { smmlv: smm, uvt: U0, fsp: R.book.settings.nomina?.fsp }
+  let apG = 0, retG = 0, salSin = 0, honSin = 0
+  for (const x of mine) {
+    const t = txtDe(x), g = dedGuardadas(x, ref)
+    if (g) { apG += g.aportes; retG += g.ret; continue }
+    if (RE_SAL.test(t)) salSin += +(x.bruto ?? 0) ? +(x.bruto ?? 0) * pagosMes(x) : conv(x.valor, x.currency, trm) * pagosMes(x)
+    else if (RE_HON.test(t)) honSin += mensual(x) * 12
+  }
+  const aportes = apG + salSin * 12 * (0.08 + fsp) + honSin * 0.4 * 0.285
   let retLab = 0
-  try { retLab = sal ? retEmpleado(sal, sal * (0.08 + fsp), U0) * 12 : 0 } catch { retLab = 0 }
-  return { lab, hon, ces, arr, fin, pen, otr, aportes: Math.round(aportes), ret: Math.round(retLab + retInv), volun: 0, afc: 0, sal }
+  try { retLab = salSin ? retEmpleado(salSin, salSin * (0.08 + fsp), U0) * 12 : 0 } catch { retLab = 0 }
+  // Ingresos extra del año que se declara.
+  const E = o.y ? extrasDe(R, o.y, mid) : null
+  if (E) { lab += E.lab; hon += E.hon; ces += E.ces; arr += E.arr; fin += E.fin; pen += E.pen; otr += E.otr }
+  return { lab, hon, ces, arr, fin, pen, otr, aportes: Math.round(aportes), ret: Math.round(retLab + retG + retInv), volun: 0, afc: 0, sal, ext: E?.total ?? 0, apG: Math.round(apG), retG: Math.round(retG) }
+}
+
+/** Gastos marcados como deducibles en el año, por tipo (de la persona; los sin persona son del titular). */
+export function deduciblesDe(R: RentaInput, y: number, mid: string) {
+  const tit = titularId(R.members), trm = R.book.settings.trm, yr = String(y)
+  const o: Record<Deducible, { v: number; n: number }> = { salud: { v: 0, n: 0 }, educacion: { v: 0, n: 0 }, vivienda: { v: 0, n: 0 }, dependiente: { v: 0, n: 0 } }
+  for (const g of R.book.expenses) {
+    const k = g.deducible as Deducible | null | undefined
+    if (!k || !(k in o) || !String(g.fecha).startsWith(yr) || !esDe(g.member_id, mid, tit)) continue
+    o[k].v += conv(+g.valor || 0, g.currency, trm)
+    o[k].n++
+  }
+  return o
 }
 
 /** Depuración de la cédula general y el impuesto estimado (calcRenta de la v4). */
@@ -153,10 +282,15 @@ export function rentaAuto(R: RentaInput, mid: string, today: DateInput) {
  * para el 10 % (dentro del límite) y para los 72 UVT (fuera del límite). "v4" reproduce la v4, que elegía entre
  * "10 % con uno y 72 UVT con los demás" o "72 UVT por cada uno" (solo para las pruebas de paridad).
  */
-export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInput, opts: { deps?: "2023" | "v4" } = {}) {
-  const U = uvtY(y, R.uvtOverrides, today), A = rentaAuto(R, mid, today), T = R.tax ?? { ing: {}, ded: {}, docs: {}, consig: 0, consumos: 0 }
+export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInput, opts: RentaOpts = {}) {
+  const U = uvtY(y, R.uvtOverrides, today, R.uvtRef), A = rentaAuto(R, mid, today, { y, v4: opts.v4 }), T = R.tax ?? { ing: {}, ded: {}, docs: {}, consig: 0, consumos: 0 }
   const g = (k: RikKey) => { const v = T.ing?.[k]; return v !== undefined && v !== "" && v !== null ? +v : (A[k] || 0) }
-  const dd = (k: RdkKey) => +(T.ded?.[k] ?? 0) || 0
+  // Deducciones: lo que escribió la persona (del certificado) o, si no escribió nada, la medicina prepagada que marcó
+  // como deducible en sus gastos del año. Vivienda y educación solo se proponen en pantalla: el valor deducible son los
+  // intereses del certificado del banco o del ICETEX, no la cuota completa.
+  const ded = opts.v4 ? null : deduciblesDe(R, y, mid)
+  const dedAuto: Partial<Record<RdkKey, number>> = ded ? { prep: ded.salud.v } : {}
+  const dd = (k: RdkKey) => +(T.ded?.[k] ?? 0) || dedAuto[k] || 0
   const lab = g("lab"), hon = g("hon"), ces = g("ces"), arr = g("arr"), fin = g("fin"), pen = g("pen"), otr = g("otr"), aportes = g("aportes"), volun = g("volun"), afc = g("afc"), ret = g("ret")
   const trabajo = lab + hon + ces, brutos = trabajo + arr + fin + otr + pen
   const RL = Math.max(0, trabajo + arr + fin + otr - aportes)
@@ -164,7 +298,7 @@ export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInpu
   const cesPct = su <= 350 ? 1 : su <= 410 ? 0.9 : su <= 470 ? 0.8 : su <= 530 ? 0.6 : su <= 590 ? 0.4 : su <= 650 ? 0.2 : 0
   const cesEx = ces * cesPct
   const vol = Math.min(volun + afc, 0.3 * (lab + hon), 3800 * U)
-  const nD = depsDe(R.members, mid, today).length
+  const nD = depsDe(R.members, mid, today, opts.v4 ? 23 : EDAD_ESTUDIA).length
   const d10 = nD ? Math.min(0.1 * (lab + hon), 384 * U) : 0
   const opA = d10 + Math.min(Math.max(nD - 1, 0), 4) * 72 * U, opB = Math.min(nD, 4) * 72 * U
   const v4 = opts.deps === "v4"
@@ -179,30 +313,39 @@ export function calcRenta(R: RentaInput, y: number, mid: string, today: DateInpu
   const penGrav = Math.max(0, pen - 12000 * U)
   const RLG = Math.max(0, RL - apl - dep72 - fe) + penGrav
   const imp = Math.round((tarifa241(RLG / U) * U) / 1000) * 1000
-  return { U, A, lab, hon, ces, arr, fin, pen, otr, aportes, volun, afc, ret, trabajo, brutos, RL, cesEx, cesPct, vol, nD, dep10, dep72, useA, intViv, prep, gmf, icetex, fe, r25, sub, lim, apl, recorte: sub - apl, RLG, imp, saldo: imp - ret }
+  return { U, A, lab, hon, ces, arr, fin, pen, otr, aportes, volun, afc, ret, trabajo, brutos, RL, cesEx, cesPct, vol, nD, dep10, dep72, useA, intViv, prep, gmf, icetex, fe, r25, sub, lim, apl, recorte: sub - apl, RLG, imp, saldo: imp - ret, ded, dedAuto }
 }
 export type Renta = ReturnType<typeof calcRenta>
 
 export const bValor = (b: TaxAssetIn) => (b.tipo === "inmueble" ? Math.max(+b.costo || 0, +b.avaluo || 0) : +b.valor31 || +b.costo || +b.avaluo || 0)
 
-/** Patrimonio al 31 de diciembre (patrimonio de la v4). */
-export function patrimonio(R: RentaInput, mid: string, today: DateInput) {
+/**
+ * Patrimonio al 31 de diciembre (patrimonio de la v4). Con `y` (y sin `v4`), los préstamos, las tarjetas y las
+ * inversiones se calculan a la fecha de corte del año (`corteRenta`) y la deuda de las tarjetas resta. Las cuentas,
+ * los bienes y los pasivos que se escriben a mano se toman con su valor de hoy (no guardan historia).
+ */
+export function patrimonio(R: RentaInput, mid: string, today: DateInput, o: { y?: number; v4?: boolean } = {}) {
   const tit = titularId(R.members), es = mid === tit, trm = R.book.settings.trm
+  const corte = !o.v4 && o.y ? corteRenta(o.y, today) : null
   const B = R.bienes.filter((b) => (b.member_id || tit) === mid)
   const linked = new Set(B.map((b) => b.asset_id).filter(Boolean))
   const cuentas = es ? R.book.assets.filter((a) => /^11/.test(a.cod) && !linked.has(a.id)).reduce((s, a) => s + conv(a.valor, a.currency, trm), 0) : 0
   const otrosAct = es ? R.book.assets.filter((a) => !/^11/.test(a.cod) && !linked.has(a.id)).reduce((s, a) => s + conv(a.valor, a.currency, trm), 0) : 0
-  const invs = es ? R.book.investments.reduce((s, x) => s + conv(inv(x, today).valor, x.currency, trm), 0) : 0
-  const cobr = es ? R.book.loans.filter((L) => L.kind === "cobrar").reduce((s, L) => s + loanEngine(L, today).saldo, 0) : 0
+  const invs = es ? R.book.investments.filter((x) => !corte || String(x.inicio).slice(0, 10) <= corte).reduce((s, x) => s + conv(inv(x, corte ?? today).valor, x.currency, trm), 0) : 0
+  const saldo = (L: LoanIn) => (corte ? saldoPrestamoAl(L, corte) : loanEngine(L, today).saldo)
+  const cobr = es ? R.book.loans.filter((L) => L.kind === "cobrar").reduce((s, L) => s + saldo(L), 0) : 0
   const bv = B.reduce((s, b) => s + (bValor(b) * (+b.pct || 100)) / 100, 0)
-  const deudas = es ? R.book.liabilities.reduce((s, p) => s + conv(p.valor, p.currency, trm), 0) + R.book.loans.filter((L) => L.kind === "pagar").reduce((s, L) => s + loanEngine(L, today).saldo, 0) : 0
+  const pasivos = es ? R.book.liabilities.reduce((s, p) => s + conv(p.valor, p.currency, trm), 0) : 0
+  const prestamos = es ? R.book.loans.filter((L) => L.kind === "pagar").reduce((s, L) => s + saldo(L), 0) : 0
+  const tarjetas = es && !o.v4 ? deudaTarjetasAl(R.book.creditCards, corte ?? iso(toDay(today))) : 0
+  const deudas = pasivos + prestamos + tarjetas
   const bruto = cuentas + otrosAct + invs + cobr + bv
-  return { cuentas, otrosAct, invs, cobr, bv, bruto, deudas, liquido: bruto - deudas, B }
+  return { cuentas, otrosAct, invs, cobr, bv, bruto, deudas, liquido: bruto - deudas, B, pasivos, prestamos, tarjetas, corte }
 }
 
 /** ¿Debo declarar? Topes del año (topes de la v4). */
-export function topes(R: RentaInput, y: number, mid: string, today: DateInput) {
-  const U = uvtY(y, R.uvtOverrides, today), C = calcRenta(R, y, mid, today, { deps: "v4" }), P = patrimonio(R, mid, today), yr = String(y)
+export function topes(R: RentaInput, y: number, mid: string, today: DateInput, o: { v4?: boolean } = {}) {
+  const U = uvtY(y, R.uvtOverrides, today, R.uvtRef), C = calcRenta(R, y, mid, today, { deps: "v4", v4: o.v4 }), P = patrimonio(R, mid, today, { y, v4: o.v4 }), yr = String(y)
   const es = mid === titularId(R.members)
   const gas = es ? R.book.expenses.filter((g) => g.fecha.startsWith(yr)).reduce((a, g) => a + +g.valor, 0) : 0
   const tc = es ? R.book.creditCards.reduce((a, t) => a + (t.purchases || []).filter((c) => c.fecha.startsWith(yr)).reduce((b, c) => b + +c.valor, 0), 0) : 0

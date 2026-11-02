@@ -21,7 +21,8 @@ import { AddressFields, emptyAddress, type Address } from "@/components/mirai/ad
 import { useSave } from "@/hooks/use-book-data"
 import { geoOf } from "@/lib/geo"
 import type { Row } from "@/lib/supabase/tables"
-import { useSettings } from "@/features/catalogs/hooks"
+import { useContacts, useSettings } from "@/features/catalogs/hooks"
+import { findContact } from "@/lib/domain/registros"
 
 export const DOC_TIPOS = [
   { value: "CC", label: "Cédula de ciudadanía (CC)" },
@@ -64,6 +65,7 @@ export function ContactForm(props: Props) {
 function ContactFormBody({ onOpenChange, contact, onSaved, formId }: Props & { formId: string }) {
   const save = useSave("contacts")
   const { data: cfg } = useSettings()
+  const { data: contacts = [] } = useContacts()
   const [addr, setAddr] = useState<Address>(toAddress(contact))
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -77,6 +79,9 @@ function ContactFormBody({ onOpenChange, contact, onSaved, formId }: Props & { f
   const relaciones = cfg?.relaciones ?? []
 
   async function onSubmit(v: Values) {
+    // Mismo nombre (sin tildes ni mayúsculas) o mismo documento que otro contacto: no se crea otro igual.
+    const dup = findContact(contacts.filter((c) => c.id !== contact?.id), { nombre: v.nombre, doc: v.doc })
+    if (dup) { form.setError("nombre", { message: `Ya tienes a “${dup.nombre}” en tus contactos. Edítalo en vez de crear otro.` }); return }
     const city = geoOf(addr.ciudad)
     const row = await save.mutateAsync({
       ...(contact ? { id: contact.id } : {}),

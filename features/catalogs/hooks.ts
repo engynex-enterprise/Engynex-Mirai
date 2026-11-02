@@ -6,6 +6,7 @@ import { useApp, useBookId } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
 import type { Option } from "@/components/mirai/combobox"
 import type { Row } from "@/lib/supabase/tables"
+import { entityIcon } from "@/lib/domain/registros"
 
 const GRUPO = { n: "Necesidad", g: "Gusto", a: "Ahorro" } as const
 
@@ -64,7 +65,7 @@ export const contactOptions = (c: Row<"contacts">[] = []): Option[] =>
   c.map((x) => ({ value: x.id, label: x.nombre, icon: x.tipo === "empresa" ? "building-2" : "user-round", hint: [x.relacion, x.telefono].filter(Boolean).join(" · ") }))
 
 export const entityOptions = (e: Row<"entities">[] = []): Option[] =>
-  e.map((x) => ({ value: x.id, label: x.nombre, icon: "landmark", hint: [x.tipo, x.nit && `NIT ${x.nit}`].filter(Boolean).join(" · ") }))
+  e.map((x) => ({ value: x.id, label: x.nombre, icon: entityIcon(x.tipo), hint: [x.tipo, x.nit && `NIT ${x.nit}`].filter(Boolean).join(" · ") }))
 
 export const memberName = (id: string | null | undefined, m: Row<"family_members">[] = []) => (id ? (m.find((x) => x.id === id)?.nombre ?? "—") : "Familia")
 

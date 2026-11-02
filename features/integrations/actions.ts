@@ -5,7 +5,10 @@ import { requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { encrypt, mask } from "@/lib/crypto"
 import { integrationByKind, isAdminOnly } from "@/lib/integrations/registry"
-import { aiErrMsg, modelFrom } from "@/lib/ai/model"
+import { aiErrMsg, modelFrom, modelIdOf } from "@/lib/ai/model"
+import { aiPlatformSettings, logUsage } from "@/lib/ai/usage"
+import { costUSD } from "@/lib/ai/pricing"
+import { can } from "@/lib/plans"
 import { MODEL_LIST, modelOptions, parseModels, type ModelOption } from "@/lib/ai/models"
 import { getGlobalIntegration, getIntegration, getOwnIntegration } from "./store"
 import { USE_PLATFORM } from "@/lib/integrations/resolve"
@@ -73,8 +76,23 @@ export async function testIntegration(kind: string): Promise<{ ok: boolean; msg:
   try {
     if (def?.cat === "ia") {
       if (!v) return { ok: false, msg: "Primero guarda la clave de API." }
-      const { text } = await generateText({ model: modelFrom(v), prompt: "Responde solo con la palabra: listo", maxOutputTokens: 20 })
-      return done(true, `Conexión exitosa con ${def.n}. Respondió: “${text.trim().slice(0, 40)}”.`)
+      // Solo se prueban las claves del hogar: la IA de la plataforma la administra Mirai (y probarla gastaría sus créditos).
+      if (v.source === "plataforma") return { ok: true, msg: `Usas ${def.n} de Mirai: ya está lista y no hace falta probarla.` }
+      if (!can(ctx.plan, "ia")) return { ok: false, msg: "La inteligencia artificial no está incluida en tu plan. Conoce los planes en /planes." }
+      // La prueba queda en el uso de IA del hogar (feature "prueba"), como cualquier otra llamada.
+      const t0 = Date.now()
+      const model = modelIdOf(v)
+      const who = { householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, plan: ctx.plan.id, feature: "prueba" as const, fuente: "ia" as const, provider: kind, dePlataforma: false }
+      try {
+        const r = await generateText({ model: modelFrom(v), prompt: "Responde solo con la palabra: listo", maxOutputTokens: 20 })
+        const u = { input: r.usage?.inputTokens ?? 0, output: r.usage?.outputTokens ?? 0, cached: 0 }
+        const modelId = r.response?.modelId || model
+        await logUsage({ ...who, model: modelId, ...u, usd: costUSD(u, modelId, (await aiPlatformSettings()).precios), creditos: 0, ms: Date.now() - t0 })
+        return done(true, `Conexión exitosa con ${def.n}. Respondió: “${r.text.trim().slice(0, 40)}”.`)
+      } catch (e) {
+        await logUsage({ ...who, model, ms: Date.now() - t0, ok: false, error: aiErrMsg(e) })
+        throw e
+      }
     }
     return { ok: true, msg: "Esta integración no necesita prueba." }
   } catch (e) {

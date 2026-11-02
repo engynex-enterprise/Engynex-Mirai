@@ -4,6 +4,14 @@ import { login, shot, watchErrors } from "./helpers"
 // Fila de la tabla de proveedores: <tr> en escritorio y tarjeta <li> en el celular (DataTable dibuja una sola versión).
 const fila = (page: Page, nombre: string) => page.getByTestId("data-table").locator("tr, li").filter({ hasText: nombre })
 
+// Cierra el detalle: el primer Escape puede cerrar solo un tooltip abierto.
+async function cerrar(page: Page) {
+  await page.keyboard.press("Escape")
+  const dlg = page.getByRole("dialog")
+  if (await dlg.count()) await dlg.getByRole("button", { name: "Cerrar" }).last().click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+}
+
 async function accion(page: Page, nombre: string, item: string) {
   const row = fila(page, nombre).first()
   await row.scrollIntoViewIfNeeded()
@@ -35,7 +43,11 @@ test("proveedores: crear desde el módulo, editar y eliminar con Deshacer", asyn
   await page.getByRole("dialog").getByRole("textbox", { name: /Teléfono/ }).fill("6015551234")
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText("Proveedor actualizado").first()).toBeVisible()
-  await expect(fila(page, nombre).first().getByText("6015551234")).toBeVisible()
+  // La columna Contacto viene oculta: el teléfono (con formato) está en el detalle › Datos.
+  await fila(page, nombre).first().getByRole("button", { name: nombre, exact: true }).click()
+  await page.getByRole("dialog").getByRole("tab", { name: "Datos" }).click()
+  await expect(page.getByRole("dialog").getByText("(601) 555 1234")).toBeVisible()
+  await cerrar(page)
 
   // Eliminar con Deshacer
   await accion(page, nombre, "Eliminar")
@@ -72,10 +84,10 @@ test("proveedores: crear desde el selector dentro de Gasto fijo y verlo en el m�
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText(`${nombre} guardado`)).toBeVisible()
   // La lista de gastos fijos sigue mostrando el nombre del proveedor (columna de texto sincronizada).
-  await expect(page.locator("li", { hasText: nombre }).getByText(prov)).toBeVisible()
+  await expect(page.locator("#main li", { hasText: nombre }).getByText(prov)).toBeVisible()
 
   // Al volver a abrir el formulario, el proveedor ya está elegido (no se escribe otra vez).
-  const li = page.locator("li", { hasText: nombre }).first()
+  const li = page.locator("#main li", { hasText: nombre }).first()
   if (info.project.name === "movil") { await li.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: `Editar ${nombre}` }).click() }
   else await li.getByRole("button", { name: `Editar ${nombre}` }).click()
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Proveedor" })).toContainText(prov)
@@ -90,11 +102,11 @@ test("proveedores: crear desde el selector dentro de Gasto fijo y verlo en el m�
 
   // Limpieza: el gasto fijo y el proveedor
   await page.goto("/fijos")
-  const fijo = page.locator("li", { hasText: nombre }).first()
+  const fijo = page.locator("#main li", { hasText: nombre }).first()
   await fijo.scrollIntoViewIfNeeded()
   if (info.project.name === "movil") { await fijo.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: /Eliminar/ }).click() }
   else await fijo.getByRole("button", { name: `Eliminar ${nombre}` }).click()
-  await expect(page.locator("li", { hasText: nombre })).toHaveCount(0)
+  await expect(page.locator("#main li", { hasText: nombre })).toHaveCount(0)
   await page.goto("/proveedores")
   await accion(page, prov, "Eliminar")
   await expect(fila(page, prov)).toHaveCount(0)
@@ -129,7 +141,11 @@ test("proveedores: medio de pago preferido, próximo pago, detalle y deuda enlaz
   await page.getByRole("option", { name: /^Transferencia/ }).click()
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText("Proveedor agregado").first()).toBeVisible()
-  await expect(fila(page, prov).first().getByText("Transferencia")).toBeVisible()
+  // El medio preferido (columna oculta por defecto) se ve en el detalle › Datos.
+  await fila(page, prov).first().getByRole("button", { name: prov, exact: true }).click()
+  await page.getByRole("dialog").getByRole("tab", { name: "Datos" }).click()
+  await expect(page.getByRole("dialog").getByText("Transferencia").first()).toBeVisible()
+  await cerrar(page)
 
   // Gasto fijo con ese proveedor: sugiere su medio de pago y aparece como próximo pago
   await page.goto("/fijos?nuevo=1")
@@ -166,7 +182,7 @@ test("proveedores: medio de pago preferido, próximo pago, detalle y deuda enlaz
 
   // De vuelta en Proveedores: "Le debes" con el saldo y filtro "Le debes"
   await page.goto("/proveedores")
-  await expect(fila(page, prov).first().getByText(/Le debes/)).toBeVisible()
+  await expect(fila(page, prov).first().getByText(/Le debes/).first()).toBeVisible()
   await page.getByRole("button", { name: "Filtros" }).click()
   await page.getByRole("checkbox", { name: "Le debes" }).click()
   await page.keyboard.press("Escape")

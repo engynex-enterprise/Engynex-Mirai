@@ -29,3 +29,34 @@ export async function fetchFx() {
   const r = await fetch("https://open.er-api.com/v6/latest/COP", { next: { revalidate: 3600 } }).then((x) => x.json())
   return { USD: 1 / r.rates.USD, EUR: 1 / r.rates.EUR }
 }
+
+/**
+ * Precio de criptomonedas en la moneda `vs` (cop, usd…) desde CoinGecko. Acepta el id de CoinGecko ("bitcoin") o el
+ * símbolo ("btc"). Devuelve { símbolo o id en minúsculas: precio }. La clave demo es opcional.
+ */
+export async function fetchCryptoPrices(symbols: string[], vs: string, apiKey?: string) {
+  const list = [...new Set(symbols.map((s) => s.trim().toLowerCase()).filter(Boolean))]
+  if (!list.length) return {} as Record<string, number>
+  const headers: Record<string, string> = apiKey ? { "x-cg-demo-api-key": apiKey } : {}
+  const get = async (param: "ids" | "symbols") => {
+    const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?${param}=${encodeURIComponent(list.join(","))}&vs_currencies=${encodeURIComponent(vs)}`, { headers, next: { revalidate: 3600 } })
+    if (!r.ok) return {} as Record<string, Record<string, number>>
+    return (await r.json()) as Record<string, Record<string, number>>
+  }
+  const [byId, bySym] = await Promise.all([get("ids"), get("symbols")])
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries({ ...bySym, ...byId })) if (Number(v?.[vs]) > 0) out[k.toLowerCase()] = Number(v[vs])
+  return out
+}
+
+/** Último precio de una acción o ETF (Alpha Vantage GLOBAL_QUOTE o Twelve Data /price), en la moneda de su bolsa. */
+export async function fetchStockPrice(symbol: string, provider: string, apiKey: string): Promise<number | null> {
+  const s = encodeURIComponent(symbol)
+  if (provider === "twelvedata") {
+    const r = await fetch(`https://api.twelvedata.com/price?symbol=${s}&apikey=${encodeURIComponent(apiKey)}`, { next: { revalidate: 3600 } }).then((x) => x.json())
+    return Number(r?.price) > 0 ? Number(r.price) : null
+  }
+  const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${s}&apikey=${encodeURIComponent(apiKey)}`, { next: { revalidate: 3600 } }).then((x) => x.json())
+  const p = Number(r?.["Global Quote"]?.["05. price"])
+  return p > 0 ? p : null
+}

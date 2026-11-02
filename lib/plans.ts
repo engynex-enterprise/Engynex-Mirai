@@ -5,13 +5,15 @@ export type PlanId = string
 export type PremiumFeature = "ia" | "banco" | "impuestos" | "familia"
 
 /** Plan vigente de un hogar tal como lo usa la app (tabla plans). */
-export type PlanInfo = { id: string; nombre: string; features: PremiumFeature[]; ads: boolean; limites: { libros?: number; personas?: number }; pago: boolean }
-export const FREE_PLAN: PlanInfo = { id: "gratis", nombre: "Gratis", features: [], ads: true, limites: { libros: 1, personas: 2 }, pago: false }
+export type PlanLimits = { libros?: number; personas?: number; /** Automatizaciones activas a la vez por libro (sin dato = sin límite). */ automatizaciones?: number }
+export type PlanInfo = { id: string; nombre: string; features: PremiumFeature[]; ads: boolean; limites: PlanLimits; pago: boolean }
+/** Respaldo si el plan no está en la tabla plans (la base usa los mismos valores: plan_automation_limit). */
+export const FREE_PLAN: PlanInfo = { id: "gratis", nombre: "Gratis", features: [], ads: true, limites: { libros: 1, personas: 2, automatizaciones: 3 }, pago: false }
 
 /** Fila de la tabla plans → PlanInfo. */
 export function toPlanInfo(row: { id: string; nombre: string; funciones?: string[] | null; anuncios?: boolean | null; limites?: unknown; precio_mes?: number | null } | null | undefined): PlanInfo {
   if (!row) return FREE_PLAN
-  const lim = (row.limites ?? {}) as { libros?: number; personas?: number }
+  const lim = (row.limites ?? {}) as PlanLimits
   return { id: row.id, nombre: row.nombre, features: (row.funciones ?? []).filter((f): f is PremiumFeature => f in FEATURES), ads: row.anuncios ?? true, limites: lim, pago: (row.precio_mes ?? 0) > 0 }
 }
 
@@ -20,13 +22,14 @@ export const can = (plan: PlanInfo, f: PremiumFeature | undefined) => !f || plan
 /** ¿El plan incluye todas las funciones de pago? (para textos como "Premium"). */
 export const isFull = (plan: PlanInfo) => FEATURE_LIST.every((f) => plan.features.includes(f))
 /** Límite del plan (undefined = sin límite). */
-export const limitOf = (plan: PlanInfo, k: "libros" | "personas") => plan.limites[k]
+export const limitOf = (plan: PlanInfo, k: keyof PlanLimits) => plan.limites[k]
 
 export const FEATURES: Record<PremiumFeature, { label: string; icon: string; desc: string; beneficios: string[]; secciones: string[] }> = {
   ia: {
     label: "Inteligencia artificial", icon: "sparkles", desc: "Tu consejero financiero personal, disponible siempre.",
     beneficios: ["Consejero IA y chat que conocen tus números", "Lee facturas y recibos con una foto", "Clasifica tus gastos solo y detecta gastos hormiga", "Resumen del mes escrito para ti"],
-    secciones: ["consejero"],
+    // El Consejero funciona en todos los planes (en Gratis responde con algoritmos): no lleva la corona en el menú.
+    secciones: [],
   },
   banco: {
     label: "Automatización bancaria", icon: "landmark", desc: "Tus movimientos entran solos, sin digitarlos.",

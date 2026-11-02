@@ -103,3 +103,23 @@ sandbox de `node:vm` con "hoy" fijo y los datos de ejemplo `sample()` (familia N
 `calcRenta` aplica por defecto la regla vigente: el mismo dependiente sirve para el 10 % (dentro del límite del 40 %)
 y para los 72 UVT (fuera del límite, hasta 4). La v4 elegía entre "10 % con uno y 72 con los demás" o "72 por cada
 uno" (Concepto DIAN 0624/2023, cuyo aparte suspendió el Consejo de Estado). La paridad se prueba con `{ deps: "v4" }`.
+
+## Renta: datos de la v5 (frente F6, 2-nov-2026)
+
+Por defecto `rentaAuto`, `calcRenta`, `patrimonio` y `topes` usan datos que la v4 no tenía. La paridad con la v4 se
+prueba con `{ v4: true }` (y `depInfo(m, hoy, 23)`); las pruebas de `renta.test.ts` › "renta con los datos de la v5"
+cubren cada diferencia:
+- **Tarjetas de crédito** en las deudas del patrimonio (`deudaTarjetasAl`). La v4 no las restaba.
+- **Saldos al 31 de diciembre** del año gravable (`corteRenta`: el 31-dic si ya pasó, si no hoy) para préstamos
+  (`saldoPrestamoAl`: solo pagos hasta esa fecha; 0 si el préstamo empezó después), tarjetas e inversiones. La v4 usaba
+  hoy. Cuentas, bienes y pasivos escritos a mano se toman con su valor de hoy (no guardan historia). Las compras
+  marcadas `pagada` cuentan en 0 aunque se hayan pagado después del corte.
+- **Descuentos guardados** en cada ingreso (`incomes.deducciones`): aportes (salud, pensión, FSP) y retención salen de
+  `dedCalc` con los mismos datos del formulario de ingresos (procedimiento 2, valor fijo, % …). Los ingresos sin
+  descuentos guardados se siguen estimando como la v4 (8 % + FSP y tabla del art. 383).
+- **Ingresos extra** del año (`extra_incomes`) suman por persona y tipo (categoría o descripción).
+- **Gastos deducibles** (`expenses.deducible`): `salud` propone la medicina prepagada (`prep`, tope 16 UVT/mes) cuando
+  no hay un valor escrito. `vivienda` y `educacion` solo se muestran como referencia ("Usar este valor"): lo deducible
+  son los intereses del certificado (art. 119 ET), no la cuota. `dependiente` no suma (es respaldo). Verificado con el
+  subagente finanzas-colombia (art. 387 y 119 ET, DUR 1625 art. 1.2.4.1.6).
+- **Hijos que estudian hasta 25 años** (Ley 2411 de 2024, art. 387 ET). La v4 usaba 23.

@@ -1,13 +1,14 @@
 import "server-only"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { loadBookData } from "@/lib/book-data"
-import { notifs, todayBogota, type Notif } from "@/lib/domain"
+import { conFechasDian, fechasDian, miSaldoGrupo, notifs, todayBogota, type AvisoExtras, type Notif, type NotifFlags, type RentaFecha, type RentaRegimen } from "@/lib/domain"
 import { getIntegration } from "@/features/integrations/store"
 import { AVISOS, avisoOf, enSilencio, maskDest, onFor, type Canales, type CanalKey, type Matriz } from "./rules"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "./email"
 import { fallbackNote, pushReady, sendPush, sendTelegram, sendWhatsApp } from "./channels"
 import { caseOfDigest, formatCoPhone, normalizeCoPhone, type WaCase, type WaValues } from "./whatsapp"
-import { logSend } from "./log"
+import { claimSend, finishSend, logSend } from "./log"
+import { resumenKey, tocaResumen } from "./schedule"
 import { siteUrl } from "@/lib/site-url"
 
 const MONEY = /\$\s?[\d.]+(,\d+)?/g
@@ -15,19 +16,70 @@ const MONEY = /\$\s?[\d.]+(,\d+)?/g
 export type Rule = {
   user_id: string; book_id: string; matriz: Matriz; canales: Canales; hora: number; frecuencia: string
   silencio: { on?: boolean; desde?: number; hasta?: number }; ocultar_montos: boolean; email_to: string | null; whatsapp_to: string | null; last_sent: Record<string, string>
+  /** Interruptores de cada tipo de aviso de esta persona (sobre los del libro). */
+  notif?: NotifFlags | null
 }
 
 export const defaultRule = (user_id: string, book_id: string): Rule => ({
-  user_id, book_id, matriz: {}, canales: { app: true, popup: true }, hora: 7, frecuencia: "diario", silencio: { on: false, desde: 22, hasta: 7 }, ocultar_montos: false, email_to: null, whatsapp_to: null, last_sent: {},
+  user_id, book_id, matriz: {}, canales: { app: true, popup: true }, hora: 7, frecuencia: "diario", silencio: { on: false, desde: 22, hasta: 7 }, ocultar_montos: false, email_to: null, whatsapp_to: null, last_sent: {}, notif: null,
 })
 
 /** Hora actual en Colombia (0–23). */
 export const horaBogota = (now = new Date()) => Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Bogota", hour: "numeric", hourCycle: "h23" }).format(now))
 
-/** Avisos del libro para un canal según la matriz del usuario. */
+/** Referencias de la renta (calendario DIAN): cambian una vez al año, se leen una vez por proceso cada 6 horas. */
+let rentaRef: { at: number; filas: RentaFecha[]; regimenes: RentaRegimen[] } | null = null
+async function rentaRefs() {
+  if (rentaRef && Date.now() - rentaRef.at < 6 * 3_600_000) return rentaRef
+  const db = supabaseAdmin()
+  const [{ data: filas }, { data: regs }] = await Promise.all([db.from("ref_renta_calendar").select("year,digitos,regimen,fecha"), db.from("ref_renta_regimenes").select("key,nombre,seccionales")])
+  rentaRef = { at: Date.now(), filas: (filas ?? []).map((f) => ({ ...f, year: +f.year, fecha: String(f.fecha).slice(0, 10) })), regimenes: (regs ?? []) as RentaRegimen[] }
+  return rentaRef
+}
+
+/**
+ * Lo que necesitan los avisos de una persona y que no viene en el libro: sus fechas DIAN (por su cédula), las mesadas
+ * del libro y su saldo en cada grupo de gastos compartidos.
+ */
+export async function avisoCtx(bookId: string, userId: string) {
+  const db = supabaseAdmin()
+  const [b, { data: prof }, { data: alw }, { data: groups }] = await Promise.all([
+    loadBookData(db, bookId),
+    db.from("profiles").select("nombre,digitos,ciudad").eq("id", userId).maybeSingle(),
+    db.from("allowances").select("id,member_id,mesada,frec").eq("book_id", bookId).is("deleted_at", null),
+    db.from("shared_groups").select("id,nombre,personas").eq("book_id", bookId).is("deleted_at", null),
+  ])
+  const extras: AvisoExtras = {}
+  if (alw?.length) {
+    const [{ data: fm }, { data: movs }] = await Promise.all([
+      db.from("family_members").select("id,nombre").in("id", alw.map((a) => a.member_id)),
+      db.from("allowance_movements").select("allowance_id,fecha,valor").eq("book_id", bookId).is("deleted_at", null).gt("valor", 0).order("fecha", { ascending: false }).limit(500),
+    ])
+    extras.mesadas = alw.map((a) => ({ id: a.id, nombre: fm?.find((m) => m.id === a.member_id)?.nombre ?? "", mesada: +a.mesada, frec: a.frec, ultima: movs?.find((x) => x.allowance_id === a.id)?.fecha ?? null }))
+  }
+  if (groups?.length && prof?.nombre) {
+    const { data: gg } = await db.from("shared_group_expenses").select("group_id,valor,paga,entre").eq("book_id", bookId).is("deleted_at", null)
+    extras.compartidos = groups.flatMap((g) => {
+      const saldo = miSaldoGrupo(g.personas, (gg ?? []).filter((x) => x.group_id === g.id).map((x) => ({ valor: +x.valor, paga: x.paga, entre: x.entre })), prof.nombre)
+      return saldo === null ? [] : [{ id: g.id, nombre: g.nombre, saldo }]
+    })
+  }
+  const dian = /^\d{2}$/.test(prof?.digitos ?? "") ? fechasDian({ digitos: prof!.digitos, ...(await rentaRefs()), ciudad: prof?.ciudad, eventos: b.calendarEvents }) : []
+  return { book: conFechasDian(b, dian), extras }
+}
+
+/** Todos los avisos de hoy para una persona en un libro (sin filtrar por canal). */
+export async function avisosDe(bookId: string, rule: Rule, today = todayBogota()) {
+  const { book, extras } = await avisoCtx(bookId, rule.user_id)
+  return notifs(book, today, { notif: rule.notif, extras })
+}
+
+/** Avisos que salen por un canal según la matriz de la persona. */
+export const paraCanal = (list: Notif[], rule: Rule, canal: CanalKey) => list.filter((n) => onFor(rule.matriz, avisoOf(n.id), canal))
+
+/** Avisos del libro para un canal según la matriz y los interruptores de la persona. */
 export async function avisosPara(bookId: string, rule: Rule, canal: CanalKey) {
-  const b = await loadBookData(supabaseAdmin(), bookId)
-  return notifs(b, todayBogota()).filter((n) => onFor(rule.matriz, avisoOf(n.id), canal))
+  return paraCanal(await avisosDe(bookId, rule), rule, canal)
 }
 
 /** Línea del resumen (nLine de la v4): sin montos si el usuario lo pidió. */
@@ -52,7 +104,7 @@ function digestHtml(nombre: string, list: Notif[], hide: boolean) {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
 
 /** Primer proveedor de correo que Mirai tiene activo para el hogar (lo configura el administrador). */
-async function emailProvider(householdId: string) {
+export async function emailProvider(householdId: string) {
   for (const k of EMAIL_KINDS) { const v = await getIntegration(householdId, k); if (v?.enabled) return v }
   return null
 }
@@ -107,8 +159,9 @@ export function testMsg(nombre: string): Msg {
  * Envía un mensaje por un canal externo con el servicio que Mirai tiene activo y registra el intento
  * (notification_log). Devuelve un mensaje para el usuario; si falla, lanza el error legible (ya registrado).
  */
-export async function deliver(o: { householdId: string; userId: string; canal: Canal; emailTo: string; whatsappTo: string | null; kind: string }, m: Msg): Promise<string> {
-  const log = { user_id: o.userId, household_id: o.householdId, channel: o.canal, kind: o.kind }
+export async function deliver(o: { householdId: string; userId: string; canal: Canal; emailTo: string; whatsappTo: string | null; kind: string; bookId?: string | null; /** Fila ya reclamada con claimSend (se cierra en lugar de crear otra). */ claimId?: number | null }, m: Msg): Promise<string> {
+  const log = { user_id: o.userId, household_id: o.householdId, book_id: o.bookId ?? null, channel: o.canal, kind: o.kind }
+  const close = (l: Parameters<typeof logSend>[0]) => (o.claimId ? finishSend(o.claimId, l) : logSend(l))
   let provider: string | null = null, source: string | null = null, destino: string | null = null
   try {
     let msg: string, ref: string | null = null, nota: string | null = null
@@ -146,23 +199,41 @@ export async function deliver(o: { householdId: string; userId: string; canal: C
       if (!n) throw new Error("No tienes dispositivos con push activado. Actívalo en este celular o computador.")
       msg = `Enviado a ${n} dispositivo${n === 1 ? "" : "s"}.`
     }
-    await logSend({ ...log, status: "enviado", provider, source, destino, ref, error: nota })
+    await close({ ...log, status: "enviado", provider, source, destino, ref, error: nota })
     return msg
   } catch (e) {
     const msg = (e as Error).message || "Error desconocido"
-    await logSend({ ...log, status: "fallido", provider, source, destino, error: msg })
+    await close({ ...log, status: "fallido", provider, source, destino, error: msg })
     throw new Error(msg)
   }
 }
 
-/** Envía el resumen por un canal externo. Devuelve un mensaje para el usuario. */
-export async function sendDigest(o: { householdId: string; rule: Rule; canal: Canal; email: string; nombre: string; force?: boolean }) {
+/**
+ * Envía UNA sola vez por clave (`dedupe`): reclama el envío en notification_log antes de hacerlo. Si ya salió, se está
+ * enviando en otra pasada o ya falló MAX_FALLOS veces, no hace nada (`sent: false`).
+ */
+export async function deliverOnce(o: Parameters<typeof deliver>[0] & { dedupe: string }, m: Msg): Promise<{ sent: boolean; msg: string }> {
+  const claimId = await claimSend({ dedupe: o.dedupe, userId: o.userId, householdId: o.householdId, bookId: o.bookId, channel: o.canal, kind: o.kind })
+  if (!claimId) return { sent: false, msg: "Ya se había enviado." }
+  return { sent: true, msg: await deliver({ ...o, claimId }, m) }
+}
+
+/** Envía el resumen por un canal externo ("Enviar resumen ahora": a pedido, sin clave de no-duplicado). Devuelve un mensaje para el usuario. */
+export async function sendDigest(o: { householdId: string; rule: Rule; canal: Canal; email: string; nombre: string; force?: boolean; list?: Notif[] }) {
   const { rule, canal } = o
-  const list = await avisosPara(rule.book_id, rule, canal)
+  const list = o.list ?? (await avisosPara(rule.book_id, rule, canal))
   if (!list.length && !o.force) return { sent: false, msg: "No tienes avisos pendientes para enviar." }
   const m = list.length ? digestMsg(o.nombre, list, rule.ocultar_montos) : testMsg(o.nombre)
-  const msg = await deliver({ householdId: o.householdId, userId: rule.user_id, canal, emailTo: rule.email_to || o.email, whatsappTo: rule.whatsapp_to, kind: list.length ? "resumen" : "prueba" }, m)
+  const msg = await deliver({ householdId: o.householdId, userId: rule.user_id, bookId: rule.book_id, canal, emailTo: rule.email_to || o.email, whatsappTo: rule.whatsapp_to, kind: list.length ? "resumen" : "prueba" }, m)
   return { sent: true, msg: list.length ? `Resumen ${msg.charAt(0).toLowerCase()}${msg.slice(1)}` : msg }
+}
+
+/** ¿La persona tiene a dónde recibir por este canal? (sin destino no se intenta ni se registra un fallo en cada pasada). */
+async function tieneDestino(rule: Rule, canal: Canal, email: string) {
+  if (canal === "email") return !!(rule.email_to || email)
+  if (canal === "whatsapp") return !!normalizeCoPhone(rule.whatsapp_to)
+  if (canal === "telegram") return !!(await supabaseAdmin().from("telegram_links").select("chat_id").eq("user_id", rule.user_id).maybeSingle()).data?.chat_id
+  return !!(await supabaseAdmin().from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", rule.user_id)).count
 }
 
 /** Crea los avisos dentro de la app (campana). Sin duplicados gracias a (user_id, dedupe). */
@@ -175,28 +246,38 @@ export async function upsertAppNotifs(rule: Rule, list: Notif[]) {
   return rows.length
 }
 
-/** Proceso del cron para una regla: avisos en la app + resúmenes externos si es su hora. */
-export async function runRule(o: { householdId: string; rule: Rule; email: string; nombre: string; now?: Date; daily?: boolean }) {
+/**
+ * Proceso del cron para una regla: avisos en la app (campana) y, si es su hora, el resumen por cada canal externo.
+ * - `horario`: el cron horario está vivo (lib/notify/schedule.ts); entonces se respeta la hora elegida también en la
+ *   pasada diaria. Sin él, la pasada diaria envía a todos.
+ * - Cada resumen se reclama con su clave (resumen:<persona>:<libro>:<canal>:<día>): nunca sale dos veces el mismo día.
+ * - `ready`: canales que Mirai ofrece al hogar. Un canal no disponible o sin destino no se intenta (no llena el registro de fallos).
+ */
+export async function runRule(o: { householdId: string; rule: Rule; email: string; nombre: string; now?: Date; daily?: boolean; horario?: boolean; ready?: Record<Canal, boolean> }) {
   const { rule } = o
   const now = o.now ?? new Date()
   const hoy = todayBogota(now)
   const h = horaBogota(now)
   const out: string[] = []
-  await upsertAppNotifs(rule, await avisosPara(rule.book_id, rule, "app"))
-  if (rule.frecuencia === "nunca") return out
-  if (rule.frecuencia === "semanal" && new Date(`${hoy}T12:00:00`).getDay() !== 1) return out
-  // Con cron horario se respeta la hora elegida; con el cron diario de Vercel se envía en esa única pasada.
-  if (!o.daily && h < rule.hora) return out
+  const list = await avisosDe(rule.book_id, rule, hoy)
+  await upsertAppNotifs(rule, paraCanal(list, rule, "app"))
+  if (!tocaResumen({ frecuencia: rule.frecuencia, hora: rule.hora, hoy, h, daily: !!o.daily, horario: !!o.horario })) return out
+  const ready = o.ready ?? (await channelStatus(o.householdId))
   const sent = { ...rule.last_sent }
   for (const canal of ["email", "telegram", "push", "whatsapp"] as const) {
-    if (!rule.canales[canal] || sent[canal] === hoy) continue
+    if (!rule.canales[canal] || sent[canal] === hoy || !ready[canal]) continue
     if (canal === "push" && enSilencio(h, rule.silencio)) continue
+    if (!(await tieneDestino(rule, canal, o.email))) continue
+    const mine = paraCanal(list, rule, canal)
+    // Sin avisos para este canal no se envía nada; el día queda marcado (como en la versión anterior).
+    if (!mine.length) { sent[canal] = hoy; continue }
     try {
-      const r = await sendDigest({ ...o, canal })
-      if (r.sent) out.push(`${canal}: ok`)
+      const r = await deliverOnce({ householdId: o.householdId, userId: rule.user_id, bookId: rule.book_id, canal, emailTo: rule.email_to || o.email, whatsappTo: rule.whatsapp_to, kind: "resumen", dedupe: resumenKey(rule.user_id, rule.book_id, canal, hoy) }, digestMsg(o.nombre, mine, rule.ocultar_montos))
+      out.push(`${canal}: ${r.sent ? "ok" : "ya enviado"}`)
       sent[canal] = hoy
     } catch (e) { out.push(`${canal}: ${(e as Error).message}`) }
   }
-  await supabaseAdmin().from("notification_rules").update({ last_sent: sent }).eq("user_id", rule.user_id).eq("book_id", rule.book_id)
+  if (JSON.stringify(sent) !== JSON.stringify(rule.last_sent ?? {}))
+    await supabaseAdmin().from("notification_rules").update({ last_sent: sent }).eq("user_id", rule.user_id).eq("book_id", rule.book_id)
   return out
 }

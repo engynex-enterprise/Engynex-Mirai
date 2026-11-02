@@ -25,9 +25,11 @@
 - Ingresos no constitutivos: aportes obligatorios a salud y pensión.
 - Rentas exentas y deducciones sujetas al límite **40 % de la renta líquida o 1.340 UVT**: cesantías (según salario promedio, tabla art. 206 num. 4), aportes voluntarios pensión + AFC (30 % y 3.800 UVT), dependientes 10 % (máx. 32 UVT/mes), intereses de vivienda (1.200 UVT/año), medicina prepagada (16 UVT/mes), 50 % del GMF, intereses ICETEX (100 UVT), renta exenta 25 % (790 UVT/año).
 - Fuera del límite: **72 UVT por dependiente hasta 4** y **1 % de compras con factura electrónica** (máx. 240 UVT). Desde el Decreto 2231/2023 (art. 1.2.1.20.3 DUR 1625) **el mismo dependiente sirve para el 10 % y para los 72 UVT**; el Consejo de Estado suspendió el aparte de la DIAN que decía lo contrario (auto exp. 28541, 21-ene-2025). Los 72 UVT y el 1 % no se usan en la retención mensual, solo en la declaración.
-- Dependientes: hijos < 18; 18–23 si estudian; con discapacidad; cónyuge, padres o hermanos sin ingresos > 260 UVT o con discapacidad. Solo un declarante puede tomarlo.
+- Dependientes: hijos < 18; 18–25 si estudian y el padre o la madre les paga la educación superior o técnica (Ley 2411 de 2024; antes 23); con discapacidad; cónyuge, padres o hermanos sin ingresos > 260 UVT o con discapacidad. Solo un declarante puede tomarlo.
 - Tarifa art. 241 (en UVT): 0–1.090: 0 %; 1.090–1.700: 19 %; 1.700–4.100: 28 % + 116; 4.100–8.670: 33 % + 788; 8.670–18.970: 35 % + 2.296; 18.970–31.000: 37 % + 5.901; > 31.000: 39 % + 10.352.
 - Patrimonio: inmuebles al mayor entre costo fiscal y avalúo catastral; demás bienes por costo; saldos al 31 de diciembre.
+- Deudas del patrimonio: pasivos, préstamos (pagos hasta el 31 de diciembre) y tarjetas de crédito (compras y cuotas facturadas hasta esa fecha).
+- Gastos deducibles (`expenses.deducible`): salud = solo prepagada, pólizas o planes complementarios (16 UVT/mes, art. 387 ET; DUR 1625 art. 1.2.4.1.6); vivienda = solo intereses del crédito o leasing habitacional (1.200 UVT, art. 119); educación = solo intereses ICETEX propios (100 UVT); el arriendo, las matrículas y los gastos médicos sueltos no se restan; los gastos de un dependiente no se restan por su valor.
 - No incluido (aún): dividendos, ganancias ocasionales, rentas no laborales detalladas, anticipo, pérdidas, renta presuntiva, régimen SIMPLE.
 
 ## Impuestos locales (estimados en el calendario)

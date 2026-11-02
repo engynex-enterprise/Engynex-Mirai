@@ -73,7 +73,7 @@ describe("campos visibles por tipo", () => {
   })
   it("empeño: casa de empeño, objeto obligatorio, solo tasa y sin escoger sistema (americano)", () => {
     const c = camposLoan("empeno", "pagar")
-    expect(c).toMatchObject({ quien: "casa", prenda: "si", concepto: false, sistema: false, frecs: [], foto: false })
+    expect(c).toMatchObject({ quien: "casa", ctCorto: false, prenda: "si", concepto: false, sistema: false, frecs: [], foto: false })
     expect(c.intereses).toEqual(["tasa"])
     expect(sistemaDe("empeno", "tasa", "frances", c)).toBe("americano")
   })
@@ -96,9 +96,9 @@ describe("campos visibles por tipo", () => {
   it("compra a cuotas: almacén, cuota inicial, seguros y foto de la factura", () => {
     expect(camposLoan("cuotas", "pagar")).toMatchObject({ quien: "prov", inicial: true, extra: true, foto: true, concepto: true })
   })
-  it("gota a gota: solo un nombre opcional, frecuencias diarias o semanal, nota", () => {
+  it("gota a gota: un contacto (basta el apodo y el celular), frecuencias diarias o semanal, nota", () => {
     const c = camposLoan("gota", "pagar")
-    expect(c).toMatchObject({ quien: "nombre", nota: true, extra: false })
+    expect(c).toMatchObject({ quien: "ct", ctCorto: true, nota: true, extra: false })
     expect(c.frecs).toEqual(["diariohab", "diario", "semanal"])
   })
   it("Me deben: le presté con garantía opcional; venta fiada sin E.A.; otro con entidad o persona", () => {
@@ -127,10 +127,13 @@ describe("campos obligatorios por tipo", () => {
     expect(faltantesLoan(base({ tipo: "banco", entity: "e", monto: 1e6, interes: "tasa", plazo: 36 })).map((f) => f.campo)).toEqual(["tasa"])
     expect(faltantesLoan(base({ tipo: "banco", entity: "e", monto: 1e6, interes: "tasa", ea: 24, plazo: 36 }))).toEqual([])
   })
-  it("empeño: la casa (entidad o nombre escrito), el objeto, el valor y el interés", () => {
+  it("empeño: la casa (siempre una entidad escogida o creada), el objeto, el valor y el interés", () => {
     const st = base({ tipo: "empeno", monto: 500_000, tasa: 4, plazo: 4 })
     expect(faltantesLoan(st).map((f) => f.campo)).toEqual(["quien", "obj"])
-    expect(faltantesLoan({ ...st, acreedor: "Compraventa La 14", obj: "Cadena" })).toEqual([])
+    expect(faltantesLoan(st)[0].msg).toBe("Escoge o crea la casa de empeño")
+    // Un nombre escrito ya no basta: hay que escoger o crear la entidad (así no se repite la compraventa).
+    expect(faltantesLoan({ ...st, nombreNuevo: "Compraventa La 14", obj: "Cadena" }).map((f) => f.campo)).toEqual(["quien"])
+    expect(faltantesLoan({ ...st, entity: "e", obj: "Cadena" })).toEqual([])
     expect(faltantesLoan({ ...st, entity: "e", obj: "Cadena", tasa: 0 }).map((f) => f.campo)).toEqual(["tasa"])
   })
   it("fiado: la tienda, el valor y una fecha de pago después de la compra", () => {
@@ -149,9 +152,19 @@ describe("campos obligatorios por tipo", () => {
     expect(faltantesLoan(st).map((f) => f.campo)).toEqual(["inicial"])
     expect(faltantesLoan({ ...st, inicial: 200_000 })).toEqual([])
   })
-  it("gota a gota: el nombre es opcional, la cuota no", () => {
-    expect(faltantesLoan(base({ tipo: "gota", monto: 500_000, interes: "cuota", plazo: 30 })).map((f) => f.campo)).toEqual(["cuota"])
-    expect(faltantesLoan(base({ tipo: "gota", monto: 500_000, interes: "cuota", cuota: 25_000, plazo: 30 }))).toEqual([])
+  it("gota a gota: quien presta es obligatorio (contacto o apodo nuevo) y la cuota también", () => {
+    const st = base({ tipo: "gota", monto: 500_000, interes: "cuota", plazo: 30 })
+    expect(faltantesLoan({ ...st, quien: "new" }).map((f) => f.campo)).toEqual(["quien", "cuota"])
+    expect(faltantesLoan({ ...st, quien: "new" })[0].msg).toBe("Escribe el nombre o el apodo de quien te prestó")
+    expect(faltantesLoan({ ...st, quien: "ex", cuota: 25_000 })[0].msg).toBe("Escoge el contacto")
+    expect(faltantesLoan({ ...st, quien: "new", nombreNuevo: "Don Jaime", cuota: 25_000 })).toEqual([])
+    expect(faltantesLoan({ ...st, quien: "ex", contact: "c", cuota: 25_000 })).toEqual([])
+  })
+  it("ningún tipo se guarda sin un registro de quien presta", () => {
+    for (const kind of ["pagar", "cobrar"] as const) for (const t of tiposDe(kind)) {
+      const st = base({ tipo: t.value, kind, monto: 100_000, pago: "unico", vence: "2026-12-02", interes: "no", plazo: 1, obj: "Reloj", tasa: 4, cuota: 10_000 })
+      expect(faltantesLoan(st).map((f) => f.campo), `${kind}/${t.value}`).toContain("quien")
+    }
   })
   it("otro en Le debo: con banco o entidad pide la entidad", () => {
     const st = base({ tipo: "otro", monto: 100_000, pago: "cuotas", interes: "no", plazo: 2, quien: "ent" as const })
@@ -181,6 +194,15 @@ describe("textos por tipo", () => {
     expect(textosLoan("banco", "pagar", { frec: "mensual" }).cuota).toBe("Cuota mensual")
     expect(textosLoan("banco", "pagar", { frec: "quincenal" }).plazo).toBe("Plazo en quincenas")
     expect(textosLoan("gota", "pagar", { frec: "diariohab" }).cuota).toBe("¿Cuánto pagas cada día?")
+  })
+  it("la ayuda dice dónde queda guardado quien presta", () => {
+    expect(textosLoan("banco", "pagar").quienHint).toMatch(/Contactos › Bancos y entidades/)
+    expect(textosLoan("empeno", "pagar").quienHint).toMatch(/Contactos › Bancos y entidades/)
+    expect(textosLoan("fiado", "pagar").quienHint).toMatch(/Proveedores/)
+    expect(textosLoan("cuotas", "pagar").quienHint).toMatch(/Proveedores/)
+    expect(textosLoan("persona", "pagar").quienHint).toBe("Queda en Contactos.")
+    expect(textosLoan("gota", "pagar").quienHint).toMatch(/Don Jaime.*Contactos/)
+    expect(textosLoan("presto", "cobrar").quienHint).toBe("Queda en Contactos.")
   })
   it("Me deben habla al revés", () => {
     expect(textosLoan("presto", "cobrar")).toMatchObject({ quien: "¿A quién le prestaste?", vence: "¿Cuándo te paga?" })

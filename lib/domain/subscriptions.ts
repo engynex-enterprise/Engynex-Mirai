@@ -63,3 +63,36 @@ export function detectSubs(
   }
   return out
 }
+
+const normTxt = (s: string | null | undefined) => (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim()
+
+/** Gasto con los campos que sirven para emparejarlo con el cobro de una suscripción. */
+export interface GastoCobro {
+  id: string
+  fecha: string
+  descripcion: string
+  provider_id?: string | null
+  /** Gasto creado con "Ya se cobró" (pay_subscription). */
+  subscription_id?: string | null
+  /** Fecha del cobro que pagó ese gasto ('YYYY-MM-DD'). */
+  sub_proximo?: string | null
+}
+
+/**
+ * El gasto que registró el cobro de la suscripción `s` en el mes `mes` ('YYYY-MM'), sin repetir los ya `usados`:
+ * primero el enlazado por `subscription_id` (por el mes del cobro que pagó), y si no hay, el del mismo mes con el mismo
+ * nombre o proveedor (regla 4 del flujo integral, para los cobros registrados antes de existir el enlace).
+ * Un gasto enlazado a OTRA suscripción nunca se empareja por nombre. Marca el elegido en `usados`.
+ */
+export function gastoDeCobro<T extends GastoCobro>(
+  s: { id: string; nombre: string; provider_id?: string | null }, gastos: T[], mes: string, usados: Set<string>, ok: (g: T) => boolean = () => true,
+): T | undefined {
+  const libre = (g: T) => !usados.has(g.id) && ok(g)
+  let g = gastos.find((x) => x.subscription_id === s.id && ((x.sub_proximo ?? x.fecha).slice(0, 7) === mes) && libre(x))
+  if (!g) {
+    const n = normTxt(s.nombre)
+    g = gastos.find((x) => !x.subscription_id && x.fecha.slice(0, 7) === mes && libre(x) && (normTxt(x.descripcion) === n || (!!s.provider_id && x.provider_id === s.provider_id)))
+  }
+  if (g) usados.add(g.id)
+  return g
+}

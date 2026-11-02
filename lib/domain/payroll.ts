@@ -14,10 +14,19 @@ export const UVT: Record<number, number> = { 2025: 49799, 2026: 52374 }
 const SMMLV_DEF = 1750905
 const UVT_DEF = 52374
 
-/** SMMLV del año: sobrescritura del libro o valor por defecto (igual que la v4: si no hay, 1.750.905). */
-export const smmlvFor = (year: number, overrides?: Record<string, number> | null): number => +(overrides ?? {})[year] || SMMLV[year] || SMMLV_DEF
-/** UVT del año: sobrescritura del libro, tabla UVT o 52.374. */
-export const uvtFor = (year: number, overrides?: Record<string, number> | null): number => +({ ...UVT, ...(overrides ?? {}) } as Record<string, number>)[year] || UVT_DEF
+/**
+ * SMMLV del año, en este orden: sobrescritura del libro (Ajustes › Finanzas), la tabla oficial `ref_smmlv` (`ref`,
+ * opcional), la constante del código o 1.750.905 (igual que la v4 cuando no hay nada).
+ */
+export const smmlvFor = (year: number, overrides?: Record<string, number> | null, ref?: Record<string, number> | null): number =>
+  +(overrides ?? {})[year] || +(ref ?? {})[year] || SMMLV[year] || SMMLV_DEF
+/** UVT del año: sobrescritura del libro, la tabla oficial `ref_uvt` (`ref`, opcional), la constante del código o 52.374. */
+export const uvtFor = (year: number, overrides?: Record<string, number> | null, ref?: Record<string, number> | null): number =>
+  +(overrides ?? {})[year] || +(ref ?? {})[year] || UVT[year] || UVT_DEF
+
+/** Filas de `ref_uvt`/`ref_smmlv` ({ year, valor }) como mapa por año, para pasarlas como `ref`. */
+export const refPorAnio = (rows: { year: number; valor: number | string }[] | null | undefined): Record<string, number> =>
+  Object.fromEntries((rows ?? []).filter((r) => +r.valor > 0).map((r) => [String(r.year), +r.valor]))
 
 /** Riesgos ARL: [nivel, nombre, % sobre el IBC]. */
 export const ARLN: [string, string, number][] = [

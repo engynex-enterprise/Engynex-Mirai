@@ -7,6 +7,10 @@ export const AVISOS = [
   { k: "presupuesto", t: "Presupuesto", icon: "chart-pie", d: "Cuando una categoría llega al porcentaje que definas.", kind: "presupuesto" },
   { k: "inversiones", t: "Inversiones", icon: "trending-up", d: "Cuando un CDT o inversión está por vencer.", kind: "inversion" },
   { k: "metas", t: "Metas", icon: "target", d: "Cuando una meta está cerca de su fecha.", kind: "meta" },
+  { k: "tarjetas", t: "Tarjetas de crédito", icon: "credit-card", d: "Cuando llega la fecha de corte o usas más del 30 % del cupo.", kind: "tarjeta" },
+  { k: "empenos", t: "Empeños y garantías", icon: "gem", d: "Cuando se acerca la fecha límite para recuperar lo empeñado.", kind: "empeno" },
+  { k: "mesadas", t: "Mesadas", icon: "piggy-bank", d: "Cuando toca entregar la mesada de alguien del hogar.", kind: "mesada" },
+  { k: "compartidos", t: "Gastos compartidos", icon: "split", d: "Cuando en un grupo te deben o debes plata.", kind: "compartido" },
 ] as const
 export type AvisoKey = (typeof AVISOS)[number]["k"]
 
@@ -23,23 +27,31 @@ export type Matriz = Partial<Record<AvisoKey, Partial<Record<CanalKey, boolean>>
 /** Canales activos del usuario (interruptor general de cada canal). */
 export type Canales = Partial<Record<CanalKey, boolean>> & { popup?: boolean }
 
-const URGENT: AvisoKey[] = ["pagos", "cobros"]
+const URGENT: AvisoKey[] = ["pagos", "cobros", "empenos"]
 export function defaultMatriz(): Matriz {
   return Object.fromEntries(AVISOS.map(({ k }) => [k, {
     app: true, email: URGENT.includes(k) || k === "inversiones", telegram: URGENT.includes(k) || k === "inversiones", push: URGENT.includes(k), whatsapp: URGENT.includes(k),
   }])) as Matriz
 }
 
+/**
+ * Los empeños antes viajaban como "pagos": mientras la persona no toque su fila, siguen la de pagos (nadie deja de
+ * recibir lo que ya recibía). Los demás tipos nuevos usan la matriz por defecto (solo en la app).
+ */
+const HEREDA: Partial<Record<AvisoKey, AvisoKey>> = { empenos: "pagos" }
+
 /** ¿Este aviso sale por este canal? (app: mientras no sea false; los demás: deben estar en true). */
 export function onFor(m: Matriz | null | undefined, aviso: AvisoKey, canal: CanalKey) {
-  const v = (m && Object.keys(m).length ? m : defaultMatriz())[aviso]?.[canal]
+  const own = m && Object.keys(m).length ? m : null
+  const fila = own ? own[aviso] ?? (HEREDA[aviso] ? own[HEREDA[aviso]!] : undefined) ?? defaultMatriz()[aviso] : defaultMatriz()[aviso]
+  const v = fila?.[canal]
   return canal === "app" ? v !== false : v === true
 }
 
-/** Categoría de un aviso por el prefijo de su id (nCat de la v4). */
+/** Categoría de un aviso por el prefijo de su id (nCat de la v4 + tipos de la v5). */
 export function avisoOf(id: string): AvisoKey {
   const p = id.split(":")[0]
-  return ({ b: "presupuesto", c: "cobros", h: "hormiga", i: "inversiones", m: "metas", p: "pagos", pr: "pagos" } as Record<string, AvisoKey>)[p] ?? "pagos"
+  return ({ b: "presupuesto", c: "cobros", h: "hormiga", i: "inversiones", m: "metas", p: "pagos", pr: "empenos", t: "tarjetas", ms: "mesadas", sg: "compartidos" } as Record<string, AvisoKey>)[p] ?? "pagos"
 }
 
 /** Horario de silencio (cruza la medianoche si desde > hasta). */

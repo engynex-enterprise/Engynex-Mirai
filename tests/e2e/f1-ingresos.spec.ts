@@ -34,7 +34,7 @@ test("ingresos: salario bruto con descuentos de nómina", async ({ page }, info)
   await expect(page.getByRole("textbox", { name: "Concepto" })).toHaveValue(concepto)
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText(/1ª quincena te llegan .* y 2ª quincena .*descuentos del mes/)).toBeVisible()
-  const row = page.locator("li", { hasText: concepto })
+  const row = page.locator("#main li", { hasText: concepto })
   await expect(row.getByText("neto")).toBeVisible()
   await expect(row.getByText(/^Bruto \$/)).toBeVisible()
   await expect(page.getByText("Ingreso mensual")).toBeVisible()
@@ -55,7 +55,7 @@ test("ingresos flexibles: comprobante de nómina real, bono por quincena, valore
     await page.getByRole("textbox", { name: "Concepto" }).fill(concepto)
     await page.getByRole("radio", { name: desc }).click()
   }
-  const row = (t: string) => page.locator("li", { hasText: t })
+  const row = (t: string) => page.locator("#main li", { hasText: t })
   const resumen = page.getByTestId("ingreso-resumen")
 
   // Sueldo $9.175.000, retención por procedimiento 2 (4,38 %) y todos los descuentos en la 2ª quincena.

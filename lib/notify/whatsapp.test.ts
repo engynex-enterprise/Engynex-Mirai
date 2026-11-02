@@ -159,9 +159,10 @@ describe("plantilla de respaldo", () => {
     const list = [tpl("mirai_resumen", "PENDING"), tpl("mirai_pagos", "APPROVED"), meta]
     expect(plantillaDeRespaldo(list, "mirai_pagos", "mirai_resumen")?.name).toBe("mirai_pagos")
   })
-  it("sin otra propia aprobada: la de ejemplo de Meta", () => {
+  it("sin otra propia aprobada: nunca la de ejemplo de Meta (el aviso va como texto libre)", () => {
     const list = [tpl("mirai_resumen", "PENDING"), tpl("otra", "REJECTED"), meta]
-    expect(plantillaDeRespaldo(list, "mirai_resumen", "mirai_resumen")?.name).toBe("3p_direct_integration_test_template")
+    expect(plantillaDeRespaldo(list, "mirai_resumen", "mirai_resumen")).toBeNull()
+    expect(plantillaDeRespaldo([meta], "3p_direct_integration_test_template", "x")).toBeNull()
     expect(esPlantillaDeMeta("hello_world")).toBe(true)
   })
   it("prefiere una propia con variable en español antes que la de Meta", () => {

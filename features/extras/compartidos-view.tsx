@@ -114,7 +114,11 @@ function SharedForm({ open, group, onOpenChange }: { open: boolean; group: Group
     }
     const { error } = await sb.from("shared_group_expenses").insert({ book_id: bookId, group_id: group.id, descripcion: desc.trim(), valor, paga, entre, fecha, expense_id })
     setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.message })
+    if (error) {
+      // Sin el gasto del grupo, tu parte no debe quedar suelta en tus gastos.
+      if (expense_id) await sb.from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", expense_id)
+      return toast.error("No se pudo guardar", { description: error.message })
+    }
     toast.success("Gasto anotado"); invalidateBook(qc, bookId, "shared_group_expenses"); invalidateBook(qc, bookId, "expenses"); onOpenChange(false)
   }
   return (
@@ -132,7 +136,7 @@ function SharedForm({ open, group, onOpenChange }: { open: boolean; group: Group
           <FormField label="¿Entre quiénes se divide?" hint={entre.length ? `A cada uno le tocan ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor / entre.length)}` : "Elige al menos una persona"}>
             <div className="flex flex-wrap gap-3">{group.personas.map((p) => <label key={p} className="flex items-center gap-2 text-sm"><Checkbox checked={entre.includes(p)} onCheckedChange={(c) => setEntre((e) => (c === true ? [...e, p] : e.filter((x) => x !== p)))} />{p}</label>)}</div>
           </FormField>
-          <label className="flex items-center gap-2 text-sm"><Checkbox checked={miGasto} onCheckedChange={(c) => setMiGasto(c === true)} /> Registrar mi parte en mis gastos</label>
+          <label className="flex items-start gap-2 text-sm"><Checkbox checked={miGasto} onCheckedChange={(c) => setMiGasto(c === true)} className="mt-0.5" /><span><b>Registrar mi parte en mis gastos</b><br /><span className="text-muted-foreground">Si después borras este gasto del grupo, también sale de tus gastos.</span></span></label>
           <button type="submit" hidden aria-hidden tabIndex={-1} />
         </FieldGroup>
       </form>
@@ -220,7 +224,7 @@ export function CompartidosView() {
               )}
             </Panel>
           </div>
-          <Panel title="Gastos" icon="receipt" action={canEdit && <><Button onClick={() => setAdding(g)}><Plus /> Anotar gasto</Button><IconButton icon="trash-2" destructive label="Eliminar grupo" onClick={() => delG.mutate(g)} /></>}>
+          <Panel title="Gastos" icon="receipt" action={canEdit && <><Button onClick={() => setAdding(g)}><Plus /> Anotar gasto</Button><IconButton icon="trash-2" destructive label="Eliminar grupo" onClick={() => delG.mutate(g, { onSuccess: () => invalidateBook(qc, bookId, "expenses") })} /></>}>
             {!gg.length ? <p className="text-sm text-muted-foreground">Aún no hay gastos en este grupo.</p> : (
               <>
                 {gg.length > 4 && <ListToolbar c={c} placeholder="Buscar un gasto o quién pagó" sorts={SORTS} />}
@@ -230,7 +234,7 @@ export function CompartidosView() {
                       <ToneIcon icon="receipt" tone="blue" size="sm" />
                       <span className="grid min-w-0 flex-1"><b className="truncate">{x.descripcion || "Gasto"}</b><span className="text-muted-foreground">Pagó {x.paga} · entre {x.entre.length} · {fmtDate(x.fecha)}</span></span>
                       <Money value={Number(x.valor)} className="font-bold" />
-                      {canEdit && <IconButton icon="trash-2" destructive label={`Eliminar gasto ${x.descripcion || ""}`.trim()} onClick={() => delE.mutate(x)} />}
+                      {canEdit && <IconButton icon="trash-2" destructive label={`Eliminar gasto ${x.descripcion || ""}`.trim()} onClick={() => delE.mutate(x, { onSuccess: () => invalidateBook(qc, bookId, "expenses") })} />}
                     </li>))}</ul>
                 )}
               </>
