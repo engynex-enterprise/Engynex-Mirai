@@ -5,6 +5,7 @@ import { supabaseServer } from "@/utils/supabase/server"
 import { G_SCOPES, redirectUri, siteUrl } from "@/lib/google"
 import { getAppContext } from "@/lib/dal"
 import { can } from "@/lib/plans"
+import { getIntegration } from "@/features/integrations/store"
 
 /** Inicia la conexión con Google: ?s=gmail|calendar&back=/correo */
 export async function GET(req: NextRequest) {
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) return NextResponse.json({ error: "Falta configurar GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET" }, { status: 500 })
   const s = req.nextUrl.searchParams.get("s") === "calendar" ? "calendar" : "gmail"
   const back = (req.nextUrl.searchParams.get("back") || "/correo").replace(/^(?!\/)/, "/").replace(/^\/\//, "/")
+  // La conexión es de la cuenta de cada persona; el administrador solo decide si el servicio está disponible.
+  if (!(await getIntegration(ctx.household.id, s === "calendar" ? "google_calendar" : "google_gmail"))) return NextResponse.redirect(`${siteUrl()}${back}${back.includes("?") ? "&" : "?"}google=no-disponible`)
   const state = randomBytes(16).toString("hex")
   ;(await cookies()).set("g_oauth", JSON.stringify({ state, back }), { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 600, path: "/" })
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth")

@@ -4,7 +4,7 @@ import { Illustration } from "@/components/mirai/illustration"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { useQuery } from "@tanstack/react-query"
-import { EyeOff, Moon, Plus } from "lucide-react"
+import { EyeOff, LifeBuoy, Moon, Plus } from "lucide-react"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
 import { Icon } from "@/components/mirai/icon"
 import { PAGES } from "@/lib/nav"
@@ -13,6 +13,15 @@ import { useShell } from "./shell-store"
 import { useBookId } from "./app-context"
 import { ADD_ITEMS } from "./add-menu"
 import { togglePrivacy } from "./privacy"
+
+/** Accesos del Centro de ayuda en el buscador: [clave del panel, texto, ícono, palabras extra]. */
+const HELP_ITEMS: [string, string, string, string][] = [
+  ["@glosario", "Glosario financiero", "library", "uvt smmlv retencion prima cesantias cdt usura 4x1000 pila"],
+  ["@guias", "Guías paso a paso", "list-checks", "instructivo como registrar nomina quincena"],
+  ["@soporte", "Contactar soporte", "life-buoy", "caso problema ayuda escribir"],
+  ["@atajos", "Atajos de teclado", "command", "teclas teclado"],
+  ["@estado", "Estado del servicio", "activity", "version conexion servidor caido"],
+]
 
 /** Buscador global (Ctrl/⌘ K): secciones, contactos, préstamos y gastos fijos. */
 export function CommandPalette() {
@@ -36,6 +45,9 @@ export function CommandPalette() {
     },
   })
   const go = (href: string) => { setOpen(false); router.push(href) }
+  const setHelp = useShell((s) => s.setHelp)
+  // Cierra el buscador y luego abre el Centro de ayuda (dos ventanas a la vez bloquean los clics).
+  const help = (k: string) => { setOpen(false); setTimeout(() => setHelp(k), 150) }
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} title="Buscar en Mirai" description="Secciones, contactos, préstamos y gastos fijos">
@@ -82,6 +94,12 @@ export function CommandPalette() {
             ))}
           </CommandGroup>
         )}
+        <CommandGroup heading="Centro de ayuda">
+          <CommandItem value="centro de ayuda soporte como funciona manual" onSelect={() => help("@")}><LifeBuoy /> Abrir el Centro de ayuda <span className="ml-auto text-xs text-muted-foreground">?</span></CommandItem>
+          {HELP_ITEMS.map(([k, label, icon, words]) => (
+            <CommandItem key={k} value={`ayuda ${label} ${words}`} onSelect={() => help(k)}><Icon name={icon} /> {label}</CommandItem>
+          ))}
+        </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Acciones">
           {ADD_ITEMS.map((a) => (

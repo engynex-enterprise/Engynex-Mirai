@@ -7,6 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { supabaseServer } from "@/utils/supabase/server"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
+import { logSend } from "@/lib/notify/log"
+import { maskDest } from "@/lib/notify/rules"
 import { siteUrl } from "@/lib/site-url"
 import { limitOf } from "@/lib/plans"
 
@@ -35,13 +37,15 @@ export async function inviteMember(input: { email: string; role: "editor" | "vie
   for (const k of EMAIL_KINDS) {
     const v = await getIntegration(ctx.household.id, k)
     if (!v?.enabled) continue
+    const log = { user_id: ctx.user.id, household_id: ctx.household.id, channel: "email", kind: "invitacion", provider: k, source: v.source ?? null, destino: maskDest("email", p.data.email) } as const
     try {
-      await sendEmail(v, {
+      const ref = await sendEmail(v, {
         to: p.data.email, subject: `${ctx.user.nombre} te invitó a su hogar en Mirai`,
         html: brandEmail(`Te invitaron a “${ctx.household.nombre}”`, `<p>${ctx.user.nombre} quiere que lleven juntos las finanzas del hogar en Mirai, como <b>${p.data.role === "editor" ? "editor (puede registrar y cambiar)" : "lector (solo puede ver)"}</b>.</p><p style="margin-top:20px"><a href="${url}" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Aceptar invitación</a></p><p style="color:#616161;font-size:13px">El enlace vence en 7 días.</p>`),
       })
+      await logSend({ ...log, status: "enviado", ref })
       return { ok: true, msg: `Invitación enviada a ${p.data.email}.`, url }
-    } catch { /* sigue con el enlace */ }
+    } catch (e) { await logSend({ ...log, status: "fallido", error: (e as Error).message }) /* sigue con el enlace */ }
   }
   return { ok: true, msg: "Invitación creada. Copia el enlace y compártelo (no hay un servicio de correo activo).", url }
 }

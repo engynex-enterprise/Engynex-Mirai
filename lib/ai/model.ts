@@ -12,9 +12,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 
 const def = (kind: string) => String(integrationByKind(kind)?.fields.find((f) => f.k === "model")?.def ?? "")
 
-/** Construye el modelo de un proveedor con su clave y modelo configurados. */
-export function modelFrom(v: IntegrationValue): LanguageModel {
-  const m = String(v.config.model || def(v.kind))
+/** Nombre del modelo configurado en una integración (o el de por defecto del registro). */
+export const modelIdOf = (v: Pick<IntegrationValue, "kind" | "config">) => String(v.config.model || def(v.kind))
+
+/** Construye el modelo de un proveedor con su clave y modelo configurados (o `override`, p. ej. el modelo barato). */
+export function modelFrom(v: IntegrationValue, override?: string): LanguageModel {
+  const m = override || modelIdOf(v)
   const key = v.secrets.apiKey
   switch (v.kind) {
     case "ai_gateway": return createGateway({ apiKey: key || process.env.AI_GATEWAY_API_KEY })(m)

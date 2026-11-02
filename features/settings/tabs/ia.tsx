@@ -11,6 +11,7 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { useSettings } from "@/features/catalogs/hooks"
 import { AI_KINDS, integrationByKind } from "@/lib/integrations/registry"
 import { SettingRow, SettingSection } from "../ui"
+import { AiQuotaNotice } from "@/features/ia-uso/uso-view"
 import { useBookSettingsSave } from "../prefs"
 import { IntegrationsTab, useIntegrations } from "./integrations"
 
@@ -43,6 +44,7 @@ export function IaTab() {
 
   return (
     <div className="grid gap-4">
+      <AiQuotaNotice />
       <SettingSection icon="sparkles" title="Inteligencia artificial">
         <SettingRow title="Usar inteligencia artificial" desc="Si la apagas, Mirai funciona igual con tus reglas, tu historial y palabras clave.">
           <Switch checked={on} onCheckedChange={(v) => set({ on: v })} aria-label="Usar inteligencia artificial" />

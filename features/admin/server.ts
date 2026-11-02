@@ -6,14 +6,20 @@ import { z } from "zod"
 import { requirePlatformAdmin } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { encrypt, mask } from "@/lib/crypto"
-import { INTEGRATIONS, integrationByKind } from "@/lib/integrations/registry"
+import { INTEGRATIONS, integrationByKind, isAdminOnly } from "@/lib/integrations/registry"
 import { modelFrom, aiErrMsg } from "@/lib/ai/model"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { applyPayment } from "@/lib/payments/apply"
 import { cancelPreapproval } from "@/lib/payments/mercadopago"
 import { siteUrl } from "@/lib/site-url"
 import { vigente } from "@/lib/plans"
-import { getGlobalIntegration } from "@/features/integrations/store"
+import { getGlobalIntegration, type IntegrationValue } from "@/features/integrations/store"
+import { fetchFestivos, fetchFx, fetchTrm, fetchUsura } from "@/features/integrations/data-sources"
+import { fallbackNote, fetchTemplateSpec, sendWhatsApp, whatsappNumber } from "@/lib/notify/channels"
+import { testMsg } from "@/lib/notify/digest"
+import { logSend } from "@/lib/notify/log"
+import { maskDest } from "@/lib/notify/rules"
+import { formatCoPhone, normalizeCoPhone } from "@/lib/notify/whatsapp"
 
 const DAY = 86_400_000
 const ago = (d: number) => new Date(Date.now() - d * DAY).toISOString()
@@ -379,18 +385,18 @@ export async function adminGlobalIntegrations() {
   await requirePlatformAdmin()
   const db = supabaseAdmin()
   const [{ data: rows }, { data: own }] = await Promise.all([
-    db.from("platform_integrations").select("kind,modo,planes,config,meta,updated_at"),
+    db.from("platform_integrations").select("kind,modo,planes,config,meta,updated_at,secrets_enc"),
     db.from("integrations").select("kind,enabled"),
   ])
   return INTEGRATIONS.map((def) => {
     const r = (rows ?? []).find((x) => x.kind === def.kind)
     const mine = (own ?? []).filter((x) => x.kind === def.kind)
-    return { kind: def.kind, modo: (r?.modo ?? "apagada") as string, planes: r?.planes ?? [], config: (r?.config ?? {}) as Record<string, unknown>, meta: (r?.meta ?? {}) as Record<string, unknown>, updated_at: r?.updated_at ?? null, hogaresPropios: mine.filter((x) => x.enabled).length, hogaresApagada: mine.filter((x) => !x.enabled).length, env: !!(def.env && process.env[def.env]) }
+    return { kind: def.kind, modo: (r?.modo ?? "apagada") as string, planes: r?.planes ?? [], config: (r?.config ?? {}) as Record<string, unknown>, meta: (r?.meta ?? {}) as Record<string, unknown>, updated_at: r?.updated_at ?? null, hogaresPropios: mine.filter((x) => x.enabled).length, hogaresApagada: mine.filter((x) => !x.enabled).length, env: !!(def.env && process.env[def.env]), adminOnly: isAdminOnly(def), existe: !!r, guardada: !!r?.secrets_enc || Object.keys((r?.config ?? {}) as object).length > 0 }
   })
 }
 
 /** Guarda una integración global. Los errores que el administrador debe leer se devuelven (en producción Next oculta los de un throw). */
-export async function adminSaveGlobalIntegration(kind: string, input: { modo: string; planes: string[]; values: Record<string, string | number | boolean> }): Promise<{ ok: boolean; msg?: string }> {
+export async function adminSaveGlobalIntegration(kind: string, input: { modo: string; planes: string[]; values: Record<string, string | number | boolean> }): Promise<{ ok: boolean; msg?: string; warn?: string }> {
   const ctx = await requirePlatformAdmin()
   const def = integrationByKind(kind)
   if (!def) throw new Error("Integración desconocida")
@@ -414,31 +420,130 @@ export async function adminSaveGlobalIntegration(kind: string, input: { modo: st
     if (!/^\d{6,20}$/.test(String(config.slot ?? "").trim())) return { ok: false, msg: "El id del bloque de anuncios debe ser solo números." }
     config.client = String(config.client).trim(); config.slot = String(config.slot).trim()
   }
+  let warn: string | undefined
+  if (kind === "whatsapp") {
+    for (const k of ["phoneId", "wabaId", "template", "lang"]) if (typeof config[k] === "string") config[k] = String(config[k]).trim()
+    if (config.phoneId && !/^\d{6,25}$/.test(String(config.phoneId))) return { ok: false, msg: "El ID del número de teléfono son solo números (Phone number ID)." }
+    if (config.wabaId && !/^\d{6,25}$/.test(String(config.wabaId))) return { ok: false, msg: "El ID de la cuenta de WhatsApp Business son solo números." }
+    delete config.tplSpec
+    // Con la cuenta de WhatsApp Business se lee de Meta la plantilla por defecto (estructura, idioma y estado).
+    if (config.template && config.wabaId && secrets.token) {
+      try {
+        const spec = await fetchTemplateSpec({ kind, enabled: true, config, secrets })
+        if (spec) config.lang = spec.lang
+      } catch (e) { warn = `Guardado, pero no pudimos leer la plantilla: ${(e as Error).message}` }
+    } else if (config.template) warn = "Guardado. Sin el ID de la cuenta de WhatsApp Business, Mirai envía la plantilla con un solo parámetro (el resumen) y no puede administrar plantillas."
+  }
   const { error } = await db.from("platform_integrations").upsert({ kind, modo, planes, config: config as never, meta: meta as never, secrets_enc: Object.keys(secrets).length ? encrypt(JSON.stringify(secrets)) : null, updated_by: ctx.user.id, updated_at: new Date().toISOString() })
   if (error) return { ok: false, msg: "No se pudo guardar. Intenta de nuevo." }
   await audit(ctx.user.id, "integración global", kind, { modo, planes })
-  return { ok: true }
+  return { ok: true, warn }
 }
 
-/** Prueba la integración global (IA: una respuesta corta; correo: te envía uno; Telegram: valida el bot). */
+/** Prueba la integración global (IA: una respuesta corta; correo: te envía uno; Telegram y WhatsApp: validan la cuenta; datos: una consulta). */
 export async function adminTestGlobal(kind: string): Promise<{ ok: boolean; msg: string }> {
   const ctx = await requirePlatformAdmin()
   const g = await getGlobalIntegration(kind)
   const def = integrationByKind(kind)
-  if (!g || !def) return { ok: false, msg: "Primero guarda la configuración." }
-  const v = { kind, enabled: true, config: g.config, secrets: g.secrets }
+  if (!def) return { ok: false, msg: "Integración desconocida." }
+  const v: IntegrationValue = { kind, enabled: true, config: g?.config ?? {}, secrets: g?.secrets ?? {} }
+  const keyless = !def.fields.some((f) => f.required)
+  if (!g && !keyless) return { ok: false, msg: "Primero guarda la configuración." }
+  const meta = async (lastOk: boolean, lastMsg: string) => {
+    if (!g) return
+    const { data } = await supabaseAdmin().from("platform_integrations").select("meta").eq("kind", kind).single()
+    await supabaseAdmin().from("platform_integrations").update({ meta: { ...(data?.meta as object), lastTest: new Date().toISOString(), lastOk, lastMsg } as never }).eq("kind", kind)
+  }
   try {
     let msg = "Esta integración no necesita prueba."
     if (def.cat === "ia") { const { text } = await generateText({ model: modelFrom(v), prompt: "Responde solo con la palabra: listo", maxOutputTokens: 20 }); msg = `Conexión exitosa. Respondió: “${text.trim().slice(0, 40)}”.` }
-    else if (EMAIL_KINDS.includes(kind)) { await sendEmail(v, { to: ctx.user.email, subject: "Mirai: prueba del correo de la plataforma", html: brandEmail("El correo de la plataforma funciona", "<p>Desde ahora Mirai puede enviar avisos con esta cuenta.</p>") }); msg = `Te enviamos un correo de prueba a ${ctx.user.email}.` }
-    else if (kind === "telegram") { const r = await fetch(`https://api.telegram.org/bot${g.secrets.botToken}/getMe`).then((x) => x.json()); if (!r.ok) throw new Error("401 token inválido"); msg = `Bot conectado: @${r.result.username}.` }
-    await supabaseAdmin().from("platform_integrations").update({ meta: { ...(await supabaseAdmin().from("platform_integrations").select("meta").eq("kind", kind).single()).data?.meta as object, lastTest: new Date().toISOString(), lastOk: true, lastMsg: msg } as never }).eq("kind", kind)
+    else if (EMAIL_KINDS.includes(kind)) {
+      const ref = await sendEmail(v, { to: ctx.user.email, subject: "Mirai: prueba del correo de la plataforma", html: brandEmail("El correo de la plataforma funciona", "<p>Desde ahora Mirai puede enviar avisos con esta cuenta.</p>") })
+      await logSend({ user_id: ctx.user.id, channel: "email", kind: "prueba_admin", status: "enviado", provider: kind, source: "plataforma", destino: maskDest("email", ctx.user.email), ref })
+      msg = `Te enviamos un correo de prueba a ${ctx.user.email}.`
+    }
+    else if (kind === "telegram") { const r = await fetch(`https://api.telegram.org/bot${v.secrets.botToken}/getMe`).then((x) => x.json()); if (!r.ok) throw new Error("401 token inválido"); msg = `Bot conectado: @${r.result.username}.` }
+    else if (kind === "whatsapp") {
+      const n = await whatsappNumber(v)
+      msg = `Número conectado: ${n.display_phone_number ?? "?"}${n.verified_name ? ` (${n.verified_name})` : ""}${n.quality_rating ? ` · calidad ${n.quality_rating}` : ""}.`
+      if (v.config.template) {
+        const spec = await fetchTemplateSpec(v).catch((e) => { msg += ` ${(e as Error).message}`; return null })
+        if (spec) msg += ` Plantilla "${spec.name}" aprobada en ${spec.lang} con ${spec.body.length} parámetro${spec.body.length === 1 ? "" : "s"} en el cuerpo.`
+      }
+    }
+    else if (kind === "trm") { const t = await fetchTrm(); msg = `TRM de hoy: $${t.valor.toLocaleString("es-CO")} (vigente desde ${t.fecha}).` }
+    else if (kind === "usura") { const u = await fetchUsura(); msg = `Tasa de usura vigente: ${u.usura.toFixed(2).replace(".", ",")} % E.A.` }
+    else if (kind === "festivos") { const f = await fetchFestivos(new Date().getFullYear()); msg = `${f.length} festivos encontrados este año.` }
+    else if (kind === "fx") { const r = await fetchFx(); msg = `1 USD = $${Math.round(r.USD).toLocaleString("es-CO")} · 1 EUR = $${Math.round(r.EUR).toLocaleString("es-CO")}.` }
+    else if (kind === "coingecko") {
+      const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=cop", { headers: v.secrets.apiKey ? { "x-cg-demo-api-key": v.secrets.apiKey } : {} }).then((x) => x.json())
+      msg = `1 BTC = $${Math.round(r.bitcoin.cop).toLocaleString("es-CO")}.`
+    }
+    else if (kind === "stocks") {
+      const key = v.secrets.apiKey
+      const url = v.config.provider === "twelvedata" ? `https://api.twelvedata.com/price?symbol=SPY&apikey=${key}` : `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${key}`
+      const r = await fetch(url).then((x) => x.json())
+      const p = r.price ?? r["Global Quote"]?.["05. price"]
+      if (!p) throw new Error(r.message ?? r.Note ?? r.Information ?? "invalid api key")
+      msg = `SPY = US$${Number(p).toFixed(2)}.`
+    }
+    await meta(true, msg)
     return { ok: true, msg }
   } catch (e) {
     const msg = aiErrMsg(e, def.url)
-    await supabaseAdmin().from("platform_integrations").update({ meta: { ...(await supabaseAdmin().from("platform_integrations").select("meta").eq("kind", kind).single()).data?.meta as object, lastTest: new Date().toISOString(), lastOk: false, lastMsg: msg } as never }).eq("kind", kind)
+    if (EMAIL_KINDS.includes(kind)) await logSend({ user_id: ctx.user.id, channel: "email", kind: "prueba_admin", status: "fallido", provider: kind, source: "plataforma", destino: maskDest("email", ctx.user.email), error: msg })
+    await meta(false, msg)
     return { ok: false, msg }
   }
+}
+
+/** Destinos sugeridos para "Enviar prueba": tu correo y el WhatsApp que guardaste en Ajustes › Alertas. */
+export async function adminTestDefaults(): Promise<{ email: string; whatsapp: string }> {
+  const ctx = await requirePlatformAdmin()
+  const { data } = await supabaseAdmin().from("notification_rules").select("whatsapp_to").eq("user_id", ctx.user.id).not("whatsapp_to", "is", null).limit(1).maybeSingle()
+  return { email: ctx.user.email, whatsapp: data?.whatsapp_to ?? "" }
+}
+
+/**
+ * "Enviar prueba" de la consola: un mensaje real con la configuración global (aunque esté apagada, para probar antes
+ * de activarla) al destino que escribas. Queda en el registro de envíos. Errores legibles en { ok: false, msg }.
+ */
+export async function adminSendTest(kind: string, to: string): Promise<{ ok: boolean; msg: string }> {
+  const ctx = await requirePlatformAdmin()
+  const isMail = EMAIL_KINDS.includes(kind)
+  if (!isMail && kind !== "whatsapp") return { ok: false, msg: "Solo correo y WhatsApp tienen envío de prueba." }
+  const channel = isMail ? "email" : "whatsapp"
+  const dest = to.trim()
+  if (isMail && !z.email().safeParse(dest).success) return { ok: false, msg: "Escribe un correo válido." }
+  if (!isMail && !normalizeCoPhone(dest)) return { ok: false, msg: "Escribe un celular de Colombia de 10 dígitos (por ejemplo 315 123 4567)." }
+  const g = await getGlobalIntegration(kind)
+  if (!g) return { ok: false, msg: "Primero guarda la configuración." }
+  const v: IntegrationValue = { kind, enabled: true, config: g.config, secrets: g.secrets, source: "plataforma" }
+  const m = testMsg(ctx.user.nombre)
+  const base = { user_id: ctx.user.id, channel, kind: "prueba_admin", provider: kind, source: "plataforma", destino: maskDest(channel, isMail ? dest : normalizeCoPhone(dest)) } as const
+  try {
+    let msg: string, ref: string | null
+    if (isMail) { ref = await sendEmail(v, { to: dest, subject: m.subject, html: m.html, text: m.text }); msg = `Correo de prueba enviado a ${dest}.` }
+    else { const r = await sendWhatsApp(v, dest, m.wa, { caso: m.caso, text: m.text }); ref = r.id; msg = `WhatsApp de prueba enviado a ${formatCoPhone(r.to)}${r.id ? ` (id ${r.id.slice(-12)})` : ""}.${r.fallback ? ` ${fallbackNote(r.fallback)}` : ""} Si no llega en un minuto, revisa el registro de envíos.` }
+    await logSend({ ...base, status: "enviado", ref })
+    await audit(ctx.user.id, "envío de prueba", kind, { destino: base.destino })
+    return { ok: true, msg }
+  } catch (e) {
+    const msg = (e as Error).message || "Error desconocido"
+    await logSend({ ...base, status: "fallido", error: msg })
+    return { ok: false, msg }
+  }
+}
+
+/** Registro de envíos (últimos 500): canal, estado, destino enmascarado y error. Sin el contenido de los mensajes. */
+export async function adminNotifyLog() {
+  await requirePlatformAdmin()
+  const db = supabaseAdmin()
+  const { data } = await db.from("notification_log").select("*").order("created_at", { ascending: false }).limit(500)
+  const ids = [...new Set((data ?? []).map((r) => r.user_id).filter(Boolean))] as string[]
+  const { data: people } = ids.length ? await db.from("profiles").select("id,email,nombre").in("id", ids) : { data: [] }
+  const who = new Map((people ?? []).map((p) => [p.id, p.nombre || p.email || "—"]))
+  return (data ?? []).map((r) => ({ ...r, quien: r.user_id ? who.get(r.user_id) ?? "—" : "Sistema" }))
 }
 
 /** Invita a una persona por correo (Supabase envía el enlace para crear su cuenta). */

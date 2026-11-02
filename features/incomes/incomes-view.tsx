@@ -14,7 +14,7 @@ import { ListRow } from "@/components/mirai/list-row"
 import { useCanEdit } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { incomeCuando, incomeReparto, ingresoMensual, quincena, type Deducciones } from "@/lib/domain"
+import { incomeCuando, incomeReparto, ingresoBrutoMensual, ingresoMensual, quincena, type Deducciones } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { memberName, useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
@@ -56,7 +56,7 @@ export function IncomesView() {
     if (!book) return null
     const [y, m] = today.split("-").map(Number)
     const sumIng = (w: "q1" | "q2") => quincena(book, y, m - 1, w, today).ent.filter((e) => e.icon === "briefcase").reduce((a, e) => a + e.v, 0)
-    return { mes: ingresoMensual(book.incomes, book.settings.trm), q1: sumIng("q1"), q2: sumIng("q2"), corte: book.settings.corte_q }
+    return { mes: ingresoMensual(book.incomes, book.settings.trm), bruto: ingresoBrutoMensual(book.incomes, book.settings.trm), q1: sumIng("q1"), q2: sumIng("q2"), corte: book.settings.corte_q }
   }, [book, today])
 
   return (
@@ -64,7 +64,11 @@ export function IncomesView() {
       <PageHeader id="ingresos" description="Tu salario, honorarios, arriendos y cualquier dinero que recibas con regularidad."
         actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar ingreso</Button>} />
       <KpiGrid className="xl:grid-cols-3">
-        <Kpi icon="wallet" tone="income" label="Ingreso mensual" loading={isPending} value={<Money value={k?.mes} />} valueClassName="text-success" sub={`${incomes.length} fuente${incomes.length === 1 ? "" : "s"}`} />
+        <Kpi icon="wallet" tone="income" label="Ingreso mensual" loading={isPending}
+          value={<>{<Money value={k?.mes} />} <span className="text-[12px] font-medium text-muted-foreground">con descuentos</span></>} valueClassName="text-success"
+          sub={k && k.bruto - k.mes >= 1
+            ? <>Sin descuentos <Money value={k.bruto} className="font-semibold text-foreground" /> · descuentos <Money value={k.bruto - k.mes} /></>
+            : `${incomes.length} fuente${incomes.length === 1 ? "" : "s"} · sin descuentos de nómina`} />
         <Kpi icon="calendar" tone="blue" label={`1ª quincena (1–${k?.corte ?? 15})`} loading={isPending} value={<Money value={k?.q1} />} />
         <Kpi icon="calendar" tone="blue" label={`2ª quincena (${(k?.corte ?? 15) + 1}–fin)`} loading={isPending} value={<Money value={k?.q2} />} />
       </KpiGrid>

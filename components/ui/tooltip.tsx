@@ -17,16 +17,49 @@ function TooltipProvider({
   )
 }
 
+/*
+ * Ajuste Mirai: Radix no abre los tooltips con el dedo (ignora el puntero táctil y cierra al tocar). En pantallas
+ * táctiles un toque abre o cierra el tooltip; en los enlaces (menú lateral) se deja el comportamiento normal.
+ */
+const TouchTooltip = React.createContext<{ open: boolean; set: (o: boolean) => void } | null>(null)
+
 function Tooltip({
+  open: openProp,
+  defaultOpen,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+  const [inner, setInner] = React.useState(defaultOpen ?? false)
+  const open = openProp ?? inner
+  const set = React.useCallback((o: boolean) => { if (openProp === undefined) setInner(o); onOpenChange?.(o) }, [openProp, onOpenChange])
+  return (
+    <TouchTooltip.Provider value={{ open, set }}>
+      <TooltipPrimitive.Root data-slot="tooltip" open={open} onOpenChange={set} {...props} />
+    </TouchTooltip.Provider>
+  )
 }
 
 function TooltipTrigger({
+  onPointerDown,
+  onClick,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  const ctx = React.useContext(TouchTooltip)
+  const touch = React.useRef<{ on: boolean; was: boolean }>({ on: false, was: false })
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onPointerDown={(e) => { touch.current = { on: e.pointerType !== "mouse", was: !!ctx?.open }; onPointerDown?.(e) }}
+      onClick={(e) => {
+        onClick?.(e)
+        const t = touch.current
+        touch.current = { on: false, was: false }
+        // Radix cierra el tooltip después de este clic; se vuelve a abrir (o se deja cerrado) en el siguiente ciclo.
+        if (t.on && ctx && !e.currentTarget.closest("a")) setTimeout(() => ctx.set(!t.was), 0)
+      }}
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({

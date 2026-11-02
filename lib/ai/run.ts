@@ -1,13 +1,35 @@
 import "server-only"
-import { generateObject, generateText, type ModelMessage } from "ai"
+import { createHash } from "node:crypto"
+import { generateObject, generateText, type LanguageModelUsage, type ModelMessage } from "ai"
 import type { z } from "zod"
-import { aiErrMsg, aiProviders, aiSettings } from "./model"
-import { getIntegration } from "@/features/integrations/store"
-import { householdCan } from "@/lib/plan-server"
+import { aiErrMsg, aiSettings, modelFrom, modelIdOf } from "./model"
+import { enabledOf, getIntegration, type IntegrationValue } from "@/features/integrations/store"
+import { planOf } from "@/lib/plan-server"
+import { can } from "@/lib/plans"
+import { AI_KINDS, integrationByKind } from "@/lib/integrations/registry"
+import { AI_FEATURES, type AiFeature } from "./features"
+import { systemFor } from "./prompts"
+import { cheapModelFor, costFromMetadata, costUSD, creditsFor, estimateTokens } from "./pricing"
+import { aiPlatformSettings, cacheGet, cacheKey, cacheSet, householdQuota, logUsage } from "./usage"
+
+// Punto único para llamar a la IA. Orden de cada llamada:
+//   plan (Premium) → IA encendida → caché (respuesta idéntica reciente) → cupo de créditos → límite por hora →
+//   proveedores en el orden del hogar (modelo barato primero en tareas simples) → registro en ai_usage → caché.
+// El system prompt sale de lib/ai/prompts.ts según la función (`feature`), salvo que se pase uno propio.
 
 export class AiUnavailable extends Error {}
 
-type Base = { householdId: string; bookId: string; system?: string; prompt?: string; messages?: ModelMessage[]; images?: { data: string; mediaType: string }[] }
+type Base = {
+  householdId: string; bookId: string; userId?: string | null
+  /** Para qué es la llamada (métricas, prompt, modelo, tope de salida y caché: lib/ai/features.ts). Por defecto "otro". */
+  feature?: AiFeature
+  /** Tono del chat (elige la variante del system prompt). */
+  tono?: "simple" | "fin"
+  system?: string; prompt?: string; messages?: ModelMessage[]; images?: { data: string; mediaType: string }[]
+  maxOutputTokens?: number
+  /** false = no usar la caché aunque la función la tenga. */
+  cache?: boolean
+}
 
 const asMessages = (b: Base): ModelMessage[] =>
   b.messages ?? [{ role: "user", content: [...(b.images ?? []).map((i) => ({ type: "image" as const, image: i.data, mediaType: i.mediaType })), { type: "text" as const, text: b.prompt ?? "" }] }]
@@ -26,28 +48,119 @@ async function rateLimit(householdId: string) {
   } catch (e) { if (e instanceof AiUnavailable) throw e }
 }
 
-async function withFallback<T>(b: Base, fn: (model: Parameters<typeof generateText>[0]["model"]) => Promise<T>): Promise<{ result: T; provider: string }> {
-  if (!(await householdCan(b.householdId, "ia"))) throw new AiUnavailable("La inteligencia artificial no está incluida en tu plan. Conoce los planes en /planes.")
-  const ia = await aiSettings(b.bookId)
-  if (ia.on === false) throw new AiUnavailable("La inteligencia artificial está apagada. Actívala en Ajustes › Integraciones.")
-  const list = await aiProviders(b.householdId, ia.orden)
-  if (!list.length) throw new AiUnavailable("Activa un proveedor de IA en Ajustes › Integraciones (Gemini tiene plan gratis).")
+/** ¿El hogar puede usar IA ahora (plan + interruptor del libro)? Para saltarse trabajo previo si no. */
+export async function aiAllowed(householdId: string, bookId: string) {
+  const [plan, ia] = await Promise.all([planOf(householdId), aiSettings(bookId)])
+  return can(plan, "ia") && ia.on !== false
+}
+
+/** Registra una respuesta resuelta con algoritmo (0 tokens) para medir el ahorro. */
+export async function logAlgorithm(r: { householdId: string; bookId?: string | null; userId?: string | null; feature: AiFeature; evitados: number }) {
+  await logUsage({ ...r, fuente: "algoritmo" })
+}
+
+type ProviderOptions = Parameters<typeof generateText>[0]["providerOptions"]
+
+type Attempt = { v: IntegrationValue; model: string; cheap: boolean }
+
+/** Intentos en orden: por cada proveedor, el modelo barato (si la tarea es simple y conviene) y luego el configurado. */
+function attempts(list: IntegrationValue[], feature: AiFeature, precios: Record<string, { in: number; out: number }>): Attempt[] {
+  const tier = AI_FEATURES[feature].tier
+  return list.flatMap((v) => {
+    const conf = modelIdOf(v)
+    const cheap = tier === "simple" ? cheapModelFor(v.kind, conf, String(v.config.modelSimple ?? "") || null, precios) : null
+    return cheap ? [{ v, model: cheap, cheap: true }, { v, model: conf, cheap: false }] : [{ v, model: conf, cheap: false }]
+  })
+}
+
+const usageOf = (u: LanguageModelUsage | undefined) => ({ input: u?.inputTokens ?? 0, output: u?.outputTokens ?? 0, cached: u?.inputTokenDetails?.cacheReadTokens ?? 0 })
+
+type Raw = { usage?: LanguageModelUsage; providerMetadata?: unknown; response?: { modelId?: string } }
+
+async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; system: string; messages: ModelMessage[]; providerOptions?: ProviderOptions; maxOutputTokens: number; anthropicCache: boolean }) => Promise<Raw & { value: T }>): Promise<{ value: T; provider: string; fuente: "ia" | "cache" }> {
+  const feature: AiFeature = b.feature ?? "otro"
+  const f = AI_FEATURES[feature]
+  const [plan, ia, s] = await Promise.all([planOf(b.householdId), aiSettings(b.bookId), aiPlatformSettings()])
+  if (!can(plan, "ia")) throw new AiUnavailable("La inteligencia artificial no está incluida en tu plan. Conoce los planes en /planes.")
+  if (ia.on === false) throw new AiUnavailable("La inteligencia artificial está apagada. Actívala en Ajustes › Inteligencia artificial.")
+  const system = b.system ?? systemFor(feature, { tono: b.tono })
+  const messages = asMessages(b)
+  const who = { householdId: b.householdId, bookId: b.bookId, userId: b.userId ?? null, plan: plan.id, feature }
+
+  // Caché: la misma entrada (system + mensajes + imágenes) en las últimas horas → misma respuesta, 0 tokens.
+  const ttl = Math.min(f.cacheH, s.cacheHoras)
+  const key = b.cache !== false && ttl > 0
+    ? cacheKey(feature, b.householdId, { system, prompt: b.prompt, messages: b.messages, images: (b.images ?? []).map((i) => createHash("sha256").update(i.data).digest("hex")) })
+    : null
+  if (key) {
+    const hit = await cacheGet<T>(key)
+    if (hit) { await logUsage({ ...who, fuente: "cache", evitados: hit.tokens }); return { value: hit.result, provider: "Respuesta guardada", fuente: "cache" } }
+  }
+
+  // Proveedores y cupo: si el hogar agotó sus créditos, solo quedan los proveedores con su propia clave.
+  let list = await enabledOf(b.householdId, [...new Set([...(ia.orden ?? []), ...AI_KINDS])].filter((k) => AI_KINDS.includes(k)))
+  if (!list.length) throw new AiUnavailable("Activa un proveedor de IA en Ajustes › Inteligencia artificial (Gemini tiene plan gratis).")
+  if (s.cuposActivo && list.some((v) => v.source === "plataforma")) {
+    const q = await householdQuota(b.householdId, plan.id)
+    if (q.nivel === "agotado") {
+      list = list.filter((v) => v.source !== "plataforma")
+      if (!list.length) throw new AiUnavailable(`Usaste todos los créditos de IA de este mes (${Math.round(q.cupo ?? 0).toLocaleString("es-CO")}). Se renuevan el primer día del próximo mes; mientras tanto Mirai sigue funcionando con tus reglas y cálculos. Mira el detalle en Ajustes › Uso de IA.`)
+    }
+  }
   await rateLimit(b.householdId)
+
+  const maxOutputTokens = b.maxOutputTokens ?? f.maxOut
   let last: unknown
-  for (const p of list) {
-    try { return { result: await fn(p.model), provider: p.name } } catch (e) { last = e }
+  for (const a of attempts(list, feature, s.precios)) {
+    const t0 = Date.now()
+    const provider = integrationByKind(a.v.kind)?.n ?? a.v.kind
+    const dePlataforma = a.v.source === "plataforma"
+    try {
+      const anthropicCache = a.v.kind === "ai_anthropic" || a.model.startsWith("anthropic/")
+      // En el modelo barato de OpenAI se pide razonamiento mínimo (los tokens de razonamiento se cobran como salida).
+      const providerOptions: ProviderOptions = a.cheap && /gpt-5/.test(a.model) ? { openai: { reasoningEffort: "minimal" } } : undefined
+      const r = await call({ model: modelFrom(a.v, a.model), system, messages, providerOptions, maxOutputTokens, anthropicCache })
+      let u = usageOf(r.usage)
+      // Algunos proveedores (o modelos gratis) no informan tokens: se estiman (~4 caracteres por token).
+      // Cada imagen cuenta como ~1.000 tokens (orden de magnitud de una foto en los modelos de visión).
+      if (!u.input && !u.output) u = { input: estimateTokens(system) + estimateTokens(b.prompt ?? JSON.stringify(b.messages ?? [])) + (b.images?.length ?? 0) * 1000, output: estimateTokens(typeof r.value === "string" ? r.value : JSON.stringify(r.value)), cached: 0 }
+      const modelId = r.response?.modelId || a.model
+      const real = costFromMetadata(r.providerMetadata)
+      const usd = real ?? costUSD(u, modelId, s.precios)
+      await logUsage({ ...who, fuente: "ia", provider: a.v.kind, model: modelId, dePlataforma, ...u, usd, real: real !== null, creditos: creditsFor(usd, s.creditUsd, dePlataforma), ms: Date.now() - t0 })
+      if (key) await cacheSet(key, { householdId: b.householdId, feature, result: r.value, tokens: u.input + u.output, ttlHours: ttl })
+      return { value: r.value, provider, fuente: "ia" }
+    } catch (e) {
+      last = e
+      await logUsage({ ...who, fuente: "ia", provider: a.v.kind, model: a.model, dePlataforma, ms: Date.now() - t0, ok: false, error: aiErrMsg(e) })
+    }
   }
   throw new Error(aiErrMsg(last))
 }
 
+/** System como primer mensaje con cacheControl para Anthropic (caché de prompt); en los demás, `system` normal. */
+const withSystem = (system: string, messages: ModelMessage[], anthropicCache: boolean) =>
+  anthropicCache
+    ? { messages: [{ role: "system" as const, content: system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }, ...messages] }
+    : { system, messages }
+
 /** Texto libre con respaldo entre proveedores. */
-export async function aiText(b: Base & { maxOutputTokens?: number }) {
-  const { result, provider } = await withFallback(b, (model) => generateText({ model, system: b.system, messages: asMessages(b), maxOutputTokens: b.maxOutputTokens ?? 1500 }))
-  return { text: result.text, provider }
+export async function aiText(b: Base) {
+  const r = await run(b, async ({ model, system, messages, providerOptions, maxOutputTokens, anthropicCache }) => {
+    const x = await generateText({ model, ...withSystem(system, messages, anthropicCache), providerOptions, maxOutputTokens })
+    return { value: x.text, usage: x.usage, providerMetadata: x.providerMetadata, response: x.response }
+  })
+  return { text: r.value, provider: r.provider, fuente: r.fuente }
 }
 
 /** Objeto validado con zod (equivale a .json() de la v4) con respaldo entre proveedores. */
 export async function aiObject<S extends z.ZodType>(b: Base & { schema: S }) {
-  const { result, provider } = await withFallback(b, (model) => generateObject({ model, system: b.system, messages: asMessages(b), schema: b.schema }))
-  return { object: result.object as z.infer<S>, provider }
+  const r = await run<z.infer<S>>(b, async ({ model, system, messages, providerOptions, maxOutputTokens, anthropicCache }) => {
+    const x = await generateObject({ model, ...withSystem(system, messages, anthropicCache), schema: b.schema, providerOptions, maxOutputTokens })
+    return { value: x.object as z.infer<S>, usage: x.usage, providerMetadata: x.providerMetadata, response: x.response }
+  })
+  return { object: r.value, provider: r.provider, fuente: r.fuente }
 }
+
+/** Tokens que se ahorran al resolver algo sin IA: el prompt que se habría enviado + una respuesta típica. */
+export const tokensFor = (feature: AiFeature, prompt: string) => estimateTokens(systemFor(feature)) + estimateTokens(prompt) + Math.round(AI_FEATURES[feature].maxOut / 6)

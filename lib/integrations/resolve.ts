@@ -28,3 +28,24 @@ export function resolveIntegration({ own, global, plan, envReady }: { own: Own; 
   if (envReady) return { source: "env", locked: false }
   return null
 }
+
+/** Modos de las integraciones que solo administra Mirai (todo menos la IA): apagada o activa. */
+export const ADMIN_MODES: { value: GlobalMode; label: string; desc: string }[] = [
+  { value: "apagada", label: "Apagada", desc: "Mirai no la usa." },
+  { value: "obligatoria", label: "Activa", desc: "Mirai la usa para todos los hogares de los planes elegidos." },
+]
+
+/**
+ * Integraciones que solo configura el administrador (correo, WhatsApp, Telegram, push, datos, Google, infraestructura):
+ * la configuración del hogar se ignora (no se borra). Sin fila global se usa la variable de entorno o, si no pide datos
+ * obligatorios, queda disponible (TRM, festivos…). Con fila global: apagada = no se usa; activa = solo en los planes elegidos.
+ */
+export function resolvePlatformOnly({ global, plan, envReady, keyless }: { global: Global; plan: string; envReady?: boolean; keyless?: boolean }): { source: "plataforma" | "env"; locked: true } | null {
+  if (global) {
+    if (global.modo === "apagada" || (global.planes.length && !global.planes.includes(plan))) return null
+    return { source: "plataforma", locked: true }
+  }
+  if (envReady) return { source: "env", locked: true }
+  if (keyless) return { source: "plataforma", locked: true }
+  return null
+}

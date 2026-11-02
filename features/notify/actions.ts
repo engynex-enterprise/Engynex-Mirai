@@ -5,7 +5,8 @@ import { requireRole, getAppContext } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { getIntegration } from "@/features/integrations/store"
 import { telegramApi } from "@/lib/notify/channels"
-import { avisosPara, defaultRule, horaBogota, sendDigest, upsertAppNotifs, type Rule } from "@/lib/notify/digest"
+import { avisosPara, channelStatus, defaultRule, deliver, horaBogota, NOT_READY, sendDigest, testMsg, upsertAppNotifs, type Canal, type Rule } from "@/lib/notify/digest"
+import { normalizeCoPhone } from "@/lib/notify/whatsapp"
 import { enSilencio } from "@/lib/notify/rules"
 
 async function myRule() {
@@ -23,11 +24,28 @@ export async function sendDigestNow(canal: "email" | "telegram" | "push" | "what
   } catch (e) { return { ok: false, msg: (e as Error).message } }
 }
 
+/** Canales que Mirai ofrece a este hogar (los activa el administrador en la consola). */
+export async function notifyChannels(): Promise<Record<Canal, boolean>> {
+  try { const ctx = await getAppContext(); return await channelStatus(ctx.household.id) }
+  catch { return { email: false, telegram: false, whatsapp: false, push: false } }
+}
+
+/** "Enviarme una prueba" por un canal: un mensaje corto, sin el resumen. Queda en el registro de envíos. */
+export async function sendTestNow(canal: Canal): Promise<{ ok: boolean; msg: string }> {
+  try {
+    if (!["email", "telegram", "push", "whatsapp"].includes(canal)) return { ok: false, msg: "Canal desconocido." }
+    const { ctx, rule } = await myRule()
+    if (canal === "whatsapp" && rule.whatsapp_to && !normalizeCoPhone(rule.whatsapp_to)) return { ok: false, msg: "Tu número de WhatsApp no es válido: escribe un celular de 10 dígitos (por ejemplo 315 123 4567)." }
+    const msg = await deliver({ householdId: ctx.household.id, userId: ctx.user.id, canal, emailTo: rule.email_to || ctx.user.email, whatsappTo: rule.whatsapp_to, kind: "prueba" }, testMsg(ctx.user.nombre))
+    return { ok: true, msg }
+  } catch (e) { return { ok: false, msg: (e as Error).message } }
+}
+
 /** Telegram: genera un código y el enlace t.me/<bot>?start=<código>. */
 export async function telegramStartLink(): Promise<{ ok: boolean; url?: string; msg?: string }> {
   const ctx = await requireRole("viewer")
   const v = await getIntegration(ctx.household.id, "telegram")
-  if (!v?.enabled) return { ok: false, msg: "El dueño del hogar debe activar Telegram en Ajustes › Integraciones." }
+  if (!v?.secrets.botToken) return { ok: false, msg: NOT_READY.telegram }
   try {
     const me = await telegramApi<{ username: string }>(v.secrets.botToken, "getMe")
     const code = randomBytes(6).toString("hex")
@@ -42,7 +60,8 @@ export async function telegramConfirm(): Promise<{ ok: boolean; msg: string }> {
   const v = await getIntegration(ctx.household.id, "telegram")
   const db = supabaseAdmin()
   const { data: link } = await db.from("telegram_links").select("*").eq("user_id", ctx.user.id).maybeSingle()
-  if (!v?.enabled || !link?.link_code) return { ok: false, msg: "Primero toca “Vincular Telegram”." }
+  if (!v?.secrets.botToken) return { ok: false, msg: NOT_READY.telegram }
+  if (!link?.link_code) return { ok: false, msg: "Primero toca “Vincular Telegram”." }
   try {
     const ups = await telegramApi<{ message?: { text?: string; chat: { id: number } } }[]>(v.secrets.botToken, "getUpdates", { allowed_updates: ["message"], limit: 100 })
     const hit = ups.reverse().find((u) => u.message?.text?.trim() === `/start ${link.link_code}`)

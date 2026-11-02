@@ -4,7 +4,9 @@ import { z } from "zod"
 import { requireRole } from "@/lib/dal"
 import { supabaseServer } from "@/utils/supabase/server"
 import { loadBookData } from "@/lib/book-data"
-import { aiObject, AiUnavailable } from "@/lib/ai/run"
+import { aiObject, AiUnavailable, logAlgorithm, tokensFor } from "@/lib/ai/run"
+import { interpConfiable } from "@/lib/ai/router"
+import { toLines } from "@/lib/ai/compact"
 import { aiSettings } from "@/lib/ai/model"
 import { ATIPOS, asAnalyze, completeInterp, localInterp, todayBogota, type AdvisorInput, type Analisis, type Atipo } from "@/lib/domain"
 
@@ -17,20 +19,21 @@ const InterpSchema = z.object({
   seguros: n, plazo_dias: n, reemplaza: n, persona: z.string().nullable().optional(), dudas: z.array(z.string()).optional(),
 })
 
-/** Paso 1: entiende la frase (IA si está activa; si no, reglas locales). */
+/** Paso 1: entiende la frase. Si es clara (tipo y un solo monto) basta con reglas; si no, IA; sin IA, reglas. */
 export async function interpretDecision(text: string): Promise<{ d: AdvisorInput; src: "ia" | "local" }> {
   const ctx = await requireRole("viewer")
   const t = text.trim().slice(0, 600)
   const ia = await aiSettings(ctx.book.id)
   if (ia.on !== false && ia.consejero !== false) {
+    const sure = interpConfiable(t)
+    if (sure) {
+      await logAlgorithm({ householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "consejero_interpretar", evitados: tokensFor("consejero_interpretar", t) })
+      return { d: completeInterp(sure, t), src: "local" }
+    }
     try {
       const { object: r } = await aiObject({
-        householdId: ctx.household.id, bookId: ctx.book.id, schema: InterpSchema,
-        prompt: `Eres un asistente financiero para familias colombianas. El usuario describe lo que piensa hacer con su dinero:
-"${t}"
-Clasifícalo y extrae los datos. Tipos: comprar (compra de contado, a cuotas o con tarjeta), tarjeta (sacar/obtener una tarjeta de crédito nueva), credito (pedir un préstamo o crédito), prestar (prestarle dinero a otra persona), fijo (asumir un gasto mensual nuevo), invertir (CDT, ahorro, inversión), abonar (pagar antes una deuda que ya tiene), empeno (empeñar un objeto).
-"desc": resumen de 3 a 8 palabras. "dudas": 1 a 3 preguntas cortas y sencillas sobre datos que faltan para un mejor consejo.
-Reglas: "valor" según el tipo: comprar=precio total; tarjeta=cupo aprobado; credito/empeno=monto prestado; prestar=monto a prestar; fijo=valor mensual; invertir=monto a invertir; abonar=valor del abono. Montos en pesos sin puntos ("3 millones"=3000000, "500 mil"=500000). No inventes datos: usa null si no aparecen.`,
+        householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "consejero_interpretar", schema: InterpSchema,
+        prompt: `FRASE: "${t}"`,
       })
       const d: AdvisorInput = {
         tipo: r.tipo, desc: r.desc, valor: r.valor ?? "", forma: r.forma ?? undefined, cuotas: r.cuotas ?? "", tasa: r.tasa_mensual ?? undefined,
@@ -67,18 +70,15 @@ export async function analyzeDecision(d: AdvisorInput, txt: string): Promise<Con
   else {
     const data = {
       quiere: ATIPOS[d.tipo].l, descripcion: d.desc, texto_original: txt,
-      detalles: Object.fromEntries(Object.entries(d).filter(([k, v]) => v !== "" && v != null && k !== "dudas")),
+      detalles: Object.fromEntries(Object.entries(d).filter(([k, v]) => v !== "" && v != null && k !== "dudas" && !/Id$/.test(k))),
       calculos: { cuota_mensual: Math.round(m.cuota), intereses_totales: Math.round(m.intereses), tasa_efectiva_anual_pct: +(m.ea * 100).toFixed(1), ...Object.fromEntries(Object.entries(an.X ?? {}).map(([k, v]) => [k, Math.round(v)])) },
       finanzas: { ingreso_mensual: Math.round(m.ing), gastos_fijos_mes: Math.round(m.fij), cuotas_deudas_mes: Math.round(m.cuo), suscripciones_mes: Math.round(m.subs), gasto_variable_mes: Math.round(m.varr), libre_mes_antes: Math.round(m.libre), libre_mes_despues: Math.round(m.libreD), deudas_sobre_ingreso_despues_pct: +(m.ratioD * 100).toFixed(1), disponible_hoy: Math.round(m.liq), disponible_despues: Math.round(m.liqD), meses_colchon_antes: +m.emergA.toFixed(1), meses_colchon_despues: +m.emergD.toFixed(1) },
       veredicto_reglas: an.v, observaciones: an.R,
     }
     try {
       const r = await aiObject({
-        householdId: ctx.household.id, bookId: ctx.book.id, schema: AiVerdict,
-        prompt: `Eres un asesor financiero para familias colombianas (cifras en pesos COP). Analiza la decisión con los datos reales.
-"titular": máx 12 palabras. "explicacion": 2-3 frases en español sencillo, sin tecnicismos. "razones": 3 a 5 razones con cifras en formato $ 1.234.567. "alternativas": 2 a 4 opciones prácticas. "plan": 3 pasos concretos si decide hacerlo. "pregunta": una pregunta para reflexionar. "tecnico.resumen": 3-4 frases para alguien que sabe de finanzas: flujo de caja, endeudamiento (DTI), liquidez, costo financiero, TEA. "tecnico.recomendacion": 1-2 frases técnicas.
-Sé honesto y amable. Respeta el veredicto de las reglas salvo razón clara (explícala). No inventes datos.
-DATOS: ${JSON.stringify(data)}`,
+        householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "consejero_analizar", schema: AiVerdict,
+        prompt: `DATOS:\n${toLines(data as never, { exact: true })}`,
       })
       ai = r.object; provider = r.provider
     } catch (e) { aiErr = e instanceof AiUnavailable ? e.message : "No pudimos consultar la IA; ves el análisis automático con tus números." }

@@ -51,6 +51,8 @@ export type IncomeIn = Pick<Row<"incomes">, "id" | "concepto" | "valor" | "frec"
   member_id?: string | null
   category_id?: string | null
   currency?: string | null
+  /** Valor por pago antes de descuentos (nómina); null si se escribió lo que llega a la cuenta. */
+  bruto?: number | null
 }
 
 export type ExtraIncomeIn = Pick<Row<"extra_incomes">, "fecha" | "descripcion" | "valor"> & { id?: string }

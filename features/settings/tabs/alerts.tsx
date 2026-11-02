@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { ExternalLink, Send } from "lucide-react"
+import { ExternalLink, FlaskConical, Send } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,16 +19,15 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { useSettings } from "@/features/catalogs/hooks"
-import { sendDigestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/actions"
+import { notifyChannels, sendDigestNow, sendTestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/actions"
 import { currentPush, disablePush, enablePush, pushSupported } from "@/features/notify/push-client"
 import { AVISOS, CANALES, defaultMatriz, onFor, type CanalKey, type Canales, type Matriz } from "@/lib/notify/rules"
+import { formatCoPhone, normalizeCoPhone } from "@/lib/notify/whatsapp"
 import { cn } from "@/lib/utils"
 import { SettingRow, SettingSection } from "../ui"
 import { useBookSettingsSave } from "../prefs"
-import { useIntegrations } from "./integrations"
 
 const HORAS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h === 0 ? 12 : h > 12 ? h - 12 : h}:00 ${h < 12 ? "a. m." : "p. m."}` }))
-const EMAIL_KINDS = ["email_resend", "email_brevo", "email_sendgrid", "email_gmail", "email_smtp"]
 
 type RuleRow = { matriz: Matriz; canales: Canales; hora: number; frecuencia: string; silencio: { on?: boolean; desde?: number; hasta?: number }; ocultar_montos: boolean; email_to: string | null; whatsapp_to: string | null; last_sent: Record<string, string> }
 
@@ -54,15 +52,24 @@ function useRule() {
   return { rule: q.data, save }
 }
 
-function SendNow({ canal, label = "Enviar resumen ahora" }: { canal: Exclude<CanalKey, "app">; label?: string }) {
-  const [busy, setBusy] = useState(false)
+/** "Enviarme una prueba" (mensaje corto) y "Enviar resumen ahora" (lo pendiente de hoy) por un canal. */
+function SendNow({ canal, digest = true }: { canal: Exclude<CanalKey, "app">; digest?: boolean }) {
+  const [busy, setBusy] = useState<"test" | "digest" | null>(null)
+  const run = async (k: "test" | "digest") => {
+    setBusy(k); const r = await (k === "test" ? sendTestNow(canal) : sendDigestNow(canal)); setBusy(null)
+    toast[r.ok ? "success" : "error"](r.ok ? (k === "test" ? "Prueba enviada" : "Resumen enviado") : "No se pudo enviar", { description: r.msg, duration: r.ok ? 5000 : 12000 })
+  }
+  const label = CANALES.find((c) => c.k === canal)!.t
   return (
-    <Button variant="outline" size="sm" disabled={busy} onClick={async () => {
-      setBusy(true); const r = await sendDigestNow(canal); setBusy(false)
-      toast[r.ok ? "success" : "error"](r.ok ? "Enviado" : "No se pudo enviar", { description: r.msg })
-    }}>{busy ? <Spinner /> : <Send />} {label}</Button>
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" size="sm" disabled={!!busy} onClick={() => run("test")} aria-label={`Enviarme una prueba por ${label}`}>{busy === "test" ? <Spinner /> : <FlaskConical />} Enviarme una prueba</Button>
+      {digest && <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => run("digest")} aria-label={`Enviar resumen ahora por ${label}`}>{busy === "digest" ? <Spinner /> : <Send />} Enviar resumen ahora</Button>}
+    </div>
   )
 }
+
+/** Canal que Mirai aún no ofrece (lo activa el administrador). */
+const NoDisponible = ({ que }: { que: string }) => <p className="py-2 text-sm text-muted-foreground">Mirai todavía no envía avisos por {que}. Cuando esté disponible podrás activarlo aquí.</p>
 
 function TelegramLink() {
   const { user } = useApp()
@@ -112,7 +119,7 @@ function PushDevice() {
 export function AlertasTab() {
   const { rule, save } = useRule()
   const { data: cfg } = useSettings()
-  const { data: ints } = useIntegrations()
+  const { data: ready } = useQuery({ queryKey: ["notify-channels"], queryFn: () => notifyChannels(), staleTime: 5 * 60_000 })
   const saveCfg = useBookSettingsSave()
   const { user } = useApp()
   const [email, setEmail] = useState<string | null>(null)
@@ -124,15 +131,17 @@ export function AlertasTab() {
   const can = rule.canales ?? {}
   const setCan = (k: keyof Canales, v: boolean) => save({ canales: { ...can, [k]: v } })
   const setMat = (a: string, c: CanalKey, v: boolean) => save({ matriz: { ...matriz, [a]: { ...matriz[a as keyof Matriz], [c]: v } } }, true)
-  const hasEmail = EMAIL_KINDS.some((k) => ints?.[k]?.enabled)
-  const ready: Record<string, boolean> = { app: true, email: hasEmail, telegram: !!ints?.telegram?.enabled, push: !!ints?.webpush?.enabled, whatsapp: !!ints?.whatsapp?.enabled }
-  const notReady = (["email", "telegram", "push", "whatsapp"] as const).filter((c) => can[c] && !ready[c])
+  // Canales que Mirai ofrece (los configura el administrador). Mientras carga no se marcan como no disponibles.
+  const ok = (c: "email" | "telegram" | "push" | "whatsapp") => !ready || ready[c]
+  const notReady = (["email", "telegram", "push", "whatsapp"] as const).filter((c) => can[c] && !ok(c))
+  const waNum = normalizeCoPhone(wa ?? rule.whatsapp_to)
+  const waBad = !!(wa ?? rule.whatsapp_to) && !waNum
 
   return (
     <div className="grid gap-4">
       {notReady.length > 0 && (
-        <Notice tone="warn" title="Falta conectar un servicio" action={<Button size="sm" variant="outline" asChild><Link href="/ajustes?tab=integraciones">Ir a Integraciones</Link></Button>}>
-          Activaste {notReady.map((c) => CANALES.find((x) => x.k === c)!.t).join(", ")}, pero el servicio aún no está activo en Ajustes › Integraciones.
+        <Notice tone="warn" title="Por ahora no podemos enviarte por ese medio">
+          Activaste {notReady.map((c) => CANALES.find((x) => x.k === c)!.t).join(", ")}, pero Mirai todavía no tiene ese servicio disponible. Te seguimos avisando en la app.
         </Notice>
       )}
 
@@ -188,34 +197,46 @@ export function AlertasTab() {
       </SettingSection>
 
       <SettingSection icon="mail" title="Correo electrónico">
-        <SettingRow title="Enviar resumen por correo" desc={hasEmail ? "Con el proveedor de correo activo en Integraciones." : "Primero activa Resend, Brevo, SendGrid, Gmail o SMTP en Integraciones."}><Switch checked={!!can.email} onCheckedChange={(v) => setCan("email", v)} aria-label="Enviar resumen por correo" /></SettingRow>
-        {can.email && <>
+        <SettingRow title="Enviar resumen por correo" desc="Te llega al correo con lo que tienes pendiente."><Switch checked={!!can.email} disabled={!can.email && !ok("email")} onCheckedChange={(v) => setCan("email", v)} aria-label="Enviar resumen por correo" /></SettingRow>
+        {!ok("email") && <NoDisponible que="correo" />}
+        {can.email && ok("email") && <>
           <SettingRow title="Enviar a" desc="Si lo dejas vacío usamos el correo de tu cuenta.">
             <Input type="email" className="h-10 w-72" placeholder={user.email} value={email ?? rule.email_to ?? ""} onChange={(e) => setEmail(e.target.value)} onBlur={() => email !== null && save({ email_to: email.trim() || null })} aria-label="Correo para avisos" />
           </SettingRow>
-          <div className="flex flex-wrap items-center gap-3 py-3"><SendNow canal="email" />{rule.last_sent?.email && <span className="text-xs text-muted-foreground">Último envío: {rule.last_sent.email}</span>}</div>
+          <div className="flex flex-wrap items-center gap-3 py-3"><SendNow canal="email" />{rule.last_sent?.email && <span className="text-xs text-muted-foreground">Último resumen: {rule.last_sent.email}</span>}</div>
         </>}
       </SettingSection>
 
       <SettingSection icon="send" title="Telegram" desc="100 % gratis. Recomendado para recibir los avisos en el celular.">
-        <SettingRow title="Enviar resumen por Telegram"><Switch checked={!!can.telegram} onCheckedChange={(v) => setCan("telegram", v)} aria-label="Enviar resumen por Telegram" /></SettingRow>
-        {can.telegram && ready.telegram && <div className="grid gap-3 py-3"><TelegramLink /><SendNow canal="telegram" /></div>}
+        <SettingRow title="Enviar resumen por Telegram"><Switch checked={!!can.telegram} disabled={!can.telegram && !ok("telegram")} onCheckedChange={(v) => setCan("telegram", v)} aria-label="Enviar resumen por Telegram" /></SettingRow>
+        {!ok("telegram") && <NoDisponible que="Telegram" />}
+        {can.telegram && ok("telegram") && <div className="grid gap-3 py-3"><TelegramLink /><SendNow canal="telegram" /></div>}
       </SettingSection>
 
       <SettingSection icon="bell-ring" title="Notificaciones push" desc="Avisos en este celular o computador, como los de cualquier app.">
-        <SettingRow title="Enviar avisos push"><Switch checked={!!can.push} onCheckedChange={(v) => setCan("push", v)} aria-label="Enviar avisos push" /></SettingRow>
-        {can.push && ready.push && <div className="grid gap-3 py-3"><PushDevice /><SendNow canal="push" label="Enviar una prueba" /></div>}
+        <SettingRow title="Enviar avisos push"><Switch checked={!!can.push} disabled={!can.push && !ok("push")} onCheckedChange={(v) => setCan("push", v)} aria-label="Enviar avisos push" /></SettingRow>
+        {!ok("push") && <NoDisponible que="notificaciones push" />}
+        {can.push && ok("push") && <div className="grid gap-3 py-3"><PushDevice /><SendNow canal="push" digest={false} /></div>}
       </SettingSection>
 
-      <SettingSection icon="message-circle" title="WhatsApp" desc="Con la API oficial de Meta (cobra por mensaje).">
-        <SettingRow title="Enviar resumen por WhatsApp"><Switch checked={!!can.whatsapp} onCheckedChange={(v) => setCan("whatsapp", v)} aria-label="Enviar resumen por WhatsApp" /></SettingRow>
-        {can.whatsapp && <>
-          <SettingRow title="Tu número">
-            <InputGroup className="h-10 w-60"><InputGroupAddon><InputGroupText>+57</InputGroupText></InputGroupAddon>
-              <InputGroupInput inputMode="numeric" placeholder="300 123 4567" value={wa ?? rule.whatsapp_to ?? ""} onChange={(e) => setWa(e.target.value.replace(/\D/g, "").slice(0, 12))} onBlur={() => wa !== null && save({ whatsapp_to: wa || null })} aria-label="Número de WhatsApp" />
-            </InputGroup>
+      <SettingSection icon="message-circle" title="WhatsApp" desc="Te enviamos el resumen al WhatsApp desde el número oficial de Mirai.">
+        <SettingRow title="Enviar resumen por WhatsApp"><Switch checked={!!can.whatsapp} disabled={!can.whatsapp && !ok("whatsapp")} onCheckedChange={(v) => setCan("whatsapp", v)} aria-label="Enviar resumen por WhatsApp" /></SettingRow>
+        {!ok("whatsapp") && <NoDisponible que="WhatsApp" />}
+        {can.whatsapp && ok("whatsapp") && <>
+          <SettingRow title="Tu número" desc={waBad ? undefined : waNum ? `Te escribimos al ${formatCoPhone(waNum)}.` : "Tu celular de Colombia (10 dígitos)."}>
+            <div className="grid gap-1">
+              <InputGroup className="h-10 w-60"><InputGroupAddon><InputGroupText>+57</InputGroupText></InputGroupAddon>
+                <InputGroupInput inputMode="numeric" placeholder="300 123 4567" value={wa ?? rule.whatsapp_to ?? ""} aria-invalid={waBad || undefined} onChange={(e) => setWa(e.target.value.replace(/\D/g, "").slice(0, 12))} onBlur={() => {
+                  if (wa === null) return
+                  const n = normalizeCoPhone(wa)
+                  if (wa && !n) return void toast.error("Revisa el número", { description: "Debe ser un celular de 10 dígitos que empiece por 3, por ejemplo 315 123 4567." })
+                  save({ whatsapp_to: n ? n.slice(2) : null }); setWa(null)
+                }} aria-label="Número de WhatsApp" />
+              </InputGroup>
+              {waBad && <p className="text-xs text-danger">Debe ser un celular de 10 dígitos que empiece por 3.</p>}
+            </div>
           </SettingRow>
-          {ready.whatsapp && <div className="py-3"><SendNow canal="whatsapp" /></div>}
+          {waNum && !waBad && <div className="py-3"><SendNow canal="whatsapp" /></div>}
         </>}
       </SettingSection>
 

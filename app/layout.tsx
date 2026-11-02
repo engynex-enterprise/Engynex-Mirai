@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next"
-import { Inter, Geist_Mono } from "next/font/google"
+import { Courier_Prime, Inter, Geist_Mono } from "next/font/google"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Providers } from "./providers"
 import { IsoDefs } from "@/components/mirai/iso-icon"
@@ -7,6 +7,8 @@ import "./globals.css"
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" })
 const mono = Geist_Mono({ variable: "--font-mono-app", subsets: ["latin"], display: "swap" })
+// Letra de tirilla para los recibos (resumen de Agregar ingreso).
+const receipt = Courier_Prime({ variable: "--font-receipt-app", subsets: ["latin"], weight: ["400", "700"], display: "swap" })
 
 export const metadata: Metadata = {
   title: { default: "Mirai · Tu futuro financiero", template: "%s · Mirai" },
@@ -29,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es-CO" suppressHydrationWarning className={`${inter.variable} ${mono.variable} h-full`}>
+    <html lang="es-CO" suppressHydrationWarning className={`${inter.variable} ${mono.variable} ${receipt.variable} h-full`}>
       {/* suppressHydrationWarning: extensiones como ColorZilla (cz-shortcut-listen) o Grammarly agregan atributos al
           body antes de que React cargue; solo ignora atributos de esta etiqueta, no su contenido */}
       <body className="min-h-full" suppressHydrationWarning>

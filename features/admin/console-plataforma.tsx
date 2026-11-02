@@ -29,13 +29,14 @@ import { UserAvatar } from "@/components/mirai/user-avatar"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { CATS, INTEGRATIONS, type IntegrationDef } from "@/lib/integrations/registry"
-import { MODES, type GlobalMode } from "@/lib/integrations/resolve"
+import { ADMIN_MODES, MODES, type GlobalMode } from "@/lib/integrations/resolve"
 import { integrationBrand } from "@/lib/brands"
 import { FEATURES, FEATURE_LIST, ahorroAnual, precio } from "@/lib/plans"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { usePlanOptions } from "./console-negocio"
-import { adminAddAdminByEmail, adminAdmins, adminAuditLog, adminBroadcast, adminCleanOrphanHouseholds, adminGlobalIntegrations, adminSaveGlobalIntegration, adminSaveSettings, adminSetPlatformAdmin, adminSystem, adminTestGlobal } from "./server"
+import { adminAddAdminByEmail, adminAdmins, adminAuditLog, adminBroadcast, adminCleanOrphanHouseholds, adminGlobalIntegrations, adminNotifyLog, adminSaveGlobalIntegration, adminSaveSettings, adminSendTest, adminSetPlatformAdmin, adminSystem, adminTestDefaults, adminTestGlobal } from "./server"
+import { EMAIL_KINDS } from "@/lib/notify/email-kinds"
 
 const rel = (d?: string | null) => (d ? formatDistanceToNowStrict(new Date(d), { locale: es, addSuffix: true }) : "—")
 
@@ -134,22 +135,28 @@ type GlobalRow = Awaited<ReturnType<typeof adminGlobalIntegrations>>[number]
 function GlobalDialog({ def, row, onClose }: { def: IntegrationDef; row: GlobalRow; onClose: () => void }) {
   const qc = useQueryClient()
   const { data: plans = [] } = usePlanOptions()
-  const [modo, setModo] = useState<GlobalMode>(row.modo as GlobalMode)
+  // La IA conserva los 4 modos (el hogar puede usar la suya); el resto solo se apaga o se activa.
+  const modes = row.adminOnly ? ADMIN_MODES : MODES
+  const [modo, setModo] = useState<GlobalMode>(row.adminOnly && row.modo !== "apagada" ? "obligatoria" : row.modo as GlobalMode)
   const [planes, setPlanes] = useState<string[]>(row.planes)
   const [vals, setVals] = useState<Record<string, string | number | boolean>>({})
   const [busy, setBusy] = useState(false)
   const v = (k: string, d?: unknown) => (k in vals ? vals[k] : (row.config[k] as string | undefined) ?? d ?? "")
   const save = async () => {
     setBusy(true)
-    try { const r = await adminSaveGlobalIntegration(def.kind, { modo, planes, values: vals }); if (!r.ok) return void toast.error(r.msg); toast.success("Integración global guardada"); qc.invalidateQueries({ queryKey: ["admin", "globals"] }); onClose() }
+    try {
+      const r = await adminSaveGlobalIntegration(def.kind, { modo, planes, values: vals }); if (!r.ok) return void toast.error(r.msg)
+      if (r.warn) toast.warning("Integración global guardada", { description: r.warn }); else toast.success("Integración global guardada")
+      qc.invalidateQueries({ queryKey: ["admin", "globals"] }); onClose()
+    }
     catch (e) { toast.error("No se pudo guardar", { description: (e as Error).message }) }
     finally { setBusy(false) }
   }
   return (
-    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} title={`${def.n} para toda la plataforma`} description="Configura la cuenta de Mirai y decide cómo la reciben los hogares." wide>
+    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} title={`${def.n} para toda la plataforma`} description={row.adminOnly ? "Configura la cuenta de Mirai. Los hogares no ven ni cambian esta integración: solo eligen en Ajustes › Alertas si reciben avisos por este medio." : "Configura la cuenta de Mirai y decide cómo la reciben los hogares."} wide>
       <FieldGroup className="pb-2">
-        <FormField label="¿Cómo la reciben los hogares?" tip={false}>
-          <div className="grid gap-2 sm:grid-cols-2">{MODES.map((m) => (
+        <FormField label={row.adminOnly ? "¿Mirai la usa?" : "¿Cómo la reciben los hogares?"} tip={false}>
+          <div className="grid gap-2 sm:grid-cols-2">{modes.map((m) => (
             <button key={m.value} type="button" role="radio" aria-checked={modo === m.value} onClick={() => setModo(m.value)} className={cn("grid gap-0.5 rounded-lg p-3 text-left text-sm ring-1 ring-border", modo === m.value && "bg-brand-soft ring-2 ring-brand")}><b>{m.label}</b><span className="text-muted-foreground">{m.desc}</span></button>
           ))}</div>
         </FormField>
@@ -168,9 +175,38 @@ function GlobalDialog({ def, row, onClose }: { def: IntegrationDef; row: GlobalR
                   value={f.type === "secret" ? String(vals[f.k] ?? "") : String(v(f.k, f.def))} onChange={(e) => setVals({ ...vals, [f.k]: f.type === "number" ? +e.target.value : e.target.value })} />}
           </FormField>
         ))}
-        {def.fields.some((f) => f.type === "model") && <FormField label="Modelo" htmlFor="gi-model" tip="Escribe el id del modelo (por ejemplo el recomendado en Ajustes › Integraciones de un hogar)."><Input id="gi-model" className="h-11" value={String(v("model", def.fields.find((f) => f.k === "model")?.def))} onChange={(e) => setVals({ ...vals, model: e.target.value })} /></FormField>}
-        <p className="text-xs text-muted-foreground">Las claves se guardan cifradas y nunca llegan al navegador de nadie. Los hogares solo ven que Mirai incluye el servicio.</p>
+        {def.fields.some((f) => f.type === "model") && <FormField label="Modelo" htmlFor="gi-model" tip="Escribe el id del modelo (por ejemplo el recomendado en Ajustes › Inteligencia artificial de un hogar)."><Input id="gi-model" className="h-11" value={String(v("model", def.fields.find((f) => f.k === "model")?.def))} onChange={(e) => setVals({ ...vals, model: e.target.value })} /></FormField>}
+        <p className="text-xs text-muted-foreground">Las claves se guardan cifradas y nunca llegan al navegador de nadie.{row.adminOnly ? "" : " Los hogares solo ven que Mirai incluye el servicio."}</p>
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancelar</Button><Button disabled={busy} onClick={save}>{busy && <Spinner />} Guardar</Button></div>
+      </FieldGroup>
+    </ResponsiveDialog>
+  )
+}
+
+/** "Enviar prueba" (correo y WhatsApp): un mensaje real al destino que escribas, con la configuración guardada. */
+function SendTestDialog({ def, onClose }: { def: IntegrationDef; onClose: () => void }) {
+  const qc = useQueryClient()
+  const wa = def.kind === "whatsapp"
+  const { data: defs } = useQuery({ queryKey: ["admin", "test-defaults"], queryFn: () => adminTestDefaults() })
+  const [to, setTo] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const val = to ?? (wa ? defs?.whatsapp : defs?.email) ?? ""
+  const send = async () => {
+    setBusy(true)
+    const r = await adminSendTest(def.kind, val).catch((e) => ({ ok: false, msg: (e as Error).message }))
+    setBusy(false)
+    toast[r.ok ? "success" : "error"](r.ok ? "Prueba enviada" : "No se pudo enviar", { description: r.msg, duration: 12000 })
+    qc.invalidateQueries({ queryKey: ["admin", "envios"] })
+    if (r.ok) onClose()
+  }
+  return (
+    <ResponsiveDialog open onOpenChange={(o) => !o && onClose()} title={`Enviar prueba · ${def.n}`} description={wa ? "Envía la plantilla del caso “Mensaje de prueba” (consola › WhatsApp) con datos de prueba a un celular. Meta cobra el mensaje." : "Envía un correo de prueba con la plantilla de Mirai."}>
+      <FieldGroup className="pb-2">
+        <FormField label={wa ? "Celular (Colombia)" : "Correo"} htmlFor="st-to" tip={false}>
+          <Input id="st-to" className="h-11" type={wa ? "tel" : "email"} inputMode={wa ? "numeric" : "email"} placeholder={wa ? "315 123 4567" : "tu@correo.com"} value={val} onChange={(e) => setTo(e.target.value)} />
+        </FormField>
+        <p className="text-xs text-muted-foreground">Funciona aunque la integración esté apagada, para que la pruebes antes de activarla. El resultado queda en Registro de envíos.</p>
+        <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancelar</Button><Button disabled={busy || !val.trim()} onClick={send}>{busy ? <Spinner /> : <Send />} Enviar prueba</Button></div>
       </FieldGroup>
     </ResponsiveDialog>
   )
@@ -179,13 +215,17 @@ function GlobalDialog({ def, row, onClose }: { def: IntegrationDef; row: GlobalR
 export function IntegracionesPanel() {
   const { data, isPending } = useQuery({ queryKey: ["admin", "globals"], queryFn: () => adminGlobalIntegrations() })
   const [edit, setEdit] = useState<IntegrationDef | null>(null)
+  const [sendTo, setSendTo] = useState<IntegrationDef | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
   const qc = useQueryClient()
   if (isPending) return <Skeleton className="h-96" />
   const tone: Record<string, Parameters<typeof StatusPill>[0]["tone"]> = { apagada: "gray", opcional: "info", por_defecto: "pagado", obligatoria: "porVencer" }
   return (
     <div className="grid gap-6">
-      <Card className="gap-1 p-4 text-sm shadow-card ring-0"><p><b>Cómo funciona:</b> si configuras aquí un servicio (por ejemplo un correo o una IA que te salga barato), los hogares lo reciben según el modo: <b>opcional</b> (lo activan con un clic), <b>activo por defecto</b> (lo tienen sin hacer nada y pueden apagarlo o usar el suyo) u <b>obligatorio</b> (todos lo usan y no lo pueden cambiar). Puedes limitarlo a ciertos planes.</p></Card>
+      <Card className="gap-1 p-4 text-sm shadow-card ring-0">
+        <p><b>Cómo funciona:</b> los hogares solo configuran la <b>inteligencia artificial</b> (pueden usar su propia clave). Para la IA decides cómo reciben la de Mirai: <b>opcional</b>, <b>activa por defecto</b> u <b>obligatoria</b>.</p>
+        <p>Todo lo demás (correo, WhatsApp, Telegram, push, datos, Google e infraestructura) <b>solo lo configuras tú</b>: si está <b>activa</b>, Mirai la usa para los planes elegidos. Cada persona decide en Ajustes › Alertas si recibe avisos por correo, WhatsApp, Telegram o push.</p>
+      </Card>
       {(Object.keys(CATS) as (keyof typeof CATS)[]).map((c) => (
         <section key={c} className="grid gap-3">
           <h2 className="flex items-center gap-2 font-semibold"><Icon name={CATS[c].icon} className="size-5 text-brand" />{CATS[c].n}</h2>
@@ -193,19 +233,26 @@ export function IntegracionesPanel() {
             {INTEGRATIONS.filter((i) => i.cat === c).map((def) => {
               const r = data!.find((x) => x.kind === def.kind)!
               const meta = r.meta as { lastOk?: boolean; lastMsg?: string }
+              const keyless = !def.fields.some((f) => f.required)
+              // Solo admin: activa · apagada (fila guardada) · sin fila: disponible (sin claves o variable de entorno) o sin configurar.
+              const libre = !r.existe && (keyless || r.env)
+              const label = r.adminOnly ? (r.modo !== "apagada" ? "Activa" : r.existe ? "Apagada" : libre ? "Disponible" : "Sin configurar") : MODES.find((m) => m.value === r.modo)?.label
+              const canSend = r.guardada && (EMAIL_KINDS.includes(def.kind) || def.kind === "whatsapp")
               return (
                 <Card key={def.kind} className="gap-3 p-4 shadow-card ring-0">
                   <div className="flex items-start gap-3">
                     {integrationBrand(def.kind, r.config) ? <BrandLogo k={integrationBrand(def.kind, r.config)!} size={40} /> : <span className="grid size-10 place-items-center rounded-lg bg-muted"><Icon name={def.icon} className="size-5" /></span>}
                     <div className="grid min-w-0 flex-1 gap-1">
-                      <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={tone[r.modo]}>{MODES.find((m) => m.value === r.modo)?.label}</StatusPill>{r.env && <StatusPill tone="info">Variable del despliegue</StatusPill>}</p>
-                      <p className="text-xs text-muted-foreground">{r.planes.length ? `Solo planes: ${r.planes.join(", ")}` : "Todos los planes"} · {r.hogaresPropios} {r.hogaresPropios === 1 ? "hogar" : "hogares"} con cuenta propia{r.hogaresApagada ? ` · ${r.hogaresApagada} la ${r.hogaresApagada === 1 ? "apagó" : "apagaron"}` : ""}</p>
+                      <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}<StatusPill tone={r.adminOnly ? (r.modo !== "apagada" || libre ? "pagado" : "gray") : tone[r.modo]}>{label}</StatusPill>{r.env && <StatusPill tone="info">Variable del despliegue</StatusPill>}{r.adminOnly && r.guardada && <StatusPill tone="gray">Datos guardados</StatusPill>}</p>
+                      <p className="text-xs text-muted-foreground">{r.planes.length ? `Solo planes: ${r.planes.join(", ")}` : "Todos los planes"}{r.adminOnly ? "" : ` · ${r.hogaresPropios} ${r.hogaresPropios === 1 ? "hogar" : "hogares"} con cuenta propia${r.hogaresApagada ? ` · ${r.hogaresApagada} la ${r.hogaresApagada === 1 ? "apagó" : "apagaron"}` : ""}`}</p>
                     </div>
                   </div>
                   {meta.lastMsg && <p className={cn("flex items-start gap-1.5 text-xs", meta.lastOk ? "text-success" : "text-danger")}>{meta.lastOk ? <CircleCheck className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0" />}{meta.lastMsg}</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => setEdit(def)}>Configurar</Button>
-                    {r.modo !== "apagada" && <Button size="sm" variant="soft" disabled={testing === def.kind} onClick={async () => { setTesting(def.kind); const t = await adminTestGlobal(def.kind); setTesting(null); toast[t.ok ? "success" : "error"](t.msg); qc.invalidateQueries({ queryKey: ["admin", "globals"] }) }}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar</Button>}
+                    {(r.modo !== "apagada" || r.guardada || (r.adminOnly && keyless)) && <Button size="sm" variant="soft" disabled={testing === def.kind} onClick={async () => { setTesting(def.kind); const t = await adminTestGlobal(def.kind); setTesting(null); toast[t.ok ? "success" : "error"](t.ok ? "Prueba exitosa" : "La prueba falló", { description: t.msg, duration: 12000 }); qc.invalidateQueries({ queryKey: ["admin", "globals"] }) }}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar</Button>}
+                    {canSend && <Button size="sm" variant="soft" onClick={() => setSendTo(def)}><Send /> Enviar prueba</Button>}
+                    {def.kind === "whatsapp" && <Button size="sm" variant="soft" asChild><Link href="/admin/whatsapp"><Icon name="message-circle" /> Plantillas y casos</Link></Button>}
                   </div>
                 </Card>
               )
@@ -214,7 +261,38 @@ export function IntegracionesPanel() {
         </section>
       ))}
       {edit && <GlobalDialog def={edit} row={data!.find((x) => x.kind === edit.kind)!} onClose={() => setEdit(null)} />}
+      {sendTo && <SendTestDialog def={sendTo} onClose={() => setSendTo(null)} />}
     </div>
+  )
+}
+
+// ── Registro de envíos ──────────────────────────────────────────────────────────────────────────────────────────
+
+const CANAL_N: Record<string, string> = { email: "Correo", whatsapp: "WhatsApp", telegram: "Telegram", push: "Push" }
+const TIPO_N: Record<string, string> = { resumen: "Resumen", prueba: "Prueba del usuario", prueba_admin: "Prueba de la consola", invitacion: "Invitación", contador: "Contador" }
+
+export function EnviosPanel() {
+  const { data, isPending } = useQuery({ queryKey: ["admin", "envios"], queryFn: () => adminNotifyLog() })
+  type E = NonNullable<typeof data>[number]
+  const fallidos = (data ?? []).filter((e) => e.status === "fallido").length
+  return (
+    <DataTable<E>
+      title="Registro de envíos" info={`Correos, WhatsApp, Telegram y push que Mirai intentó enviar (últimos 500). Sin el contenido de los mensajes.${data?.length ? ` ${fallidos} fallido${fallidos === 1 ? "" : "s"}.` : ""}`} data={data} loading={isPending} rowKey={(e) => String(e.id)}
+      search={{ placeholder: "Buscar persona, destino o error", text: (e) => `${e.quien} ${e.destino ?? ""} ${e.error ?? ""} ${e.provider ?? ""}` }}
+      filters={[
+        { id: "canal", label: "Canal", options: Object.entries(CANAL_N).map(([value, label]) => ({ value, label })), match: (e, v) => e.channel === v },
+        { id: "estado", label: "Estado", options: [{ value: "enviado", label: "Enviado" }, { value: "fallido", label: "Fallido" }], match: (e, v) => e.status === v },
+        { id: "tipo", label: "Tipo", options: Object.entries(TIPO_N).map(([value, label]) => ({ value, label })), match: (e, v) => e.kind === v },
+      ]}
+      exportName="mirai-envios" initialSort={{ id: "cuando", dir: "desc" }}
+      columns={[
+        { id: "cuando", header: "Cuándo", sort: (e) => e.created_at, csv: (e) => e.created_at, cell: (e) => <DTTwoLine top={fmtDate(e.created_at.slice(0, 10), { year: true })} bottom={rel(e.created_at)} /> },
+        { id: "canal", header: "Canal", sort: (e) => e.channel, csv: (e) => e.channel, cell: (e) => <DTTwoLine top={CANAL_N[e.channel] ?? e.channel} bottom={`${TIPO_N[e.kind] ?? e.kind}${e.provider ? ` · ${e.provider}` : ""}`} /> },
+        { id: "quien", header: "Persona", sort: (e) => e.quien, csv: (e) => e.quien, cell: (e) => <DTTwoLine top={e.quien} bottom={e.destino ?? ""} /> },
+        { id: "estado", header: "Estado", sort: (e) => e.status, csv: (e) => e.status, cell: (e) => e.status === "enviado" ? <StatusPill tone="pagado" check>Enviado</StatusPill> : <StatusPill tone="vencido">Fallido</StatusPill> },
+        { id: "detalle", header: "Detalle", csv: (e) => e.error ?? e.ref ?? "", cell: (e) => <span className={cn("line-clamp-3 max-w-md text-xs", e.error ? "text-danger" : "text-muted-foreground")}>{e.error ?? (e.ref ? `Id ${e.ref}` : "")}</span> },
+      ]}
+    />
   )
 }
 

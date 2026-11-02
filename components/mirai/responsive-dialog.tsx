@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { ArrowLeft } from "lucide-react"
 import { MDESC } from "@/lib/content/help"
 import { cn } from "@/lib/utils"
 
@@ -16,12 +17,16 @@ import { cn } from "@/lib/utils"
 const noop = () => () => {}
 
 export function ResponsiveDialog({
-  open, onOpenChange, title, description, mdesc, footer, children, wide,
+  open, onOpenChange, title, description, mdesc, footer, children, wide, split, onBack,
 }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; mdesc?: string
   footer?: React.ReactNode; children: React.ReactNode
   /** Ventana más ancha; "xl" para formularios con panel de resumen al lado. */
   wide?: boolean | "xl"
+  /** Escritorio ancho: alto fijo y el contenido maneja su propio desplazamiento (p. ej. formulario + panel fijo). */
+  split?: boolean
+  /** Muestra la flecha Atrás en el encabezado (vista de detalle dentro de la misma ventana, como Facebook). */
+  onBack?: () => void
 }) {
   const live = useIsMobile()
   const hydrated = useSyncExternalStore(noop, () => true, () => false)
@@ -35,7 +40,12 @@ export function ResponsiveDialog({
     return (
       <Drawer open={open} onOpenChange={onOpenChange} repositionInputs={false}>
         <DrawerContent className="max-h-[94dvh]">
-          <DrawerHeader className="border-b text-center">
+          <DrawerHeader className="relative border-b text-center">
+            {onBack && (
+            <button type="button" onClick={onBack} aria-label="Atrás" className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-secondary text-foreground hover:bg-secondary-hover">
+              <ArrowLeft className="size-5" />
+            </button>
+          )}
             <DrawerTitle className="text-[20px] font-bold">{title}</DrawerTitle>
             {desc && <DrawerDescription className="text-[14px]">{desc}</DrawerDescription>}
           </DrawerHeader>
@@ -46,13 +56,18 @@ export function ResponsiveDialog({
     )
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("flex max-h-[92dvh] flex-col gap-0 p-0", wide === "xl" ? "sm:max-w-[1180px]" : wide ? "sm:max-w-[820px]" : "sm:max-w-[700px]")}>
+      <DialogContent className={cn("flex max-h-[92dvh] flex-col gap-0 p-0", split && "lg:h-[min(92dvh,880px)]", wide === "xl" ? "sm:max-w-[1180px]" : wide ? "sm:max-w-[820px]" : "sm:max-w-[700px]")}>
         {/* Encabezado estilo Facebook: título centrado, línea divisoria y cerrar en círculo gris */}
-        <DialogHeader className="items-center border-b px-14 pt-4 pb-3 text-center">
+        <DialogHeader className="relative items-center border-b px-14 pt-4 pb-3 text-center">
+          {onBack && (
+            <button type="button" onClick={onBack} aria-label="Atrás" className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-secondary text-foreground hover:bg-secondary-hover">
+              <ArrowLeft className="size-5" />
+            </button>
+          )}
           <DialogTitle className="text-[20px] leading-6 font-bold">{title}</DialogTitle>
           {desc && <DialogDescription className="max-w-[60ch] text-center text-[14px]">{desc}</DialogDescription>}
         </DialogHeader>
-        <div className="overflow-y-auto px-6 pt-5 pb-6">{children}</div>
+        <div className={split ? "min-h-0 flex-1 overflow-y-auto lg:overflow-hidden" : "overflow-y-auto px-6 pt-5 pb-6"}>{children}</div>
         {/* Pie fijo dentro de la ventana (el DialogFooter de shadcn trae márgenes negativos que lo sacaban del borde). */}
         {footer && <DialogFooter className="m-0 shrink-0 rounded-b-xl bg-card px-6 py-3">{footer}</DialogFooter>}
       </DialogContent>

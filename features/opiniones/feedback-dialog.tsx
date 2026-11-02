@@ -7,6 +7,7 @@ import { ImagePlus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
+import { Switch } from "@/components/ui/switch"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
@@ -16,7 +17,7 @@ import { useApp } from "@/components/app/app-context"
 import { useShell, type FeedbackDraft } from "@/components/app/shell-store"
 import { createClient } from "@/utils/supabase/client"
 import { APP_VER } from "@/lib/content/ayuda"
-import { TIPOS, TIPO_LIST, type FeedbackTipo } from "@/lib/content/opiniones"
+import { TIPOS, TIPO_FORM, type FeedbackTipo } from "@/lib/content/opiniones"
 import { StarRating } from "./stars"
 
 const MAX_IMG = 5 * 1024 * 1024
@@ -34,7 +35,16 @@ export function useMyFeedback() {
   })
 }
 
-function Form({ draft, onDone }: { draft: FeedbackDraft; onDone: () => void }) {
+/** Datos técnicos que acompañan una opinión o un caso de soporte (nunca montos ni datos financieros). */
+export function feedbackContexto(extra: Record<string, unknown> = {}) {
+  return {
+    version: APP_VER, pantalla: `${window.innerWidth}×${window.innerHeight}`, tema: document.documentElement.classList.contains("dark") ? "oscuro" : "claro",
+    navegador: navigator.userAgent.slice(0, 200), idioma: navigator.language, ...extra,
+  }
+}
+
+/** Formulario de "Tu opinión". Se usa en la ventana y dentro del Centro de ayuda (`compact`). */
+export function FeedbackForm({ draft, onDone, compact = false }: { draft: FeedbackDraft; onDone: () => void; compact?: boolean }) {
   const { user, household } = useApp()
   const qc = useQueryClient()
   const router = useRouter()
@@ -44,6 +54,7 @@ function Form({ draft, onDone }: { draft: FeedbackDraft; onDone: () => void }) {
   const [mensaje, setMensaje] = useState(draft.mensaje ?? "")
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
+  const [conPagina, setConPagina] = useState(true)
   const input = useRef<HTMLInputElement>(null)
   const t = TIPOS[tipo]
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
@@ -70,11 +81,8 @@ function Form({ draft, onDone }: { draft: FeedbackDraft; onDone: () => void }) {
     }
     const { error } = await sb.from("feedback").insert({
       tipo, rating: tipo === "calificacion" ? rating : null, mensaje: mensaje.trim(), captura, household_id: household.id,
-      pagina: pathname,
-      contexto: {
-        version: APP_VER, pantalla: `${window.innerWidth}×${window.innerHeight}`, tema: document.documentElement.classList.contains("dark") ? "oscuro" : "claro",
-        navegador: navigator.userAgent.slice(0, 200), idioma: navigator.language,
-      },
+      pagina: conPagina ? pathname : null,
+      contexto: feedbackContexto(),
     })
     setBusy(false)
     if (error) return toast.error("No se pudo enviar", { description: error.message })
@@ -86,8 +94,8 @@ function Form({ draft, onDone }: { draft: FeedbackDraft; onDone: () => void }) {
   return (
     <FieldGroup className="pb-2">
       <FormField label="¿Sobre qué nos quieres contar?" tip={false}>
-        <ChoiceCards name="fb-tipo" value={tipo} onChange={(v) => setTipo(v as FeedbackTipo)} cols={3}
-          items={TIPO_LIST.map((k) => ({ value: k, label: TIPOS[k].label, desc: TIPOS[k].desc, icon: TIPOS[k].icon }))} />
+        <ChoiceCards name="fb-tipo" value={tipo} onChange={(v) => setTipo(v as FeedbackTipo)} cols={compact ? 2 : 3}
+          items={TIPO_FORM.map((k) => ({ value: k, label: TIPOS[k].label, desc: TIPOS[k].desc, icon: TIPOS[k].icon }))} />
       </FormField>
       {tipo === "calificacion" && (
         <div className="grid justify-items-center gap-1 rounded-xl bg-secondary/60 py-4">
@@ -113,7 +121,11 @@ function Form({ draft, onDone }: { draft: FeedbackDraft; onDone: () => void }) {
           )}
         </div>
       )}
-      <p className="text-xs text-muted-foreground">Para entenderte mejor incluimos la página donde estás, la versión de Mirai y tu tipo de pantalla. Nunca enviamos tus montos ni tus datos financieros.</p>
+      <label className="flex items-start gap-3 rounded-lg bg-secondary/60 p-3 text-sm">
+        <Switch checked={conPagina} onCheckedChange={setConPagina} aria-label="Incluir la página donde estás" className="mt-0.5" />
+        <span className="min-w-0"><span className="block font-medium">Incluir la página donde estás</span><span className="block break-all text-xs text-muted-foreground">{pathname}</span></span>
+      </label>
+      <p className="text-xs text-muted-foreground">También incluimos la versión de Mirai y tu tipo de pantalla. Nunca enviamos tus montos ni tus datos financieros.</p>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onDone}>Cancelar</Button>
         <Button onClick={send} disabled={busy}>{busy ? <Spinner /> : <Send />} Enviar</Button>
@@ -129,7 +141,7 @@ export function FeedbackDialog() {
   return (
     <ResponsiveDialog open={!!draft} onOpenChange={(o) => !o && close()} title="Tu opinión sobre Mirai"
       description="Califícanos, cuéntanos qué falla o qué te gustaría. Lo leemos todo y te respondemos aquí.">
-      {draft && <Form key={JSON.stringify(draft)} draft={draft} onDone={close} />}
+      {draft && <FeedbackForm key={JSON.stringify(draft)} draft={draft} onDone={close} />}
     </ResponsiveDialog>
   )
 }

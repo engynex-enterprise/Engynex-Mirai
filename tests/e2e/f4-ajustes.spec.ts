@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
 
-test("ajustes: pestañas, catálogos, finanzas, alertas, integraciones, hogar y datos", async ({ page }, info) => {
+test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", async ({ page }, info) => {
   test.setTimeout(180_000)
   const errs = watchErrors(page)
   const mobile = info.project.name.includes("movil")
@@ -33,11 +33,18 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, integraciones, hogar y 
   await tab("alertas")
   await expect(page.getByText("¿Qué te avisamos y por dónde?")).toBeVisible()
   await expect(page.getByRole("checkbox", { name: "Pagos por vencer y vencidos por En la app" })).toBeChecked()
+  // Los canales son preferencia de cada persona; los servicios los configura el administrador (sin enlace a Integraciones).
+  await expect(page.getByRole("switch", { name: "Enviar resumen por WhatsApp" })).toBeVisible()
+  await expect(page.getByRole("switch", { name: "Enviar resumen por correo" })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Ir a Integraciones" })).toHaveCount(0)
   await shot(page, "ajustes-alertas", info.project.name)
 
+  // Integraciones del hogar = solo IA (el enlace viejo abre Inteligencia artificial).
   await tab("integraciones")
-  await expect(page.getByText("TRM del día")).toBeVisible()
-  await expect(page.getByRole("switch", { name: "Activar Telegram" })).toBeVisible()
+  await expect(page.getByRole("switch", { name: "Usar inteligencia artificial" })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText("TRM del día")).toHaveCount(0)
+  await expect(page.getByRole("switch", { name: "Activar Telegram" })).toHaveCount(0)
+  await expect(page.getByRole("switch", { name: "Activar WhatsApp Cloud API" })).toHaveCount(0)
   await shot(page, "ajustes-integraciones", info.project.name)
   // El modelo de IA se escoge de la lista del proveedor (OpenRouter la publica sin clave).
   const card = (n: string) => page.locator("[data-slot=card]", { hasText: n })

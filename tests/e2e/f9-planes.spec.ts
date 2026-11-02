@@ -108,26 +108,78 @@ test("consola: entrar desde el perfil, crear un plan, asignarlo y ver pagos", as
   expect(errs).toEqual([])
 })
 
-test("consola: integración global activa por defecto llega a los hogares", async ({ page }, info) => {
+/** Guarda la fila global de una integración para restaurarla al final (pruebas y producción comparten la base). */
+async function keepGlobal(kind: string) {
+  const { data } = await admin().from("platform_integrations").select("*").eq("kind", kind).maybeSingle()
+  return async () => { if (data) await admin().from("platform_integrations").upsert(data); else await admin().from("platform_integrations").delete().eq("kind", kind) }
+}
+
+test("consola: la IA global activa por defecto llega a los hogares", async ({ page }, info) => {
   test.setTimeout(180_000)
   const errs = watchErrors(page)
   await login(page)
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  const restore = await keepGlobal("ai_gateway")
   try {
     await page.goto("/admin/integraciones")
-    const card = page.locator("[data-slot=card]", { hasText: "Festivos de Colombia" })
+    const card = page.locator("[data-slot=card]", { hasText: "Vercel AI Gateway" })
     await card.getByRole("button", { name: "Configurar" }).click()
     await page.getByRole("dialog").getByRole("radio", { name: /Activa por defecto/ }).click()
     await page.getByRole("dialog").getByRole("button", { name: "Guardar" }).click()
     await expect(page.getByText("Integración global guardada")).toBeVisible()
     await shot(page, "consola-integraciones", info.project.name)
+    // El enlace viejo de Integraciones abre Ajustes › Inteligencia artificial (lo único que configura el hogar).
     await page.goto("/ajustes?tab=integraciones")
-    const mine = page.locator("[data-slot=card]", { hasText: "Festivos de Colombia" })
+    const mine = page.locator("[data-slot=card]", { hasText: "Vercel AI Gateway" })
     await expect(mine.getByText("Incluida por Mirai")).toBeVisible({ timeout: 30_000 })
     await expect(mine.getByRole("switch")).toBeChecked()
   } finally {
-    await admin().from("platform_integrations").delete().eq("kind", "festivos")
+    await restore()
+  }
+  expect(errs).toEqual([])
+})
+
+test("consola: correo, WhatsApp y datos solo los configura el administrador", async ({ page }, info) => {
+  test.setTimeout(180_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
+  await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  const restore = await keepGlobal("festivos")
+  try {
+    await page.goto("/admin/integraciones")
+    // Las que no son IA solo se apagan o se activan (sin modos por hogar).
+    const card = page.locator("[data-slot=card]", { hasText: "Festivos de Colombia" })
+    await card.getByRole("button", { name: "Configurar" }).click()
+    const dlg = page.getByRole("dialog")
+    await expect(dlg.getByRole("radio", { name: /Activa por defecto/ })).toHaveCount(0)
+    await dlg.getByRole("radio", { name: /^Apagada/ }).click()
+    await dlg.getByRole("button", { name: "Guardar" }).click()
+    await expect(page.getByText("Integración global guardada")).toBeVisible()
+    await expect(card.getByText("Apagada", { exact: true })).toBeVisible()
+    await card.getByRole("button", { name: "Configurar" }).click()
+    await dlg.getByRole("radio", { name: /^Activa/ }).click()
+    await dlg.getByRole("button", { name: "Guardar" }).click()
+    await expect(card.getByText("Activa", { exact: true })).toBeVisible({ timeout: 20_000 })
+    // WhatsApp y correo tienen "Enviar prueba" cuando hay datos guardados (no se envía nada aquí).
+    const wa = page.locator("[data-slot=card]", { hasText: "WhatsApp Cloud API" })
+    await expect(wa.getByRole("button", { name: "Configurar" })).toBeVisible()
+    await shot(page, "consola-integraciones-admin", info.project.name)
+
+    // Registro de envíos
+    await page.goto("/admin/envios")
+    await expect(page.getByText("Registro de envíos").first()).toBeVisible({ timeout: 30_000 })
+    await shot(page, "consola-envios", info.project.name)
+
+    // El hogar ya no ve correo, WhatsApp, Telegram ni datos: solo la IA.
+    await page.goto("/ajustes?tab=ia")
+    await expect(page.getByText("Google Gemini")).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText("WhatsApp Cloud API")).toHaveCount(0)
+    await expect(page.getByText("Festivos de Colombia")).toHaveCount(0)
+    await expect(page.getByRole("switch", { name: "Activar Telegram" })).toHaveCount(0)
+  } finally {
+    await restore()
   }
   expect(errs).toEqual([])
 })
@@ -138,12 +190,13 @@ test("consola: Google AdSense se configura en integraciones globales y publica a
   await login(page)
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  const restore = await keepGlobal("adsense")
   try {
     await page.goto("/admin/integraciones")
     const card = page.locator("[data-slot=card]", { hasText: "Google AdSense" })
     await card.getByRole("button", { name: "Configurar" }).click()
     const dlg = page.getByRole("dialog")
-    await dlg.getByRole("radio", { name: /Opcional/ }).click()
+    await dlg.getByRole("radio", { name: /^Activa/ }).click()
     await dlg.getByRole("textbox", { name: "Id de cliente (ca-pub-…)" }).fill("pub-mal")
     await dlg.getByRole("textbox", { name: "Id del bloque de anuncios" }).fill("1234567890")
     await dlg.getByRole("button", { name: "Guardar" }).click()
@@ -155,11 +208,11 @@ test("consola: Google AdSense se configura en integraciones globales y publica a
     await page.goto("/admin/anuncios")
     await page.getByRole("radio", { name: "Ajustes" }).click()
     await expect(page.getByText(/Activo \(ca-pub-1234567890123456\)/)).toBeVisible({ timeout: 30_000 })
-    await page.goto("/ajustes?tab=integraciones")
-    await expect(page.getByText("TRM del día")).toBeVisible({ timeout: 30_000 })
+    await page.goto("/ajustes?tab=ia")
+    await expect(page.getByText("Google Gemini")).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText("Google AdSense")).toHaveCount(0)
   } finally {
-    await admin().from("platform_integrations").delete().eq("kind", "adsense")
+    await restore()
   }
 })
 

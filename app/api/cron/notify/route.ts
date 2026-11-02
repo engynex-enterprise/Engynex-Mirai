@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { defaultRule, horaBogota, runRule, type Rule } from "@/lib/notify/digest"
 import { refreshReferenceData } from "@/features/integrations/refresh"
 import { planReminders } from "@/lib/payments/reminders"
+import { runAutomationsCron } from "@/lib/automations/server"
 
 export const maxDuration = 60
 
@@ -39,5 +40,7 @@ export async function GET(req: NextRequest) {
     }
   }
   report.runs = runs
+  // Automatizaciones (programadas, por estado, cola pendiente y esperas cumplidas). Aislado: si falla no afecta lo demás.
+  report.automatizaciones = await runAutomationsCron({ daily }).catch((e) => `ERROR ${(e as Error).message}`)
   return NextResponse.json({ ok: true, ...report })
 }

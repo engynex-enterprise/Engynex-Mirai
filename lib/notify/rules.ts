@@ -45,3 +45,12 @@ export function avisoOf(id: string): AvisoKey {
 /** Horario de silencio (cruza la medianoche si desde > hasta). */
 export const enSilencio = (h: number, s: { on?: boolean; desde?: number; hasta?: number } | null | undefined) =>
   !!s?.on && (Number(s.desde) > Number(s.hasta) ? h >= Number(s.desde) || h < Number(s.hasta) : h >= Number(s.desde) && h < Number(s.hasta))
+
+/** Destino enmascarado para el registro de envíos: al•••@gmail.com · +57 315 ••• 4567 · chat •••1234. */
+export function maskDest(canal: Exclude<CanalKey, "app">, dest: string | null | undefined) {
+  const d = String(dest ?? "").trim()
+  if (!d) return null
+  if (canal === "email") { const [u, dom] = d.split("@"); return dom ? `${u.slice(0, 2)}•••@${dom}` : "•••" }
+  if (canal === "whatsapp") { const n = d.replace(/\D/g, ""); return n.length >= 10 ? `+${n.slice(0, -10)} ${n.slice(-10, -7)} ••• ${n.slice(-4)}`.replace(/^\+ /, "") : "•••" }
+  return `•••${d.slice(-4)}`
+}

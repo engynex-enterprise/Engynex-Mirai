@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { useQueryClient } from "@tanstack/react-query"
-import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Crown, Eye, EyeOff, LogOut, MessageSquareHeart, Moon, Plus, Search, Settings, ShieldCheck, Sun, User } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Crown, Eye, EyeOff, LifeBuoy, LogOut, MessageSquareHeart, Moon, Plus, Search, Settings, ShieldCheck, Sun, User } from "lucide-react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge,
   SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, SidebarTrigger, useSidebar,
@@ -30,6 +30,11 @@ import { switchBook } from "./actions"
 import { ModeSwitch } from "./mode-switch"
 import { togglePrivacy } from "./privacy"
 import { useGami } from "@/features/gami/use-gami"
+
+/** Abre el Centro de ayuda desde el menú: en celular primero cierra el menú (dos paneles a la vez bloquean los clics). */
+function openHelpFromMenu(isMobile: boolean, setOpenMobile: (v: boolean) => void, openHelp: (k: string) => void) {
+  if (isMobile) { setOpenMobile(false); setTimeout(() => openHelp("@"), 250) } else setTimeout(() => openHelp("@"), 0)
+}
 
 export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "?"
 
@@ -79,7 +84,6 @@ export function AppSidebar({ live, online, badges, hidden = [], unread }: { live
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
-          <ProfileRow />
           <SidebarMenuItem>
             <SidebarMenuButton data-tour="bell" onClick={() => openBell(true)} tooltip="Notificaciones">
               <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card group-data-[collapsible=icon]:size-7"><IsoIcon k="notificaciones" size={22} />{unread > 0 && <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-expense px-1 text-[10px] font-bold text-white ring-2 ring-sidebar">{unread > 9 ? "9+" : unread}</span>}</span>
@@ -147,22 +151,6 @@ function NavIcon({ iso, icon }: { iso?: string; icon?: string }) {
     <span className="grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card transition-transform group-hover/menu-button:scale-105 group-data-[collapsible=icon]:size-7 group-data-[active=true]/menu-button:bg-white dark:group-data-[active=true]/menu-button:bg-card">
       {iso ? <IsoIcon k={iso} size={22} /> : <Icon name={icon ?? "circle"} className="size-5! text-brand" />}
     </span>
-  )
-}
-
-/** Primera fila: tu foto y nombre (como en Facebook), lleva a tu perfil. */
-function ProfileRow() {
-  const { user } = useApp()
-  const path = usePathname()
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip={user.nombre} isActive={path === "/perfil"}>
-        <Link href="/perfil">
-          <UserAvatar src={user.avatar} name={user.nombre} className="size-9 group-data-[collapsible=icon]:size-7" fallbackClassName="text-xs" />
-          <span className="font-semibold">{user.nombre}</span>
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
   )
 }
 
@@ -294,6 +282,8 @@ function BookSwitcher() {
 function UserMenu() {
   const { user, household, isAdmin } = useApp()
   const openFeedback = useShell((s) => s.openFeedback)
+  const openHelp = useShell((s) => s.setHelp)
+  const { isMobile, setOpenMobile } = useSidebar()
   const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
   const g = useGami()
@@ -317,6 +307,7 @@ function UserMenu() {
             <DropdownMenuItem asChild><Link href="/perfil"><User /> Tu perfil</Link></DropdownMenuItem>
             <DropdownMenuItem asChild><Link href="/ajustes"><Settings /> Ajustes</Link></DropdownMenuItem>
             <DropdownMenuItem onSelect={() => togglePrivacy()}><EyeOff /> Ocultar o mostrar montos</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openHelpFromMenu(isMobile, setOpenMobile, openHelp)}><LifeBuoy /> Centro de ayuda</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => openFeedback()}><MessageSquareHeart /> Danos tu opinión</DropdownMenuItem>
             {isAdmin && <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck /> Admin</Link></DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>

@@ -69,6 +69,7 @@ export const BANNERS: Record<string, { t: BannerThemeKey; m: BannerMotif }> = {
   admin: { t: "navy", m: "dashboard" },
   perfil: { t: "lavanda", m: "toggles" },
   ajustes: { t: "azul", m: "toggles" },
+  automatizaciones: { t: "teal", m: "toggles" },
 }
 
 export const bannerFor = (id: string) => {

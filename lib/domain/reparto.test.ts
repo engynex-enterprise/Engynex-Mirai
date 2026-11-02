@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { dedCalc } from "./payroll"
 import { quincena } from "./quincena"
 import { dedAMes, fijoValor, incomeCuando, incomePagos, pagosMes, planIngreso, quincenaDeDia, quincenasNetas, tipoIngreso } from "./reparto"
-import { ingresoMensual } from "./totals"
+import { ingresoBrutoMensual, ingresoMensual } from "./totals"
 import type { BookData } from "./types"
 
 const ref = { smmlv: 1750905, uvt: 52374 }
@@ -180,5 +180,17 @@ describe("tipo de ingreso y descuentos de antes", () => {
     const antes = quincenasNetas(4_000_000, 4_000_000, { tipo: "empleado", retModo: "manual", retV: 100_000, otros: [{ n: "Libranza", v: 50_000 }] }, ref)
     const despues = quincenasNetas(4_000_000, 4_000_000, dedAMes({ tipo: "empleado", retModo: "manual", retV: 100_000, otros: [{ n: "Libranza", v: 50_000 }] }, "quincenal"), ref)
     expect(Math.abs(antes.total - despues.total)).toBeLessThanOrEqual(200)
+  })
+})
+
+describe("ingreso del mes con y sin descuentos", () => {
+  it("bruto de la nómina (quincenas con valor propio) y valor de los demás", () => {
+    const xs = [
+      { id: "n", concepto: "Nómina", frec: "quincenal", valor: 4_037_600, bruto: 4_587_500, dia: 30, currency: "COP", reparto: { b1: 4_587_500, b2: 4_587_500, n1: 4_587_500, n2: 3_487_700 } },
+      { id: "b", concepto: "Conectividad", frec: "quincenal", valor: 30_000, dia: 30, currency: "COP" },
+      { id: "m", concepto: "Pensión", frec: "mensual", valor: 1_800_000, bruto: 2_000_000, dia: 30, currency: "COP" },
+    ]
+    expect(ingresoBrutoMensual(xs, {})).toBe(9_175_000 + 60_000 + 2_000_000)
+    expect(ingresoMensual(xs, {})).toBe(4_037_600 * 2 + 60_000 + 1_800_000)
   })
 })

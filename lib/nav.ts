@@ -42,9 +42,10 @@ export const NAV: NavSection[] = [
     { g: "informes", label: "Informes", icon: "chart-column", iso: "reportes", items: [
       leaf("indicadores", "Salud financiera", "gauge"), leaf("reportes", "Reportes y resumen IA", "file-text"),
     ] },
+    leaf("automatizaciones", "Automatizaciones", "workflow"),
   ] },
   { sec: "Soporte", entries: [
-    { g: "ayuda", label: "Ayuda", icon: "life-buoy", iso: "consejero", items: [
+    { g: "ayuda", label: "Centro de ayuda", icon: "life-buoy", iso: "ayuda", items: [
       leaf("novedades", "Novedades", "megaphone"), leaf("faq", "Preguntas frecuentes", "circle-help"),
       leaf("manual", "Manual e instructivos", "book-open"), leaf("academia", "Academia Mirai", "graduation-cap"),
       leaf("opiniones", "Tu opinión", "message-square-heart"),

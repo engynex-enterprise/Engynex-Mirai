@@ -11,6 +11,7 @@
   --color-foreground: var(--foreground);
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Historic", "Segoe UI", Helvetica, Arial, var(--font-inter), sans-serif;
   --font-mono: var(--font-mono-app), ui-monospace, Menlo, monospace;
+  --font-receipt: var(--font-receipt-app), "Courier New", ui-monospace, monospace;
   --font-heading: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Historic", "Segoe UI", Helvetica, Arial, var(--font-inter), sans-serif;
   --color-primary-hover: var(--primary-hover);
   --color-secondary-hover: var(--secondary-hover);

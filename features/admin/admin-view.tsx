@@ -19,7 +19,7 @@ import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { UserAvatar } from "@/components/mirai/user-avatar"
-import { ESTADOS, ESTADO_LIST, TIPOS, TIPO_LIST, type FeedbackEstado, type FeedbackTipo } from "@/lib/content/opiniones"
+import { ESTADOS, ESTADO_LIST, TIPOS, TIPO_LIST, type FeedbackEstado, type FeedbackTipo, SOPORTE_TEMAS, casoNumero, type SoporteCtx } from "@/lib/content/opiniones"
 import { norm } from "@/lib/domain"
 import { fmtDate } from "@/lib/format"
 import { Stars } from "@/features/opiniones/stars"
@@ -141,7 +141,8 @@ function FeedbackItem({ f }: { f: Fb }) {
   const [resp, setResp] = useState(f.respuesta ?? "")
   const [busy, setBusy] = useState(false)
   const t = TIPOS[f.tipo as FeedbackTipo] ?? TIPOS.otro
-  const ctx = (f.contexto ?? {}) as { version?: string; pantalla?: string; tema?: string }
+  const ctx = (f.contexto ?? {}) as { version?: string; pantalla?: string; tema?: string; soporte?: SoporteCtx }
+  const sop = ctx.soporte
   const update = async (patch: { estado?: FeedbackEstado; respuesta?: string }, msg: string) => {
     setBusy(true)
     try { await adminUpdateFeedback(f.id, patch); toast.success(msg); qc.invalidateQueries({ queryKey: ["admin"] }) }
@@ -155,6 +156,7 @@ function FeedbackItem({ f }: { f: Fb }) {
         <div className="min-w-0"><p className="truncate text-sm font-semibold">{f.autor?.nombre || "Sin nombre"}</p><p className="truncate text-xs text-muted-foreground">{f.autor?.email} · {rel(f.created_at)}</p></div>
         <span className="ml-auto flex flex-wrap items-center gap-1.5"><StatusPill tone="info"><Icon name={t.icon} className="size-3" />{t.label}</StatusPill>{f.rating && <Stars value={f.rating} />}</span>
       </div>
+      {sop && <p className="flex flex-wrap items-center gap-2 text-sm font-semibold"><StatusPill tone="porVencer">Caso {casoNumero(f.id)}</StatusPill>{SOPORTE_TEMAS.find((t) => t.value === sop.tema)?.label ?? sop.tema}</p>}
       {f.mensaje ? <p className="text-sm whitespace-pre-wrap">{f.mensaje}</p> : <p className="text-sm text-muted-foreground italic">Sin comentario.</p>}
       {f.capturaUrl && (
         <a href={f.capturaUrl} target="_blank" rel="noreferrer" className="w-fit">

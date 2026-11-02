@@ -13,7 +13,7 @@ import { norm } from "@/lib/domain"
 import { GeneralTab, AparienciaTab, PrivacidadTab } from "./tabs/account"
 import { SeguridadTab } from "./tabs/security"
 import { IaTab } from "./tabs/ia"
-import { IntegrationsTab } from "./tabs/integrations"
+import { AiUsageView } from "@/features/ia-uso/uso-view"
 import { AlertasTab } from "./tabs/alerts"
 import { FinanzasTab, DefaultsTab } from "./tabs/finance"
 import { CatalogTab } from "./tabs/catalogs"
@@ -21,7 +21,10 @@ import { HogarTab } from "./tabs/household"
 import { DatosTab } from "./tabs/data"
 import { PlanTab } from "@/features/planes/plan-tab"
 
-/** Pestañas de Ajustes (AJTABS de la v4; "servidor" pasa a "integraciones" y se agrega "hogar"). */
+/**
+ * Pestañas de Ajustes (AJTABS de la v4; se agrega "hogar"). Las integraciones del hogar son solo de IA y viven en
+ * "Inteligencia artificial"; correo, WhatsApp, Telegram y demás los configura el administrador en la consola.
+ */
 export const TABS = [
   ["general", "General", "settings", "Cuenta", "Pantalla de inicio, ayudas y tour"],
   ["plan", "Mi plan", "crown", "Cuenta", "Premium, renovación y pagos"],
@@ -29,9 +32,9 @@ export const TABS = [
   ["privacidad", "Privacidad", "eye-off", "Cuenta", "Ocultar montos y datos en mensajes"],
   ["seguridad", "Seguridad", "shield-check", "Cuenta", "Contraseña, dos pasos y bloqueo"],
   ["hogar", "Hogar y familia", "users", "Cuenta", "Quién más usa este hogar y con qué permisos"],
-  ["ia", "Inteligencia artificial", "sparkles", "Inteligencia", "Activar, orden de proveedores y funciones"],
-  ["integraciones", "Integraciones", "plug", "Conexiones", "IA, correo, Telegram, WhatsApp, datos y Google"],
-  ["alertas", "Alertas y notificaciones", "bell", "Avisos", "App, correo, Telegram, push y WhatsApp"],
+  ["ia", "Inteligencia artificial", "sparkles", "Inteligencia", "Proveedores, claves, modelo y funciones de la IA"],
+  ["usoia", "Uso de IA", "gauge", "Inteligencia", "Créditos del mes, costo, ahorro y consultas"],
+  ["alertas", "Alertas y notificaciones", "bell", "Avisos", "Qué te avisamos y por dónde: app, correo, WhatsApp, Telegram y push"],
   ["finanzas", "Finanzas", "calculator", "Finanzas", "Quincenas, 50/30/20, fondo y tasas"],
   ["defs", "Valores por defecto", "sliders-horizontal", "Finanzas", "Lo que aparece ya puesto en los formularios"],
   ["cats", "Categorías de gastos", "tag", "Finanzas", "Nombres, íconos y topes"],
@@ -43,6 +46,8 @@ export const TABS = [
   ["respaldo", "Datos y cuenta", "database", "Datos", "Respaldo, historial, descargar y eliminar"],
 ] as const
 type TabId = (typeof TABS)[number][0]
+/** Enlaces viejos: ?tab=integraciones abre la IA (lo único que el hogar configura). */
+const ALIAS: Record<string, TabId> = { integraciones: "ia", servidor: "ia" }
 
 function Body({ tab }: { tab: TabId }) {
   switch (tab) {
@@ -53,7 +58,7 @@ function Body({ tab }: { tab: TabId }) {
     case "seguridad": return <SeguridadTab />
     case "hogar": return <HogarTab />
     case "ia": return <IaTab />
-    case "integraciones": return <IntegrationsTab />
+    case "usoia": return <AiUsageView />
     case "alertas": return <AlertasTab />
     case "finanzas": return <FinanzasTab />
     case "defs": return <DefaultsTab />
@@ -65,7 +70,7 @@ function Body({ tab }: { tab: TabId }) {
 export function SettingsView() {
   const [tab, setTab] = useQueryState("tab", parseAsString.withDefault("general"))
   const [q, setQ] = useState("")
-  const cur = (TABS.find((t) => t[0] === tab) ?? TABS[0])
+  const cur = (TABS.find((t) => t[0] === (ALIAS[tab] ?? tab)) ?? TABS[0])
   const list = useMemo(() => TABS.filter((t) => !q || norm(t[1] + " " + t[4]).includes(norm(q))), [q])
   const groups = [...new Set(list.map((t) => t[3]))]
   return (

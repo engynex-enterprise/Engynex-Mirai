@@ -3,9 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { loadBookData } from "@/lib/book-data"
 import { notifs, todayBogota, type Notif } from "@/lib/domain"
 import { getIntegration } from "@/features/integrations/store"
-import { AVISOS, avisoOf, enSilencio, onFor, type Canales, type CanalKey, type Matriz } from "./rules"
+import { AVISOS, avisoOf, enSilencio, maskDest, onFor, type Canales, type CanalKey, type Matriz } from "./rules"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "./email"
-import { pushReady, sendPush, sendTelegram, sendWhatsApp } from "./channels"
+import { fallbackNote, pushReady, sendPush, sendTelegram, sendWhatsApp } from "./channels"
+import { caseOfDigest, formatCoPhone, normalizeCoPhone, type WaCase, type WaValues } from "./whatsapp"
+import { logSend } from "./log"
 import { siteUrl } from "@/lib/site-url"
 
 const MONEY = /\$\s?[\d.]+(,\d+)?/g
@@ -49,45 +51,118 @@ function digestHtml(nombre: string, list: Notif[], hide: boolean) {
 }
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
 
-/** Primer proveedor de correo activo del hogar. */
+/** Primer proveedor de correo que Mirai tiene activo para el hogar (lo configura el administrador). */
 async function emailProvider(householdId: string) {
   for (const k of EMAIL_KINDS) { const v = await getIntegration(householdId, k); if (v?.enabled) return v }
   return null
 }
 
+export type Canal = Exclude<CanalKey, "app">
+
+/** Mensaje si Mirai aún no ofrece un canal (lo activa el administrador en la consola). */
+export const NOT_READY: Record<Canal, string> = {
+  email: "Mirai aún no tiene activo el envío por correo. Lo activa el administrador de Mirai.",
+  whatsapp: "Mirai aún no tiene activo el envío por WhatsApp. Lo activa el administrador de Mirai.",
+  telegram: "Mirai aún no tiene activo Telegram. Lo activa el administrador de Mirai.",
+  push: "Las notificaciones push no están configuradas en este despliegue.",
+}
+
+/** ¿Qué canales ofrece Mirai a este hogar? (para Ajustes › Alertas). */
+export async function channelStatus(householdId: string): Promise<Record<Canal, boolean>> {
+  const [email, telegram, whatsapp, push] = await Promise.all([emailProvider(householdId), getIntegration(householdId, "telegram"), getIntegration(householdId, "whatsapp"), getIntegration(householdId, "webpush")])
+  return { email: !!email, telegram: !!telegram?.secrets.botToken, whatsapp: !!(whatsapp?.secrets.token && whatsapp.config.phoneId), push: !!push && pushReady() }
+}
+
+/** Contenido de un envío en cada formato (correo, texto, push y parámetros de la plantilla de WhatsApp). */
+export type Msg = { subject: string; html: string; text: string; push: { title: string; body: string }; wa: WaValues; /** Caso de WhatsApp (plantilla que se usa). */ caso: WaCase }
+
+const fechaHoy = () => new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", weekday: "long", day: "numeric", month: "long" }).format(new Date())
+
+export function digestMsg(nombre: string, list: Notif[], hide: boolean): Msg {
+  const top = list.slice(0, 15).map((n) => line(n, hide))
+  return {
+    subject: digestSubject(list.length), html: digestHtml(nombre, list, hide), text: digestText(nombre, list, hide),
+    push: { title: digestSubject(list.length), body: list.slice(0, 3).map((x) => x.t).join(" · ") },
+    wa: {
+      nombre: nombre.split(" ")[0] || "", cantidad: String(list.length), resumen: top.join("\n") + (list.length > 15 ? `\n…y ${list.length - 15} avisos más.` : ""), fecha: fechaHoy(), enlace: `${siteUrl()}/${list.length === 1 ? list[0].go : "inicio"}`,
+      titulo: list[0]?.t ?? "", detalle: list[0] ? (hide ? list[0].b.replace(MONEY, "").replace(/\s+/g, " ").trim() : list[0].b) : "", monto: hide ? "" : list[0]?.b.match(MONEY)?.[0] ?? "",
+    },
+    caso: caseOfDigest(list.map((n) => avisoOf(n.id))),
+  }
+}
+
+export function testMsg(nombre: string): Msg {
+  const first = nombre.split(" ")[0] || ""
+  const body = "Este es un mensaje de prueba de Mirai. Así te llegará el resumen de tus pagos y cobros."
+  return {
+    subject: "Mirai: mensaje de prueba", text: `Hola ${first}. ${body}`,
+    html: brandEmail(`¡Hola${first ? `, ${esc(first)}` : ""}! Tus avisos por correo funcionan`, `<p>${body}</p><p style="margin-top:20px"><a href="${siteUrl()}/ajustes?tab=alertas" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Ver mis alertas</a></p>`),
+    push: { title: "Mirai: mensaje de prueba", body: "Así te llegarán los avisos." },
+    wa: { nombre: first, cantidad: "0", resumen: body.replace(/\.$/, ""), fecha: fechaHoy(), enlace: `${siteUrl()}/inicio`, titulo: "Mensaje de prueba", detalle: "Así te llegarán los avisos", monto: "" },
+    caso: "prueba",
+  }
+}
+
+/**
+ * Envía un mensaje por un canal externo con el servicio que Mirai tiene activo y registra el intento
+ * (notification_log). Devuelve un mensaje para el usuario; si falla, lanza el error legible (ya registrado).
+ */
+export async function deliver(o: { householdId: string; userId: string; canal: Canal; emailTo: string; whatsappTo: string | null; kind: string }, m: Msg): Promise<string> {
+  const log = { user_id: o.userId, household_id: o.householdId, channel: o.canal, kind: o.kind }
+  let provider: string | null = null, source: string | null = null, destino: string | null = null
+  try {
+    let msg: string, ref: string | null = null, nota: string | null = null
+    if (o.canal === "email") {
+      const v = await emailProvider(o.householdId)
+      if (!v) throw new Error(NOT_READY.email)
+      provider = v.kind; source = v.source ?? null; destino = maskDest("email", o.emailTo)
+      if (!o.emailTo) throw new Error("No hay un correo de destino.")
+      ref = await sendEmail(v, { to: o.emailTo, subject: m.subject, html: m.html, text: m.text })
+      msg = `Enviado a ${o.emailTo}.`
+    } else if (o.canal === "telegram") {
+      const v = await getIntegration(o.householdId, "telegram")
+      if (!v?.secrets.botToken) throw new Error(NOT_READY.telegram)
+      provider = "telegram"; source = v.source ?? null
+      const { data: link } = await supabaseAdmin().from("telegram_links").select("chat_id").eq("user_id", o.userId).maybeSingle()
+      if (!link?.chat_id) throw new Error("Primero vincula tu chat de Telegram.")
+      destino = maskDest("telegram", link.chat_id)
+      const r = await sendTelegram(v, link.chat_id, m.text) as { message_id?: number }
+      ref = r?.message_id ? String(r.message_id) : null
+      msg = "Enviado a tu Telegram."
+    } else if (o.canal === "whatsapp") {
+      const v = await getIntegration(o.householdId, "whatsapp")
+      if (!v?.secrets.token) throw new Error(NOT_READY.whatsapp)
+      provider = "whatsapp"; source = v.source ?? null; destino = maskDest("whatsapp", normalizeCoPhone(o.whatsappTo) ?? o.whatsappTo)
+      if (!o.whatsappTo) throw new Error("Escribe tu número de WhatsApp en Ajustes › Alertas.")
+      const r = await sendWhatsApp(v, o.whatsappTo, m.wa, { caso: m.caso, text: m.text })
+      ref = r.id
+      nota = fallbackNote(r.fallback)
+      msg = `Enviado a tu WhatsApp (${formatCoPhone(r.to)}).${nota ? ` ${nota}` : ""}`
+    } else {
+      provider = "webpush"
+      if (!pushReady()) throw new Error(NOT_READY.push)
+      const n = await sendPush(o.userId, { title: m.push.title, body: m.push.body, url: "/inicio", tag: "mirai-digest" })
+      destino = `${n} dispositivo${n === 1 ? "" : "s"}`
+      if (!n) throw new Error("No tienes dispositivos con push activado. Actívalo en este celular o computador.")
+      msg = `Enviado a ${n} dispositivo${n === 1 ? "" : "s"}.`
+    }
+    await logSend({ ...log, status: "enviado", provider, source, destino, ref, error: nota })
+    return msg
+  } catch (e) {
+    const msg = (e as Error).message || "Error desconocido"
+    await logSend({ ...log, status: "fallido", provider, source, destino, error: msg })
+    throw new Error(msg)
+  }
+}
+
 /** Envía el resumen por un canal externo. Devuelve un mensaje para el usuario. */
-export async function sendDigest(o: { householdId: string; rule: Rule; canal: Exclude<CanalKey, "app">; email: string; nombre: string; force?: boolean }) {
+export async function sendDigest(o: { householdId: string; rule: Rule; canal: Canal; email: string; nombre: string; force?: boolean }) {
   const { rule, canal } = o
   const list = await avisosPara(rule.book_id, rule, canal)
   if (!list.length && !o.force) return { sent: false, msg: "No tienes avisos pendientes para enviar." }
-  const hide = rule.ocultar_montos
-  const text = list.length ? digestText(o.nombre, list, hide) : "Prueba de Mirai — Así te llegarán los avisos."
-  if (canal === "email") {
-    const v = await emailProvider(o.householdId)
-    if (!v) throw new Error("Activa un proveedor de correo en Ajustes › Integraciones.")
-    const to = rule.email_to || o.email
-    await sendEmail(v, { to, subject: list.length ? digestSubject(list.length) : "Prueba de Mirai", html: list.length ? digestHtml(o.nombre, list, hide) : brandEmail("Prueba de Mirai", "<p>¡Hola! Así te llegarán los avisos de Mirai.</p>"), text })
-    return { sent: true, msg: `Resumen enviado a ${to}.` }
-  }
-  if (canal === "telegram") {
-    const v = await getIntegration(o.householdId, "telegram")
-    if (!v?.enabled) throw new Error("Activa Telegram en Ajustes › Integraciones.")
-    const { data: link } = await supabaseAdmin().from("telegram_links").select("chat_id").eq("user_id", rule.user_id).maybeSingle()
-    if (!link?.chat_id) throw new Error("Primero vincula tu chat de Telegram.")
-    await sendTelegram(v, link.chat_id, text)
-    return { sent: true, msg: "Resumen enviado a tu Telegram." }
-  }
-  if (canal === "whatsapp") {
-    const v = await getIntegration(o.householdId, "whatsapp")
-    if (!v?.enabled) throw new Error("Activa WhatsApp Cloud API en Ajustes › Integraciones.")
-    if (!rule.whatsapp_to) throw new Error("Escribe tu número de WhatsApp.")
-    await sendWhatsApp(v, rule.whatsapp_to, text)
-    return { sent: true, msg: "Resumen enviado a tu WhatsApp." }
-  }
-  if (!pushReady()) throw new Error("Las notificaciones push no están configuradas en este despliegue.")
-  const n = await sendPush(rule.user_id, { title: list.length ? digestSubject(list.length) : "Prueba de Mirai", body: list.length ? list.slice(0, 3).map((x) => x.t).join(" · ") : "Así te llegarán los avisos.", url: "/inicio", tag: "mirai-digest" })
-  if (!n) throw new Error("Este usuario no tiene dispositivos con push activado.")
-  return { sent: true, msg: `Aviso enviado a ${n} dispositivo${n === 1 ? "" : "s"}.` }
+  const m = list.length ? digestMsg(o.nombre, list, rule.ocultar_montos) : testMsg(o.nombre)
+  const msg = await deliver({ householdId: o.householdId, userId: rule.user_id, canal, emailTo: rule.email_to || o.email, whatsappTo: rule.whatsapp_to, kind: list.length ? "resumen" : "prueba" }, m)
+  return { sent: true, msg: list.length ? `Resumen ${msg.charAt(0).toLowerCase()}${msg.slice(1)}` : msg }
 }
 
 /** Crea los avisos dentro de la app (campana). Sin duplicados gracias a (user_id, dedupe). */

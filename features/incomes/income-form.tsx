@@ -19,13 +19,14 @@ import { ChoiceCards, Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
 import { Icon } from "@/components/mirai/icon"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useSave } from "@/hooks/use-book-data"
 import {
-  DED_EN, DIAS_SEMANA, MESES_LARGOS, TIPOS_INGRESO, dedAMes, incomeReparto, planIngreso, quincenaDeDia, smmlvFor, tipoIngreso, uvtFor,
+  DED_EN, DIAS_SEMANA, FSP_LEY797, MESES_LARGOS, TIPOS_INGRESO, dedAMes, incomePagos, incomeReparto, planIngreso, quincenaDeDia, smmlvFor, tipoIngreso, uvtFor,
   type Deducciones, type IncomeReparto, type NominaCfg, type PlanIngreso, type TipoIngreso,
 } from "@/lib/domain"
-import { fmtMoney, todayISO } from "@/lib/format"
+import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { CURRENCY_OPTIONS, memberOptions, useIncomeCategories, useMembers, useSettings } from "@/features/catalogs/hooks"
 import { DeductionsEditor, defaultDed } from "./deductions-editor"
@@ -72,16 +73,23 @@ const veces = (frec: string, dias: number) => (frec === "diario" ? Math.max(1, d
 
 export function IncomeForm(props: Props) {
   const [formId] = useState(() => `ingreso-${Math.random().toString(36).slice(2)}`)
+  // Vista de detalle dentro de la misma ventana (como los modales de Facebook): oculta el formulario sin desmontarlo.
+  const [detalle, setDetalle] = useState(false)
+  const close = (o: boolean) => { if (!o) setDetalle(false); props.onOpenChange(o) }
   return (
-    <ResponsiveDialog open={props.open} onOpenChange={props.onOpenChange} wide="xl" title={props.income ? "Editar ingreso" : "Agregar ingreso"}
-      description="A la izquierda nos cuentas cómo es tu ingreso; a la derecha ves cómo va quedando lo que te llega en cada pago."
-      footer={<><Button variant="outline" onClick={() => props.onOpenChange(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}>
-      <ReadyGate><IncomeFormBody {...props} formId={formId} /></ReadyGate>
+    <ResponsiveDialog open={props.open} onOpenChange={close} wide="xl" split
+      title={detalle ? "Detalle del ingreso" : props.income ? "Editar ingreso" : "Agregar ingreso"}
+      description={detalle ? "Todo el cálculo de tu ingreso: descuentos, cada pago, próximas fechas y el año completo." : "A la izquierda nos cuentas cómo es tu ingreso; a la derecha ves el recibo de lo que te llega."}
+      onBack={detalle ? () => setDetalle(false) : undefined}
+      footer={detalle
+        ? <><Button variant="outline" onClick={() => setDetalle(false)}><ArrowLeft /> Volver</Button><Button type="submit" form={formId}>Guardar</Button></>
+        : <><Button variant="outline" onClick={() => close(false)}>Cancelar</Button><Button type="submit" form={formId}>Guardar</Button></>}>
+      <ReadyGate><IncomeFormBody {...props} onOpenChange={close} formId={formId} detalle={detalle} onDetalle={() => setDetalle(true)} /></ReadyGate>
     </ResponsiveDialog>
   )
 }
 
-function IncomeFormBody({ onOpenChange, income, formId }: Props & { formId: string }) {
+function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Props & { formId: string; detalle: boolean; onDetalle: () => void }) {
   const save = useSave("incomes")
   const saveCat = useSave("income_categories")
   const { data: cats = [] } = useIncomeCategories()
@@ -184,7 +192,9 @@ function IncomeFormBody({ onOpenChange, income, formId }: Props & { formId: stri
   const diaQ = (n: 1 | 2) => (n === 1 ? `día ${w.d1 || 15}` : (w.d2 || 30) >= 31 ? "fin de mes" : `día ${w.d2}`)
 
   return (
-    <form id={formId} onSubmit={form.handleSubmit(onSubmit)} noValidate aria-busy={isSubmitting} className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <>
+    <form id={formId} onSubmit={form.handleSubmit(onSubmit)} noValidate aria-busy={isSubmitting} className={cn("grid lg:h-full lg:grid-cols-[minmax(0,1fr)_400px]", detalle && "hidden")}>
+      <div className="pb-6 md:px-6 md:pt-5 lg:min-h-0 lg:overflow-y-auto">
       <FieldGroup>
         <FormField label="¿Qué tipo de ingreso es?" tip={false} hint={td?.desc} error={errors.tipo?.message}>
           <Controller control={form.control} name="tipo" render={({ field }) => (
@@ -301,10 +311,21 @@ function IncomeFormBody({ onOpenChange, income, formId }: Props & { formId: stri
         </FormField>}
         {isSubmitting && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Guardando…</p>}
       </FieldGroup>
-      <Resumen plan={plan} tipo={td} concepto={w.concepto} currency={w.currency} conDesc={conDesc} ref_={ref}
-        cuando={w.frec ? cuandoTxt(w) : undefined} reparto={q && conDesc && plan.desc > 0 ? DED_EN.find((d) => d.value === w.ded)?.label : undefined}
-        etiquetas={q ? [diaQ(1), diaQ(2)] : undefined} anual={anual} />
+      </div>
+      {/* Recibo fijo: en escritorio no se desplaza con el formulario. */}
+      <div className="border-t py-6 md:px-6 lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l lg:bg-secondary/40 lg:py-6">
+        <Resumen plan={plan} tipo={td} concepto={w.concepto} currency={w.currency} conDesc={conDesc}
+          cuando={w.frec ? cuandoTxt(w) : undefined} anual={anual} onDetalle={onDetalle} />
+      </div>
     </form>
+    {detalle && (
+      <div className="pb-6 md:px-6 md:pt-5 lg:h-full lg:overflow-y-auto">
+        <DetalleIngreso plan={plan} tipo={td} w={w} ded={conDesc ? ded : null} ref_={ref} currency={w.currency}
+          cuando={w.frec ? cuandoTxt(w) : undefined} reparto={q && conDesc && plan.desc > 0 ? DED_EN.find((d) => d.value === w.ded)?.label : undefined}
+          etiquetas={q ? [diaQ(1), diaQ(2)] : undefined} anual={anual} />
+      </div>
+    )}
+    </>
   )
 }
 
@@ -317,68 +338,213 @@ function cuandoTxt(w: Values): string {
   return `Cada mes · día ${w.dia || 30}`
 }
 
+/** Nombres cortos para que cada línea del recibo quepa en una fila. */
+const corto = (n: string) => n.replace("Fondo de solidaridad pensional", "Fondo de solidaridad").replace("Retención en la fuente", "Retención")
+
+/** Figuras vectoriales de fondo del encabezado del recibo (círculos, onda, puntos y destellos de la marca). */
+function ReceiptArt() {
+  return (
+    <svg aria-hidden viewBox="0 0 400 190" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 -z-10 size-full">
+      <defs>
+        <pattern id="rcpt-dots" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" className="fill-navy/15 dark:fill-white/15" /></pattern>
+        <linearGradient id="rcpt-wash" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#9EDB4E" stopOpacity=".28" /><stop offset="1" stopColor="#1F2B4B" stopOpacity=".06" /></linearGradient>
+      </defs>
+      <rect width="400" height="190" fill="url(#rcpt-wash)" />
+      <circle cx="352" cy="18" r="78" fill="#9EDB4E" fillOpacity=".35" />
+      <circle cx="352" cy="18" r="46" fill="none" stroke="#3F7A1E" strokeOpacity=".25" strokeWidth="2" />
+      <circle cx="22" cy="168" r="62" className="fill-navy/[.07] dark:fill-white/[.06]" />
+      <rect x="250" y="96" width="120" height="70" fill="url(#rcpt-dots)" />
+      <rect x="18" y="18" width="84" height="50" fill="url(#rcpt-dots)" />
+      <path d="M0 140 C 60 112, 120 168, 190 138 S 320 108, 400 140" fill="none" stroke="#9EDB4E" strokeWidth="3" strokeOpacity=".7" strokeLinecap="round" />
+      <path d="M0 154 C 70 128, 130 180, 200 152 S 330 124, 400 156" fill="none" stroke="#3F7A1E" strokeWidth="1.5" strokeOpacity=".25" strokeDasharray="3 6" strokeLinecap="round" />
+      <path d="M78 96 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3z" fill="#9EDB4E" />
+      <path d="M326 120 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z" fill="#1F2B4B" fillOpacity=".35" />
+      <rect x="300" y="48" width="18" height="18" rx="4" transform="rotate(18 309 57)" fill="none" stroke="#1F2B4B" strokeOpacity=".2" strokeWidth="2" />
+    </svg>
+  )
+}
+
+/** Código de barras decorativo (siempre igual para el mismo texto). */
+function Barcode({ seed }: { seed: string }) {
+  let h = 2166136261
+  for (const ch of seed || "mirai") h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
+  const bars: { x: number; w: number }[] = []
+  let x = 0
+  for (let i = 0; i < 46 && x < 220; i++) {
+    h = Math.imul(h ^ (h >>> 13), 1274126177)
+    const w = 1 + (Math.abs(h) % 3)
+    bars.push({ x, w })
+    x += w + 1 + (Math.abs(h >> 5) % 3)
+  }
+  return (
+    <div className="grid justify-items-center gap-1" aria-hidden>
+      <svg viewBox={`0 0 ${x} 30`} className="h-8 w-48 text-foreground/80" preserveAspectRatio="none">
+        {bars.map((b, i) => <rect key={i} x={b.x} width={b.w} height="30" fill="currentColor" />)}
+      </svg>
+      <span className="text-[10px] tracking-[.3em] text-muted-foreground">MIRAI · {String(Math.abs(h) % 1e8).padStart(8, "0")}</span>
+    </div>
+  )
+}
+
 /**
- * Panel derecho con forma de tirilla de recibo: cómo va quedando el ingreso (del mes, descuentos y lo que llega en cada
- * pago). Fijo al desplazar. El zigzag de arriba y abajo es una máscara (`receipt-edge`); la sombra va en el contenedor.
+ * Recibo fijo a la derecha: encabezado con figuras, el mes (bruto, descuentos y lo que llega) y "Más detalle", que abre
+ * la vista completa en la misma ventana. El zigzag es una máscara (`receipt-edge`); la sombra va en el contenedor.
  */
-function Resumen({ plan, tipo, concepto, currency, conDesc, ref_, cuando, reparto, etiquetas, anual }: {
+function Resumen({ plan, tipo, concepto, currency, conDesc, cuando, anual, onDetalle }: {
   plan: PlanIngreso; tipo: (typeof TIPOS_INGRESO)[number] | null; concepto: string; currency: string; conDesc: boolean
-  ref_: { smmlv: number; uvt: number }; cuando?: string; reparto?: string; etiquetas?: string[]; anual: boolean
+  cuando?: string; anual: boolean; onDetalle: () => void
+}) {
+  const fila = (label: string, v: number, cls?: string) => (
+    <div className={cn("flex items-baseline gap-1", cls)}>
+      <span className="shrink-0">{label}</span>
+      <span className="mb-1 min-w-3 flex-1 border-b border-dotted border-foreground/30" aria-hidden />
+      <Money value={v} currency={currency} className="shrink-0" />
+    </div>
+  )
+  return (
+    <div className="receipt-shadow mx-auto w-full max-w-[360px]">
+      <aside className="receipt-edge grid bg-receipt font-receipt text-[13px] leading-5" aria-live="polite" data-testid="ingreso-resumen" aria-label="Recibo de pago">
+        <div className="relative isolate overflow-hidden px-5 pt-9 pb-5 text-center">
+          <ReceiptArt />
+          <span className="mx-auto grid size-12 -rotate-6 place-items-center rounded-2xl bg-navy text-lime shadow-card"><Icon name={tipo?.icon ?? "receipt"} className="size-6" /></span>
+          <p className="mt-3 text-[10.5px] font-bold tracking-[.32em] text-muted-foreground uppercase">Recibo de pago</p>
+          <p className="mt-0.5 truncate text-[17px] font-bold text-foreground">{concepto.trim() || tipo?.label || "Tu ingreso"}</p>
+          <p className="text-[11.5px] leading-4 text-muted-foreground">{[tipo?.label, cuando].filter(Boolean).join(" · ") || "Aquí verás cómo va quedando"}</p>
+        </div>
+        <div className="grid gap-3 px-5 pb-10">
+          <hr className="border-0 border-t border-dashed border-foreground/30" />
+          {!(plan.mensual > 0) ? (
+            <p className="py-3 text-center text-muted-foreground">{tipo ? "Escribe cuánto recibes y aquí verás tu recibo." : "Escoge el tipo de ingreso para empezar."}</p>
+          ) : (
+            <>
+              <p className="text-[10.5px] font-bold tracking-[.25em] text-muted-foreground uppercase">{anual ? "El pago" : "En el mes"}</p>
+              <div className="num grid gap-1">
+                {fila(conDesc ? "Valor bruto" : anual ? "Valor del pago" : "Valor del mes", plan.mensual, "font-bold")}
+                {plan.items.map((x) => <div key={x.n}>{fila(`− ${corto(x.n)}`, x.v, "text-danger")}</div>)}
+                {plan.desc > 0 && fila("Total descuentos", plan.desc, "font-bold text-danger")}
+              </div>
+              <div className="num flex items-baseline justify-between gap-2 border-y-[3px] border-double border-foreground/40 py-2 text-[15px] font-bold">
+                <span>{anual ? "TE LLEGA EN EL PAGO" : "TE LLEGA AL MES"}</span>
+                <Money value={plan.neto} currency={currency} className="text-success" />
+              </div>
+              <Barcode seed={concepto + plan.mensual} />
+              <Button type="button" variant="outline" className="font-receipt" onClick={onDetalle}>Más detalle <ArrowRight /></Button>
+            </>
+          )}
+        </div>
+      </aside>
+    </div>
+  )
+}
+
+/** Tarjeta de la vista de detalle. */
+function Card({ title, icon, children, className }: { title: string; icon: string; children: React.ReactNode; className?: string }) {
+  return (
+    <section className={cn("grid content-start gap-3 rounded-xl border bg-card p-4 shadow-card", className)}>
+      <h3 className="flex items-center gap-2 font-semibold"><Icon name={icon} className="size-[18px] text-brand" />{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+/** Vista completa del ingreso (se abre con "Más detalle" y vuelve con Atrás). */
+function DetalleIngreso({ plan, tipo, w, ded, ref_, currency, cuando, reparto, etiquetas, anual }: {
+  plan: PlanIngreso; tipo: (typeof TIPOS_INGRESO)[number] | null; w: Values; ded: Deducciones | null
+  ref_: { smmlv: number; uvt: number; fsp?: [number, number][] | null }; currency: string; cuando?: string; reparto?: string; etiquetas?: string[]; anual: boolean
 }) {
   const M = (v: number, cls?: string) => <Money value={v} currency={currency} className={cls} />
-  const corte = <hr className="border-0 border-t border-dashed border-foreground/25" />
+  const pct = (v: number) => (plan.mensual ? `${((v / plan.mensual) * 100).toFixed(1).replace(".", ",")} %` : "")
+  // Próximas fechas: el mismo cálculo que usa la agenda con lo que está escrito en el formulario.
+  const hoy = todayISO()
+  const [y, m] = hoy.split("-").map(Number)
+  const x = {
+    frec: w.frec ?? "mensual", valor: plan.valor, dia: w.dia || 30,
+    reparto: { n1: plan.pagos[0]?.neto, n2: plan.pagos[1]?.neto, d1: w.d1, d2: w.d2, dow: +w.dow, mes: +w.mes, dias: w.dias },
+  }
+  const prox = [0, 1, 2, 3].flatMap((k) => incomePagos(x, y + Math.floor((m - 1 + k) / 12), (m - 1 + k) % 12)).filter((p) => p.fecha >= hoy).slice(0, 6)
+  const tabla = ref_.fsp?.length ? ref_.fsp : FSP_LEY797
+  const proc = ded?.ret === false ? "no se calcula" : ded?.retModo === "proc2" ? `procedimiento 2 (${String(ded.retV ?? 0).replace(".", ",")} % fijo sobre la base, art. 386 E.T.)` : ded?.retModo === "manual" ? "valor fijo que escribiste" : ded?.retModo === "pct" ? `${String(ded.retV ?? 0).replace(".", ",")} % del pago` : "procedimiento 1 (tabla del art. 383 E.T.)"
   return (
-    <div className="receipt-shadow lg:sticky lg:top-0">
-      <aside className="receipt-edge grid gap-4 bg-receipt px-5 pt-8 pb-9" aria-live="polite" data-testid="ingreso-resumen" aria-label="Resumen del ingreso">
-        <div className="grid justify-items-center gap-1.5 text-center">
-          <span className="grid size-11 place-items-center rounded-full bg-card text-success shadow-card"><Icon name={tipo?.icon ?? "receipt"} className="size-5" /></span>
-          <span className="text-[11px] font-semibold tracking-[.2em] text-muted-foreground uppercase">Recibo de pago</span>
-          <span className="max-w-full truncate text-base font-bold">{concepto.trim() || tipo?.label || "Tu ingreso"}</span>
-          <span className="text-xs text-muted-foreground">{[tipo?.label, cuando].filter(Boolean).join(" · ") || "Aquí verás cómo va quedando"}</span>
+    <div className="grid gap-4" data-testid="ingreso-detalle">
+      <div className="relative isolate overflow-hidden rounded-xl border bg-receipt p-5">
+        {/* Las figuras solo a la derecha para no pasar por encima del texto. */}
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 -z-10 w-[420px] max-w-[60%]"><ReceiptArt /></div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="grid size-12 place-items-center rounded-2xl bg-navy text-lime"><Icon name={tipo?.icon ?? "receipt"} className="size-6" /></span>
+          <div className="grid flex-1 gap-0.5">
+            <p className="text-lg font-bold">{w.concepto.trim() || tipo?.label || "Tu ingreso"}</p>
+            <p className="text-sm text-muted-foreground">{[tipo?.label, cuando].filter(Boolean).join(" · ")}</p>
+          </div>
+          <div className="grid text-right">
+            <span className="text-xs text-muted-foreground">Te llega {anual ? "en el pago" : "al mes"}</span>
+            {M(plan.neto, "text-[26px] font-extrabold text-success")}
+          </div>
         </div>
-        {corte}
-        {!(plan.mensual > 0) ? (
-          <p className="py-2 text-center text-sm text-muted-foreground">{tipo ? "Escribe cuánto recibes y aquí verás cuánto te llega en cada pago." : "Escoge el tipo de ingreso para empezar."}</p>
-        ) : (
-          <>
-            <div className="grid gap-1.5">
-              <p className="text-[11px] font-semibold tracking-[.15em] text-muted-foreground uppercase">{anual ? "El pago" : "En el mes"}</p>
-              <table className="num w-full text-sm">
-                <tbody>
-                  <tr><td className="py-1">{conDesc ? (anual ? "Valor del pago" : "Valor antes de descuentos") : anual ? "Valor del pago" : "Valor del mes"}</td><td className="py-1 text-right font-medium">{M(plan.mensual)}</td></tr>
-                  {plan.items.map((x) => (
-                    <tr key={x.n}>
-                      <td className="py-1">− {x.n} <span className="block text-xs text-muted-foreground">{x.h}</span></td>
-                      <td className="py-1 text-right align-top text-danger">{M(x.v)}</td>
-                    </tr>
-                  ))}
-                  {plan.desc > 0 && <tr className="border-t border-dashed border-foreground/25 font-medium"><td className="py-1.5">Total descuentos</td><td className="py-1.5 text-right text-danger">{M(plan.desc)}</td></tr>}
-                  <tr className="border-t-2 border-double border-foreground/40 text-[15px] font-bold"><td className="py-2">Te llega {anual ? "en el pago" : "al mes"}</td><td className="py-2 text-right text-success">{M(plan.neto)}</td></tr>
-                </tbody>
-              </table>
-            </div>
-            {cuando && (
-              <>
-                {corte}
-                <div className="grid gap-2">
-                  <p className="text-sm font-semibold">Lo que te llega a la cuenta</p>
-                  {reparto && <p className="-mt-1 text-xs text-muted-foreground">Descuentos: {reparto.toLowerCase()}</p>}
-                  <div className={plan.pagos.length > 1 ? "grid grid-cols-2 items-start gap-2" : "grid"}>
-                    {plan.pagos.map((p, i) => (
-                      <div key={p.n} className="grid rounded-lg border border-dashed border-foreground/25 bg-card/70 p-2.5">
-                        <span className="text-xs text-muted-foreground">{etiquetas ? `${p.n} (${etiquetas[i]})` : p.n}</span>
-                        {M(p.neto, "text-[19px] font-extrabold text-success")}
-                        {p.desc > 0 && <span className="text-[11px] text-muted-foreground">{M(p.bruto)} − {M(p.desc)}</span>}
-                      </div>
-                    ))}
-                  </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card title={anual ? "El pago" : "Del mes"} icon="receipt">
+          <table className="num w-full text-sm">
+            <tbody>
+              <tr><td className="py-1.5">{ded ? "Valor antes de descuentos" : "Valor"}</td><td className="py-1.5 text-right font-medium">{M(plan.mensual)}</td></tr>
+              {plan.items.map((i) => (
+                <tr key={i.n} className="border-t">
+                  <td className="py-1.5">− {i.n}<span className="block text-xs text-muted-foreground">{i.h}</span></td>
+                  <td className="py-1.5 text-right align-top text-danger">{M(i.v)}<span className="block text-xs text-muted-foreground">{pct(i.v)}</span></td>
+                </tr>
+              ))}
+              {plan.desc > 0 && <tr className="border-t font-medium"><td className="py-1.5">Total descuentos</td><td className="py-1.5 text-right text-danger">{M(plan.desc)} <span className="text-xs text-muted-foreground">({pct(plan.desc)})</span></td></tr>}
+              <tr className="border-t-2 font-bold"><td className="py-2">Te llega {anual ? "en el pago" : "al mes"}</td><td className="py-2 text-right text-success">{M(plan.neto)}</td></tr>
+            </tbody>
+          </table>
+        </Card>
+        <Card title="Lo que te llega a la cuenta" icon="wallet">
+          {reparto && <p className="-mt-1 text-sm text-muted-foreground">Descuentos: {reparto.toLowerCase()}</p>}
+          {w.frec ? (
+            <div className={plan.pagos.length > 1 ? "grid grid-cols-2 items-start gap-3" : "grid"}>
+              {plan.pagos.map((p, i) => (
+                <div key={p.n} className="grid rounded-lg bg-brand-soft p-3">
+                  <span className="text-xs text-muted-foreground">{etiquetas ? `${p.n} (${etiquetas[i]})` : p.n}</span>
+                  {M(p.neto, "text-[20px] font-extrabold")}
+                  {p.desc > 0 && <span className="text-xs text-muted-foreground">{M(p.bruto)} − {M(p.desc)}</span>}
                 </div>
-              </>
-            )}
-            {conDesc && <>{corte}<p className="text-center text-[11px] leading-4 text-muted-foreground">Cálculo aproximado con salario mínimo {fmtMoney(ref_.smmlv)} y UVT {fmtMoney(ref_.uvt)}. Compáralo con tu desprendible: si no coincide, ajusta los descuentos a la izquierda.</p></>}
-          </>
+              ))}
+            </div>
+          ) : <p className="text-sm text-muted-foreground">Escoge cada cuánto te pagan para ver cada pago.</p>}
+        </Card>
+        <Card title="Próximas fechas de pago" icon="calendar-days">
+          {prox.length ? (
+            <ul className="grid gap-1.5 text-sm">
+              {prox.map((p) => (
+                <li key={p.fecha + p.v} className="flex items-center justify-between gap-2 border-b pb-1.5 last:border-0">
+                  <span>{fmtDate(p.fecha, { long: true })}{p.parte ? <span className="text-xs text-muted-foreground"> · {p.parte === "q1" ? "1ª" : "2ª"} quincena</span> : null}</span>
+                  {M(p.v, "font-semibold")}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-sm text-muted-foreground">Escoge cada cuánto te pagan para ver las fechas.</p>}
+        </Card>
+        <Card title="En el año" icon="calendar-range">
+          <table className="num w-full text-sm">
+            <tbody>
+              <tr><td className="py-1.5">Antes de descuentos</td><td className="py-1.5 text-right">{M(plan.mensual * (anual ? 1 : 12))}</td></tr>
+              <tr className="border-t"><td className="py-1.5">Descuentos</td><td className="py-1.5 text-right text-danger">{M(plan.desc * (anual ? 1 : 12))}</td></tr>
+              <tr className="border-t font-bold"><td className="py-1.5">Te llega</td><td className="py-1.5 text-right text-success">{M(plan.neto * (anual ? 1 : 12))}</td></tr>
+            </tbody>
+          </table>
+          <p className="text-xs text-muted-foreground">Sin contar prima, cesantías ni bonos aparte: regístralos como otro ingreso.</p>
+        </Card>
+        {ded && (
+          <Card title="Cómo lo calculamos" icon="calculator" className="md:col-span-2">
+            <ul className="grid list-disc gap-1.5 pl-5 text-sm">
+              <li>Salario mínimo {fmtMoney(ref_.smmlv)} y UVT {fmtMoney(ref_.uvt)}{plan.mensual ? ` · ganas ${(plan.mensual / ref_.smmlv).toFixed(1).replace(".", ",")} salarios mínimos.` : "."}</li>
+              <li>Salud y pensión: 4 % cada una del salario (empleado). Los aportes se redondean a la centena de arriba, como la planilla PILA.</li>
+              <li>Fondo de solidaridad pensional desde {tabla[0][0]} salarios mínimos: {tabla.map(([d, p]) => `${p.toString().replace(".", ",")} % desde ${d}`).join(" · ")}.{ref_.fsp?.length ? " (Tabla propia de Ajustes › Nómina.)" : " (Ley 797 de 2003.)"}</li>
+              <li>Retención en la fuente: {proc}. La ley permite los dos procedimientos y tu empresa escoge uno; míralo en tu desprendible.</li>
+              <li>Es un cálculo aproximado. Compáralo con tu desprendible de nómina: si no coincide, vuelve atrás y ajusta los descuentos.</li>
+            </ul>
+          </Card>
         )}
-      </aside>
+      </div>
     </div>
   )
 }

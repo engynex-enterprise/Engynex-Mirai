@@ -7,6 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { supabaseServer } from "@/utils/supabase/server"
 import { googleFetch, googleToken } from "@/lib/google"
 import { aiObject } from "@/lib/ai/run"
+import { mailMayBePurchase } from "@/lib/ai/router"
+import { clip } from "@/lib/ai/compact"
 import { aiSettings } from "@/lib/ai/model"
 import { loadBookData } from "@/lib/book-data"
 import { agenda, todayBogota } from "@/lib/domain"
@@ -37,18 +39,21 @@ export async function scanMail(query?: string): Promise<{ ok: boolean; rows: Mai
   const correos = msgs.filter(Boolean).map((m, i) => ({ i, id: m!.id, asunto: hdr(m!, "subject"), texto: m!.snippet, fecha_correo: new Date(+m!.internalDate).toISOString().slice(0, 10), remitente: hdr(m!, "from") }))
   if (!correos.length) return { ok: true, rows: [] }
   const ia = await aiSettings(ctx.book.id)
+  // Sin un monto no puede ser una compra (publicidad, avisos de seguridad…): esos ni se le mandan a la IA.
+  const candidatos = correos.filter((c) => mailMayBePurchase(`${c.asunto} ${c.texto}`))
+  if (!candidatos.length) return { ok: true, rows: [] }
   if (ia.on !== false) {
     try {
       const { object } = await aiObject({
-        householdId: ctx.household.id, bookId: ctx.book.id,
+        householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "correo_banco",
         schema: z.object({ items: z.array(z.object({ i: z.number(), es_gasto: z.boolean(), fecha: z.string(), comercio: z.string(), valor: z.number() })) }),
-        prompt: `Extrae compras, pagos o débitos de estas notificaciones bancarias colombianas. Ignora publicidad, ofertas, extractos y abonos/ingresos. "valor" en pesos sin puntos. "fecha" YYYY-MM-DD; si no hay fecha clara usa la del correo. "comercio": nombre corto.\nCORREOS: ${JSON.stringify(correos.map(({ i, asunto, texto, fecha_correo, remitente }) => ({ i, asunto, texto, fecha_correo, remitente })))}`,
+        prompt: `CORREOS (i | fecha del correo | remitente | asunto | texto):\n${candidatos.map((c) => `${c.i} | ${c.fecha_correo} | ${clip(c.remitente.replace(/.*<|>.*/g, ""), 40)} | ${clip(c.asunto, 100)} | ${clip(c.texto, 260)}`).join("\n")}`,
       })
       const rows = object.items.filter((x) => x.es_gasto && x.valor > 0 && correos[x.i]).map((x) => { const c = correos[x.i]; return { id: c.id, fecha: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? x.fecha : c.fecha_correo, comercio: x.comercio.slice(0, 80), valor: Math.round(x.valor), asunto: c.asunto, remitente: c.remitente } })
       return { ok: true, rows, ia: true }
     } catch { /* respaldo sin IA */ }
   }
-  const rows = correos.map((c) => {
+  const rows = candidatos.map((c) => {
     const t = `${c.asunto} ${c.texto}`
     const m = t.match(/\$\s?([\d.,]+)/)
     const com = t.match(/en ([A-Z0-9 *.]{3,30})/)

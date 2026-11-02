@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { BookOpen, Megaphone, PlayCircle, RotateCcw } from "lucide-react"
+import { BookOpen, LifeBuoy, Megaphone, PlayCircle, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -13,12 +13,14 @@ import { PAGES } from "@/lib/nav"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/utils/supabase/client"
 import { useApp } from "@/components/app/app-context"
+import { useShell } from "@/components/app/shell-store"
 import { togglePrivacy } from "@/components/app/privacy"
 import { SettingRow, SettingSection } from "../ui"
 import { usePrefs } from "../prefs"
 
 export function GeneralTab() {
   const { prefs, save } = usePrefs()
+  const setHelp = useShell((s) => s.setHelp)
   if (!prefs) return <Skeleton className="h-64 w-full" />
   return (
     <div className="grid gap-4">
@@ -27,7 +29,10 @@ export function GeneralTab() {
           <div className="w-64"><Combobox value={prefs.home_view} onChange={(v) => save({ home_view: v })} options={PAGES.map((p) => ({ value: p.id, label: p.label, icon: p.icon, hint: p.group?.label ?? p.section }))} /></div>
         </SettingRow>
       </SettingSection>
-      <SettingSection icon="life-buoy" title="Ayuda">
+      <SettingSection icon="life-buoy" title="Centro de ayuda">
+        <SettingRow title="Centro de ayuda" desc="Preguntas frecuentes, manual, guías, academia, glosario y soporte. Atajo: tecla ?.">
+          <Button variant="outline" onClick={() => setHelp("@")}><LifeBuoy /> Abrir</Button>
+        </SettingRow>
         <SettingRow title="Tour de la plataforma" desc="Un recorrido corto por las secciones principales.">
           <Button variant="outline" onClick={() => save({ tour_done: false })} asChild><Link href="/inicio?tour=1"><PlayCircle /> Hacer el tour</Link></Button>
         </SettingRow>

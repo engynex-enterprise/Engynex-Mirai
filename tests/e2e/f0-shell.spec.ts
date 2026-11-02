@@ -69,9 +69,15 @@ test("login → bienvenida → shell con menú, Ctrl K y Agregar", async ({ page
   await page.screenshot({ path: `tests/.out/agregar-${test.info().project.name}.png` })
   await page.keyboard.press("Escape")
 
+  // "Cómo funciona" abre el Centro de ayuda en la ayuda de esta página; Atrás lleva a la portada.
   await page.getByRole("button", { name: "Cómo funciona" }).click()
-  await expect(page.getByText(/Cómo funciona: Gastos y hormiga/)).toBeVisible()
+  const centro = page.getByRole("dialog", { name: "Centro de ayuda" })
+  await expect(centro.getByRole("heading", { name: "Gastos y hormiga" })).toBeVisible()
+  await centro.getByRole("button", { name: "Atrás" }).click()
+  await expect(centro.getByRole("textbox", { name: "Buscar en el Centro de ayuda" })).toBeVisible()
+  await expect(centro.getByText("Cómo funciona: Gastos y hormiga")).toBeVisible()
   await page.keyboard.press("Escape")
+  await expect(centro).toHaveCount(0)
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow, "sin scroll horizontal").toBeLessThanOrEqual(0)

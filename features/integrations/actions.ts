@@ -4,19 +4,21 @@ import { generateText } from "ai"
 import { requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { encrypt, mask } from "@/lib/crypto"
-import { integrationByKind } from "@/lib/integrations/registry"
+import { integrationByKind, isAdminOnly } from "@/lib/integrations/registry"
 import { aiErrMsg, modelFrom } from "@/lib/ai/model"
 import { MODEL_LIST, modelOptions, parseModels, type ModelOption } from "@/lib/ai/models"
-import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
 import { getGlobalIntegration, getIntegration, getOwnIntegration } from "./store"
 import { USE_PLATFORM } from "@/lib/integrations/resolve"
-import { fetchFestivos, fetchFx, fetchTrm, fetchUsura } from "./data-sources"
+
+/** Los hogares solo configuran la IA; el resto lo administra Mirai en la consola. */
+const ADMIN_MSG = "Esta integración la administra Mirai. Los avisos se eligen en Ajustes › Alertas."
 
 /** Guarda la configuración (los secretos vacíos conservan los guardados) y la activa. */
 export async function saveIntegration(kind: string, values: Record<string, string | number | boolean>, enabled = true) {
   const ctx = await requireRole("owner")
   const def = integrationByKind(kind)
   if (!def) throw new Error("Integración desconocida")
+  if (isAdminOnly(def)) throw new Error(ADMIN_MSG)
   const prev = await getOwnIntegration(ctx.household.id, kind)
   const config: Record<string, unknown> = {}
   const secrets: Record<string, string> = { ...(prev?.secrets ?? {}) }
@@ -40,6 +42,7 @@ export async function saveIntegration(kind: string, values: Record<string, strin
 export async function toggleIntegration(kind: string, enabled: boolean) {
   const ctx = await requireRole("owner")
   const def = integrationByKind(kind)
+  if (isAdminOnly(def)) throw new Error(ADMIN_MSG)
   const own = await getOwnIntegration(ctx.household.id, kind)
   const global = await getGlobalIntegration(kind)
   const offered = !!global && global.modo !== "apagada" && (!global.planes.length || global.planes.includes(ctx.plan.id))
@@ -53,12 +56,14 @@ export async function toggleIntegration(kind: string, enabled: boolean) {
 
 export async function deleteIntegration(kind: string) {
   const ctx = await requireRole("owner")
+  if (isAdminOnly(kind)) throw new Error(ADMIN_MSG)
   await supabaseAdmin().from("integrations").delete().eq("household_id", ctx.household.id).eq("kind", kind)
 }
 
-/** Prueba la conexión. Devuelve un mensaje para el usuario. */
+/** Prueba la conexión de un proveedor de IA del hogar. Devuelve un mensaje para el usuario. */
 export async function testIntegration(kind: string): Promise<{ ok: boolean; msg: string }> {
   const ctx = await requireRole("editor")
+  if (isAdminOnly(kind)) return { ok: false, msg: ADMIN_MSG }
   const v = await getIntegration(ctx.household.id, kind)
   const def = integrationByKind(kind)
   const done = async (ok: boolean, msg: string) => {
@@ -70,32 +75,6 @@ export async function testIntegration(kind: string): Promise<{ ok: boolean; msg:
       if (!v) return { ok: false, msg: "Primero guarda la clave de API." }
       const { text } = await generateText({ model: modelFrom(v), prompt: "Responde solo con la palabra: listo", maxOutputTokens: 20 })
       return done(true, `Conexión exitosa con ${def.n}. Respondió: “${text.trim().slice(0, 40)}”.`)
-    }
-    if (EMAIL_KINDS.includes(kind)) {
-      if (!v) return { ok: false, msg: "Primero guarda los datos del correo." }
-      await sendEmail(v, { to: ctx.user.email, subject: "Mirai: correo de prueba", html: brandEmail("¡Tu correo quedó conectado!", "<p>Desde ahora te llegarán aquí los avisos de pagos y cobros que actives.</p>") })
-      return done(true, `Te enviamos un correo de prueba a ${ctx.user.email}.`)
-    }
-    if (kind === "telegram") {
-      const r = await fetch(`https://api.telegram.org/bot${v?.secrets.botToken}/getMe`).then((x) => x.json())
-      if (!r.ok) throw new Error("401 token inválido")
-      return done(true, `Bot conectado: @${r.result.username}. Ahora vincula tu chat en Ajustes › Avisos.`)
-    }
-    if (kind === "trm") { const t = await fetchTrm(); return done(true, `TRM de hoy: $${t.valor.toLocaleString("es-CO")} (vigente desde ${t.fecha}).`) }
-    if (kind === "usura") { const u = await fetchUsura(); return done(true, `Tasa de usura vigente: ${u.usura.toFixed(2).replace(".", ",")} % E.A. (1,5 × interés bancario corriente de ${u.ibc.toFixed(2).replace(".", ",")} %).`) }
-    if (kind === "festivos") { const f = await fetchFestivos(new Date().getFullYear()); return done(true, `${f.length} festivos encontrados este año.`) }
-    if (kind === "fx") { const r = await fetchFx(); return done(true, `1 USD = $${Math.round(r.USD).toLocaleString("es-CO")} · 1 EUR = $${Math.round(r.EUR).toLocaleString("es-CO")}.`) }
-    if (kind === "coingecko") {
-      const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=cop", { headers: v?.secrets.apiKey ? { "x-cg-demo-api-key": v.secrets.apiKey } : {} }).then((x) => x.json())
-      return done(true, `1 BTC = $${Math.round(r.bitcoin.cop).toLocaleString("es-CO")}.`)
-    }
-    if (kind === "stocks") {
-      const key = v?.secrets.apiKey
-      const url = v?.config.provider === "twelvedata" ? `https://api.twelvedata.com/price?symbol=SPY&apikey=${key}` : `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${key}`
-      const r = await fetch(url).then((x) => x.json())
-      const p = r.price ?? r["Global Quote"]?.["05. price"]
-      if (!p) throw new Error(r.message ?? r.Note ?? r.Information ?? "invalid api key")
-      return done(true, `SPY = US$${Number(p).toFixed(2)}.`)
     }
     return { ok: true, msg: "Esta integración no necesita prueba." }
   } catch (e) {

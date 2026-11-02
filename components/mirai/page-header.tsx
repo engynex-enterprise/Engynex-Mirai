@@ -37,7 +37,7 @@ export function PageHeader({ id, title, description, actions, noHelp, children }
           {(actions || (help && !noHelp)) && (
             <div className="flex flex-wrap items-center gap-2 pt-1 max-sm:w-full max-sm:[&>*]:flex-1">
               {help && !noHelp && (
-                <Button variant="outline" className="bg-white/75 hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" onClick={() => setHelp(id)}>
+                <Button variant="outline" className="bg-white/75 hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" onClick={() => setHelp(id)} title="Abre el Centro de ayuda con el paso a paso de esta pantalla">
                   <CircleHelp /> Cómo funciona
                 </Button>
               )}

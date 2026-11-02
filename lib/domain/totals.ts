@@ -7,7 +7,7 @@ import { isHormiga } from "./hormiga"
 import { inv } from "./investments"
 import { FMES, loanEngine } from "./loans"
 import { conv } from "./money"
-import { pagosMes } from "./reparto"
+import { incomeReparto, pagosMes } from "./reparto"
 import { subsMes } from "./subscriptions"
 import type {
   AssetIn, BookData, CategoryIn, DateInput, ExpenseIn, FixedExpenseIn, IncomeIn, InvestmentIn, LoanIn, Trm,
@@ -19,6 +19,19 @@ export const FREC: Record<string, number> = { mensual: 1, quincenal: 2, semanal:
 /** Ingreso mensual equivalente de todos los ingresos (en COP). */
 export const ingresoMensual = (incomes: IncomeIn[], trm: Trm): number =>
   incomes.reduce((a, x) => a + conv(x.valor, x.currency, trm) * pagosMes(x), 0)
+
+/**
+ * Ingreso del mes antes de descuentos: el bruto de los ingresos con nómina (en quincenas con valores distintos, la suma
+ * de las dos) y el valor de los demás. Junto con `ingresoMensual` (lo que llega) muestra cuánto se va en descuentos.
+ */
+export const ingresoBrutoMensual = (incomes: IncomeIn[], trm: Trm): number =>
+  incomes.reduce((a, x) => {
+    const b = +(x.bruto ?? 0)
+    if (!(b > 0)) return a + conv(x.valor, x.currency, trm) * pagosMes(x)
+    const R = incomeReparto(x)
+    const mes = x.frec === "quincenal" && R.b1 != null && R.b2 != null ? +R.b1 + +R.b2 : b * pagosMes(x)
+    return a + conv(mes, x.currency, trm)
+  }, 0)
 
 /** Dinero disponible: cuentas y efectivo (PUC 11xx) + inversiones de tipo ahorro. */
 export function liquidez(assets: AssetIn[], investments: InvestmentIn[], trm: Trm, today: DateInput): number {

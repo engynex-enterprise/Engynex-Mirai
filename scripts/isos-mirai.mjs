@@ -91,6 +91,71 @@ const NEW = {
       + shade("M104 86C56 86 24 116 24 156C24 180 36 200 56 212L50 240Q48 248 56 244L92 225Q98 226 104 226C152 226 184 196 184 156C184 116 152 86 104 86Z", `${k}-2`)
       + `<path d="M64 156a12 12 0 1 0 24 0a12 12 0 1 0 -24 0ZM92 156a12 12 0 1 0 24 0a12 12 0 1 0 -24 0ZM120 156a12 12 0 1 0 24 0a12 12 0 1 0 -24 0Z" fill="#FFFFFF" />`,
   },
+  // Lista de deseos: corazón rosa con etiqueta de precio amarilla y un destello.
+  deseos: {
+    g: [["rojo", "0.2 0 0.8 1"], ["amarillo"], ["naranja"]],
+    svg: (k) => shade("M128 214C70 176 30 140 30 96C30 64 54 42 84 42C104 42 120 52 128 68C136 52 152 42 172 42C202 42 226 64 226 96C226 140 186 176 128 214Z", `${k}-1`)
+      + `<path d="M84 76Q66 80 62 100" fill="none" stroke="#FFFFFF" stroke-opacity=".75" stroke-width="12" stroke-linecap="round" />`
+      + `<path d="M150 150L186 114H220Q228 114 228 122V156L192 192Q186 198 180 192L150 162Q144 156 150 150Z" fill="url(#${k}-2)" /><path d="M150 150L186 114H220Q228 114 228 122V156L192 192Q186 198 180 192L150 162Q144 156 150 150Z" fill="url(#iso-sh)" />`
+      + `<path d="M204 132a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z" fill="#FFFFFF" />`
+      + `<path d="M206 26l5 13 13 5 -13 5 -5 13 -5 -13 -13 -5 13 -5z" fill="url(#${k}-3)" />`,
+  },
+  // Calculadoras: calculadora azul con pantalla clara y teclas.
+  calculadoras: {
+    g: [["azul", "0.2 0 0.8 1"], ["claro"], ["naranja"], ["cyan"]],
+    svg: (k) => shade("M72 24H184Q206 24 206 46V210Q206 232 184 232H72Q50 232 50 210V46Q50 24 72 24Z", `${k}-1`)
+      + `<path d="M76 50H180Q186 50 186 56V90Q186 96 180 96H76Q70 96 70 90V56Q70 50 76 50Z" fill="url(#${k}-2)" />`
+      + `<path d="M134 74H170" stroke="#2349C9" stroke-opacity=".55" stroke-width="10" stroke-linecap="round" />`
+      + [0, 1, 2].map((r) => [0, 1, 2].map((c) => `<path d="M${74 + c * 40} ${116 + r * 36}h28a6 6 0 0 1 6 6v16a6 6 0 0 1 -6 6h-28a6 6 0 0 1 -6 -6v-16a6 6 0 0 1 6 -6Z" fill="${c === 2 ? `url(#${k}-3)` : "#FFFFFF"}" ${c === 2 ? "" : 'opacity=".9"'} />`).join("")).join(""),
+  },
+  // Automatizaciones: tres nodos conectados (disparador, condición, acción) con un rayo.
+  automatizaciones: {
+    g: [["teal", "0.2 0 0.8 1"], ["morado", "0.2 0 0.8 1"], ["naranja", "0.2 0 0.8 1"], ["amarillo"]],
+    svg: (k) => `<path d="M80 84V128Q80 140 92 140H164Q176 140 176 152V178" fill="none" stroke="#2C3A66" stroke-opacity=".35" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />`
+      + `<path d="M80 140V178" fill="none" stroke="#2C3A66" stroke-opacity=".35" stroke-width="12" stroke-linecap="round" />`
+      + shade("M52 28H108Q124 28 124 44V84Q124 100 108 100H52Q36 100 36 84V44Q36 28 52 28Z", `${k}-1`)
+      + shade("M52 160H108Q124 160 124 176V212Q124 228 108 228H52Q36 228 36 212V176Q36 160 52 160Z", `${k}-2`)
+      + shade("M148 160H204Q220 160 220 176V212Q220 228 204 228H148Q132 228 132 212V176Q132 160 148 160Z", `${k}-3`)
+      + `<path d="M86 40L66 68H82L74 90L98 58H82L90 40Z" fill="url(#${k}-4)" />`
+      + `<path d="M62 194L74 206L98 182" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />`
+      + `<path d="M158 194H194M176 176V212" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" />`
+      + `<path d="M168 30l6 16 16 6 -16 6 -6 16 -6 -16 -16 -6 16 -6z" fill="url(#${k}-4)" />`,
+  },
+  // Academia: birrete morado con borla amarilla.
+  academia: {
+    g: [["morado", "0.2 0 0.8 1"], ["lavanda"], ["amarillo", "0 0 0 1"]],
+    svg: (k) => shade("M74 120V166Q74 196 128 196Q182 196 182 166V120L128 146Z", `${k}-2`)
+      + shade("M128 50L232 98L128 146L24 98Z", `${k}-1`)
+      + `<path d="M128 50L232 98L128 146L24 98Z" fill="#FFFFFF" opacity=".08" />`
+      + `<path d="M128 98L204 116V176" fill="none" stroke="url(#${k}-3)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />`
+      + `<path d="M192 172H216L222 212Q222 220 214 220H194Q186 220 186 212Z" fill="url(#${k}-3)" />`
+      + `<path d="M116 98a12 8 0 1 0 24 0a12 8 0 1 0 -24 0Z" fill="url(#${k}-3)" />`,
+  },
+  // Tu opinión: globo coral con un corazón y estrellas de calificación.
+  opiniones: {
+    g: [["coral", "0.1 0 0.9 1"], ["amarillo"]],
+    svg: (k) => shade("M128 26C74 26 32 60 32 106C32 132 46 154 68 168L60 206Q58 218 70 213L112 188Q120 188 128 188C182 188 224 152 224 106C224 60 182 26 128 26Z", `${k}-1`)
+      + `<path d="M128 146C102 128 84 112 84 92C84 78 94 68 107 68C116 68 124 73 128 81C132 73 140 68 149 68C162 68 172 78 172 92C172 112 154 128 128 146Z" fill="#FFFFFF" />`
+      + [0, 1, 2].map((i) => `<path transform="translate(${150 + i * 30} 210) scale(.9)" d="M0 -14L4 -4L15 -4L6 3L9 14L0 7L-9 14L-6 3L-15 -4L-4 -4Z" fill="url(#${k}-2)" />`).join(""),
+  },
+  // Invita y gana: regalo verde con moño rojo.
+  referidos: {
+    g: [["verde", "0.2 0 0.8 1"], ["menta"], ["rojo", "0.2 0 0.8 1"]],
+    svg: (k) => shade("M48 120H208V212Q208 228 192 228H64Q48 228 48 212Z", `${k}-1`)
+      + shade("M36 88Q36 76 48 76H208Q220 76 220 88V114Q220 124 208 124H48Q36 124 36 114Z", `${k}-2`)
+      + `<path d="M112 76H144V228H112Z" fill="url(#${k}-3)" /><path d="M112 76H144V228H112Z" fill="url(#iso-sh)" />`
+      + `<path d="M128 76C112 46 76 34 70 54C64 74 100 80 128 76Z" fill="url(#${k}-3)" /><path d="M128 76C144 46 180 34 186 54C192 74 156 80 128 76Z" fill="url(#${k}-3)" />`
+      + `<path d="M84 56Q92 64 116 72" fill="none" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="6" stroke-linecap="round" />`,
+  },
+  // Centro de ayuda: salvavidas rojo y blanco.
+  ayuda: {
+    g: [["rojo", "0.2 0 0.8 1"], ["claro"]],
+    svg: (k) => shade("M128 24a104 104 0 1 0 0.01 0Z", `${k}-2`)
+      + `<path d="M128 24A104 104 0 0 1 201.5 54.5L169 87A58 58 0 0 0 128 70Z" fill="url(#${k}-1)" /><path d="M232 128A104 104 0 0 1 201.5 201.5L169 169A58 58 0 0 0 186 128Z" fill="url(#${k}-1)" />`
+      + `<path d="M128 232A104 104 0 0 1 54.5 201.5L87 169A58 58 0 0 0 128 186Z" fill="url(#${k}-1)" /><path d="M24 128A104 104 0 0 1 54.5 54.5L87 87A58 58 0 0 0 70 128Z" fill="url(#${k}-1)" />`
+      + `<path d="M128 24a104 104 0 1 0 0.01 0Z" fill="url(#iso-hl)" /><path d="M128 24a104 104 0 1 0 0.01 0Z" fill="url(#iso-sh)" />`
+      + `<path d="M128 70a58 58 0 1 0 0.01 0Z" fill="#FFFFFF" /><path d="M128 84a44 44 0 1 0 0.01 0Z" fill="#E4ECFA" />`,
+  },
 }
 
 let defs = iso.defs

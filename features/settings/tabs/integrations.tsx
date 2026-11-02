@@ -19,7 +19,7 @@ import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
-import { CATS, INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
+import { CATS, CLIENT_INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
 import { deleteIntegration, listModels, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/actions"
 import { MODEL_LIST } from "@/lib/ai/models"
 import { integrationBrand } from "@/lib/brands"
@@ -108,7 +108,8 @@ function ConfigDialog({ def, cur, onClose }: { def: IntegrationDef; cur?: Pub; o
   )
 }
 
-export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
+/** Proveedores que el hogar puede configurar: solo IA (el resto lo administra Mirai en la consola). */
+export function IntegrationsTab({ only = ["ia"] }: { only?: IntegrationCategory[] }) {
   const { household, plan } = useApp()
   const qc = useQueryClient()
   const isOwner = household.role === "owner"
@@ -118,16 +119,16 @@ export function IntegrationsTab({ only }: { only?: IntegrationCategory[] }) {
   const [testing, setTesting] = useState<string | null>(null)
   const refresh = () => qc.invalidateQueries({ queryKey: ["h", household.id, "integrations"] })
   if (isPending) return <div className="grid gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
-  const cats = (only ?? (Object.keys(CATS) as IntegrationCategory[]))
+  const cats = only.filter((c) => CLIENT_INTEGRATIONS.some((i) => i.cat === c))
 
   return (
     <div className="grid gap-6">
-      {!isOwner && <p className="rounded-lg bg-muted p-3 text-sm">Solo el dueño del hogar puede cambiar las integraciones.</p>}
+      {!isOwner && <p className="rounded-lg bg-muted p-3 text-sm">Solo el dueño del hogar puede cambiar los proveedores de IA.</p>}
       {cats.map((c) => (
         <section key={c} className="grid gap-3">
           <div><h3 className="flex items-center gap-2 font-semibold"><Icon name={CATS[c].icon} className="size-5 text-brand" />{CATS[c].n}</h3><p className="text-sm text-muted-foreground">{CATS[c].d}</p></div>
           <div className="grid gap-3 xl:grid-cols-2">
-            {INTEGRATIONS.filter((i) => i.cat === c && !i.adminOnly).map((def) => {
+            {CLIENT_INTEGRATIONS.filter((i) => i.cat === c).map((def) => {
               const cur = state?.[def.kind]
               const meta = (cur?.meta ?? {}) as { lastOk?: boolean; lastMsg?: string }
               const g = globals?.[def.kind]

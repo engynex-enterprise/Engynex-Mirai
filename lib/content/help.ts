@@ -8,8 +8,8 @@ export const HELP: Record<string, HelpEntry> = {
   ...(HELP_RAW as Record<string, HelpEntry>),
   opiniones: {
     t: "Tu opinión", i: "Aquí nos cuentas qué piensas de Mirai y ves qué pasó con lo que nos enviaste.",
-    p: ["Toca <b>Enviar una opinión</b> y elige el tema: calificar, algo que no funciona, una función que quieres, una sugerencia o una duda.", "Si es un error, adjunta una captura de pantalla: nos ayuda a encontrarlo más rápido.", "Cada opinión muestra su estado (<b>Recibido</b>, <b>En revisión</b>, <b>Planeado</b>, <b>Listo</b>) y nuestra respuesta. Te llega un aviso cuando respondemos."],
-    tips: ["Nunca enviamos tus montos ni tus datos financieros: solo lo que escribes, la página donde estabas y tu tipo de pantalla."],
+    p: ["Toca <b>Enviar una opinión</b> y elige el tema: calificar, algo que no funciona, una función que quieres, una sugerencia, un elogio o una duda.", "Si es un error, adjunta una captura de pantalla: nos ayuda a encontrarlo más rápido. Puedes decidir si incluimos la página donde estás.", "Cada opinión muestra su estado (<b>Recibido</b>, <b>En revisión</b>, <b>Planeado</b>, <b>Listo</b>) y nuestra respuesta. Te llega un aviso cuando respondemos.", "Si necesitas ayuda con algo puntual, abre un caso en <b>Centro de ayuda › Contactar soporte</b>: aparece aquí con su número."],
+    tips: ["Nunca enviamos tus montos ni tus datos financieros: solo lo que escribes, la página donde estabas (si la incluyes) y tu tipo de pantalla."],
   },
   deseos: {
     t: "Lista de deseos", i: "Antes de comprar algo que no necesitas ya, anótalo y espera unos días.",
@@ -33,9 +33,24 @@ export const HELP: Record<string, HelpEntry> = {
     p: ["<b>Gratis</b>: gastos, ingresos, quincena, presupuesto, préstamos, metas, avisos y más, con anuncios.", "<b>Premium</b>: inteligencia artificial, automatización con tu banco, impuestos y contador, y toda la familia con varios libros. Sin anuncios.", "Paga con tarjeta (se renueva sola y la cancelas cuando quieras) o con Nequi, PSE o Bancolombia por un mes o un año."],
     tips: ["El plan es del hogar: si el dueño paga, todos los integrantes tienen Premium.", "Si vuelves a Gratis no se borra nada."],
   },
+  automatizaciones: {
+    t: "Automatizaciones", i: "Pon a Mirai a trabajar por ti: cuando pase algo con tu plata, Mirai hace lo que le digas, solo.",
+    p: [
+      "Cada automatización es un <b>diagrama</b> que se lee de arriba hacia abajo: un <b>disparador</b> (lo que la pone a andar), <b>condiciones</b> (preguntas con dos caminos: Sí o No) y <b>acciones</b> (lo que Mirai hace).",
+      "Empieza con una <b>plantilla</b> o con las que ya te dejamos listas. Toca una para abrir el editor, arrastra pasos desde la izquierda y únelos con líneas.",
+      "Toca un paso para cambiar sus datos a la derecha. En los textos puedes usar variables como <b>{monto}</b> o <b>{descripcion}</b>.",
+      "Toca <b>Probar</b> para ver el recorrido con tus datos reales sin cambiar nada. Cuando todo esté bien, actívala con el interruptor.",
+      "En <b>Historial</b> ves cada vez que corrió, qué hizo y si algo falló.",
+    ],
+    tips: [
+      "Las que crean movimientos o apartan plata empiezan pausadas: revísalas antes de activarlas.",
+      "Con el plan Gratis puedes tener 3 automatizaciones activas a la vez; con Premium, todas las que quieras y el paso de consejo con IA.",
+      "Una automatización nunca se dispara con los gastos que ella misma crea: así no se forman bucles.",
+    ],
+  },
   admin: {
     t: "Panel de administración", i: "Solo lo ves tú como dueño de Mirai: cómo va la plataforma y qué opinan las personas.",
-    p: ["<b>Resumen</b>: personas registradas, activas, hogares, uso por día y lo más usado.", "<b>Clientes</b>: cada cuenta con su hogar, plan, último ingreso y actividad; descárgalo en CSV.", "<b>Opiniones</b>: calificaciones, errores e ideas. Cambia el estado y responde; la persona recibe un aviso."],
+    p: ["<b>Resumen</b>: personas registradas, activas, hogares, uso por día y lo más usado.", "<b>Clientes</b>: cada cuenta con su hogar, plan, último ingreso y actividad; descárgalo en CSV.", "<b>Opiniones</b>: calificaciones, errores, ideas, elogios y casos de soporte. Cambia el estado y responde; la persona recibe un aviso."],
   },
 }
 

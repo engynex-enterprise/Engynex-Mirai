@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { USE_PLATFORM, resolveIntegration } from "./resolve"
+import { USE_PLATFORM, resolveIntegration, resolvePlatformOnly } from "./resolve"
 
 const own = (enabled: boolean, config: Record<string, unknown> = {}) => ({ enabled, config })
 const g = (modo: "apagada" | "opcional" | "por_defecto" | "obligatoria", planes: string[] = []) => ({ modo, planes })
@@ -28,5 +28,21 @@ describe("integración efectiva hogar + plataforma", () => {
   })
   it("apagada: se ignora", () => {
     expect(resolveIntegration({ own: own(true), global: g("apagada"), plan: "gratis" })?.source).toBe("hogar")
+  })
+})
+
+describe("integraciones que solo administra Mirai", () => {
+  it("activa: la de la plataforma, solo en los planes elegidos", () => {
+    expect(resolvePlatformOnly({ global: g("obligatoria"), plan: "gratis" })?.source).toBe("plataforma")
+    expect(resolvePlatformOnly({ global: g("por_defecto", ["premium"]), plan: "gratis" })).toBeNull()
+    expect(resolvePlatformOnly({ global: g("opcional", ["premium"]), plan: "premium" })?.source).toBe("plataforma")
+  })
+  it("apagada por el administrador: no se usa, aunque haya variable de entorno", () => {
+    expect(resolvePlatformOnly({ global: g("apagada"), plan: "gratis", envReady: true, keyless: true })).toBeNull()
+  })
+  it("sin configurar: variable de entorno o servicio sin claves", () => {
+    expect(resolvePlatformOnly({ global: null, plan: "gratis", envReady: true })?.source).toBe("env")
+    expect(resolvePlatformOnly({ global: null, plan: "gratis", keyless: true })?.source).toBe("plataforma")
+    expect(resolvePlatformOnly({ global: null, plan: "gratis" })).toBeNull()
   })
 })

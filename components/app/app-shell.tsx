@@ -27,6 +27,7 @@ import { ChatWidget } from "@/features/chat/chat-widget"
 import { Tour } from "./tour"
 import { GamiCheck } from "@/features/gami/gami-check"
 import { NotifPopups } from "@/features/notify/popups"
+import { AutomationRunner } from "@/features/automations/runner"
 
 export function AppShell({ ctx, sidebarOpen, children }: { ctx: AppContext; sidebarOpen: boolean; children: React.ReactNode }) {
   return (
@@ -72,15 +73,16 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <ChatWidget />
       <GamiCheck />
       <NotifPopups />
+      <AutomationRunner />
       <Suspense fallback={null}><Tour /></Suspense>
     </>
   )
 }
 
 
-/** Atajos: Ctrl/⌘ K buscar · N agregar (Ctrl/⌘ B lo maneja el sidebar). */
+/** Atajos: Ctrl/⌘ K buscar · N agregar · ? Centro de ayuda (Ctrl/⌘ B lo maneja el sidebar). Lista en lib/content/centro-ayuda.ts (ATAJOS). */
 function useShortcuts() {
-  const { setSearch, setAdd } = useShell.getState()
+  const { setSearch, setAdd, setHelp } = useShell.getState()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
@@ -91,9 +93,12 @@ function useShortcuts() {
       } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "n" && !document.querySelector("[role=dialog]")) {
         e.preventDefault()
         setAdd(true)
+      } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === "?" && !document.querySelector("[role=dialog]")) {
+        e.preventDefault()
+        setHelp("@")
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [setSearch, setAdd])
+  }, [setSearch, setAdd, setHelp])
 }

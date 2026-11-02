@@ -6,6 +6,8 @@ import { requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { getIntegration } from "@/features/integrations/store"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@/lib/notify/email"
+import { logSend } from "@/lib/notify/log"
+import { maskDest } from "@/lib/notify/rules"
 import { loadRentaData, type RentaData } from "@/features/renta/data"
 import { siteUrl } from "@/lib/site-url"
 import { can } from "@/lib/plans"
@@ -23,7 +25,11 @@ async function mail(householdId: string, to: string, owner: string, url: string)
   for (const k of EMAIL_KINDS) {
     const v = await getIntegration(householdId, k)
     if (!v?.enabled) continue
-    await sendEmail(v, { to, subject: `${owner} te dio acceso a su información en Mirai`, html: brandEmail("Tienes acceso de solo lectura", `<p>${owner} te compartió su información para la declaración de renta en Mirai.</p><p style="margin-top:20px"><a href="${url}" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Abrir la información</a></p><p style="color:#616161;font-size:13px">El enlace es personal. No lo reenvíes.</p>`) })
+    const log = { household_id: householdId, channel: "email", kind: "contador", provider: k, source: v.source ?? null, destino: maskDest("email", to) } as const
+    try {
+    const ref = await sendEmail(v, { to, subject: `${owner} te dio acceso a su información en Mirai`, html: brandEmail("Tienes acceso de solo lectura", `<p>${owner} te compartió su información para la declaración de renta en Mirai.</p><p style="margin-top:20px"><a href="${url}" style="background:#1F2B4B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Abrir la información</a></p><p style="color:#616161;font-size:13px">El enlace es personal. No lo reenvíes.</p>`) })
+    await logSend({ ...log, status: "enviado", ref })
+    } catch (e) { await logSend({ ...log, status: "fallido", error: (e as Error).message }); throw e }
     return true
   }
   return false
