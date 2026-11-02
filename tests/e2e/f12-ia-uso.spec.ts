@@ -22,11 +22,13 @@ test("uso de IA: créditos del mes, ahorro, por función y aviso del 80 %", asyn
   const { userId, householdId } = await qaIds()
   await admin().from("ai_usage").delete().eq("household_id", householdId)
   const base = { household_id: householdId, user_id: userId, plan: "premium", provider: "ai_gateway", model: "google/gemini-2.5-flash", de_plataforma: true }
-  await admin().from("ai_usage").insert([
+  // defaultToNull: false → las columnas que no trae una fila usan su valor por defecto (si no, llegan NULL y el insert falla).
+  const { error: insErr } = await admin().from("ai_usage").insert([
     { ...base, feature: "chat", fuente: "ia", input_tokens: 2000, output_tokens: 300, costo_usd: 0.0014, creditos: 1.4, duracion_ms: 2100 },
     { ...base, feature: "categorizar", fuente: "algoritmo", provider: null, model: null, tokens_evitados: 600 },
     { ...base, feature: "categorizar", fuente: "cache", provider: null, model: null, tokens_evitados: 500 },
-  ])
+  ], { defaultToNull: false })
+  expect(insErr?.message ?? null).toBeNull()
 
   await page.goto("/ajustes?tab=usoia")
   await expect(page.getByRole("heading", { name: "Créditos de IA de este mes" })).toBeVisible({ timeout: 30_000 })

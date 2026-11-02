@@ -20,12 +20,15 @@ type Tile = { id: string; icon: string; title: string; sub: string; route?: Help
 
 /** Portada del Centro de ayuda: buscador global, ayuda de la página actual y accesos rápidos. */
 export function HelpHome() {
-  const { go, close } = useHelpNav()
+  const { go, close, query, setQuery } = useHelpNav()
   const path = usePathname()
   const router = useRouter()
   const { user } = useApp()
   const { noLeidas, academia, ready } = useAyuda()
-  const [q, setQ] = useState("")
+  // Dentro del panel la búsqueda queda guardada en el panel (se conserva al abrir un resultado y volver con Atrás).
+  const [local, setLocal] = useState("")
+  const q = query ?? local
+  const setQ = setQuery ?? setLocal
   const dq = useDeferredValue(q)
   const index = useMemo(() => buildHelpIndex(), [])
   const groups = useMemo(() => groupHits(searchHelp(index, dq, { limit: 40 })), [index, dq])

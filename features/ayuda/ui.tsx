@@ -13,7 +13,11 @@ import { cn } from "@/lib/utils"
 
 // ───────────────────────────── Navegación ─────────────────────────────
 
-type HelpNav = { inPanel: boolean; go: (r: HelpRoute) => void; close: () => void }
+type HelpNav = {
+  inPanel: boolean; go: (r: HelpRoute) => void; close: () => void
+  /** Texto del buscador de la portada: vive en el panel para que se conserve al volver con Atrás. */
+  query?: string; setQuery?: (q: string) => void
+}
 const NavCtx = createContext<HelpNav | null>(null)
 export const HelpNavProvider = NavCtx.Provider
 

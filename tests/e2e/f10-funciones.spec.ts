@@ -44,7 +44,8 @@ test("calculadoras, lista de deseos, academia y patrimonio", async ({ page }, in
   await page.getByRole("dialog").getByRole("radio", { name: "$400.000" }).click()
   await expect(page.getByText(/¡Correcto!/)).toBeVisible()
   await page.getByRole("dialog").getByRole("button", { name: /^(Terminar lección|Listo)$/ }).click()
-  await expect(page.getByText(/1 de 8 lecciones/)).toBeVisible()
+  await expect(page.getByText(/\d+ de \d+ lecciones/)).toBeVisible()
+  await expect(page.getByRole("button", { name: /Completada El presupuesto 50\/30\/20/ })).toBeVisible()
   await shot(page, "academia", info.project.name)
 
   await page.goto("/balance")

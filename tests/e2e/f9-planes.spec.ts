@@ -174,7 +174,7 @@ test("consola: correo, WhatsApp y datos solo los configura el administrador", as
 
     // El hogar ya no ve correo, WhatsApp, Telegram ni datos: solo la IA.
     await page.goto("/ajustes?tab=ia")
-    await expect(page.getByText("Google Gemini")).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText("Google Gemini").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText("WhatsApp Cloud API")).toHaveCount(0)
     await expect(page.getByText("Festivos de Colombia")).toHaveCount(0)
     await expect(page.getByRole("switch", { name: "Activar Telegram" })).toHaveCount(0)
@@ -209,7 +209,7 @@ test("consola: Google AdSense se configura en integraciones globales y publica a
     await page.getByRole("radio", { name: "Ajustes" }).click()
     await expect(page.getByText(/Activo \(ca-pub-1234567890123456\)/)).toBeVisible({ timeout: 30_000 })
     await page.goto("/ajustes?tab=ia")
-    await expect(page.getByText("Google Gemini")).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText("Google Gemini").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText("Google AdSense")).toHaveCount(0)
   } finally {
     await restore()

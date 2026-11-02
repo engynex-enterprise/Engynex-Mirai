@@ -54,7 +54,8 @@ export function HelpPanel({ initial, onClose }: { initial: string; onClose: () =
   const route = stack[stack.length - 1]
   const go = useCallback((r: HelpRoute) => setStack((s) => (helpKey(s[s.length - 1]) === helpKey(r) ? s : [...s, r])), [])
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s))
-  const nav = useMemo(() => ({ inPanel: true, go, close: onClose }), [go, onClose])
+  const [query, setQuery] = useState("")
+  const nav = useMemo(() => ({ inPanel: true, go, close: onClose, query, setQuery }), [go, onClose, query])
   const scroller = useRef<HTMLDivElement>(null)
   const depth = stack.length
   useEffect(() => { scroller.current?.scrollTo({ top: 0 }) }, [depth])
