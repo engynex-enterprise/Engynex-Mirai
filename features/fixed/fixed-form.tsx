@@ -20,8 +20,8 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
-import { FFREC, FSTEP, fijoPeriods, fijoProxIso, localCat, type FixedExpenseIn } from "@/lib/domain"
-import { fmtDate, todayISO } from "@/lib/format"
+import { FFREC, FSTEP, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
+import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { categoryOptions, methodOptions, useCategories, useKeywordRules, usePaymentMethods } from "@/features/catalogs/hooks"
 import { useList, invalidateBook } from "@/hooks/use-book-data"
@@ -42,6 +42,7 @@ const schema = z.object({
   proveedor: z.string(),
   yaPagoQ: z.enum(["no", "q1", "q2", "ambas"]), yaPagoM: z.enum(["no", "si"]),
   fpag: z.string(), vpag: z.number(),
+  repQ: z.enum(["igual", "distinto"]), q1: z.number(), q2: z.number(),
 })
 type Values = z.infer<typeof schema>
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; fixed?: FixedRow | null }
@@ -79,6 +80,7 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
       diaQ1: fixed?.frec === "quincenal" ? Math.min(15, fixed.dia) : 15, dia2: fixed?.dia2 ?? 30,
       fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? "",
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
+      repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
     },
   })
   const { errors, isSubmitting } = form.formState
@@ -92,8 +94,12 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
       if (!vmin && !vmax) return toast.error("Escribe el valor mínimo y máximo que sueles pagar")
       vmin ||= vmax; vmax ||= vmin
       if (vmin > vmax) [vmin, vmax] = [vmax, vmin]
-    } else if (!v.valor) return toast.error("Escribe el valor")
-    const valor = rg ? Math.round((vmin + vmax) / 2) : v.valor
+    }
+    // Quincenal con un valor distinto en cada quincena: `valor` guarda el promedio (el total del mes no cambia).
+    const dist = !rg && v.frec === "quincenal" && v.repQ === "distinto"
+    if (dist ? !v.q1 && !v.q2 : !rg && !v.valor) return toast.error(dist ? "Escribe el valor de al menos una quincena" : "Escribe el valor")
+    const valor = rg ? Math.round((vmin + vmax) / 2) : dist ? Math.round((v.q1 + v.q2) / 2) : v.valor
+    const reparto = dist ? { modo: "distinto", q1: v.q1, q2: v.q2 } : null
     const prox = new Date(v.prox + "T12:00:00")
     const o = {
       nombre: v.nombre.trim(), category_id: v.category_id ?? cats.find((c) => c.nombre === "Otros")?.id ?? null, valor,
@@ -101,7 +107,7 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
       dia: v.frec === "quincenal" ? Math.min(15, Math.max(1, Math.round(v.diaQ1 || 15))) : step ? prox.getDate() : 1,
       dia2: v.frec === "quincenal" ? Math.min(31, Math.max(16, Math.round(v.dia2 || 30))) : null,
       mes: step ? prox.getMonth() + 1 : null, fecha_unica: v.frec === "unico" ? v.fecha : null,
-      payment_method_id: v.medio, proveedor: v.proveedor.trim(),
+      payment_method_id: v.medio, proveedor: v.proveedor.trim(), reparto,
     }
     const desde = step && v.prox ? v.prox.slice(0, 7) : today.slice(0, 7)
     const inicio = step && v.prox ? v.prox : today
@@ -122,7 +128,7 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
         : v.yaPagoM === "si" ? [{ per: `prev-${v.fpag.slice(0, 7)}`, due: v.fpag }] : []
       for (const p of toPay) {
         const suf = p.per.endsWith("Q1") ? " (1ª quincena)" : p.per.endsWith("Q2") ? " (2ª quincena)" : ""
-        await sb.rpc("pay_fixed_expense", { p_fixed: nf.id, p_periodo: p.per, p_fecha: v.frec === "quincenal" ? p.due : v.fpag, p_valor: v.vpag || valor, p_medio: v.medio ?? undefined, p_desc_suffix: suf })
+        await sb.rpc("pay_fixed_expense", { p_fixed: nf.id, p_periodo: p.per, p_fecha: v.frec === "quincenal" ? p.due : v.fpag, p_valor: v.vpag || fijoValor({ frec: v.frec, valor, reparto }, p.per), p_medio: v.medio ?? undefined, p_desc_suffix: suf })
       }
       const st = fijoProxIso({ ...nf, valor: Number(nf.valor), payments: toPay.map((p) => ({ periodo: p.per, fecha: v.fpag, valor })) } as never, today)
       toast.success(`${o.nombre} guardado`, {
@@ -155,8 +161,20 @@ function FixedFormBody({ onOpenChange, fixed, formId }: Props & { formId: string
               <Segmented value={field.value} onChange={field.onChange} items={[{ value: "fijo", label: "Siempre es igual" }, { value: "rango", label: "Varía según consumo", icon: "activity" }]} />
             )} />
           </FormField>
-          {w.tipoValor === "fijo" ? (
-            <FormField label="Valor" htmlFor="f-valor" required>
+          {w.tipoValor === "fijo" && w.frec === "quincenal" && (
+            <FormField label="¿Pagas lo mismo en las dos quincenas?" hint={w.repQ === "distinto" ? "Por ejemplo, el arriendo partido: una parte en la 1ª quincena y el resto en la 2ª." : undefined}>
+              <Controller control={form.control} name="repQ" render={({ field }) => (
+                <Segmented value={field.value} onChange={field.onChange} items={[{ value: "igual", label: "Sí, lo mismo" }, { value: "distinto", label: "No, cambia", icon: "split" }]} />
+              )} />
+            </FormField>
+          )}
+          {w.tipoValor === "fijo" && w.frec === "quincenal" && w.repQ === "distinto" ? (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <FormField label="1ª quincena" htmlFor="f-q1"><Controller control={form.control} name="q1" render={({ field }) => <MoneyInput id="f-q1" value={field.value} onChange={field.onChange} />} /></FormField>
+              <FormField label="2ª quincena" htmlFor="f-q2" hint={w.q1 || w.q2 ? `Al mes: ${fmtMoney((w.q1 || 0) + (w.q2 || 0))}` : undefined}><Controller control={form.control} name="q2" render={({ field }) => <MoneyInput id="f-q2" value={field.value} onChange={field.onChange} />} /></FormField>
+            </div>
+          ) : w.tipoValor === "fijo" ? (
+            <FormField label={w.frec === "quincenal" ? "Valor de cada quincena" : "Valor"} htmlFor="f-valor" required>
               <Controller control={form.control} name="valor" render={({ field }) => <MoneyInput id="f-valor" value={field.value} onChange={field.onChange} />} />
             </FormField>
           ) : (

@@ -3,6 +3,7 @@
 import { days, fdate, iso, mkey, parseDate, proxDia, relTime, toDay } from "./dates"
 import { tarjetaPagoMes } from "./cards"
 import { fijoStatus } from "./fixed"
+import { fijoValor } from "./reparto"
 import { inv } from "./investments"
 import { loanEngine, loanName } from "./loans"
 import { conv, formatCOP as $, pct } from "./money"
@@ -40,8 +41,8 @@ export function agenda(b: BookData, today: DateInput): AgendaItem[] {
   for (const f of b.fixedExpenses) {
     const st = fijoStatus(f, t)
     const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: +f.valor, dir: "pagar" as const, go: "fijos" }
-    st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due }))
-    if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due })
+    st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due, monto: fijoValor(f, p.per) }))
+    if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due, monto: fijoValor(f, st.prox.per) })
   }
   for (const L of b.loans.filter((L) => L.kind === "pagar")) {
     const e = loanEngine(L, t)

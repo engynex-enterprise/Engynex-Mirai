@@ -785,14 +785,14 @@ isOneToOne: false
                   ]
                 },"fixed_expenses": {
                   Row: {
-                    "book_id": string,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"desde": string,"dia": number,"dia2": number | null,"fecha_unica": string | null,"frec": string,"id": string,"inicio": string | null,"link_id": string | null,"link_type": string | null,"logo_path": string | null,"mes": number | null,"nombre": string,"payment_method_id": string | null,"proveedor": string,"updated_at": string,"valor": number,"variable": boolean,"vmax": number | null,"vmin": number | null
+                    "book_id": string,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"desde": string,"dia": number,"dia2": number | null,"fecha_unica": string | null,"frec": string,"id": string,"inicio": string | null,"link_id": string | null,"link_type": string | null,"logo_path": string | null,"mes": number | null,"nombre": string,"payment_method_id": string | null,"proveedor": string,"reparto": Json | null,"updated_at": string,"valor": number,"variable": boolean,"vmax": number | null,"vmin": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"mes"?: number | null,"nombre": string,"payment_method_id"?: string | null,"proveedor"?: string,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
+                    "book_id": string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"mes"?: number | null,"nombre": string,"payment_method_id"?: string | null,"proveedor"?: string,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
                   }
                   Update: {
-                    "book_id"?: string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"mes"?: number | null,"nombre"?: string,"payment_method_id"?: string | null,"proveedor"?: string,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
+                    "book_id"?: string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"mes"?: number | null,"nombre"?: string,"payment_method_id"?: string | null,"proveedor"?: string,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
                   }
                   Relationships: [
                     {
@@ -1051,14 +1051,14 @@ isOneToOne: false
                   ]
                 },"incomes": {
                   Row: {
-                    "activo": boolean,"book_id": string,"bruto": number | null,"category_id": string | null,"concepto": string,"created_at": string,"created_by": string | null,"currency": string,"deducciones": Json | null,"deleted_at": string | null,"dia": number,"frec": string,"id": string,"member_id": string | null,"updated_at": string,"valor": number
+                    "activo": boolean,"book_id": string,"bruto": number | null,"category_id": string | null,"concepto": string,"created_at": string,"created_by": string | null,"currency": string,"deducciones": Json | null,"deleted_at": string | null,"dia": number,"frec": string,"id": string,"member_id": string | null,"reparto": Json | null,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "activo"?: boolean,"book_id": string,"bruto"?: number | null,"category_id"?: string | null,"concepto": string,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducciones"?: Json | null,"deleted_at"?: string | null,"dia"?: number,"frec"?: string,"id"?: string,"member_id"?: string | null,"updated_at"?: string,"valor"?: number
+                    "activo"?: boolean,"book_id": string,"bruto"?: number | null,"category_id"?: string | null,"concepto": string,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducciones"?: Json | null,"deleted_at"?: string | null,"dia"?: number,"frec"?: string,"id"?: string,"member_id"?: string | null,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "activo"?: boolean,"book_id"?: string,"bruto"?: number | null,"category_id"?: string | null,"concepto"?: string,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducciones"?: Json | null,"deleted_at"?: string | null,"dia"?: number,"frec"?: string,"id"?: string,"member_id"?: string | null,"updated_at"?: string,"valor"?: number
+                    "activo"?: boolean,"book_id"?: string,"bruto"?: number | null,"category_id"?: string | null,"concepto"?: string,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducciones"?: Json | null,"deleted_at"?: string | null,"dia"?: number,"frec"?: string,"id"?: string,"member_id"?: string | null,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {

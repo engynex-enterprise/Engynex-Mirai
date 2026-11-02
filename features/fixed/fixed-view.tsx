@@ -17,7 +17,7 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useSoftDelete } from "@/hooks/use-book-data"
 import { useIdParam, useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { FFREC, fijoStatus, fijosMes, relTime, toDay, type FixedExpenseIn } from "@/lib/domain"
+import { FFREC, fijoStatus, fijoValor, fijosMes, fixedReparto, relTime, toDay, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import { useBookData } from "@/features/book/use-book-data"
 import { useCategories, usePaymentMethods } from "@/features/catalogs/hooks"
@@ -45,7 +45,7 @@ export function FixedView() {
   const rows = useMemo(() => fixed.map((f) => ({ f, st: fijoStatus(f as unknown as FixedExpenseIn, today) })), [fixed, today])
   const mes = today.slice(0, 7)
   const k = useMemo(() => {
-    const pend = rows.flatMap(({ f, st }) => st.periods.filter((p) => !p.pago && p.due.startsWith(mes)).map(() => Number(f.valor))).reduce((a, b) => a + b, 0)
+    const pend = rows.flatMap(({ f, st }) => st.periods.filter((p) => !p.pago && p.due.startsWith(mes)).map((p) => fijoValor(f, p.per))).reduce((a, b) => a + b, 0)
     const pagado = rows.flatMap(({ f }) => f.payments.filter((p) => p.fecha.startsWith(mes))).reduce((a, p) => a + Number(p.valor), 0)
     const venc = rows.reduce((a, { st }) => a + st.venc.length, 0)
     return { total: fijosMes(fixed as unknown as FixedExpenseIn[]), pend, pagado, venc }
@@ -88,7 +88,9 @@ export function FixedView() {
                   <ListRow key={f.id} icon={cat?.icon ?? "house"} iconClassName={st.venc.length ? "bg-danger-soft text-danger" : undefined}
                     title={f.nombre} badges={<>{f.variable && <StatusPill tone="info">varía según consumo</StatusPill>}{f.link_type && <StatusPill tone="estimado">aporte</StatusPill>}{pill}</>}
                     subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor].filter(Boolean).join(" · ")}
-                    value={f.variable && f.vmin ? <span className="grid text-right"><span className="font-bold"><Money value={Number(f.vmin)} short /> – <Money value={Number(f.vmax)} short /></span><span className="text-xs text-muted-foreground">promedio <Money value={Number(f.valor)} /></span></span> : <Money value={Number(f.valor)} className="font-bold" />}
+                    value={f.variable && f.vmin ? <span className="grid text-right"><span className="font-bold"><Money value={Number(f.vmin)} short /> – <Money value={Number(f.vmax)} short /></span><span className="text-xs text-muted-foreground">promedio <Money value={Number(f.valor)} /></span></span> : fixedReparto(f).modo === "distinto" && f.frec === "quincenal"
+                      ? <span className="grid text-right"><Money value={next ? fijoValor(f, next.per) : Number(f.valor)} className="font-bold" /><span className="text-xs text-muted-foreground"><Money value={fijoValor(f, "Q1")} short /> + <Money value={fijoValor(f, "Q2")} short /> al mes</span></span>
+                      : <Money value={Number(f.valor)} className="font-bold" />}
                     onClick={canEdit ? () => setEditing(f) : undefined}
                     actions={canEdit ? [
                       ...(next ? [{ label: `Pagar ${f.nombre}`, icon: "circle-check", onClick: () => setPaying(f), className: st.venc.length ? "text-danger" : "text-success" }] : []),

@@ -15,7 +15,7 @@ import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
-import { fijoStatus, type FixedExpenseIn } from "@/lib/domain"
+import { fijoStatus, fijoValor, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { methodOptions, usePaymentMethods } from "@/features/catalogs/hooks"
 import type { FixedRow } from "./fixed-form"
@@ -39,7 +39,9 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
   const st = fijoStatus({ ...fixed, valor: Number(fixed.valor), payments: fixed.payments.map((p) => ({ ...p, valor: Number(p.valor) })) } as FixedExpenseIn, today)
   const opts = [...st.venc, ...(st.prox ? [st.prox] : [])]
   const [per, setPer] = useState(opts[0]?.per ?? "")
-  const [valor, setValor] = useState(fixed.variable ? 0 : Number(fixed.valor))
+  const [valor, setValor] = useState(fixed.variable ? 0 : fijoValor(fixed, opts[0]?.per ?? ""))
+  // Con un valor distinto por quincena, el valor sugerido cambia con el periodo.
+  const pickPer = (p: string) => { setPer(p); if (!fixed.variable) setValor(fijoValor(fixed, p)) }
   const [fecha, setFecha] = useState(today)
   const [medio, setMedio] = useState<string | null>(fixed.payment_method_id ?? methods[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
@@ -67,7 +69,7 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
   return (
     <FieldGroup className="pb-2">
       <FormField label="¿Qué periodo pagas?" tip={false}>
-        <ChoiceCards value={per} onChange={setPer} cols={2} items={opts.map((p) => ({
+        <ChoiceCards value={per} onChange={pickPer} cols={2} items={opts.map((p) => ({
           value: p.per, label: `${qLabel(p.per) ? qLabel(p.per) + " · " : ""}${fmtDate(p.due)}`, desc: p.due < today ? "Vencido" : "Pendiente", icon: p.due < today ? "circle-alert" : "calendar-clock",
         }))} />
       </FormField>

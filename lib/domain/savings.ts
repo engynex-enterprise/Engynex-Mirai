@@ -1,5 +1,6 @@
 // Fondo de emergencia, aportes programados y metas (equivalente a j_loans.js y c2_views.js de la v4).
 import { toDay } from "./dates"
+import { incomeReparto } from "./reparto"
 import type { DateInput, ExpenseIn, GoalIn, IncomeCategoryIn, IncomeIn } from "./types"
 
 export interface PayDays {
@@ -19,11 +20,14 @@ export function payDays(incomes: IncomeIn[], incomeCategories: IncomeCategoryIn[
   const sal = incomes.find((i) => i.frec === "quincenal") || incomes.find((i) => /salario|sueldo|n[oó]mina/i.test(i.concepto + " " + catName(i.category_id))) || incomes[0]
   if (!sal) return { frec: "mensual", dia: 30, dia2: 30, txt: "" }
   const q = sal.frec === "quincenal"
+  // Días propios de la quincena (reparto) o, como en la v4, 15 y 30.
+  const R = incomeReparto(sal)
+  const d1 = q && R.d1 ? Math.min(15, Math.max(1, R.d1)) : 15, d2 = q && R.d2 ? Math.min(31, Math.max(16, R.d2)) : 30
   return {
     frec: q ? "quincenal" : "mensual",
-    dia: q ? 15 : sal.dia || 30,
-    dia2: 30,
-    txt: q ? "cada quincena (15 y 30), cuando te pagan" : `cada mes el día ${sal.dia || 30}, cuando te pagan`,
+    dia: q ? d1 : sal.dia || 30,
+    dia2: d2,
+    txt: q ? `cada quincena (${d1} y ${d2}), cuando te pagan` : `cada mes el día ${sal.dia || 30}, cuando te pagan`,
   }
 }
 

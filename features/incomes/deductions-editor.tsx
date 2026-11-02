@@ -32,8 +32,10 @@ function Toggle({ label, tip, checked, onChange, children }: { label: string; ti
 }
 
 /** Formulario de descuentos (dedForm de la v4) + vista previa en vivo del neto. */
-export function DeductionsEditor({ value, onChange, bruto, frec, smmlv, uvt }: {
+export function DeductionsEditor({ value, onChange, bruto, frec, smmlv, uvt, resumen }: {
   value: Deducciones; onChange: (d: Deducciones) => void; bruto: number; frec: string; smmlv: number; uvt: number
+  /** Reemplaza "Lo que te llega…" (p. ej. lo de cada quincena cuando los descuentos no van mitad y mitad). */
+  resumen?: React.ReactNode
 }) {
   const D = value
   const set = (p: Partial<Deducciones>) => onChange({ ...D, ...p })
@@ -106,12 +108,14 @@ export function DeductionsEditor({ value, onChange, bruto, frec, smmlv, uvt }: {
       </FormField>
 
       <div className="grid gap-3 rounded-lg border-l-4 border-lime bg-brand-soft p-4" aria-live="polite">
-        <p className="text-sm">Lo que te llega a la cuenta {PER[frec] ?? "al mes"}</p>
-        <Money value={r.neto} className="text-[22px] font-extrabold" />
+        {resumen ?? (<>
+          <p className="text-sm">Lo que te llega a la cuenta {PER[frec] ?? "al mes"}</p>
+          <Money value={r.neto} className="text-[22px] font-extrabold" />
+        </>)}
         {bruto > 0 && (
           <table className="w-full text-sm">
             <tbody>
-              <tr><td className="py-1">Valor bruto</td><td className="py-1 text-right"><Money value={bruto} /></td></tr>
+              <tr><td className="py-1">Valor bruto {PER[frec] ?? ""}</td><td className="py-1 text-right"><Money value={bruto} /></td></tr>
               {r.items.map((x) => (
                 <tr key={x.n} className="border-t border-black/5 dark:border-white/10">
                   <td className="py-1">− {x.n} <span className="text-xs text-muted-foreground">({x.h})</span></td>

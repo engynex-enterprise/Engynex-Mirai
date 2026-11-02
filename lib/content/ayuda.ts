@@ -73,6 +73,8 @@ const V54: Release = {
     ["new", "Invita y gana", "Comparte tu enlace: cuando alguien se registra y crea su hogar, los dos ganan días de Mirai Premium."],
     ["imp", "Bienvenida y migas de pan", "Una bienvenida al entrar por primera vez y, arriba de cada sección, el camino para volver atrás."],
     ["imp", "Menús más cómodos", "Los menús de opciones ya no parten el texto en varias líneas."],
+    ["new", "Ingresos y gastos por quincena", "Si te pagan por quincena puedes poner un valor distinto en cada una, escoger los días de pago y decir en cuál te descuentan salud, pensión y retención (por ejemplo, la 1ª completa y todo el descuento en la 2ª). Los gastos fijos quincenales también pueden tener un valor distinto en cada quincena."],
+    ["imp", "Pagos semanales y anuales", "Escoge el día de la semana en que te pagan y el mes de un ingreso anual (como una prima o un bono de fin de año)."],
     ["imp", "Anuncios con límite", "En el plan gratis cada anuncio sale pocas veces al día y puedes cerrar la barra de arriba. Con Premium no ves ninguno."],
   ],
 }

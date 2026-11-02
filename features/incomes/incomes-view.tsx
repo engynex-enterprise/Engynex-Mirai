@@ -14,7 +14,7 @@ import { ListRow } from "@/components/mirai/list-row"
 import { useCanEdit } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { ingresoMensual, quincena, type Deducciones } from "@/lib/domain"
+import { incomeCuando, incomeReparto, ingresoMensual, quincena, type Deducciones } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { memberName, useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
@@ -22,14 +22,22 @@ import { useBookData } from "@/features/book/use-book-data"
 import { IncomeForm } from "./income-form"
 import { AdSlot } from "@/features/ads/ad-slot"
 
-const frecText = (x: Pick<Row<"incomes">, "frec" | "dia">) =>
-  ({ mensual: `Cada mes el día ${x.dia}`, quincenal: "Cada quincena (15 y 30)", semanal: "Cada semana", anual: "Una vez al año" })[x.frec] ?? x.frec
+/** "1ª quincena $X · 2ª quincena $Y" cuando cambia entre quincenas. */
+const quincLine = (x: Row<"incomes">) => {
+  const R = incomeReparto(x)
+  if (x.frec !== "quincenal" || R.n1 == null || R.n2 == null || R.n1 === R.n2) return null
+  const desc = R.ded === "q2" ? " · descuentos en la 2ª" : R.ded === "q1" ? " · descuentos en la 1ª" : ""
+  return `1ª quincena ${fmtMoney(R.n1)} · 2ª quincena ${fmtMoney(R.n2)}${desc}`
+}
 
 /** "Bruto $X − descuentos $Y: Salud, Pensión, …" (dedLine de la v4). */
 const dedLine = (x: Row<"incomes">) => {
   if (!x.bruto) return null
   const D = x.deducciones as Deducciones | null
   const names = [D?.salud !== false && D?.tipo !== "otro" && "Salud", D?.pension !== false && (D?.tipo === "empleado" || D?.tipo === "independiente") && "Pensión", D?.ret !== false && D?.tipo !== "pensionado" && "Retención", ...(D?.otros ?? []).filter((o) => o.n && +(o.v ?? 0)).map((o) => o.n)].filter(Boolean)
+  const R = incomeReparto(x)
+  if (x.frec === "quincenal" && R.b1 != null && R.b2 != null && R.n1 != null && R.n2 != null)
+    return `Bruto ${fmtMoney(R.b1 + R.b2)} al mes − descuentos ${fmtMoney(R.b1 + R.b2 - R.n1 - R.n2)}: ${names.join(", ")}`
   return `Bruto ${fmtMoney(Number(x.bruto))} − descuentos ${fmtMoney(Number(x.bruto) - Number(x.valor))}: ${names.join(", ")}`
 }
 
@@ -73,9 +81,11 @@ export function IncomesView() {
                 return (
                   <ListRow key={x.id} icon={cat?.icon ?? "coins"} iconClassName="bg-success-soft text-success" title={x.concepto}
                     badges={x.bruto ? <StatusPill tone="estimado">neto</StatusPill> : null}
-                    subtitle={[cat?.nombre, frecText(x), memberName(x.member_id, members)].filter(Boolean).join(" · ")}
-                    extra={dedLine(x)}
-                    value={<Money value={Number(x.valor)} currency={x.currency} className="font-bold text-success" />}
+                    subtitle={[cat?.nombre, incomeCuando(x), memberName(x.member_id, members)].filter(Boolean).join(" · ")}
+                    extra={quincLine(x) || dedLine(x) ? <>{quincLine(x) && <span className="block">{quincLine(x)}</span>}{dedLine(x) && <span className="block">{dedLine(x)}</span>}</> : null}
+                    value={quincLine(x)
+                      ? <span className="grid text-right"><Money value={Number(incomeReparto(x).n1) + Number(incomeReparto(x).n2)} currency={x.currency} className="font-bold text-success" /><span className="text-xs text-muted-foreground">al mes</span></span>
+                      : <Money value={Number(x.valor)} currency={x.currency} className="font-bold text-success" />}
                     onClick={canEdit ? () => setEditing(x) : undefined}
                     actions={canEdit ? [
                       { label: `Editar ${x.concepto}`, icon: "pencil", onClick: () => setEditing(x) },

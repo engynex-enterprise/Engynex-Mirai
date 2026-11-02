@@ -2,6 +2,7 @@
 import { iso, MES, parseDate, toDay } from "./dates"
 import { tarjetaPagoMes } from "./cards"
 import { fijoPeriods } from "./fixed"
+import { fijoValor, incomePagos } from "./reparto"
 import { loanEngine } from "./loans"
 import { conv } from "./money"
 import { subOcc } from "./subscriptions"
@@ -44,12 +45,13 @@ export function flujo(b: BookData, today: DateInput): CashflowMonth[] {
     const bi = iso(bb)
     const inM = (d: string) => d >= ai && d <= bi
     const det = { ing: 0, cob: 0, cuo: 0, fij: 0, sub: 0, var: vm }
-    for (const x of b.incomes) det.ing += x.frec === "anual" ? 0 : conv(x.valor, x.currency, s.trm) * (FREC[x.frec] || 0)
+    // Promedio del mes (las quincenas suman n1 + n2 = 2 × valor); el pago anual cuenta en su mes si está guardado.
+    for (const x of b.incomes) det.ing += x.frec === "anual" ? incomePagos(x, a.getFullYear(), a.getMonth()).reduce((q, p) => q + conv(p.v, x.currency, s.trm), 0) : conv(x.valor, x.currency, s.trm) * (FREC[x.frec] || 0)
     for (const c of b.calendarEvents) if (c.tipo === "ingreso" && +c.monto > 0 && parseDate(c.fecha).getMonth() === a.getMonth()) det.ing += +c.monto
     for (const p of planes) if (p.kind === "cobrar") for (const r of p.plan) if (inM(r.fecha)) det.cob += r.valor
     for (const p of planes) if (p.kind === "pagar") for (const r of p.plan) if (inM(r.fecha) || (k === 0 && r.fecha < ai)) det.cuo += r.valor
     for (const f of b.fixedExpenses)
-      for (const p of fijoPeriods(f, a.getFullYear(), a.getMonth(), t)) if (!f.payments.find((x) => x.periodo === p.per)) det.fij += +f.valor
+      for (const p of fijoPeriods(f, a.getFullYear(), a.getMonth(), t)) if (!f.payments.find((x) => x.periodo === p.per)) det.fij += fijoValor(f, p.per)
     for (const c of b.calendarEvents) if (c.tipo === "egreso" && +c.monto > 0 && parseDate(c.fecha).getMonth() === a.getMonth()) det.fij += +c.monto
     for (const sb of b.subscriptions) det.sub += subOcc(sb, a, bb).length * conv(sb.valor, sb.currency, s.trm)
     det.cuo += b.creditCards.reduce((q, c) => q + tarjetaPagoMes(c, t, k), 0)

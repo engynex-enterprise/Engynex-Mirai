@@ -22,7 +22,8 @@ import { useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { cn } from "@/lib/utils"
 
 const hoyCo = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())
-const masDias = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
+// Desde la fecha de Colombia (con la de UTC, después de las 7 p. m. sumaba un día de más).
+const masDias = (n: number) => new Date(new Date(`${hoyCo()}T12:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10)
 const faltan = (hasta: string) => Math.ceil((new Date(`${hasta}T12:00:00`).getTime() - new Date(`${hoyCo()}T12:00:00`).getTime()) / 86_400_000)
 const PRIO = { 1: ["Lo necesito", "vencido"], 2: ["Me gustaría", "porVencer"], 3: ["Capricho", "gray"] } as const
 

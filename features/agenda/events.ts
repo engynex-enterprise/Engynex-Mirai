@@ -1,5 +1,5 @@
 // Eventos del calendario de pagos (calEvents de p_calendario.js en la v4).
-import { conv, fijoPeriods, inv, iso, loanEngine, loanName, subOcc, tarjetaPagoMes, type BookData } from "@/lib/domain"
+import { conv, fijoPeriods, fijoValor, incomePagos, inv, iso, loanEngine, loanName, subOcc, tarjetaPagoMes, type BookData } from "@/lib/domain"
 
 export type ECatKey = "fijo" | "pagar" | "cobrar" | "ingreso" | "sub" | "tarjeta" | "cal" | "inv" | "aporte"
 export const ECAT: Record<ECatKey, { n: string; color: string; icon: string; go: string }> = {
@@ -34,7 +34,7 @@ export function calEvents(b: BookData, a: string, z: string, today: string, off:
     for (const [y, m] of months) for (const p of fijoPeriods(f, y, m, today)) {
       if (!inR(p.due) || (f.inicio ? p.due < f.inicio : p.due.slice(0, 7) < (f.desde ?? "0000"))) continue
       const pago = f.payments.find((x) => x.periodo === p.per)
-      out.push({ id: `f-${f.id}-${p.per}`, k, fecha: p.due, titulo: f.nombre + (p.per.endsWith("Q1") ? " (1ª quinc.)" : p.per.endsWith("Q2") ? " (2ª quinc.)" : ""), monto: pago ? Number(pago.valor) : Number(f.valor), dir: "pagar", st: st(p.due, !!pago), go: ECAT[k].go, refId: f.id, per: p.per, rng: f.variable && (f as { vmin?: number }).vmin ? `${fmt(Number((f as { vmin?: number }).vmin))} – ${fmt(Number((f as { vmax?: number }).vmax))}` : undefined })
+      out.push({ id: `f-${f.id}-${p.per}`, k, fecha: p.due, titulo: f.nombre + (p.per.endsWith("Q1") ? " (1ª quinc.)" : p.per.endsWith("Q2") ? " (2ª quinc.)" : ""), monto: pago ? Number(pago.valor) : fijoValor(f, p.per), dir: "pagar", st: st(p.due, !!pago), go: ECAT[k].go, refId: f.id, per: p.per, rng: f.variable && (f as { vmin?: number }).vmin ? `${fmt(Number((f as { vmin?: number }).vmin))} – ${fmt(Number((f as { vmax?: number }).vmax))}` : undefined })
     }
   }
   for (const L of b.loans) {
@@ -45,16 +45,11 @@ export function calEvents(b: BookData, a: string, z: string, today: string, off:
     for (const p of e.plan) if (inR(p.fecha)) out.push({ id: `l-${L.id}-${p.n}`, k: kind, fecha: p.fecha, titulo: `${kind === "cobrar" ? "Cobro" : "Cuota"} ${p.n} · ${nm}`, monto: p.valor, dir: kind, st: st(p.fecha, false), go: ECAT[kind].go, sub: L.concepto, refId: L.id })
   }
   for (const x of b.incomes) {
-    const v = conv(x.valor, x.currency, b.settings.trm)
-    const days: string[] = []
-    for (const [y, m] of months) {
-      const last = new Date(y, m + 1, 0).getDate()
-      const D = (d: number) => iso(new Date(y, m, Math.min(d, last)))
-      if (x.frec === "quincenal") days.push(D(15), D(last))
-      else if (x.frec === "mensual") days.push(D(x.dia || 30))
-      else if (x.frec === "semanal") for (let d = 1; d <= last; d++) if (new Date(y, m, d).getDay() === 5) days.push(D(d))
+    for (const [y, m] of months) for (const p of incomePagos(x, y, m)) {
+      if (!inR(p.fecha)) continue
+      const q = p.parte === "q1" ? " (1ª quinc.)" : p.parte === "q2" ? " (2ª quinc.)" : ""
+      out.push({ id: `i-${x.id}-${p.fecha}`, k: "ingreso", fecha: p.fecha, titulo: x.concepto + q, monto: conv(p.v, x.currency, b.settings.trm), dir: "cobrar", st: p.fecha <= today ? "ok" : "pend", go: "ingresos" })
     }
-    for (const d of days) if (inR(d)) out.push({ id: `i-${x.id}-${d}`, k: "ingreso", fecha: d, titulo: x.concepto, monto: v, dir: "cobrar", st: d <= today ? "ok" : "pend", go: "ingresos" })
   }
   for (const s of b.subscriptions) for (const d of subOcc(s, ad, zd)) {
     const f = iso(d)

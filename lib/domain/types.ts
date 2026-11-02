@@ -44,6 +44,8 @@ export type CategoryIn = Pick<Row<"categories">, "id" | "nombre" | "icon" | "top
 export type IncomeCategoryIn = Pick<Row<"income_categories">, "id" | "nombre">
 
 export type IncomeIn = Pick<Row<"incomes">, "id" | "concepto" | "valor" | "frec" | "dia"> & {
+  /** Reparto por quincena, día de la semana o mes del pago (lib/domain/reparto.ts). */
+  reparto?: unknown
   member_id?: string | null
   category_id?: string | null
   currency?: string | null
@@ -64,6 +66,8 @@ export type ExpenseIn = Pick<Row<"expenses">, "id" | "fecha" | "descripcion" | "
 export type FixedPaymentIn = Pick<Row<"fixed_expense_payments">, "periodo" | "fecha" | "valor">
 
 export type FixedExpenseIn = Pick<Row<"fixed_expenses">, "id" | "nombre" | "valor" | "frec" | "dia"> & {
+  /** Valor distinto en cada quincena (lib/domain/reparto.ts). */
+  reparto?: unknown
   category_id?: string | null
   dia2?: number | null
   mes?: number | null

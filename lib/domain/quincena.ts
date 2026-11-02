@@ -1,5 +1,6 @@
 // Entradas y salidas de una quincena o de un mes (equivalente a `quincena()` de b_core.js de la v4).
-import { addDays, fshort, iso, lastDay, parseDate } from "./dates"
+import { fshort, iso, lastDay, parseDate } from "./dates"
+import { fijoValor, incomePagos } from "./reparto"
 import { tarjetaPagoMes } from "./cards"
 import { fijoPeriods } from "./fixed"
 import { loanCal, loanEngine, loanName } from "./loans"
@@ -54,17 +55,13 @@ export function quincena(b: BookData, y: number, m: number, which: QuincenaWhich
   const ent: FlowItem[] = []
   const sal: FlowItem[] = []
   for (const x of b.incomes) {
-    const v = conv(x.valor, x.currency, trm)
-    if (x.frec === "mensual") {
-      const d = new Date(y, m, Math.min(x.dia || 30, ld))
-      if (inR(iso(d))) ent.push({ icon: "briefcase", n: x.concepto, s: "Ingreso · " + fshort(d), v, fecha: iso(d) })
-    } else if (x.frec === "quincenal") {
-      for (const d of [new Date(y, m, 15), new Date(y, m, ld)]) if (inR(iso(d))) ent.push({ icon: "briefcase", n: x.concepto, s: "Ingreso quincenal · " + fshort(d), v, fecha: iso(d) })
-    } else if (x.frec === "semanal") {
-      let c = 0
-      for (let d = new Date(a); d <= bb; d = addDays(d, 1)) if (d.getDay() === 5) c++
-      if (c) ent.push({ icon: "briefcase", n: x.concepto, s: `${c} pagos semanales`, v: v * c, fecha: ai })
+    const pagos = incomePagos(x, y, m).filter((p) => inR(p.fecha))
+    if (x.frec === "semanal") {
+      if (pagos.length) ent.push({ icon: "briefcase", n: x.concepto, s: `${pagos.length} pagos semanales`, v: conv(x.valor, x.currency, trm) * pagos.length, fecha: ai })
+      continue
     }
+    const tag = x.frec === "quincenal" ? "Ingreso quincenal · " : x.frec === "anual" ? "Ingreso anual · " : "Ingreso · "
+    for (const p of pagos) ent.push({ icon: "briefcase", n: x.concepto, s: tag + fshort(parseDate(p.fecha)), v: conv(p.v, x.currency, trm), fecha: p.fecha })
   }
   const cobrar = b.loans.filter((L) => L.kind === "cobrar")
   const pagar = b.loans.filter((L) => L.kind === "pagar")
@@ -83,7 +80,7 @@ export function quincena(b: BookData, y: number, m: number, which: QuincenaWhich
     for (const p of fijoPeriods(f, y, m, today))
       if (inR(p.due)) {
         const pg = f.payments.find((x) => x.periodo === p.per)
-        sal.push({ icon: catIcon(b.categories, f.category_id), n: f.nombre, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: pg ? +pg.valor : +f.valor, fecha: p.due, paid: !!pg })
+        sal.push({ icon: catIcon(b.categories, f.category_id), n: f.nombre, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: pg ? +pg.valor : fijoValor(f, p.per), fecha: p.due, paid: !!pg })
       }
   for (const L of pagar)
     for (const r of loanCal(loanEngine(L, today)))
