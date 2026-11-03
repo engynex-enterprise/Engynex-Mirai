@@ -8,16 +8,19 @@ module "mirai" {
     google.cicd = google.cicd
   }
 
-  environment     = "pruebas"
-  project_id      = var.project_id
-  cicd_project_id = var.cicd_project_id
-  region          = var.region
-  bucket_suffix   = var.bucket_suffix
-  domains         = var.domains
-  stages          = var.stages
-  public_config   = var.public_config
-  api_env         = var.api_env
-  db_adapter      = var.db_adapter
+  environment       = "pruebas"
+  project_id        = var.project_id
+  cicd_project_id   = var.cicd_project_id
+  region            = var.region
+  bucket_suffix     = var.bucket_suffix
+  domains           = var.domains
+  stages            = var.stages
+  public_config     = var.public_config
+  api_env           = var.api_env
+  realtime_env      = var.realtime_env
+  extra_web_origins = var.extra_web_origins
+  live_source       = var.live_source
+  db_adapter        = var.db_adapter
 
   scheduler_dry_run = var.scheduler_dry_run
 
@@ -34,7 +37,7 @@ module "mirai" {
   services = {
     web      = { min_instances = 0, max_instances = 3 }
     api      = { min_instances = 0, max_instances = 3 }
-    realtime = { min_instances = 0, max_instances = 1, cpu_always_on = false } # 1 instancia: sin Redis (adaptador en memoria)
+    realtime = { min_instances = 0, max_instances = 1, cpu_always_on = false } # sin Redis (memoria) y escala a cero por costo; para un ensayo real del gateway: min 1 + cpu_always_on
   }
 
   cloud_sql = {

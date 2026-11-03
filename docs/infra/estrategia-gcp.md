@@ -3,6 +3,7 @@
 > Escrito el 2026-11-02 en la rama `v6`. Base: `docs/arquitectura/v6-separacion-front-back.md` (doc v6), `docs/DEPLOY-VERCEL.md`, `docs/PWA.md` y `apps/web/vercel.json`.
 > Código: `infra/terraform/` (módulos, `stack/` y raíces por ambiente), `infra/cloudbuild/` (pipelines) e `infra/docker/web.Dockerfile`. Operación: `docs/infra/runbook.md`.
 > No se creó nada en la nube: no hay credenciales. Terraform pasa `fmt`, `validate` en las tres raíces y `terraform test` con proveedores simulados (§16). La imagen web se compiló y arrancó en local.
+> **Alineado con la API el 2026-11-02** (F2-B/C/E/G/I): variables con los nombres reales del esquema zod (§5), colas con ids literales, Scheduler solo con el tick y el drain (§7, etapa 2), gateway `mirai-realtime` (§5) y URI de Google `<API_PUBLIC_URL>/v1/google/callback` (§14).
 > **Los costos son estimados** (precios de lista de us-west1 a la fecha, sin descuentos ni impuestos) y hay que confirmarlos con la calculadora de Google antes de la fase 4.
 
 ---
@@ -17,7 +18,7 @@
 | Entrada | Balanceador HTTPS externo global + certificado de Certificate Manager con autorización DNS + Cloud Armor (WAF y límites) + Cloud CDN para la web y los archivos públicos. Cloud Run solo acepta tráfico del balanceador y tráfico interno |
 | Red | VPC propia, **Direct VPC egress** (sin conector), Private Google Access, Private Services Access para Cloud SQL y Memorystore, Cloud NAT con IP fijas opcionales |
 | Datos | Cloud Storage (3 buckets por ambiente), Cloud SQL PostgreSQL 17 (etapa 3: **HA regional en producción**, zonal en pruebas), Memorystore Redis Basic 1 GB (**solo producción**, etapa 3) |
-| Cron y colas | Cloud Scheduler (6 trabajos con OIDC) + Cloud Tasks (colas `notify`, `automations`, `slow`) |
+| Cron y colas | Cloud Scheduler (2 trabajos con OIDC: `notify/tick` cada hora y `automations/drain` cada 5 min; el tick encola las diarias) + Cloud Tasks (colas con los ids literales que usa la API: `notify`, `automations`, `slow`) |
 | Identidad | Identity Platform preparado (etapa 4): correo con contraseña o enlace, Google y TOTP |
 | Secretos | Secret Manager, un secreto por variable; Terraform crea el contenedor y los permisos, **los valores se cargan aparte** |
 | CI/CD | Cloud Build con disparadores por rama (`pruebas` → pruebas, `main` → producción con aprobación), `turbo prune` + Docker, pruebas, escaneo de vulnerabilidades y canario 10 % → 50 % → 100 % con vuelta atrás automática |
@@ -116,7 +117,7 @@ Por qué:
 3. Nivel 1 de precios (el más barato) y tiene todo: Cloud Run con Direct VPC egress, Cloud SQL Enterprise Plus, Memorystore, Cloud Tasks y Scheduler.
 4. Los estáticos (`/_next/static`, avatares) salen de Cloud CDN, que está en el borde más cercano a la persona (Bogotá/Miami), así que la región pesa poco para ellos.
 
-**Revisión en la etapa 3.** Cuando la base sea Cloud SQL (y Supabase quede apagada) desaparece la razón de estar en Oregón. Mover todo a `us-east1` ahorraría ~50 ms por petición desde Colombia. Se puede hacer en el mismo corte de la etapa 3 (crear Cloud SQL directamente en `us-east1` y redesplegar los servicios, que no tienen estado) o en una etapa 3b. `region` es una sola variable; lo que cambia de verdad es: Cloud SQL (réplica entre regiones y promoción), buckets (copia), Artifact Registry (repositorio nuevo) y las colas (nombres nuevos). Recomendación: decidir con mediciones reales de p95 después de 2 semanas en Cloud SQL.
+**Revisión en la etapa 3.** Cuando la base sea Cloud SQL (y Supabase quede apagada) desaparece la razón de estar en Oregón. Mover todo a `us-east1` ahorraría ~50 ms por petición desde Colombia. Se puede hacer en el mismo corte de la etapa 3 (crear Cloud SQL directamente en `us-east1` y redesplegar los servicios, que no tienen estado) o en una etapa 3b. `region` es una sola variable (también da `GCP_LOCATION` a la API); lo que cambia de verdad es: Cloud SQL (réplica entre regiones y promoción), buckets (copia), Artifact Registry (repositorio nuevo) y las colas (se crean en la región nueva con los mismos ids; vaciar las viejas antes). Recomendación: decidir con mediciones reales de p95 después de 2 semanas en Cloud SQL.
 
 ---
 
@@ -146,14 +147,64 @@ Por qué:
 | Tiempo máximo | 300 s (`/api/chat` sigue en la web) | 300 s (chat NDJSON) | 3600 s (WebSocket) |
 | CPU | solo en peticiones | solo en peticiones | **siempre asignada** en producción (escucha `pg_notify` y Redis) |
 | Afinidad de sesión | no | no | **sí** (socket.io con long-polling) |
-| Arranque | sonda TCP + `startup_cpu_boost` | sonda TCP; `liveness_path = "/healthz"` cuando F2-B lo tenga | sonda TCP |
+| Arranque y vida | sonda TCP + `startup_cpu_boost` | sonda TCP + vida en `/healthz` | sonda HTTP `/healthz` + vida en `/healthz` |
+| Red | `ALL_TRAFFIC` (llama a la API por la VPC) | `PRIVATE_RANGES_ONLY` | **Direct VPC egress** `PRIVATE_RANGES_ONLY` → Memorystore (y Cloud SQL) |
+| Dominio | `<dominio>` y `canary.` | `api.` y `canary-api.` | `rt.` (solo con `stages.realtime`) |
 
 Terraform es dueño de la configuración (cuenta, escala, red, variables, secretos); **Cloud Build es dueño de la imagen y del tráfico**. El módulo ignora `image`, `revision` y `traffic`, así un `terraform apply` nunca revierte un despliegue. Un cambio de configuración crea una revisión nueva que recibe el 100 % porque el tráfico queda en "la más reciente" después de cada despliegue (runbook §4.3).
 
-**Variables que entrega la infraestructura a la API** (contrato propuesto para el esquema zod de `@nestjs/config`; si F2-B usa otros nombres, se cambian en `stack/services.tf` o se agregan con `api_env`):
-`MODE`, `MIRAI_ENV`, `NODE_ENV`, `GCP_PROJECT_ID`, `GCP_REGION`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SITE_URL`, `WEB_ORIGINS`, `API_PUBLIC_URL`, `JOBS_OIDC_AUDIENCE` (URL `*.run.app` de la API), `JOBS_INVOKER_EMAILS` (cuentas de Scheduler y Tasks), `TASKS_LOCATION`, `TASKS_INVOKER_SA`, `TASKS_TARGET_BASE_URL`, `TASKS_QUEUE_NOTIFY|AUTOMATIONS|SLOW`, `DB_ADAPTER`, `GOOGLE_CLIENT_ID`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `UPSTASH_REDIS_REST_URL`, `SENTRY_DSN`, `LOG_LEVEL`; con Storage: `STORAGE_BUCKET_PRIVATE|PUBLIC|BACKUPS`, `PUBLIC_FILES_URL`; con Cloud SQL: `CLOUD_SQL_CONNECTION_NAME`, `DB_NAME`, `DB_IAM_USER`; con Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_TLS`, y los secretos de §6.
+Terraform no pone `PORT` (Cloud Run inyecta 8080) y Cloud Build nunca cambia variables: `gcloud run deploy --image` conserva las de la revisión anterior (un `--set-env-vars` en el pipeline lo revertiría el siguiente `apply`).
 
-La web recibe `public_config` completo, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_API_URL`, `API_INTERNAL_URL`, `MIRAI_ENV` y sus secretos.
+### 5.1 Variables de cada servicio (origen y valor)
+
+Nombres = los que validan `apps/api/src/core/config/config.schema.ts` (núcleo), `modules/integrations/services-env.ts` (F2-E), `modules/billing/billing.config.ts` y `modules/households/site-url.ts` (F2-I) y `modules/realtime/realtime.config.ts` (F2-G). **V** = variable normal (`stack/services.tf`), **S** = Secret Manager (`stack/secrets.tf`, §6). Extras sin tocar el stack: `api_env` y `realtime_env` (pisan los valores del stack).
+
+**api** (`mirai-<amb>-api`, `MODE=api`):
+
+| Variable | Origen | Valor | Lo lee |
+|---|---|---|---|
+| `MODE` | V | `api` | núcleo |
+| `MIRAI_ENV` | V | `pruebas` / `produccion` | núcleo, F2-E |
+| `NODE_ENV`, `LOG_LEVEL` | V | `production`; `debug` en pruebas, `info` en producción | Node, núcleo |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | V | de `public_config` (`NEXT_PUBLIC_SUPABASE_*`) | núcleo |
+| `WEB_ORIGINS` | V | `https://<web>`, `https://canary.<web>` + `extra_web_origins` (p. ej. Vercel en la transición) | núcleo (CORS) |
+| `DB_ADAPTER` | V | `db_adapter` (`supabase` hasta el corte; `pg` exige el secreto `database-url`) | núcleo |
+| `QUEUE_DRIVER` | V | `cloudtasks` | núcleo |
+| `GCP_PROJECT`, `GCP_LOCATION` | V | proyecto del ambiente y `region` | núcleo (Cloud Tasks) |
+| `TASKS_SERVICE_ACCOUNT` | V | `mirai-<amb>-tasks@…` (la API hace `actAs`) | núcleo |
+| `API_BASE_URL` | V | `https://mirai-<amb>-api-<número>.<región>.run.app` (URL interna determinista) | núcleo: URL de vuelta y audiencia del token de cada tarea |
+| `SCHEDULER_AUDIENCE` | V | la misma URL `*.run.app` (= audiencia de Scheduler y de las colas) | núcleo (`SchedulerGuard`) |
+| `SCHEDULER_SERVICE_ACCOUNTS` | V | `mirai-<amb>-scheduler@…`, `mirai-<amb>-tasks@…` | núcleo (`SchedulerGuard`) |
+| `TICK_DAILY_TASKS` | V | `1` (el tick encola las diarias; §7 etapa 2) | F2-E |
+| `AUTOMATIONS_OUTBOX` | V | `1` | F2-E |
+| `SITE_URL` | V | `https://<web>` | F2-E (correos, regreso de Google), F2-I (invitaciones, retorno de pagos) |
+| `API_PUBLIC_URL` | V | `https://api.<dominio>` → callback `<API_PUBLIC_URL>/v1/google/callback` | F2-E |
+| `GOOGLE_CLIENT_ID`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` | V | de `public_config` (`GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`); si están vacíos no se mandan | F2-E |
+| `WOMPI_PUBLIC_KEY` | V | de `public_config` (`NEXT_PUBLIC_WOMPI_PUBLIC_KEY`) | F2-I |
+| `REALTIME_API_EMIT` | V | `1` solo con `stages.redis` | F2-G (publica en Redis para el gateway) |
+| `GIT_BRANCH` | V | `pruebas` / `main` (de `cicd.branch_regex`) | consola › Sistema |
+| `STORAGE_BUCKET_PRIVATE\|PUBLIC\|BACKUPS`, `PUBLIC_FILES_URL` | V | buckets y `https://files.<dominio>` (con `stages.storage`) | `FilesModule` (F2-D): **aún no los lee** |
+| `SUPABASE_SECRET_KEY`, `ENCRYPTION_KEY`, `CRON_SECRET` | S (siempre) | §6 | núcleo |
+| `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_STATE_KEY`, `VAPID_PRIVATE_KEY`, `AI_GATEWAY_API_KEY` | S (opcionales) | §6 | F2-E |
+| `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `WOMPI_INTEGRITY_SECRET`, `WOMPI_EVENTS_SECRET` | S (opcionales) | §6 | F2-I |
+| `SUPABASE_JWT_SECRET`, `DATABASE_URL` | S (opcionales) | §6 | núcleo |
+| `REDIS_URL` | S (etapa 3, lo genera Terraform) | `redis://:<AUTH>@<IP>:6379` | F2-G |
+
+Se dejan con su valor por defecto (cámbialos con `api_env`): `HOST`, `AUTH_JWKS_URL`/`AUTH_ISSUER`/`AUTH_AUDIENCE` (salen de `SUPABASE_URL`), `RATE_LIMIT_STORE` (`supabase` fuera de local), `RATE_LIMIT_DEFAULT_PER_MIN`, `IDEMPOTENCY_STORE` (`memory`; `supabase` cuando la migración `api_idempotency` esté aplicada), `DOCS` (siempre apagado en producción), `VALIDATE_RESPONSES`, `APP_VERSION`, `GIT_COMMIT` (sale de `K_REVISION`) y `OTEL_*` (OpenTelemetry apagado si no hay exportador).
+
+**realtime** (`mirai-<amb>-realtime`, misma imagen con `MODE=realtime`, etapa 3): `MODE=realtime`, `MIRAI_ENV`, `NODE_ENV`, `LOG_LEVEL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `WEB_ORIGINS` (el gateway revisa el origen del *handshake* y del *upgrade*), `DB_ADAPTER`, `GIT_BRANCH` (V) + `realtime_env` para `REALTIME_PATH`, `REALTIME_TOKEN_CHECK_S`, `REALTIME_PRESENCE_TTL_S`, `REALTIME_RECOVERY_S`, `REALTIME_MAX_BOOKS`, `REALTIME_EVENTS_PER_10S` y `REALTIME_PG_LISTEN` (fase 4). Secretos: `SUPABASE_SECRET_KEY` y `ENCRYPTION_KEY` (los exige el núcleo fuera de local y `/readyz`), `REDIS_URL` (con Redis), `DATABASE_URL` y `SUPABASE_JWT_SECRET` (opcionales). **No** lleva cron ni colas: el esquema ya no exige `SCHEDULER_*`/`CRON_SECRET` con `MODE=realtime` (prueba en `config.schema.test.ts`). `REALTIME_DATABASE_URL` no hace falta: con Cloud SQL, `DATABASE_URL` ya es una conexión directa de sesión.
+
+**web**: `public_config` completo, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_LIVE_SOURCE` (`live_source`: `supabase` hoy, `gateway` en la fase 4 y solo con `stages.realtime`), `NEXT_PUBLIC_REALTIME_URL` (`https://rt.<dominio>`, solo con `stages.realtime`), `API_INTERNAL_URL`, `MIRAI_ENV`, `HOSTNAME`, `NEXT_TELEMETRY_DISABLED` (V; los `NEXT_PUBLIC_*` también se incrustan en el build con `_WEB_BUILD_ENV_B64`) y sus secretos (§6).
+
+### 5.2 Gateway `mirai-realtime`
+
+- Cloud Run con **afinidad de sesión** (long-polling de socket.io), **timeout 3600 s** (Cloud Run corta el WebSocket a la hora y el cliente reconecta solo), **concurrencia 250**, **mínimo 1 instancia** y CPU siempre asignada en producción (en pruebas 0–1 instancias y CPU por petición, para no pagar ~USD 45/mes; para un ensayo real del gateway sube a `min_instances = 1` y `cpu_always_on = true`).
+- **Direct VPC egress** `PRIVATE_RANGES_ONLY` en la subred del ambiente: llega a Memorystore (producción, `stages.redis`) y a Cloud SQL por Private Services Access; internet sale directo.
+- Sondas en `/healthz` (no toca la base ni Redis). Chequeo de disponibilidad de `https://rt.<dominio>/healthz` con `uptime_checks`.
+- Entrada: `rt.<dominio>` en el balanceador (backend `realtime`, el certificado comodín ya lo cubre; el registro A sale en `dns_records`). Ingress solo balanceador + interno.
+- CSP de la web: `connect-src` ya incluye `https:` y `wss:` (`apps/web/lib/security/headers.ts`), así que `rt.` no necesita cambio. El origen permitido lo da `WEB_ORIGINS`.
+- Varias instancias exigen Redis (validación de `stages`); sin Redis, una sola instancia con adaptador en memoria.
+- La web solo lo usa con `live_source = "gateway"` (fase 4, con `mirai_live_notify` instalado en Cloud SQL y `REALTIME_PG_LISTEN=1`).
 
 ---
 
@@ -164,20 +215,21 @@ Inventario sacado de `.env.example`, `apps/web/lib/env.ts`, todo `process.env.*`
 | Variable | Secreto (`mirai-<amb>-…`) | Lo montan | Obligatorio | De dónde sale el valor |
 |---|---|---|---|---|
 | `SUPABASE_SECRET_KEY` | `supabase-secret-key` | web, api, realtime | sí | Supabase › Project Settings › API keys |
-| `ENCRYPTION_KEY` | `encryption-key` | web, api | sí | **Copia exacta** de la de Vercel. No se cambia nunca: cifra las integraciones guardadas en la base |
-| `CRON_SECRET` | `cron-secret` | web, api | sí | El de Vercel (es el mismo que tiene el job `mirai-notify` de pg_cron) |
+| `ENCRYPTION_KEY` | `encryption-key` | web, api, realtime | sí | **Copia exacta** de la de Vercel. No se cambia nunca: cifra las integraciones guardadas en la base. realtime no descifra nada, pero el núcleo y `/readyz` la exigen fuera de local |
+| `CRON_SECRET` | `cron-secret` | web, api | sí | El de Vercel (es el mismo que tiene el job `mirai-notify` de pg_cron). En la API es el respaldo de `SchedulerGuard`; lo principal es OIDC |
 | `GOOGLE_CLIENT_SECRET` | `google-client-secret` | web, api | no | Google Cloud › Credenciales (cliente OAuth actual) |
-| `GOOGLE_OAUTH_STATE_KEY` | `google-oauth-state-key` | api | no | Nuevo: `openssl rand -base64 32` |
+| `GOOGLE_OAUTH_STATE_KEY` | `google-oauth-state-key` | api | no (sin él no se conecta Gmail/Calendar desde la API) | Nuevo, 32+ caracteres: `openssl rand -base64 32` (runbook §2.3) |
 | `AI_GATEWAY_API_KEY` | `ai-gateway-api-key` | web, api | no | Vercel › AI Gateway (respaldo si no hay fila global) |
 | `VAPID_PRIVATE_KEY` | `vapid-private-key` | web, api | no | La pareja actual (si se cambia, se pierden las suscripciones push) |
-| `UPSTASH_REDIS_REST_TOKEN` | `upstash-redis-rest-token` | web, api | no | Upstash |
+| `UPSTASH_REDIS_REST_TOKEN` | `upstash-redis-rest-token` | web | no | Upstash (la API no lo lee) |
 | `MERCADOPAGO_ACCESS_TOKEN` | `mercadopago-access-token` | web, api | no | Mercado Pago (prueba en pruebas, producción en producción) |
-| `MERCADOPAGO_WEBHOOK_SECRET` | `mercadopago-webhook-secret` | web, api | no | Mercado Pago › Webhooks |
+| `MERCADOPAGO_WEBHOOK_SECRET` | `mercadopago-webhook-secret` | web, api | no (en producción la API no procesa webhooks sin él) | Mercado Pago › Webhooks |
 | `WOMPI_INTEGRITY_SECRET` | `wompi-integrity-secret` | web, api | no | Wompi › Desarrolladores |
 | `WOMPI_EVENTS_SECRET` | `wompi-events-secret` | web, api | no | Wompi › Desarrolladores |
 | `SUPABASE_JWT_SECRET` | `supabase-jwt-secret` | api, realtime | no | Solo si Supabase sigue firmando con HS256 |
+| `DATABASE_URL` | `database-url` | api, realtime | no (sí con `db_adapter = "pg"`: una validación lo exige) | Fase 4: conexión directa a Cloud SQL por IP privada (la API usa `pg` con `DATABASE_URL`, no el conector IAM: hace falta un usuario con contraseña o agregar el conector en `PgKyselyFactory`) |
 | `SUPABASE_DB_URL` | `supabase-db-url` | ninguno (solo la cuenta `migrator`) | no | Para migraciones, volcados y DMS |
-| `REDIS_AUTH` | `redis-auth` | api, realtime | sí (etapa 3) | Lo genera Terraform desde Memorystore |
+| `REDIS_URL` | `redis-url` | api, realtime | sí (etapa 3) | Lo genera Terraform desde Memorystore: `redis://:<AUTH>@<IP>:6379` (TLS: §10) |
 
 **No son variables y no van a Secret Manager:** las claves de Resend, Brevo, SendGrid, SMTP, Gmail, WhatsApp/Meta, Telegram, proveedores de IA del hogar, AdSense, Turnstile, Sentry, etc. Desde la v5.5 viven **cifradas con `ENCRYPTION_KEY`** en `platform_integrations`/`integrations` y se configuran en consola › Integraciones globales. Migrarlas a GCP es copiar la base (etapa 3) y mantener la misma `ENCRYPTION_KEY`.
 
@@ -187,7 +239,7 @@ Inventario sacado de `.env.example`, `apps/web/lib/env.ts`, todo `process.env.*`
 1. Terraform crea el secreto (replicación automática) y da `secretAccessor` **solo** a las cuentas de los servicios que lo usan.
 2. La persona dueña carga cada valor con `gcloud secrets versions add … --data-file=-` leyendo de la terminal sin dejar historial (runbook §2.3). Ningún valor pasa por Terraform, por el repositorio ni por un chat.
 3. Cloud Run no arranca si un secreto montado no tiene versión. Por eso hay `required` (se montan siempre) y opcionales que se montan solo cuando están en `optional_secrets`.
-4. Únicos valores dentro del estado de Terraform: la clave AUTH de Redis (la genera Memorystore) y el secreto de OAuth de Google cuando se active Identity Platform. El bucket del estado es privado, versionado y solo lo leen las cuentas de Terraform.
+4. Únicos valores dentro del estado de Terraform: `REDIS_URL` con la clave AUTH de Redis (la genera Memorystore) y el secreto de OAuth de Google cuando se active Identity Platform. El bucket del estado es privado, versionado y solo lo leen las cuentas de Terraform.
 5. Rotación: runbook §3 (incluye los casos que **no** se pueden rotar sin más: `ENCRYPTION_KEY` y VAPID).
 
 ---
@@ -200,7 +252,7 @@ Principios (los del doc v6 y CLAUDE.md): la versión publicada no cambia de comp
 - Bootstrap (`envs/bootstrap`), conexión GitHub ↔ Cloud Build, `terraform apply` de pruebas y producción con `stages` de la etapa 1, carga de secretos.
 - Bajar el TTL de los registros DNS de `mirai.engynex.com` a 300 s en Hostinger **48 h antes** de la etapa 1.
 - Crear los CNAME `_acme-challenge` (salida `dns_records`): el certificado se emite **antes** de mover el tráfico.
-- Agregar en Supabase › Auth › URL Configuration y en el cliente OAuth de Google las URL nuevas de pruebas (`https://pruebas.mirai.engynex.com/auth/callback`, `/auth/confirm`, `/api/google/callback`).
+- Agregar en Supabase › Auth › URL Configuration y en el cliente OAuth de Google las URL nuevas de pruebas (`https://pruebas.mirai.engynex.com/auth/callback`, `/auth/confirm`, `/api/google/callback`) y la de la API: `<API_PUBLIC_URL>/v1/google/callback` = `https://api.pruebas.mirai.engynex.com/v1/google/callback` (y `https://api.mirai.engynex.com/v1/google/callback` en producción).
 
 ### Etapa 1 · Web y API en Cloud Run, con Supabase
 
@@ -222,7 +274,7 @@ Principios (los del doc v6 y CLAUDE.md): la versión publicada no cambia de comp
 
 Depende de que la API (F2-E) tenga `/v1/jobs/*` y `FilesModule`.
 
-**Cron:**
+**Cron:** Scheduler solo tiene dos trabajos (`stack/jobs.tf`): `mirai-<amb>-notify-tick` (`5 * * * *`) y `mirai-<amb>-automations-drain` (`*/5 * * * *`). El tick hace el latido y encola en Cloud Tasks: una tarea por hogar (`notify`), `plan/emails` y `automations/hourly` cada hora; a las 6 a. m. `refs/refresh`, `calendar/sync` y `net-worth/monthly`, y a las 9 `plan/reminders` (cola `slow`), porque la API corre con `TICK_DAILY_TASKS=1`. Por eso no hay trabajos propios para las diarias (se enviarían dos veces). Si se prefiere un trabajo por diaria: `api_env = { TICK_DAILY_TASKS = "0" }` y se agregan a `scheduler_jobs`. El drain es lo único que el tick no encola. En pruebas todo queda en pausa (`scheduler_paused = true`, base compartida); `scheduler_dry_run = true` manda `{"dry":true}` a los dos trabajos (tareas `dry-…` que calculan y no envían).
 1. `scheduler_paused = false` y `scheduler_dry_run = true` en producción: Scheduler llama al tick con `{"dry":true}` y la API calcula sin enviar (doc v6 §4.3 paso 9a). Comparar 3 días con lo que envía el cron actual.
 2. Corte: `scheduler_dry_run = false`, `select cron.unschedule('mirai-notify');` y quitar `crons` de `apps/web/vercel.json`.
 3. Criterio: cero duplicados (`notification_log` sin claves repetidas en `enviado`) y cero faltantes frente a la simulación. `notify_claim` evita duplicados aunque se crucen.
@@ -240,7 +292,7 @@ Depende de que la API (F2-E) tenga `/v1/jobs/*` y `FilesModule`.
 
 ### Etapa 3 · Cloud SQL (+ gateway realtime y Redis)
 
-`stages = { …, cloud_sql = true, redis = true (solo producción), realtime = true }`, `db_adapter = "supabase"` hasta el corte.
+`stages = { …, cloud_sql = true, redis = true (solo producción), realtime = true }`, `db_adapter = "supabase"` hasta el corte. Para `db_adapter = "pg"`: cargar `database-url` y agregarlo a `optional_secrets`. La web pasa al gateway con `live_source = "gateway"` (nuevo build: es un `NEXT_PUBLIC_*`).
 
 **Requisito duro:** la fase 2 del doc v6 terminada (paso 12): el navegador ya no lee ni escribe tablas de Supabase directamente (solo Auth). Si no, después del corte el navegador seguiría escribiendo en Supabase.
 
@@ -297,14 +349,16 @@ Tiempos esperados por build: 8–15 min (pruebas: canario de un paso de 2 min; p
 **API (F2-B, otro agente):**
 - `apps/api/Dockerfile` con contexto en la raíz, que acepte `--build-arg NODE_VERSION` y `GIT_SHA`, escuche en `$PORT` (8080), corra sin root y no meta secretos en la imagen.
 - `GET /healthz` público (canario y chequeo de disponibilidad) y `/readyz`.
-- Respetar `MODE=api|realtime` y las variables de §5 (o avisar los nombres para ajustarlos).
-- `SchedulerGuard`: validar el token OIDC (audiencia `JOBS_OIDC_AUDIENCE`, correo en `JOBS_INVOKER_EMAILS`), porque Cloud Run no revisa la invocación (`invoker_iam_disabled`). Aceptar `{"dry":true}` en `/v1/jobs/notify/tick`.
+- Respetar `MODE=api|realtime` y las variables de §5.1.
+- `SchedulerGuard`: validar el token OIDC (audiencia `SCHEDULER_AUDIENCE`, correo en `SCHEDULER_SERVICE_ACCOUNTS`), porque Cloud Run no revisa la invocación (`invoker_iam_disabled`). Aceptar `{"dry":true}` en `/v1/jobs/notify/tick`. **Hecho en F2-B/F2-E**; los nombres de §5.1 ya son los del esquema.
+- **Pendiente F2-G** (`modules/realtime/redis.ts`): aceptar la CA de Memorystore y no verificar el nombre del certificado por IP (o `servername`), para poder encender TLS en Redis (§10).
+- **Pendiente F2-B** (opcional): no exigir `ENCRYPTION_KEY` con `MODE=realtime` (y quitarla de `/readyz` en ese modo) para no montarla en el gateway.
 - Apagado ordenado con `SIGTERM` (Cloud Run da 10 s) y registros JSON a stdout con `severity` (Error Reporting los agrupa solo).
 - Etapa 3: incluir en la imagen `supabase/migrations` y un script de migración que entre con el Cloud SQL Connector + IAM (`DB_IAM_USER`), o cambiar `migrate_job.command/args`.
 
 **Web (`apps/web`):**
 - Hoy no hay que tocar nada para compilar: el Dockerfile activa standalone con `NEXT_PRIVATE_STANDALONE=1` (valor por defecto de Next 16.4) y pasa `VERCEL_GIT_COMMIT_SHA` para `NEXT_PUBLIC_BUILD_ID`. Es un mecanismo interno de Next: **conviene declarar** `output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined` en `next.config.ts` y leer un `GIT_SHA` neutro.
-- CSP (`lib/security/headers.ts`): sumar `https://api.<dominio>` y `wss://rt.<dominio>` a `connect-src`, y `https://files.<dominio>` a `img-src`.
+- CSP (`lib/security/headers.ts`): `connect-src` ya admite `https:` y `wss:` (API y `rt.` funcionan sin cambios); falta revisar `https://files.<dominio>` en `img-src` (etapa 2).
 - La caché de datos de Next queda por instancia (no hay caché compartida entre instancias de Cloud Run). Con `cacheComponents` y páginas por persona no es un problema; si hiciera falta, un `cacheHandler` sobre Redis.
 - `@vercel/speed-insights` no se monta fuera de Vercel (correcto). Medir Web Vitals con Sentry o Cloud Monitoring.
 
@@ -316,7 +370,7 @@ Tiempos esperados por build: 8–15 min (pruebas: canario de un paso de 2 min; p
 
 - **Cloud Storage** (`mirai-<amb>-{private,backups,public}-<sufijo>`): acceso uniforme, versionado en `backups`, borrado suave (7–14 días), `exports/` se borra a los 7 días, `tmp/` al día, subidas incompletas al día. CORS solo para el origen de la web (subida directa con URL firmada V4). La API firma sin llave (`signBlob` sobre su propia cuenta). El bucket público necesita una excepción de política de organización si la organización bloquea `allUsers` (`manage_org_policy_exceptions` en el bootstrap).
 - **Cloud SQL PostgreSQL 17**, Enterprise. Producción: `db-custom-2-7680` (2 vCPU, 7,5 GB) **HA regional** (99,95 %), 30 copias diarias en multi-región `us`, PITR de 7 días, `max_connections = 200`. Pruebas: `db-g1-small` zonal (sin SLA), 7 copias, PITR de 3 días. Solo IP privada, TLS obligatorio, autenticación IAM para `api`, `realtime` y `migrator` (sin contraseñas), Query Insights, consultas lentas > 1 s al registro, mantenimiento domingo 4 a. m. Enterprise Plus y su pooling administrado quedan como opción (`edition`, `managed_connection_pooling`) si el número de conexiones lo pide (instancias × pool = 20 × 5 = 100 hoy).
-- **Memorystore Redis 7.2 Basic 1 GB**, AUTH + TLS, solo en producción y solo en la etapa 3. Lo necesita el adaptador de socket.io para varias instancias y la presencia con TTL; perder su contenido solo reconecta sockets, por eso Basic y no Standard HA. En pruebas el gateway corre con una instancia y adaptador en memoria (ahorra ~USD 36/mes). Alternativa a futuro: Memorystore for Valkey.
+- **Memorystore Redis 7.2 Basic 1 GB**, con AUTH, solo en producción y solo en la etapa 3. **TLS apagado por defecto** (`redis.tls = false`): el cliente del gateway (`ioredis` en `apps/api/src/modules/realtime/redis.ts`) solo recibe `REDIS_URL`; con TLS, Memorystore firma con su propia CA y la conexión va por IP, así que la verificación fallaría sin pasarle la CA. El tráfico no sale de la VPC (Private Services Access) y la clave AUTH va en Secret Manager. Cuando F2-G acepte la CA, `redis = { tls = true }` (recrea la instancia: solo se pierde presencia y pub/sub) y `REDIS_URL` pasa a `rediss://…:6378`. Lo necesita el adaptador de socket.io para varias instancias y la presencia con TTL; perder su contenido solo reconecta sockets, por eso Basic y no Standard HA. En pruebas el gateway corre con una instancia y adaptador en memoria (ahorra ~USD 36/mes). Alternativa a futuro: Memorystore for Valkey.
 
 ---
 
@@ -325,8 +379,8 @@ Tiempos esperados por build: 8–15 min (pruebas: canario de un paso de 2 min; p
 | Cuenta | Proyecto | Permisos |
 |---|---|---|
 | `mirai-<amb>-web` | ambiente | registros, métricas, trazas, Error Reporting; `secretAccessor` en sus 3–11 secretos |
-| `mirai-<amb>-api` | ambiente | lo mismo + sus secretos, `cloudtasks.enqueuer` en las 3 colas, `actAs` sobre la cuenta de Tasks, `tokenCreator` sobre sí misma (URL firmadas), `objectAdmin` en los 3 buckets; etapa 3: `cloudsql.client` + `instanceUser`; etapa 4: `firebaseauth.admin` |
-| `mirai-<amb>-realtime` | ambiente | registros + secretos + Cloud SQL (etapa 3) |
+| `mirai-<amb>-api` | ambiente | lo mismo + sus secretos, `cloudtasks.enqueuer` en las 3 colas (`notify`, `automations`, `slow`), `actAs` sobre la cuenta de Tasks, `tokenCreator` sobre sí misma (URL firmadas), `objectAdmin` en los 3 buckets; etapa 3: `cloudsql.client` + `instanceUser`; etapa 4: `firebaseauth.admin` |
+| `mirai-<amb>-realtime` | ambiente | registros + sus secretos (`supabase-secret-key`, `encryption-key`, `redis-url`, `database-url`, `supabase-jwt-secret`) + Cloud SQL (etapa 3) |
 | `mirai-<amb>-scheduler`, `-tasks` | ambiente | ninguno de proyecto; solo firman tokens OIDC |
 | `mirai-<amb>-migrator` | ambiente | Cloud SQL + `supabase-db-url` |
 | `mirai-<amb>-deploy` | cicd | `run.developer` y `monitoring.viewer` en SU ambiente, `actAs` sobre web/api/realtime/migrator, `artifactregistry.writer` en el repositorio, `ondemandscanning.admin`, registros |
@@ -387,9 +441,9 @@ Dónde ahorrar si hace falta: Cloud SQL de producción sin HA (−USD 100, pero 
 4. **Roles para la cuenta que ejecuta el bootstrap** (la mía o una de la empresa): `roles/owner` temporal en los tres proyectos durante el bootstrap (se retira al terminar; después todo corre con las cuentas `mirai-tf-*`). Si no se quiere Owner: `serviceusage.serviceUsageAdmin`, `iam.workloadIdentityPoolAdmin`, `iam.serviceAccountAdmin`, `resourcemanager.projectIamAdmin`, `storage.admin`, `artifactregistry.admin`, `cloudbuild.connectionAdmin`, `cloudbuild.builds.editor`, `secretmanager.admin` y `monitoring.notificationChannelEditor`. Más `orgpolicy.policyAdmin` en los proyectos de ambiente si hay que crear las excepciones del bucket público.
 5. **Dominio y DNS:** acceso a la zona DNS de `engynex.com` en Hostinger para crear los CNAME `_acme-challenge.mirai.engynex.com` y `_acme-challenge.pruebas.mirai.engynex.com`, bajar el TTL y, en el corte, cambiar `mirai.engynex.com` a A y crear `api`, `rt`, `files`, `canary` y `canary-api` (y los de `pruebas.`). Alternativa: delegar `mirai.engynex.com` a Cloud DNS (4 registros NS).
 6. **GitHub:** dueño y nombre del repositorio y su ID numérico; alguien con admin del repositorio que instale la app **Google Cloud Build** (da el ID de instalación) y autorice la conexión en la consola (deja el token OAuth en Secret Manager); crear el entorno `produccion` en GitHub con revisores obligatorios; confirmar si Terraform se aplicará desde GitHub Actions (se agrega un flujo con `google-github-actions/auth`).
-7. **Valores de secretos por ambiente** (los carga el dueño con `gcloud secrets versions add`, nunca por chat): los 14 de §6, en especial `ENCRYPTION_KEY` y `CRON_SECRET` **idénticos** a los de Vercel, `SUPABASE_SECRET_KEY`, `GOOGLE_CLIENT_SECRET`, `VAPID_PRIVATE_KEY`, Mercado Pago y Wompi de **prueba** para pruebas y de **producción** para producción. Y la configuración pública: clave publicable de Supabase, NIT y datos del responsable (Ley 1581), Client ID de Google, llave VAPID pública, llave pública de Wompi, DSN de Sentry, Turnstile y AdSense si aplican.
+7. **Valores de secretos por ambiente** (los carga el dueño con `gcloud secrets versions add`, nunca por chat): los 15 de §6 que no genera la infraestructura (`REDIS_URL` sí la genera), en especial `ENCRYPTION_KEY` y `CRON_SECRET` **idénticos** a los de Vercel, `SUPABASE_SECRET_KEY`, `GOOGLE_CLIENT_SECRET`, **`GOOGLE_OAUTH_STATE_KEY` (nuevo: se genera con `openssl rand -base64 32`, uno distinto por ambiente)**, `VAPID_PRIVATE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `WOMPI_INTEGRITY_SECRET` y `WOMPI_EVENTS_SECRET` de **prueba** para pruebas y de **producción** para producción, y en la fase 4 `DATABASE_URL` (Cloud SQL). Y la configuración pública: clave publicable de Supabase, NIT y datos del responsable (Ley 1581), Client ID de Google, llave VAPID pública, llave pública de Wompi (`NEXT_PUBLIC_WOMPI_PUBLIC_KEY`, la API la recibe como `WOMPI_PUBLIC_KEY`), DSN de Sentry, Turnstile y AdSense si aplican. Si la web sigue en Vercel mientras la API está en Cloud Run (fase 2), su origen va en `extra_web_origins`.
 8. **Supabase:** confirmar el plan (DMS necesita replicación lógica); cadena de conexión directa con un usuario con permiso de replicación; credenciales S3 de Supabase Storage (para copiar los 7 buckets); acceso para exportar `auth.users` e `auth.identities` (hash bcrypt) en la etapa 4; agregar las URL de redirección nuevas en Auth.
-9. **Google Cloud del cliente OAuth actual:** acceso para agregar los orígenes y URI de redirección nuevos (`/auth/callback`, `/api/google/callback` y, en la etapa 4, `https://<proyecto>.firebaseapp.com/__/auth/handler` o el dominio propio de auth).
+9. **Google Cloud del cliente OAuth actual:** acceso para agregar los orígenes y URI de redirección nuevos: `/auth/callback` y `/api/google/callback` de cada dominio de la web, **la URI de la API `<API_PUBLIC_URL>/v1/google/callback`** (`https://api.pruebas.mirai.engynex.com/v1/google/callback` y `https://api.mirai.engynex.com/v1/google/callback`; `API_PUBLIC_URL` la pone Terraform) y, en la etapa 4, `https://<proyecto>.firebaseapp.com/__/auth/handler` o el dominio propio de auth.
 10. **Pasarelas y servicios con URL registradas:** Mercado Pago y Wompi (cambiar la URL del webhook a `api.mirai.engynex.com/v1/webhooks/*` en la etapa del doc v6 paso 10), y confirmar si alguna integración (Meta, Telegram, bancos) exige IP fija de salida.
 11. **Vercel:** acceso para leer las variables (o que el dueño las copie), quitar `crons` en la etapa 2 y mantener el despliegue como respaldo 4 semanas.
 12. **Cuotas a solicitar:** ninguna es obligatoria para arrancar con los tamaños de este plan. Revisar en la consola (IAM › Cuotas) y pedir si se queda corto: "Total CPU allocation" de Cloud Run en us-west1 (producción usa hasta 20+20+6 vCPU), "In-use global external IP addresses" (≥ 2: un balanceador por ambiente), "Security policies" y "Security policy rules" de Cloud Armor (≥ 2 políticas y ≥ 30 reglas), "Concurrent builds" de Cloud Build (≥ 4) y el envío de correos de Identity Platform (se evita con SMTP propio).
@@ -410,6 +464,9 @@ Dónde ahorrar si hace falta: Cloud SQL de producción sin HA (−USD 100, pero 
 | `invoker_iam_disabled` deja a la app la validación de `/v1/jobs/*` | `SchedulerGuard` obligatorio (§9); ingress interno impide llegar sin pasar por el balanceador |
 | Región `us-west1` lejos de Colombia | Correcta mientras exista Supabase; revisar en la etapa 3 (§3) |
 | Supabase no permite replicación lógica en su plan | Volcado completo en ventana (la base es pequeña) |
+| Redis sin TLS (el gateway aún no acepta la CA de Memorystore) | AUTH + tráfico solo dentro de la VPC; encender `redis.tls` cuando F2-G lo soporte (§10) |
+| Conexiones a Cloud SQL (fase 4): la API abre un pool de hasta 10 por instancia (`PgKyselyFactory`); 20 instancias = 200 = `max_connections` de producción, sin margen para realtime ni migraciones | Antes del corte: bajar `services.api.max_instances`, el tamaño del pool o subir `cloud_sql.max_connections` / usar el pooling administrado |
+| `apps/api/cloudbuild.yaml` (despliegue manual de F2-B) usa otros nombres de servicio, cuenta y secretos (`mirai-api-pruebas`, `mirai-supabase-url`…) | Es de la fase 2; con Terraform se usa `infra/cloudbuild/deploy-api.yaml`. Retirarlo o alinearlo cuando la API pase a Terraform |
 | MFA y sesiones no se migran a Identity Platform | Comunicación previa y flujo de reactivación probado |
 
 ---
@@ -434,5 +491,5 @@ docs/infra/   estrategia-gcp.md · runbook.md
 
 - Proveedores fijados: `hashicorp/google` y `google-beta` `~> 8.9` (8.9.0 en el lock), Terraform ≥ 1.9 (probado con 1.16.4).
 - `terraform fmt -recursive`: sin cambios pendientes. `terraform init -backend=false && terraform validate`: válido en `envs/bootstrap`, `envs/pruebas`, `envs/produccion` y en cada módulo por separado.
-- `cd infra/terraform/stack && terraform test`: 5 pruebas con proveedores simulados (etapa 1; etapas 3–4; realtime sin Redis falla con varias instancias; realtime de una instancia sin Redis; secreto en `public_config` rechazado). Los `terraform.tfvars.example` de las tres raíces también pasan un `plan` simulado.
+- `cd infra/terraform/stack && terraform test`: 10 pruebas con proveedores simulados (etapa 1 con los nombres reales de las variables de la API, colas literales y solo dos trabajos de Scheduler; orígenes extra y `api_env`; etapas 3–4 con `REDIS_URL` y el entorno del gateway; realtime sin Redis falla con varias instancias; realtime de una instancia sin Redis; secreto en `public_config` rechazado; `live_source = gateway` sin realtime falla y con realtime llega al build; `db_adapter = pg` sin `database-url` falla y con él se monta `DATABASE_URL`). Los `terraform.tfvars.example` de pruebas y producción también pasan un `plan` simulado.
 - `ci.yaml` repite `fmt -check`, `validate` y `terraform test` en cada PR.

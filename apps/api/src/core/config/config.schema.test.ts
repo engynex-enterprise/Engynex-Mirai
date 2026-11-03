@@ -28,6 +28,13 @@ describe("configuración por entorno (zod)", () => {
     expect(c).toMatchObject({ docs: false, validateResponses: false, rateLimit: { store: "supabase" }, webOrigins: ["https://mirai.engynex.com"] })
   })
 
+  it("MODE=realtime fuera de local no exige las variables del cron (el gateway no tiene /v1/jobs)", () => {
+    const remote = { ...base, MIRAI_ENV: "produccion", SUPABASE_SECRET_KEY: "s", ENCRYPTION_KEY: KEY, WEB_ORIGINS: "https://mirai.engynex.com" }
+    expect(loadConfig({ ...remote, MODE: "realtime" })).toMatchObject({ mode: "realtime", scheduler: { cronSecret: undefined, audience: undefined, serviceAccounts: [] } })
+    expect(() => loadConfig({ ...remote, MODE: "api" })).toThrow(/SCHEDULER_AUDIENCE/)
+    expect(() => loadConfig({ ...base, MIRAI_ENV: "produccion", MODE: "realtime", SUPABASE_SECRET_KEY: "s", ENCRYPTION_KEY: KEY })).toThrow(/WEB_ORIGINS/)
+  })
+
   it("valida ENCRYPTION_KEY, PORT y combinaciones (pg sin DATABASE_URL, Cloud Tasks sin proyecto)", () => {
     expect(() => loadConfig({ ...base, ENCRYPTION_KEY: "corta" })).toThrow(/32 bytes/)
     expect(() => loadConfig({ ...base, PORT: "99999" })).toThrow(ConfigError)

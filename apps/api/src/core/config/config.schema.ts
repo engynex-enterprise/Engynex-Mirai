@@ -86,7 +86,9 @@ export const EnvSchema = z
       need(e.SUPABASE_SECRET_KEY, "SUPABASE_SECRET_KEY", "Falta SUPABASE_SECRET_KEY (Secret Manager)")
       need(e.ENCRYPTION_KEY, "ENCRYPTION_KEY", "Falta ENCRYPTION_KEY (Secret Manager)")
       need(e.WEB_ORIGINS.length, "WEB_ORIGINS", "Falta WEB_ORIGINS (orígenes del front para CORS)")
-      need(e.CRON_SECRET || (e.SCHEDULER_AUDIENCE && e.SCHEDULER_SERVICE_ACCOUNTS.length), "SCHEDULER_AUDIENCE", "Configura SCHEDULER_AUDIENCE + SCHEDULER_SERVICE_ACCOUNTS (OIDC) o CRON_SECRET")
+      // El gateway (MODE=realtime) no monta /v1/jobs/**: no necesita credenciales del cron.
+      if (e.MODE === "api")
+        need(e.CRON_SECRET || (e.SCHEDULER_AUDIENCE && e.SCHEDULER_SERVICE_ACCOUNTS.length), "SCHEDULER_AUDIENCE", "Configura SCHEDULER_AUDIENCE + SCHEDULER_SERVICE_ACCOUNTS (OIDC) o CRON_SECRET")
     }
     if (e.DB_ADAPTER === "pg") need(e.DATABASE_URL, "DATABASE_URL", "DB_ADAPTER=pg necesita DATABASE_URL")
     if (e.QUEUE_DRIVER === "cloudtasks") {

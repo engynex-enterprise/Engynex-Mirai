@@ -79,6 +79,7 @@ module "redis" {
   labels             = local.labels
   tier               = var.redis.tier
   memory_size_gb     = var.redis.memory_size_gb
+  tls                = var.redis.tls
   authorized_network = module.network.network_id
   reserved_ip_range  = module.network.private_services_range_name
 

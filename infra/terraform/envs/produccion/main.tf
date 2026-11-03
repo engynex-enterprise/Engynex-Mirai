@@ -8,16 +8,19 @@ module "mirai" {
     google.cicd = google.cicd
   }
 
-  environment     = "produccion"
-  project_id      = var.project_id
-  cicd_project_id = var.cicd_project_id
-  region          = var.region
-  bucket_suffix   = var.bucket_suffix
-  domains         = var.domains
-  stages          = var.stages
-  public_config   = var.public_config
-  api_env         = var.api_env
-  db_adapter      = var.db_adapter
+  environment       = "produccion"
+  project_id        = var.project_id
+  cicd_project_id   = var.cicd_project_id
+  region            = var.region
+  bucket_suffix     = var.bucket_suffix
+  domains           = var.domains
+  stages            = var.stages
+  public_config     = var.public_config
+  api_env           = var.api_env
+  realtime_env      = var.realtime_env
+  extra_web_origins = var.extra_web_origins
+  live_source       = var.live_source
+  db_adapter        = var.db_adapter
 
   scheduler_dry_run = var.scheduler_dry_run
 

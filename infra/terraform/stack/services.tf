@@ -1,6 +1,8 @@
 # Servicios de Cloud Run: web (Next.js standalone), api (NestJS) y realtime (socket.io, etapa 3).
-# Nombres de variables de la API: contrato propuesto para apps/api (@nestjs/config con zod). Si la API usa otros
-# nombres, se ajustan aquí o se agregan con var.api_env.
+# Nombres de variables = los que validan con zod apps/api/src/core/config/config.schema.ts (núcleo),
+# modules/integrations/services-env.ts (F2-E), modules/billing/billing.config.ts (F2-I),
+# modules/households/site-url.ts y modules/realtime/realtime.config.ts (F2-G). Inventario con su origen (variable o
+# Secret Manager): docs/infra/estrategia-gcp.md §5 y §6. Extras sin tocar el stack: var.api_env y var.realtime_env.
 
 locals {
   vpc_base = {
@@ -9,51 +11,67 @@ locals {
     tags       = local.run_tags
   }
 
+  # Valores públicos que pueden faltar en public_config: si están vacíos no se mandan (la API los toma como "sin definir").
+  api_public = { for k, v in {
+    GOOGLE_CLIENT_ID = lookup(var.public_config, "GOOGLE_CLIENT_ID", "")
+    VAPID_PUBLIC_KEY = lookup(var.public_config, "NEXT_PUBLIC_VAPID_PUBLIC_KEY", "")
+    VAPID_SUBJECT    = lookup(var.public_config, "VAPID_SUBJECT", "")
+    WOMPI_PUBLIC_KEY = lookup(var.public_config, "NEXT_PUBLIC_WOMPI_PUBLIC_KEY", "")
+  } : k => v if v != "" }
+
+  # Comunes a los dos modos de la misma imagen (MODE=api y MODE=realtime).
+  api_common_env = {
+    MIRAI_ENV                = local.env
+    NODE_ENV                 = "production"
+    LOG_LEVEL                = local.is_prod ? "info" : "debug"
+    SUPABASE_URL             = var.public_config["NEXT_PUBLIC_SUPABASE_URL"]
+    SUPABASE_PUBLISHABLE_KEY = var.public_config["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]
+    WEB_ORIGINS              = join(",", local.web_origins) # CORS (api) y origen del WebSocket (realtime)
+    DB_ADAPTER               = var.db_adapter
+    GIT_BRANCH               = trim(var.cicd.branch_regex, "^$") # consola › Sistema (GIT_COMMIT sale de K_REVISION)
+  }
+
   api_env = merge(
+    local.api_common_env,
+    local.api_public,
     {
-      MODE                     = "api"
-      MIRAI_ENV                = local.env
-      NODE_ENV                 = "production"
-      GCP_PROJECT_ID           = var.project_id
-      GCP_REGION               = var.region
-      SUPABASE_URL             = lookup(var.public_config, "NEXT_PUBLIC_SUPABASE_URL", "")
-      SUPABASE_PUBLISHABLE_KEY = lookup(var.public_config, "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
-      SITE_URL                 = local.web_origin
-      WEB_ORIGINS              = join(",", local.web_origins)
-      API_PUBLIC_URL           = local.api_origin
-      JOBS_OIDC_AUDIENCE       = local.run_url.api
-      JOBS_INVOKER_EMAILS      = join(",", [module.iam.emails["scheduler"], module.iam.emails["tasks"]])
-      TASKS_LOCATION           = var.region
-      TASKS_INVOKER_SA         = module.iam.emails["tasks"]
-      TASKS_TARGET_BASE_URL    = local.run_url.api
-      TASKS_QUEUE_NOTIFY       = module.tasks.queue_names["notify"]
-      TASKS_QUEUE_AUTOMATIONS  = module.tasks.queue_names["automations"]
-      TASKS_QUEUE_SLOW         = module.tasks.queue_names["slow"]
-      DB_ADAPTER               = var.db_adapter
-      GOOGLE_CLIENT_ID         = lookup(var.public_config, "GOOGLE_CLIENT_ID", "")
-      VAPID_PUBLIC_KEY         = lookup(var.public_config, "NEXT_PUBLIC_VAPID_PUBLIC_KEY", "")
-      VAPID_SUBJECT            = lookup(var.public_config, "VAPID_SUBJECT", "")
-      UPSTASH_REDIS_REST_URL   = lookup(var.public_config, "UPSTASH_REDIS_REST_URL", "")
-      SENTRY_DSN               = lookup(var.public_config, "NEXT_PUBLIC_SENTRY_DSN", "")
-      LOG_LEVEL                = local.is_prod ? "info" : "debug"
+      MODE = "api"
+
+      # Cron (SchedulerGuard): token OIDC de Scheduler o de Tasks con audiencia = URL *.run.app de la API.
+      SCHEDULER_AUDIENCE         = local.run_url.api
+      SCHEDULER_SERVICE_ACCOUNTS = join(",", [module.iam.emails["scheduler"], module.iam.emails["tasks"]])
+
+      # Colas (CloudTasksQueue): projects/<GCP_PROJECT>/locations/<GCP_LOCATION>/queues/<notify|automations|slow>.
+      QUEUE_DRIVER          = "cloudtasks"
+      GCP_PROJECT           = var.project_id
+      GCP_LOCATION          = var.region
+      TASKS_SERVICE_ACCOUNT = module.iam.emails["tasks"]
+      API_BASE_URL          = local.run_url.api # Cloud Tasks llama de vuelta por la URL interna (sin pasar por Armor)
+      TICK_DAILY_TASKS      = "1"               # el tick encola refs, calendar, net-worth y plan-reminders (jobs.tf)
+      AUTOMATIONS_OUTBOX    = "1"
+
+      # Enlaces: la web (correos, invitaciones, retorno de pagos y de Google) y la API pública (callback de Google:
+      # <API_PUBLIC_URL>/v1/google/callback, hay que registrarlo en el cliente OAuth).
+      SITE_URL       = local.web_origin
+      API_PUBLIC_URL = local.api_origin
     },
     var.stages.storage ? {
+      # Para FilesModule (F2-D). El núcleo aún no los lee; quedan listos con los nombres del contrato.
       STORAGE_BUCKET_PRIVATE = module.storage[0].names["private"]
       STORAGE_BUCKET_PUBLIC  = module.storage[0].names["public"]
       STORAGE_BUCKET_BACKUPS = module.storage[0].names["backups"]
       PUBLIC_FILES_URL       = local.files_origin
     } : {},
-    var.stages.cloud_sql ? {
-      CLOUD_SQL_CONNECTION_NAME = module.cloud_sql[0].connection_name
-      DB_NAME                   = module.cloud_sql[0].database_name
-      DB_IAM_USER               = module.cloud_sql[0].iam_db_users["api"]
-    } : {},
-    var.stages.redis ? {
-      REDIS_HOST = module.redis[0].host
-      REDIS_PORT = tostring(module.redis[0].port)
-      REDIS_TLS  = "true"
-    } : {},
+    # Con Redis (REDIS_URL en Secret Manager), la API publica sus cambios para el gateway (@socket.io/redis-emitter).
+    var.stages.redis ? { REALTIME_API_EMIT = "1" } : {},
     var.api_env,
+  )
+
+  # Gateway: misma imagen con MODE=realtime. No monta /v1/jobs ni las colas, así que no lleva cron ni Cloud Tasks.
+  realtime_env = merge(
+    local.api_common_env,
+    { MODE = "realtime" },
+    var.realtime_env,
   )
 }
 
@@ -78,7 +96,8 @@ module "web" {
   # (Supabase, IA) por Cloud NAT.
   vpc = merge(local.vpc_base, { egress = "ALL_TRAFFIC" })
 
-  env = merge(var.public_config, {
+  # Los NEXT_PUBLIC_* valen lo que se incrustó en el build (locals.web_build_env); aquí se repiten para el servidor.
+  env = merge(var.public_config, local.web_live_env, {
     MIRAI_ENV               = local.env
     HOSTNAME                = "0.0.0.0"
     NEXT_TELEMETRY_DISABLED = "1"
@@ -138,12 +157,18 @@ module "realtime" {
   max_instances         = var.services.realtime.max_instances
   concurrency           = var.services.realtime.concurrency
   timeout_seconds       = 3600 # Cloud Run corta el WebSocket a los 60 min y socket.io reconecta solo
-  session_affinity      = true
+  session_affinity      = true # socket.io con long-polling: todas las peticiones de una sesión a la misma instancia
   ingress               = local.ingress
   deletion_protection   = var.deletion_protection
-  vpc                   = merge(local.vpc_base, { egress = "PRIVATE_RANGES_ONLY" })
 
-  env        = merge(local.api_env, { MODE = "realtime" })
+  # Direct VPC egress solo a rangos privados: Memorystore (y Cloud SQL) por Private Services Access; internet directo.
+  vpc = merge(local.vpc_base, { egress = "PRIVATE_RANGES_ONLY" })
+
+  # /healthz no toca la base ni Redis: sirve para el arranque y la vida (también en MODE=realtime).
+  startup_probe = { type = "http", path = "/healthz" }
+  liveness_path = "/healthz"
+
+  env        = local.realtime_env
   secret_env = local.mounted_secrets["realtime"]
 
   depends_on = [module.secrets]

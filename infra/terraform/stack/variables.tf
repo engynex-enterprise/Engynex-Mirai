@@ -114,7 +114,7 @@ variable "services" {
       timeout       = optional(number, 300)
       latency_p95   = optional(number, 5000)
       vpc_egress    = optional(string, "PRIVATE_RANGES_ONLY")
-      liveness_path = optional(string)
+      liveness_path = optional(string, "/healthz")
     }), {})
     realtime = optional(object({
       cpu           = optional(string, "1")
@@ -134,6 +134,9 @@ variable "public_config" {
     Claves esperadas: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_LEGAL_*, GOOGLE_CLIENT_ID,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_SUBJECT, NEXT_PUBLIC_TURNSTILE_SITE_KEY, UPSTASH_REDIS_REST_URL,
     NEXT_PUBLIC_SENTRY_DSN, NEXT_PUBLIC_WOMPI_PUBLIC_KEY, NEXT_PUBLIC_ADSENSE_CLIENT, NEXT_PUBLIC_ADSENSE_SLOT, MIRAI_CSP_ENFORCE.
+    La API recibe de aquí (con sus nombres): SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, GOOGLE_CLIENT_ID, VAPID_PUBLIC_KEY,
+    VAPID_SUBJECT y WOMPI_PUBLIC_KEY. NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_API_URL, NEXT_PUBLIC_REALTIME_URL y
+    NEXT_PUBLIC_LIVE_SOURCE los pone el stack (dominios, stages.realtime y var.live_source).
   EOT
   type        = map(string)
   validation {
@@ -147,9 +150,39 @@ variable "public_config" {
 }
 
 variable "api_env" {
-  description = "Variables extra (sin secretos) para la API y el gateway, sin tocar el stack."
+  description = "Variables extra (sin secretos) para la API, sin tocar el stack (p. ej. IDEMPOTENCY_STORE = \"supabase\" cuando la migración api_idempotency esté aplicada, DOCS, OTEL_*). Pisan las del stack."
   type        = map(string)
   default     = {}
+}
+
+variable "realtime_env" {
+  description = "Variables extra (sin secretos) para el gateway (MODE=realtime): REALTIME_PG_LISTEN, REALTIME_TOKEN_CHECK_S, REALTIME_MAX_BOOKS… (apps/api/.env.example). Pisan las del stack."
+  type        = map(string)
+  default     = {}
+}
+
+variable "extra_web_origins" {
+  description = "Orígenes extra del front para CORS de la API y el origen del WebSocket (WEB_ORIGINS), p. ej. la web en Vercel durante la transición. Admite un * de comodín (https://engynex-mirai-*.vercel.app)."
+  type        = list(string)
+  default     = []
+  validation {
+    condition     = alltrue([for o in var.extra_web_origins : can(regex("^https://[^/]+$", o))])
+    error_message = "Cada origen va como https://dominio, sin barra final."
+  }
+}
+
+variable "live_source" {
+  description = "Fuente de los cambios en vivo de la web (NEXT_PUBLIC_LIVE_SOURCE, se incrusta en el build): supabase (Supabase Realtime, lo de hoy) o gateway (mirai-realtime; necesita stages.realtime)."
+  type        = string
+  default     = "supabase"
+  validation {
+    condition     = contains(["supabase", "gateway"], var.live_source)
+    error_message = "live_source debe ser supabase o gateway."
+  }
+  validation {
+    condition     = var.live_source == "supabase" || var.stages.realtime
+    error_message = "live_source = gateway necesita stages.realtime = true."
+  }
 }
 
 variable "db_adapter" {
@@ -159,6 +192,10 @@ variable "db_adapter" {
   validation {
     condition     = contains(["supabase", "pg"], var.db_adapter)
     error_message = "db_adapter debe ser supabase o pg."
+  }
+  validation {
+    condition     = var.db_adapter == "supabase" || contains(var.optional_secrets, "database-url")
+    error_message = "db_adapter = pg necesita DATABASE_URL: carga el secreto database-url y agrégalo a optional_secrets."
   }
 }
 
@@ -170,6 +207,7 @@ variable "optional_secrets" {
     condition = alltrue([for s in var.optional_secrets : contains([
       "google-client-secret", "google-oauth-state-key", "ai-gateway-api-key", "vapid-private-key", "upstash-redis-rest-token",
       "mercadopago-access-token", "mercadopago-webhook-secret", "wompi-integrity-secret", "wompi-events-secret", "supabase-jwt-secret",
+      "database-url",
     ], s)])
     error_message = "Secreto opcional desconocido (ver el catálogo en stack/secrets.tf)."
   }
@@ -205,6 +243,7 @@ variable "redis" {
   type = object({
     tier           = optional(string, "BASIC")
     memory_size_gb = optional(number, 1)
+    tls            = optional(bool, false) # ver modules/redis (variable tls)
   })
   default = {}
 }

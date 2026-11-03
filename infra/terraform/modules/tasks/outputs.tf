@@ -1,5 +1,5 @@
 output "queue_names" {
-  description = "Clave → nombre corto de la cola."
+  description = "Clave → id de la cola (el mismo literal que usa la API)."
   value       = { for k, q in google_cloud_tasks_queue.this : k => q.name }
 }
 

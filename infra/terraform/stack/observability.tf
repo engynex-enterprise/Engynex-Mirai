@@ -12,10 +12,13 @@ module "monitoring" {
     var.stages.realtime ? { (local.names.realtime) = { error_ratio = 0.05 } } : {},
   )
 
-  uptime_checks = var.stages.load_balancer && var.stages.uptime_checks ? {
-    web = { host = var.domains.web, path = "/api/public/version" }
-    api = { host = var.domains.api, path = "/healthz" }
-  } : {}
+  uptime_checks = var.stages.load_balancer && var.stages.uptime_checks ? merge(
+    {
+      web = { host = var.domains.web, path = "/api/public/version" }
+      api = { host = var.domains.api, path = "/healthz" }
+    },
+    var.stages.realtime ? { realtime = { host = var.domains.realtime, path = "/healthz" } } : {},
+  ) : {}
 
   cloud_sql_instance = var.stages.cloud_sql ? module.cloud_sql[0].instance_name : null
   redis_instance_id  = var.stages.redis ? "projects/${var.project_id}/locations/${var.region}/instances/${local.prefix}-redis" : null

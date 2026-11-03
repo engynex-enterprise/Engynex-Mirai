@@ -38,14 +38,23 @@ public_config = {
 
 optional_secrets = [
   # "google-client-secret",
+  # "google-oauth-state-key",     # HMAC del state de Google en la API (sin él no se conecta Gmail/Calendar)
   # "vapid-private-key",
   # "ai-gateway-api-key",
-  # "upstash-redis-rest-token",
+  # "upstash-redis-rest-token",   # solo la web
   # "mercadopago-access-token",
-  # "mercadopago-webhook-secret",
+  # "mercadopago-webhook-secret", # obligatorio en producción para procesar webhooks de Mercado Pago en la API
   # "wompi-integrity-secret",
   # "wompi-events-secret",
+  # "database-url",               # fase 4: necesario para db_adapter = "pg" o REALTIME_PG_LISTEN=1
 ]
+
+# WEB_ORIGINS ya incluye https://mirai.engynex.com y canary.: la web en Vercel (fase 2) usa el mismo dominio.
+# extra_web_origins = []
+
+# Tiempo real (fase 4, con stages.redis = true y stages.realtime = true): la web usa el gateway.
+# live_source  = "gateway"
+# realtime_env = { REALTIME_PG_LISTEN = "1" }
 
 alert_emails = {
   dueno = "alertas@engynex.com"

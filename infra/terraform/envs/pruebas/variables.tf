@@ -70,6 +70,24 @@ variable "api_env" {
   default     = {}
 }
 
+variable "realtime_env" {
+  description = "Variables extra (sin secretos) para el gateway realtime (REALTIME_*)."
+  type        = map(string)
+  default     = {}
+}
+
+variable "extra_web_origins" {
+  description = "Orígenes extra para WEB_ORIGINS (CORS de la API y origen del WebSocket), p. ej. la web en Vercel durante la transición."
+  type        = list(string)
+  default     = []
+}
+
+variable "live_source" {
+  description = "Fuente de los cambios en vivo de la web: supabase (hoy) o gateway (fase 4, con stages.realtime)."
+  type        = string
+  default     = "supabase"
+}
+
 variable "optional_secrets" {
   description = "Secretos opcionales que ya tienen valor en Secret Manager y se montan en los servicios."
   type        = list(string)

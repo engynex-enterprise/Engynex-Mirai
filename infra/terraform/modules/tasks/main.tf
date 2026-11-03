@@ -3,12 +3,15 @@
 # - automations: procesar un libro y las esperas cumplidas (scheduleTime).
 # - slow: resúmenes con IA, importación v4, respaldos y sincronización de Calendar.
 # El token OIDC se fija a nivel de cola: la API solo manda la URL y el cuerpo.
+# Ids LITERALES (notify, automations, slow): son los de QueueName en apps/api/src/core/queue/queue.port.ts y la API
+# arma projects/<GCP_PROJECT>/locations/<GCP_LOCATION>/queues/<id>. Cada ambiente tiene su proyecto, así que no
+# hace falta prefijo. Ojo: un id de cola borrado no se puede volver a usar en ~7 días.
 
 resource "google_cloud_tasks_queue" "this" {
   for_each = var.queues
   project  = var.project_id
   location = var.region
-  name     = "${var.prefix}-${each.key}"
+  name     = each.key
 
   rate_limits {
     max_dispatches_per_second = each.value.max_dispatches_per_second

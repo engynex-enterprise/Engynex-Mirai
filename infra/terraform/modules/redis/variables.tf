@@ -55,3 +55,14 @@ variable "reserved_ip_range" {
   type        = string
   default     = null
 }
+
+variable "tls" {
+  description = <<-EOT
+    TLS en tránsito (SERVER_AUTHENTICATION, puerto 6378). Memorystore firma con su propia CA y el cliente se conecta por
+    IP, así que hace falta pasarle la CA y ajustar la verificación del nombre: apps/api/src/modules/realtime/redis.ts hoy
+    solo recibe REDIS_URL. Mientras eso no exista, false (AUTH + tráfico solo dentro de la VPC por Private Services
+    Access). Cambiarlo recrea la instancia (Redis solo guarda presencia y el pub/sub de socket.io).
+  EOT
+  type        = bool
+  default     = false
+}
