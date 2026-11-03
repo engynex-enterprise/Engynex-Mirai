@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { avisoOn } from "@/lib/domain"
+import { avisoOn } from "@mirai/domain"
 import { AVISOS, avisoOf, defaultMatriz, enSilencio, maskDest, onFor } from "./rules"
 
 describe("reglas de avisos por canal", () => {

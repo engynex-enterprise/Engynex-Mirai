@@ -4,7 +4,7 @@ import { Suspense } from "react"
 import { usePathname } from "next/navigation"
 import { useEffect, useMemo } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { useBookRealtime } from "@/hooks/use-realtime"
+import { useBookLive } from "@/hooks/use-live"
 import { useIdlePrefetchBook } from "@/hooks/use-prefetch-book"
 import type { AppContext } from "@/lib/dal"
 import { AppContextProvider, useApp } from "./app-context"
@@ -47,7 +47,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const path = usePathname()
   const ctx = useApp()
   const me = useMemo(() => ({ id: ctx.user.id, nombre: ctx.user.nombre, avatar: ctx.user.avatar }), [ctx.user])
-  const { status, online } = useBookRealtime(ctx.book.id, me, path)
+  const { status, online } = useBookLive(ctx.book.id, me, path) // Supabase Realtime salvo NEXT_PUBLIC_LIVE_SOURCE=gateway
   useIdlePrefetchBook(ctx.book.id)
   const setOnline = useShell((s) => s.setOnline)
   useEffect(() => { setOnline(online.map((o) => ({ id: o.id, nombre: o.nombre, avatar: o.avatar }))) }, [online, setOnline])

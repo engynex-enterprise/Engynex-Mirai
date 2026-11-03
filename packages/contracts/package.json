@@ -22,6 +22,7 @@
     "@mirai/config": "workspace:*",
     "@types/node": "^22.20.5",
     "eslint": "^9",
+    "socket.io-client": "^4.8.4",
     "typescript": "^5",
     "vitest": "^5.0.5"
   }

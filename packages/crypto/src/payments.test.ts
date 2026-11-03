@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto"
 import { describe, expect, it } from "vitest"
-import { mercadoPagoVerify, wompiIntegrity, wompiVerifyEvent } from "./signatures"
+import { mercadoPagoVerify, wompiIntegrity, wompiVerifyEvent } from "./payments"
 
 describe("Wompi", () => {
   it("firma de integridad: SHA-256 de referencia + centavos + moneda + secreto", () => {

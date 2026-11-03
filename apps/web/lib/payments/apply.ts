@@ -1,12 +1,9 @@
 import "server-only"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import type { Json } from "@/lib/supabase/database.types"
-import { precio } from "@/lib/plans"
-import { payEffect, type PayState } from "./state"
+import { paymentNotice, type ApplyResult, type PayState, type Periodo, type Proveedor } from "@mirai/domain/billing"
 
-export type { PayState }
-export type Periodo = "mes" | "anio"
-export type Proveedor = "mercadopago" | "wompi" | "manual"
+export type { ApplyResult, PayState, Periodo, Proveedor }
 
 /** Pasarelas configuradas en este despliegue (si faltan las llaves, los botones de pago se muestran deshabilitados). */
 export const payConfig = () => ({
@@ -33,14 +30,6 @@ export async function notifyOwners(householdId: string, titulo: string, cuerpo: 
   await supabaseAdmin().from("notifications").upsert(ids.map((user_id) => ({ user_id, kind: "plan", titulo, cuerpo, href: "/ajustes?tab=plan", dedupe })), { onConflict: "user_id,dedupe", ignoreDuplicates: true })
 }
 
-/** Lo que devuelve apply_plan_payment (la transacción de la base). */
-export type ApplyResult = {
-  subscription_id: string | null; payment_id: string; prev_estado: PayState | null; estado: PayState
-  first_approval: boolean; revoked: boolean; vence_at: string | null; cupon_contado: boolean
-}
-
-const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" })
-
 /**
  * Registra un pago y, si quedó aprobado por primera vez, extiende el plan del hogar un mes o un año.
  * Todo pasa en UNA transacción de la base (apply_plan_payment, con candado por referencia y por hogar): dos
@@ -61,17 +50,9 @@ export async function applyPayment(p: {
   })
   if (error) throw new Error(error.message)
   const r = data as unknown as ApplyResult
-  const fx = payEffect(r.prev_estado, r.estado)
-
-  if (r.first_approval && r.vence_at) {
-    const { data: pl } = await db.from("plans").select("nombre").eq("id", plan).maybeSingle()
-    await notifyOwners(p.householdId, `¡Bienvenido a Mirai ${pl?.nombre ?? "Premium"}!`, `Recibimos tu pago de ${precio(p.monto)}. Tu plan está activo hasta el ${fechaLarga(r.vence_at)}.`, `pay-ok-${p.proveedor}-${p.referencia}`)
-  } else if (r.revoked) {
-    await notifyOwners(p.householdId, r.estado === "anulado" ? "Tu pago se anuló" : "Tu pago fue reembolsado", r.vence_at && new Date(r.vence_at) > new Date()
-      ? `Quitamos ese periodo de tu plan: ahora está activo hasta el ${fechaLarga(r.vence_at)}.`
-      : "Quitamos ese periodo de tu plan y volviste al plan Gratis. Tus datos siguen intactos; puedes pagar de nuevo en Ajustes › Mi plan.", `pay-rev-${p.proveedor}-${p.referencia}`)
-  } else if (fx.rejected) {
-    await notifyOwners(p.householdId, "Tu pago no se aprobó", "El banco o la pasarela rechazó el pago de tu plan. Intenta de nuevo o usa otro medio en Ajustes › Mi plan.", `pay-ko-${p.proveedor}-${p.referencia}`)
-  }
+  // Textos y dedupe en @mirai/domain/billing (los comparte la API).
+  const planNombre = r.first_approval && r.vence_at ? (await db.from("plans").select("nombre").eq("id", plan).maybeSingle()).data?.nombre : null
+  const aviso = paymentNotice(r, { proveedor: p.proveedor, referencia: p.referencia, monto: p.monto, planNombre })
+  if (aviso) await notifyOwners(p.householdId, aviso.titulo, aviso.cuerpo, aviso.dedupe)
   return { subscriptionId: r.subscription_id, firstApproval: r.first_approval, revoked: r.revoked, estado: r.estado }
 }

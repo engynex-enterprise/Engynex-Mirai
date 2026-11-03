@@ -32,9 +32,5 @@ export const cancelPreapproval = (id: string) => mp<Preapproval>(`/preapproval/$
 export const getAuthorizedPayment = (id: string) => mp<AuthorizedPayment>(`/authorized_payments/${encodeURIComponent(id)}`)
 export const getPayment = (id: string) => mp<MpPayment>(`/v1/payments/${encodeURIComponent(id)}`)
 
-/** external_reference de Mirai: "mirai:{hogar}:{periodo}:{plan}[:{cupón}]". */
-export const mpRef = (householdId: string, periodo: "mes" | "anio", plan = "premium", cupon?: string | null) => `mirai:${householdId}:${periodo}:${plan}${cupon ? `:${cupon}` : ""}`
-export function parseMpRef(ref?: string | null) {
-  const m = ref?.match(/^mirai:([0-9a-f-]{36}):(mes|anio)(?::([a-z0-9-]{2,30}))?(?::([A-Z0-9_-]{3,30}))?$/)
-  return m ? { householdId: m[1], periodo: m[2] as "mes" | "anio", plan: m[3] ?? "premium", cupon: m[4] ?? null } : null
-}
+/** external_reference de Mirai: "mirai:{hogar}:{periodo}:{plan}[:{cupón}]" (en @mirai/domain/billing). */
+export { mpRef, parseMpRef } from "@mirai/domain/billing"

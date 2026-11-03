@@ -32,6 +32,7 @@ import { FeedbackModule } from "./feedback/feedback.module"
 import { AdminModule } from "./admin/admin.module"
 import { FilesModule } from "./files/files.module"
 import { RealtimeModule } from "./realtime/realtime.module"
+import { RealtimePublisherModule } from "./realtime/realtime-publisher.module"
 import { JobsModule } from "./jobs/jobs.module"
 import { HealthModule } from "./health/health.module"
 
@@ -72,8 +73,11 @@ export const API_MODULES: readonly ApiModuleEntry[] = [
   { id: "health", owner: "F2-B", module: HealthModule },
 ]
 
-/** MODE=api: todos los módulos menos el gateway de WebSocket (va en su propio servicio de Cloud Run, D8). */
-export const apiModules = (): Type[] => API_MODULES.filter((m) => m.id !== "realtime").map((m) => m.module)
+/**
+ * MODE=api: todos los módulos menos el gateway de WebSocket (va en su propio servicio de Cloud Run, D8). En su lugar,
+ * RealtimePublisherModule (F2-G) publica en Redis los cambios de la API para el gateway (sin REDIS_URL no hace nada).
+ */
+export const apiModules = (): Type[] => [...API_MODULES.filter((m) => m.id !== "realtime").map((m) => m.module), RealtimePublisherModule]
 
 /** MODE=realtime: solo salud y el gateway (F2-G). */
 export const realtimeModules = (): Type[] => [HealthModule, RealtimeModule]

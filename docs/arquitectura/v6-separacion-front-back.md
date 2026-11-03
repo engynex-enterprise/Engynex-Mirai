@@ -943,6 +943,20 @@ Criterio de terminado: "`/v1/me` = `getAppContext` para 5 roles" y "error de rol
 
 **Terminado cuando:** cada endpoint tiene una prueba de integración con RLS (el que solo mira lee; alguien que no es miembro recibe 404) y una de paridad; latencia p95 < 250 ms en Cloud Run de pruebas.
 
+**Estado F2-C (2026-11-02, sin commit):** lecturas hechas con dobles (sin tocar la base compartida). Pruebas: `apps/api/test/read.int.test.ts` (rol y membresía de cada ruta del libro + paridad con el libro de ejemplo de la v4) y unitarias por módulo (adaptadores supabase-js con cliente falso y Kysely capturando el SQL).
+
+| Ítem | Estado | Dónde / nota |
+|---|---|---|
+| C-1 `book-tables` lectura | ✔ | `GET /v1/books/:b/t/:table` (`select`, `order=campo.asc\|desc`, `eq.campo=valor\|null`; solo tablas `generic`, columnas en lista blanca `packages/contracts/src/book-table-columns.ts`, generada de los tipos y con prueba de tipos de completitud) y `GET …/snapshot?parts=` (mismas consultas que `loadBookPart`; Kysely anida los hijos por la llave foránea). `BookTablesService.loadBook()` lo usan insights y gami |
+| C-2 `refs` | ✔ | `GET /v1/refs/{uvt,smmlv,trm,usura,festivos,renta-calendar,renta-regimenes}` con `Cache-Control: public, max-age=300, s-maxage=3600`. Viven en `modules/insights/refs` (no hay módulo `refs` en §2.6) |
+| C-3 `billing` lectura | ✘ | Pendiente: la carpeta `billing` la está llenando F2-I en paralelo; se hace con ellos para no pisarse |
+| C-4 `insights` | ✔ | `views/{flujo-integral,estado-integral,inicio,balance,dashboard,proyeccion,indicadores,agenda,hallazgos}` y `reports/:mes` (`?hoy=` opcional). Fuente única nueva en `@mirai/domain`: `integral-extras.ts` (calEst, integralExtras, rentaDataFrom, rentaInput; la web los re-exporta) y `vistas.ts` (vistaInicio/Balance/Dashboard = las llamadas de las pantallas). Paridad probada contra el cálculo del cliente con `sample-v4.json` |
+| C-5 Campana | ✔ | `GET /v1/notifications?bookId=&sinLeer=`, `PATCH …/:id/read` y `POST …/read-all` (submódulo `notifications/bell`, contrato `notifications-bell.ts`) |
+| C-6 `gami`, referidos, ia-uso | ✔ / ✘ | `GET /v1/books/:b/gami` (por libro: el estado de logros es del libro) y `GET /v1/me/referrals` (`SystemScope` con `reason`, crea el código la primera vez; devuelve `ruta` relativa). **Pendiente:** `GET /v1/books/:b/ai/usage` (depende de mover `lib/ai/usage` y `credits`, F2-F) |
+| `ads` lectura | ✔ | `GET /v1/books/:b/ads/eligible?slot=&device=` (`lib/ads.ts` pasó a `@mirai/domain/ads`). **Pendiente:** `POST /v1/ads/events` y `GET /v1/public/adsense` |
+
+Pendientes generales: integración con RLS real en Supabase local (B-10) y la latencia p95 en Cloud Run; para `DB_ADAPTER=pg`, `PgKyselyFactory` debe devolver `date` como texto `YYYY-MM-DD` (hoy `pg` da `Date`) y `numeric` como número.
+
 ### F2-D — Módulos de escritura
 **Dueño de:** `modules/{book-tables (escritura), catalogs, expenses, incomes, fixed, cards, loans, savings, assets, budget, tax (sin portal), import, feedback, files}`. **Depende de:** F2-B y F2-C-1.
 1. **F2-D-1** `book-tables` de escritura: `PUT` (upsert idempotente), `DELETE` (borrado lógico), `restore` y la regla `own` para "Registra sus gastos". Emite `EventsService.changed`.
@@ -967,6 +981,18 @@ Criterio de terminado: "`/v1/me` = `getAppContext` para 5 roles" y "error de rol
 6. **F2-E-6** Cloud Scheduler (pruebas) y colas de Cloud Tasks `notify`, `automations` y `slow` (creadas con `gcloud`; Terraform en la fase 3).
 
 **Terminado cuando:** en simulación, el *tick* produce el mismo `report` que `app/api/cron/notify` para el mismo minuto; ningún envío duplicado en 3 días de simulación comparada; envío de prueba real por cada canal desde la API.
+
+**Estado F2-E (2026-11-02, sin commit):** código compartido en **`packages/services` (`@mirai/services`)** y módulos de la API hechos en el árbol de trabajo; `pnpm typecheck`, `pnpm lint` (0 errores), `pnpm test` (services 73, api 22 nuevas de F2-E: unitarias + `test/f2e.int.test.ts`) y `pnpm --filter api build` en verde; `pnpm --filter web build` también. Detalle: `apps/api/README.md` › F2-E y `packages/services/README.md`.
+
+| Ítem | Estado | Dónde / nota |
+|---|---|---|
+| Código compartido | ✔ | `lib/notify/*`, `lib/integrations/registry.ts`, `features/integrations/{store,refresh,data-sources}.ts`, `lib/google*.ts`, `lib/plan-server.ts`, `lib/automations/{detect,notify,notify-rules,server}.ts` y `lib/security/safe-{url,next}.ts` pasaron a `@mirai/services`; los archivos de la web re-exportan (con `server-only` + `apps/web/lib/services.ts`, que llama a `configureServices`). Los casos de uso de `features/notify/actions.ts` y `features/integrations/actions.ts` (guardar/prender/borrar) también: las Server Actions solo arman el contexto y el límite. El cron de la web usa `cronHeartbeat` + `runDigests` (mismo recorrido y mismo `report.runs`). Las pruebas de avisos, WhatsApp y Calendar se movieron al paquete |
+| E-1 `integrations` | ◐ | `GET/PUT/PATCH/DELETE /v1/books/:b/integrations[/:kind]` (bajo el libro: no hay guarda de hogar). **Pendiente F2-F:** `test` y `models` (AI SDK) |
+| E-2 `notifications` | ✔ | `notifications/delivery/` (la campana es de F2-C, `bell/`): regla propia, canales, prueba y resumen ahora (`pruebaAviso`), ventanas al abrir, Telegram, push y cobro por WhatsApp (`cobroWa`, plantilla propia aprobada; nunca las de ejemplo de Meta). Exporta `DeliveryPort` para F2-D (recordatorio de préstamos) |
+| E-3 `google` | ◐ | `connect-url` con `state` HMAC-SHA256 (`GOOGLE_OAUTH_STATE_KEY`, 10 min, sin cookie), `GET /v1/google/callback` (público, redirige a la web con `?google=ok|cancelado|error`), `DELETE /v1/google`, `calendar/sync|status`. **Pendiente F2-F:** `mail/scan` (usa la IA). **Falta registrar** `<API_PUBLIC_URL>/v1/google/callback` en Google Cloud |
+| E-4 `automations` | ◐ | Outbox: `EventsService` → `automations/book/:b` (cola `automations`, 1 s, `auto-<libro>-<segundo>`) para las 7 tablas con `automation_enqueue`; `processBook`, pasada horaria y *drain* sobre el mismo `@mirai/services/automations/server`. El nodo de IA usa `rt().aiText` (la web lo da; en la API lo conecta F2-F). **Pendiente:** CRUD, `test` y `defaults` (siguen en la web) |
+| E-5 `jobs` | ✔ / ◐ | Tick con latido y fan-out por hogar (`notify-<hogar>-<AAAAMMDDHH>`), trabajadores de las 3 colas y simulación (`?dry=1` o `{ "dry": true }`: sin latido, tareas `dry-…`, `runRule` responde "simulado"/"ya enviado"). `plan/reminders` llama a `PlanRemindersPort`: **F2-I** debe proveerlo (hoy responde "pendiente"; la web sigue avisando) |
+| E-6 colas y Scheduler | ◐ | Nombres: `notify`, `automations`, `slow`. Terraform (`infra/terraform/stack/jobs.tf`) las crea con prefijo y define jobs aparte para refs/calendar/plan/patrimonio: o se usa `TICK_DAILY_TASKS=0` o se quitan esos jobs. **Desfase a resolver con F2-B/Terraform:** `CloudTasksQueue` usa el id literal de la cola y las variables del núcleo (`GCP_PROJECT`, `GCP_LOCATION`, `TASKS_SERVICE_ACCOUNT`, `API_BASE_URL`, `SCHEDULER_AUDIENCE`, `SCHEDULER_SERVICE_ACCOUNTS`) no coinciden con las de `services.tf` (`GCP_PROJECT_ID`, `TASKS_LOCATION`, `TASKS_INVOKER_SA`, `TASKS_TARGET_BASE_URL`, `TASKS_QUEUE_*`, `JOBS_OIDC_AUDIENCE`, `JOBS_INVOKER_EMAILS`) |
 
 ### F2-F — IA, chat y streaming
 **Dueño de:** `modules/{ai, chat}` y `packages/ai` (si se crea). **Depende de:** F2-B y F2-E-1 (integraciones). Usa los servicios de F2-D por inyección para confirmar propuestas; mientras F2-D no termine, puede usar `SystemScope` + RPC del mismo modo que `features/chat/confirm.ts`.

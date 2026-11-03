@@ -1,14 +1,15 @@
 import "server-only"
 import { randomInt } from "node:crypto"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { MAX_RECOMPENSAS, nuevoCodigo as codigoCon } from "@mirai/domain/referidos"
 
 // Programa de referidos: código por persona y recompensa (cortesía del plan configurado) para quien invita y quien llega.
+// Las reglas puras (alfabeto, tope, validación) viven en @mirai/domain/referidos (las comparte la API).
 
-const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // sin 0/O ni 1/I para que no se confundan al dictarlo
-export const MAX_RECOMPENSAS = 12
+export { MAX_RECOMPENSAS }
 
 export function nuevoCodigo(n = 8) {
-  return Array.from({ length: n }, () => ALFABETO[randomInt(ALFABETO.length)]).join("")
+  return codigoCon(n, randomInt)
 }
 
 /** Código de la persona (lo crea la primera vez). */

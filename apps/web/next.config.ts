@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   // Paquetes del monorepo (código TypeScript sin compilar): Next los compila como parte de la app.
-  transpilePackages: ["@mirai/domain", "@mirai/db", "@mirai/contracts", "@mirai/crypto"],
+  transpilePackages: ["@mirai/domain", "@mirai/db", "@mirai/contracts", "@mirai/crypto", "@mirai/services"],
   partialPrefetching: true,
   // Fotos de facturas, préstamos y comprobantes para la IA (máx. 6 MB en la acción).
   experimental: { serverActions: { bodySizeLimit: "8mb" } },

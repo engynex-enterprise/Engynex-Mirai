@@ -1,6 +1,5 @@
 // Calendario fiscal y laboral de Colombia (FPL, FCAT, fcatOf, calEst de la v4).
-import type { BookData } from "@/lib/domain"
-import { fijoMensual, nextOcc as nextOccDomain, salarioDesdeIngresos } from "@/lib/domain"
+import { nextOcc as nextOccDomain } from "@/lib/domain"
 
 export type FCatKey = "laboral" | "dian" | "local" | "vehiculo" | "hogar" | "personal"
 export const FCAT: Record<FCatKey, { n: string; color: string; icon: string }> = {
@@ -58,37 +57,5 @@ export function nextOcc(c: { fecha: string; anual: boolean | null }, today: stri
   return nextOccDomain({ fecha: c.fecha, anual: !!c.anual }, today, 1)
 }
 
-export type TaxAsset = { tipo: string; avaluo: number; predial: number | null; imp_veh: number | null; soat: number | null; pct: number }
-
-/**
- * Estimado de una fecha (calEst de la v4, sin la renta que viene de la Declaración).
- * Devuelve { v, how } o null si no hay cómo estimarla.
- */
-export function calEst(c: { titulo: string; template_key?: string | null }, b: BookData, assets: TaxAsset[], smmlv: number, incomeCategories: { id: string; nombre: string }[]) {
-  const k = c.template_key ?? ""
-  const t = c.titulo.toLowerCase()
-  const sal = salarioDesdeIngresos(b.incomes, incomeCategories, b.settings.trm)
-  const desc = /descuento/.test(t)
-  if (/prima/.test(t) && sal) return { v: sal / 2, how: "Medio salario mensual." }
-  if (/intereses.*cesant/.test(t) && sal) return { v: sal * 0.12, how: "12 % de las cesantías (un salario)." }
-  if (/cesant/.test(t) && sal) return { v: sal, how: "Un salario mensual por año trabajado." }
-  if (/dotaci/.test(t)) return sal && sal <= 2 * smmlv ? { v: 0, how: "Te la entregan en especie (ropa y calzado), no en dinero." } : { v: 0, how: "Solo aplica si ganas hasta 2 salarios mínimos." }
-  if (/predial/.test(t)) {
-    const inm = assets.filter((a) => a.tipo === "inmueble")
-    if (!inm.length) return null
-    const v = inm.reduce((a, x) => a + (x.predial ?? x.avaluo * 0.007) * (x.pct / 100), 0)
-    return { v: desc ? v * 0.9 : v, how: `Predial registrado o 7 por mil del avalúo${desc ? ", con 10 % de descuento" : ""}.` }
-  }
-  if (/vehicular/.test(t)) {
-    const veh = assets.filter((a) => a.tipo === "vehiculo")
-    if (!veh.length) return null
-    const v = veh.reduce((a, x) => a + (x.imp_veh ?? x.avaluo * (x.avaluo <= 60e6 ? 0.015 : x.avaluo <= 135e6 ? 0.025 : 0.035)) * (x.pct / 100), 0)
-    return { v: desc ? v * 0.9 : v, how: `Impuesto registrado o tarifa de 1,5 %, 2,5 % o 3,5 % del avalúo${desc ? ", con 10 % de descuento" : ""} (aproximación Bogotá).` }
-  }
-  if (/soat/.test(t)) { const v = assets.filter((a) => a.tipo === "vehiculo").reduce((a, x) => a + (x.soat ?? 0), 0); return v ? { v, how: "Valor de tu póliza registrada." } : null }
-  if (/matr/.test(t)) { const f = b.fixedExpenses.find((x) => /coleg|jard|univers|pensi/i.test(x.nombre)); return f ? { v: fijoMensual(f), how: `Una mensualidad de “${f.nombre}”.` } : null }
-  if (/arriendo/.test(t)) { const f = b.fixedExpenses.find((x) => /arriendo/i.test(x.nombre)); return f ? { v: f.valor * 0.051, how: "5,1 % (IPC 2025) del canon actual: es lo máximo que puede subir." } : null }
-  if (/diciembre/.test(t) && sal) return { v: (sal / 2) * 0.3, how: "30 % de la prima de diciembre." }
-  if (k === "renta") return null
-  return null
-}
+// calEst y TaxAsset viven en @mirai/domain/integral-extras (los usa también la API para las mismas cifras).
+export { calEst, type TaxAsset } from "@mirai/domain/integral-extras"

@@ -19,7 +19,8 @@ describe("modules/index.ts", () => {
   it("cada módulo vive en su carpeta y MODE=api no carga el gateway", () => {
     const dirs = readdirSync(join(__dirname), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
     expect(dirs).toEqual(API_MODULES.map((m) => m.id).sort())
-    expect(apiModules()).toHaveLength(API_MODULES.length - 1)
+    expect(apiModules()).toHaveLength(API_MODULES.length) // todos menos el gateway, más RealtimePublisherModule (F2-G)
+    expect(apiModules().map((m) => m.name)).not.toContain("RealtimeModule")
     expect(realtimeModules().map((m) => m.name)).toEqual(["HealthModule", "RealtimeModule"])
   })
 })

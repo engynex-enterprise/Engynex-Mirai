@@ -1,2 +1,2 @@
-// Proveedores de correo del registro de integraciones (isomórfico: lo usan la consola y el servidor).
-export const EMAIL_KINDS = ["email_resend", "email_brevo", "email_sendgrid", "email_gmail", "email_smtp"]
+// Re-exportación: el código vive en packages/services (@mirai/services). Edítalo allá. Isomórfico.
+export * from "@mirai/services/notify/email-kinds"

@@ -3,64 +3,29 @@
 import { generateText } from "ai"
 import { requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
-import { encrypt, mask } from "@/lib/crypto"
 import { integrationByKind, isAdminOnly } from "@/lib/integrations/registry"
 import { aiErrMsg, modelFrom, modelIdOf } from "@/lib/ai/model"
 import { aiPlatformSettings, logUsage } from "@/lib/ai/usage"
 import { costUSD } from "@/lib/ai/pricing"
 import { can } from "@/lib/plans"
 import { MODEL_LIST, modelOptions, parseModels, type ModelOption } from "@/lib/ai/models"
-import { getGlobalIntegration, getIntegration, getOwnIntegration } from "./store"
-import { USE_PLATFORM } from "@/lib/integrations/resolve"
-
-/** Los hogares solo configuran la IA; el resto lo administra Mirai en la consola. */
-const ADMIN_MSG = "Esta integración la administra Mirai. Los avisos se eligen en Ajustes › Alertas."
+import { getIntegration, getOwnIntegration } from "./store"
+import { ADMIN_MSG, deleteHouseholdIntegration, saveHouseholdIntegration, toggleHouseholdIntegration } from "./household"
 
 /** Guarda la configuración (los secretos vacíos conservan los guardados) y la activa. */
 export async function saveIntegration(kind: string, values: Record<string, string | number | boolean>, enabled = true) {
   const ctx = await requireRole("admin")
-  const def = integrationByKind(kind)
-  if (!def) throw new Error("Integración desconocida")
-  if (isAdminOnly(def)) throw new Error(ADMIN_MSG)
-  const prev = await getOwnIntegration(ctx.household.id, kind)
-  const config: Record<string, unknown> = {}
-  const secrets: Record<string, string> = { ...(prev?.secrets ?? {}) }
-  const meta: Record<string, string> = {}
-  for (const f of def.fields) {
-    const v = values[f.k]
-    if (f.type === "secret") {
-      if (typeof v === "string" && v.trim()) secrets[f.k] = v.trim()
-      if (secrets[f.k]) meta[f.k] = mask(secrets[f.k])
-    } else config[f.k] = v ?? f.def ?? ""
-  }
-  const missing = def.fields.filter((f) => (f.required || (def.scope === "platform" && f.k === "apiKey")) && !(f.type === "secret" ? secrets[f.k] : config[f.k]))
-  if (enabled && missing.length) throw new Error(`Falta: ${missing.map((f) => f.l).join(", ")}`)
-  const { error } = await supabaseAdmin().from("integrations").upsert({
-    household_id: ctx.household.id, kind, enabled, config: config as never, meta: meta as never,
-    secrets_enc: Object.keys(secrets).length ? encrypt(JSON.stringify(secrets)) : null, updated_by: ctx.user.id,
-  }, { onConflict: "household_id,kind" })
-  if (error) throw new Error(error.message)
+  await saveHouseholdIntegration({ householdId: ctx.household.id, userId: ctx.user.id, kind, values, enabled })
 }
 
 export async function toggleIntegration(kind: string, enabled: boolean) {
   const ctx = await requireRole("admin")
-  const def = integrationByKind(kind)
-  if (isAdminOnly(def)) throw new Error(ADMIN_MSG)
-  const own = await getOwnIntegration(ctx.household.id, kind)
-  const global = await getGlobalIntegration(kind)
-  const offered = !!global && global.modo !== "apagada" && (!global.planes.length || global.planes.includes(ctx.plan.id))
-  if (global?.modo === "obligatoria" && offered) throw new Error("Mirai administra esta integración para todos: no se puede apagar.")
-  // Sin datos propios, prender = usar la de la plataforma (si la ofrece).
-  const useGlobal = enabled && offered && !Object.keys(own?.secrets ?? {}).length
-  if (enabled && !useGlobal && def?.fields.some((f) => f.required) && !own) throw new Error("Primero completa sus datos")
-  const { error } = await supabaseAdmin().from("integrations").upsert({ household_id: ctx.household.id, kind, enabled, updated_by: ctx.user.id, ...(useGlobal ? { config: { ...(own?.config ?? {}), [USE_PLATFORM]: true } as never } : {}) }, { onConflict: "household_id,kind" })
-  if (error) throw new Error(error.message)
+  await toggleHouseholdIntegration({ householdId: ctx.household.id, userId: ctx.user.id, planId: ctx.plan.id, kind, enabled })
 }
 
 export async function deleteIntegration(kind: string) {
   const ctx = await requireRole("admin")
-  if (isAdminOnly(kind)) throw new Error(ADMIN_MSG)
-  await supabaseAdmin().from("integrations").delete().eq("household_id", ctx.household.id).eq("kind", kind)
+  await deleteHouseholdIntegration({ householdId: ctx.household.id, kind })
 }
 
 /** Prueba la conexión de un proveedor de IA del hogar. Devuelve un mensaje para el usuario. */

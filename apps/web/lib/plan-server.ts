@@ -1,21 +1,5 @@
 import "server-only"
-import { supabaseAdmin } from "@/lib/supabase/admin"
-import { can, toPlanInfo, type PlanInfo, type PremiumFeature } from "@/lib/plans"
+import "@/lib/services"
 
-/** Plan vigente de un hogar (servidor, con la clave de servicio). */
-export async function planOf(householdId: string): Promise<PlanInfo> {
-  const db = supabaseAdmin()
-  const { data: id } = await db.rpc("household_plan", { h: householdId })
-  const { data } = await db.from("plans").select("id,nombre,funciones,anuncios,limites,precio_mes").eq("id", id ?? "gratis").maybeSingle()
-  return toPlanInfo(data)
-}
-
-export async function householdCan(householdId: string, f: PremiumFeature) {
-  return can(await planOf(householdId), f)
-}
-
-/** ¿El plan del hogar dueño del libro incluye la función? (portal del contador y procesos sin sesión). */
-export async function bookCan(bookId: string, f: PremiumFeature) {
-  const { data } = await supabaseAdmin().from("books").select("household_id").eq("id", bookId).maybeSingle()
-  return !!data && (await householdCan(data.household_id, f))
-}
+// Re-exportación: el código vive en packages/services (@mirai/services). Edítalo allá. Solo servidor.
+export * from "@mirai/services/plan"

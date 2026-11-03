@@ -1,11 +1,10 @@
 // Sincronización con Google Calendar (crear, actualizar y borrar) con dobles: sin Google ni base reales.
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { BookData } from "@/lib/domain"
-
-vi.mock("server-only", () => ({}))
+import type { BookData } from "@mirai/domain"
+import { configureServices } from "../runtime"
 
 const db = vi.hoisted(() => ({ map: [] as { key: string; event_id: string; hash: string; fecha: string; calendar_id: string }[], deleted: [] as string[] }))
-vi.mock("@/lib/supabase/admin", () => ({
+const fakeAdmin = {
   supabaseAdmin: () => ({
     from: () => {
       const chain: Record<string, unknown> = {}
@@ -20,14 +19,19 @@ vi.mock("@/lib/supabase/admin", () => ({
       return self
     },
   }),
-}))
-vi.mock("@/lib/google", () => ({ G_SCOPES: { calendar: "cal" }, googleToken: async () => "tok" }))
-vi.mock("@/features/integrations/store", () => ({ getIntegration: async () => ({ config: { calendarId: "primary" }, secrets: {} }) }))
-vi.mock("@/lib/plan-server", () => ({ householdCan: async () => true }))
+}
+vi.mock("./oauth", () => ({ G_SCOPES: { calendar: "cal" }, googleToken: async () => "tok" }))
+vi.mock("../integrations/store", () => ({ getIntegration: async () => ({ config: { calendarId: "primary" }, secrets: {} }) }))
+vi.mock("../plan", () => ({ householdCan: async () => true }))
 const libro = vi.hoisted(() => ({ b: null as unknown as BookData }))
-vi.mock("@/lib/notify/digest", () => ({ avisoCtx: async () => ({ book: libro.b, extras: {} }) }))
+vi.mock("../notify/digest", () => ({ avisoCtx: async () => ({ book: libro.b, extras: {} }) }))
 
-const { calBody, calKey, calPlan, syncCalendarFor } = await import("./google-calendar")
+configureServices({
+  admin: fakeAdmin.supabaseAdmin as never, loadBook: async () => { throw new Error("sin libro") },
+  encrypt: (x) => x, decrypt: (x) => x, env: () => undefined,
+  siteUrl: () => "https://mirai.test", publicSiteUrl: () => "https://mirai.test",
+})
+const { calBody, calKey, calPlan, syncCalendarFor } = await import("./calendar")
 
 const base: BookData = {
   settings: { umbral: 0, limite: 0, trm: {}, emerg_meta: 6, anticipo: 5, corte_q: 15, alerta_pres: 80 },

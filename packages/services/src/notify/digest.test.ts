@@ -1,9 +1,8 @@
 // Motor de resúmenes (runRule) con dobles: sin base real ni envíos reales.
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { BookData } from "@/lib/domain"
+import type { BookData } from "@mirai/domain"
+import { configureServices } from "../runtime"
 import type { Rule } from "./digest"
-
-vi.mock("server-only", () => ({}))
 
 // ── Doble de Supabase: registra lo que se pide y simula la clave única de notify_claim ──
 const st = vi.hoisted(() => ({
@@ -13,7 +12,7 @@ const st = vi.hoisted(() => ({
   updates: [] as { table: string; v: unknown }[],
   rpcs: [] as { fn: string; args: Record<string, unknown> }[],
 }))
-vi.mock("@/lib/supabase/admin", () => {
+const adminMod = (() => {
   const result = (table: string, ops: [string, unknown[]][]) => {
     const op = (k: string) => ops.find((o) => o[0] === k)
     if (op("upsert")) { st.upserts.push({ table, rows: op("upsert")![1][0] }); return { data: null, error: null } }
@@ -53,7 +52,7 @@ vi.mock("@/lib/supabase/admin", () => {
       },
     }),
   }
-})
+})()
 
 // Libro con un arriendo que vence en 2 días (sale un aviso de pagos).
 const book: BookData = {
@@ -61,19 +60,24 @@ const book: BookData = {
   categories: [], incomes: [], extraIncomes: [], expenses: [], subscriptions: [], loans: [], creditCards: [], assets: [], liabilities: [], investments: [], goals: [], calendarEvents: [], contacts: [], entities: [],
   fixedExpenses: [{ id: "f1", nombre: "Arriendo", valor: 1500000, frec: "mensual", dia: 4, category_id: null, payments: [] } as never],
 }
-vi.mock("@/lib/book-data", () => ({ loadBookData: async () => ({ ...book, raw: { settings: {} } }) }))
-vi.mock("@/features/integrations/store", () => ({ getIntegration: async (_h: string, k: string) => (k === "email_resend" ? { kind: k, enabled: true, config: {}, secrets: {}, source: "plataforma" } : null) }))
+vi.mock("../integrations/store", () => ({ getIntegration: async (_h: string, k: string) => (k === "email_resend" ? { kind: k, enabled: true, config: {}, secrets: {}, source: "plataforma" } : null) }))
 const sendEmail = vi.hoisted(() => vi.fn(async () => "msg-1"))
-vi.mock("@/lib/notify/email", () => ({ EMAIL_KINDS: ["email_resend"], brandEmail: (t: string, b: string) => `${t}${b}`, sendEmail }))
-vi.mock("@/lib/notify/channels", () => ({ fallbackNote: () => null, pushReady: () => false, sendPush: vi.fn(), sendTelegram: vi.fn(), sendWhatsApp: vi.fn() }))
+vi.mock("./email", () => ({ EMAIL_KINDS: ["email_resend"], brandEmail: (t: string, b: string) => `${t}${b}`, sendEmail }))
+vi.mock("./channels", () => ({ fallbackNote: () => null, pushReady: () => false, sendPush: vi.fn(), sendTelegram: vi.fn(), sendWhatsApp: vi.fn() }))
 
+configureServices({
+  admin: adminMod.supabaseAdmin as never,
+  loadBook: async () => ({ ...book, raw: { settings: {} } }) as never,
+  encrypt: (x) => x, decrypt: (x) => x, env: () => undefined,
+  siteUrl: () => "https://mirai.test", publicSiteUrl: () => "https://mirai.test",
+})
 const { defaultRule, runRule } = await import("./digest")
 
 const READY = { email: true, telegram: false, whatsapp: false, push: false }
 const rule = (): Rule => ({ ...defaultRule("u1", "b1"), canales: { app: true, email: true }, hora: 9 })
 /** 2026-11-02 a la hora `h` de Colombia (UTC−5). */
 const at = (h: number) => new Date(Date.UTC(2026, 10, 2, h + 5, 5))
-const run = (h: number, o: { daily?: boolean; horario?: boolean } = {}, r = rule()) => runRule({ householdId: "h1", rule: r, email: "ana@correo.co", nombre: "Ana Pérez", now: at(h), ready: READY, horario: true, ...o })
+const run = (h: number, o: { daily?: boolean; horario?: boolean; dry?: boolean } = {}, r = rule()) => runRule({ householdId: "h1", rule: r, email: "ana@correo.co", nombre: "Ana Pérez", now: at(h), ready: READY, horario: true, ...o })
 
 beforeEach(() => {
   st.claims.clear(); st.fails.clear(); st.upserts.length = 0; st.updates.length = 0; st.rpcs.length = 0
@@ -118,5 +122,16 @@ describe("runRule: hora elegida y sin duplicados", () => {
     st.fails.set("resumen:u1:b1:email:2026-11-02", 3)
     expect(await run(9)).toEqual(["email: ya enviado"])
     expect(sendEmail).not.toHaveBeenCalled()
+  })
+  it("en simulación (dry) calcula igual pero no envía, no reclama la clave ni escribe", async () => {
+    expect(await run(9, { dry: true })).toEqual(["email: simulado"])
+    expect(sendEmail).not.toHaveBeenCalled()
+    expect(st.rpcs).toHaveLength(0)
+    expect(st.upserts).toHaveLength(0)
+    expect(st.updates).toHaveLength(0)
+  })
+  it("en simulación, una clave ya usada sale como 'ya enviado' (igual que el cron real)", async () => {
+    st.fails.set("resumen:u1:b1:email:2026-11-02", 3)
+    expect(await run(9, { dry: true })).toEqual(["email: ya enviado"])
   })
 })

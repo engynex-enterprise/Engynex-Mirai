@@ -1,0 +1,32 @@
+{
+  "name": "@mirai/services",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Servicios del servidor que comparten apps/web y apps/api: avisos (resúmenes, correo, WhatsApp, Telegram, push y registro de envíos), integraciones (registro único, cifrado, globales vs hogar), Google (OAuth, Gmail y Calendar), datos de referencia y automatizaciones del servidor. Las subrutas puras (registro, reglas, horario, WhatsApp) también corren en el navegador.",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@mirai/crypto": "workspace:*",
+    "@mirai/db": "workspace:*",
+    "@mirai/domain": "workspace:*",
+    "@supabase/supabase-js": "^2.118.0",
+    "nodemailer": "^10.3.1",
+    "resend": "^6.37.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@mirai/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "@types/nodemailer": "^8.0.2",
+    "@types/web-push": "^3.6.4",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  }
+}

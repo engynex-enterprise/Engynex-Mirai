@@ -4,6 +4,7 @@ import type { Logger } from "pino"
 import type { Config } from "./core/config/config.schema"
 import type { CtxRequest } from "./core/context/cls-setup"
 import { currentTrace, traceFields } from "./core/logging/trace"
+import { configureRealtime } from "./modules/realtime/realtime.setup"
 
 export function fastifyAdapter(config: Config) {
   return new FastifyAdapter({
@@ -37,6 +38,7 @@ export function configureApp(app: NestFastifyApplication, config: Config, log: L
     maxAge: 600,
   })
   app.enableShutdownHooks()
+  if (config.mode === "realtime") configureRealtime(app) // F2-G: socket.io con las opciones del gateway (y Redis)
 
   const fastify = app.getHttpAdapter().getInstance()
   fastify.addHook("onSend", async (req, reply, payload) => {

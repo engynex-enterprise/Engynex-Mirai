@@ -112,3 +112,60 @@ Reglas que ya aplica el núcleo:
   existe) y es el valor por defecto fuera de local.
 - **Cloud Tasks por REST** (token del servidor de metadatos), sin `@google-cloud/tasks`.
 - Versiones fijas: `@ts-rest/*@3.53.0-rc.1` (única con zod 4) y NestJS 11 (decisión D2).
+
+## Tiempo real (F2-G, `MODE=realtime`)
+
+Servicio aparte de Cloud Run (`mirai-realtime`) con la misma imagen. Código en `src/modules/realtime/`, protocolo en
+`packages/contracts/src/modules/realtime.ts` y cliente sin React en `packages/contracts/src/realtime-client.ts`.
+
+```bash
+MODE=realtime PORT=8081 pnpm --filter api dev   # ws://localhost:8081/socket.io (token de Supabase en `auth.token`)
+```
+
+- **Autenticación**: el mismo `TokenVerifier` en el *handshake* (`auth: { token }` o `Authorization: Bearer`); origen
+  revisado con `WEB_ORIGINS` (también en el *upgrade*). Cada `REALTIME_TOKEN_CHECK_S` (10 min) se revisan tokens
+  (vencido → `auth:expired` + desconexión; el cliente renueva y vuelve) y membresías (ya no es miembro → `book:left`).
+  `auth:refresh` cambia el token sin reconectar.
+- **Salas**: `book:{id}` (todos los roles: "ver" es de todos), `book:{id}:{rol}` (eventos con rol mínimo,
+  `LIVE_MIN_ROLE`), `household:{id}` y `user:{id}`. `join:book` usa `AppContextService.bookAccess` (la consulta de
+  BookGuard). Un cambio en `household_members` revisa al instante las conexiones de ese hogar en todas las instancias.
+- **Eventos** (equivalentes a Supabase Realtime): `change` (LIVE_TABLES por libro y HOUSEHOLD_TABLES por hogar),
+  `notification` (la campana), `automation` (INSERT en `automation_events`, antes el canal `auto:{libro}`),
+  `presence` (lista del libro), `resync` (se perdieron cambios: recargar) y `book:left`.
+- **Fuentes**: `EventsService` (en `MODE=api`, `RealtimePublisherModule` lo publica en Redis con
+  `@socket.io/redis-emitter`) y `PgLiveListener` (`LISTEN mirai_live`, una instancia por candado consultivo, latido y
+  reconexión con `resync`). El trigger está en `supabase/migrations/20261103004100_live_notify.sql`: **escrita, no
+  aplicada**; aunque se aplique solo crea funciones. Instalar solo en Supabase local o Cloud SQL:
+  `select public.mirai_live_notify_install(true);` y `REALTIME_PG_LISTEN=1` + `REALTIME_DATABASE_URL` (conexión directa).
+- **Escala**: sin `REDIS_URL`, una instancia en memoria con `connectionStateRecovery` (al volver recupera salas y eventos).
+  Con `REDIS_URL` (Memorystore): `@socket.io/redis-adapter` (pub/sub, clave `mirai-rt`) + presencia en Redis
+  (`presence:book:{id}`, TTL); el adaptador pub/sub no guarda sesiones, así que al reconectar el cliente recarga el libro.
+  Cloud Run: `--session-affinity --timeout=3600 --min-instances=1 --concurrency=250 --set-env-vars=MODE=realtime,…`.
+- **Front**: `apps/web/hooks/use-live.ts` elige la fuente; por defecto Supabase Realtime (nada cambia). Gateway solo con
+  `NEXT_PUBLIC_LIVE_SOURCE=gateway` y `NEXT_PUBLIC_REALTIME_URL`.
+- **Pruebas**: `src/modules/realtime/realtime.test.ts` (rutas, presencia, escucha, configuración, paridad de la
+  migración) y `test/realtime/*` (app real en un puerto local con `socket.io-client`, 500 conexiones de carga).
+
+## Avisos, integraciones, Google, cron y colas (F2-E)
+
+El código de envíos vive en **`packages/services` (`@mirai/services`)**, el mismo que usa la web (sus archivos de
+`lib/notify`, `lib/google*`, `features/integrations` y `lib/automations` lo re-exportan). La API lo configura en
+`modules/integrations/services-runtime.ts` (SystemScope + `CryptoService` + `ServicesEnv`, variables en `.env.example`).
+
+| Módulo | Rutas | Rol / plan |
+|---|---|---|
+| `integrations` | `GET/PUT/PATCH/DELETE /v1/books/:b/integrations[/:kind]` (solo IA; sin secretos) | ver: viewer · cambiar: admin |
+| `notifications/delivery` | `GET/PUT …/notification-rules/me` · `GET …/notifications/channels` · `POST …/notifications/{test,digest-now,open}` · `POST …/telegram/{link,confirm}` · `DELETE …/telegram` · `GET/POST …/notifications/cobro-whatsapp` · `PUT/DELETE /v1/push/subscriptions` | viewer (cobro: editor); límites `pruebaAviso` y `cobroWa` |
+| `google` | `GET …/google/connect-url` · `GET /v1/google/callback` (público, `state` HMAC) · `DELETE /v1/google` · `POST …/calendar/sync` · `GET …/calendar/status` | Premium `banco` para conectar y sincronizar |
+| `jobs` | `POST /v1/jobs/notify/tick` · `…/notify/household/:h` · `…/plan/{emails,reminders}` · `…/refs/refresh` · `…/calendar/{sync,user/:u}` · `…/net-worth/monthly` · `…/automations/{hourly,drain,book/:b}` | `SchedulerGuard` (OIDC o `CRON_SECRET`) |
+| `automations` | outbox: `EventsService` → `automations/book/:b` (1 s, `auto-<libro>-<segundo>`) | — |
+
+- **Tick** (Scheduler `5 * * * *`): latido → una tarea por hogar `notify-<hogar>-<AAAAMMDDHH>` (cola `notify`) +
+  `plan-emails` y `auto-hourly` de la hora; a las 6 `refs`, `gcal-sync` y `net-worth`, a las 9 `plan-reminders` (cola
+  `slow`; `TICK_DAILY_TASKS=0` si Scheduler ya las llama). Simulación con `?dry=1` o `{ "dry": true }`: sin latido,
+  tareas `dry-…` que calculan y no envían. Sin `SUPABASE_SECRET_KEY` (solo local) responde con una `nota`.
+- **Callback de Google nuevo**: `<API_PUBLIC_URL>/v1/google/callback` hay que agregarlo en Google Cloud › Credenciales.
+- Pruebas: `src/modules/{jobs,google,automations,integrations}/*.test.ts` y `test/f2e.int.test.ts` (arnés `test/f2e/`
+  con dobles de los puertos; nunca contra la base compartida).
+- Pendiente: `mail/scan` y probar/listar modelos de IA (F2-F), CRUD de automatizaciones (sigue en la web),
+  `PlanRemindersPort` real (F2-I) y adaptadores Kysely (fase 4).

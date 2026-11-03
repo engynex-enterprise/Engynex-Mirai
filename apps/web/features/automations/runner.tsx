@@ -4,6 +4,8 @@ import { useEffect } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { useBookId } from "@/components/app/app-context"
 import { runPendingAutomations } from "./actions"
+import { LIVE_SOURCE } from "@/hooks/use-live"
+import { onGatewayAutomation } from "@/hooks/use-live-gateway"
 
 const KEY = "mirai:auto-kick"
 
@@ -28,16 +30,19 @@ export function AutomationRunner() {
       const last = Number(sessionStorage.getItem(`${KEY}:${bookId}`) ?? 0)
       if (Date.now() - last > 600_000) { sessionStorage.setItem(`${KEY}:${bookId}`, String(Date.now())); kick() }
     } catch { /* sin almacenamiento: el cron lo procesa */ }
-    const ch = sb
+    // Fuente del aviso: Supabase Realtime (por defecto) o el gateway de la API (interruptor de hooks/use-live.ts).
+    const ch = LIVE_SOURCE === "gateway" ? null : sb
       .channel(`auto:${bookId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "automation_events", filter: `book_id=eq.${bookId}` }, kick)
       .subscribe()
+    const offGateway = LIVE_SOURCE === "gateway" ? onGatewayAutomation(bookId, kick) : undefined
     // Respaldo si Realtime se demora: lo que se registra desde esta pestaña revisa la cola al instante.
     addEventListener("mirai:accion", kick)
     addEventListener("mirai:auto-kick", kick)
     return () => {
       clearTimeout(t)
-      sb.removeChannel(ch)
+      if (ch) sb.removeChannel(ch)
+      offGateway?.()
       removeEventListener("mirai:accion", kick)
       removeEventListener("mirai:auto-kick", kick)
     }
