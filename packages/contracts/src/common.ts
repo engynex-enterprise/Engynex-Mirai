@@ -15,6 +15,8 @@ export const Money = z.number({ error: "Escribe un valor en números" }).finite(
 
 /** Códigos de error de la API y su código HTTP (§2.7.2). */
 export const API_ERROR_STATUS = {
+  /** Falta el token o venció (la web renueva la sesión y reintenta). */
+  UNAUTHENTICATED: 401,
   ROLE_DENIED: 403,
   PLAN_REQUIRED: 402,
   VALIDATION: 400,
@@ -42,6 +44,12 @@ export type ApiError = z.infer<typeof ApiError>
 
 /** Respuesta de un comando que salió bien: `{ ok: true, data }`. */
 export const ApiOk = <T extends z.ZodType>(data: T) => z.object({ ok: z.literal(true), data })
+
+/**
+ * Respuestas de error que cualquier endpoint puede dar (guardas, límites y filtro global de la API). Se mezclan en
+ * `responses` de cada contrato ts-rest para que el cliente tipado las conozca.
+ */
+export const COMMON_ERRORS = { 400: ApiError, 401: ApiError, 403: ApiError, 404: ApiError, 429: ApiError, 500: ApiError } as const
 
 /** Arma un ApiError (lo usan los filtros de la API y las pruebas). */
 export const apiError = (code: ApiErrorCode, msg: string, extra: Pick<ApiError, "requestId" | "details"> = {}): ApiError => ({ ok: false, msg, code, ...extra })

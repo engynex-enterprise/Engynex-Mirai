@@ -663,7 +663,7 @@ mirai/
 │     │  │  ├─ idempotency/     # IdempotencyInterceptor
 │     │  │  ├─ queue/           # QueuePort, CloudTasksQueue, InlineQueue
 │     │  │  ├─ events/          # EventsService (LiveChange + outbox de automatizaciones)
-│     │  │  ├─ crypto/          # lib/crypto.ts movido
+│     │  │  ├─ crypto/          # CryptoService sobre @mirai/crypto (packages/crypto: lib/crypto.ts movido, F2-B-7)
 │     │  │  ├─ logging/         # nestjs-pino (formato de Cloud Logging)
 │     │  │  └─ health/          # terminus
 │     │  └─ modules/
@@ -912,6 +912,25 @@ F2-A ──► F2-B ──┬──► F2-C ──► F2-D ───────
 10. **F2-B-10** Arnés de pruebas: Supabase local con `supabase/migrations`, 5 usuarios semilla (uno por rol) y utilidades de Supertest.
 
 **Terminado cuando:** `/readyz` en verde en Cloud Run de pruebas; `/v1/me` da el mismo resultado que `getAppContext` para los 5 roles; un error de rol devuelve `{ ok:false, msg:"Tu rol no permite…", code:"ROLE_DENIED" }` con 403; el log se ve agrupado por traza en Cloud Logging.
+
+**Estado F2-B (2026-11-02, sin commit):** esqueleto, autenticación y transversal hechos en el árbol de trabajo; `pnpm typecheck`, `pnpm lint` (0 errores), `pnpm test` (api: 96 pruebas en 11 archivos; dominio 1 437, web 428, contratos 11, crypto 4), `pnpm --filter api build` y `pnpm --filter web build` en verde. Imagen de Docker construida y probada en local (`/healthz` 200, `/readyz` 200 con base, JWKS y llave; `/v1/me` sin token 401). Detalle y cómo correrla: `apps/api/README.md`.
+
+| Ítem | Estado | Dónde / nota |
+|---|---|---|
+| B-1 `main.ts`, config, salud | ✔ | `src/main.ts` (Fastify, `rawBody`, CORS, apagado ordenado, `MODE=api\|realtime`), `core/config/config.schema.ts` (zod; secretos de Secret Manager obligatorios fuera de local), `modules/health` (`/healthz`, `/readyz`, `/v1/version`, `/docs` fuera de producción). Sin `@nestjs/terminus` ni `@nestjs/config` (ver README) |
+| B-2 `auth/` | ✔ | El proyecto firma con **ES256** (una clave en el JWKS público): `SupabaseJwtVerifier` con `CachedRemoteJwks` (descarga al arrancar con reintentos y luego refresca **en segundo plano**: el JWKS de Supabase a veces tarda segundos y con `createRemoteJWKSet` cada 10 min una petición esperaba la recarga), emisor `<SUPABASE_URL>/auth/v1`, audiencia `authenticated`; HS256 solo si se define `SUPABASE_JWT_SECRET`. Token inválido → 401; JWKS caído → 502 `UPSTREAM`. `AuthGuard` global + `@Public()` |
+| B-3 `context/` | ✔ | `RequestContext` en `nestjs-cls`; `BookGuard` **global** (toda ruta con `:bookId`; 404 si no es miembro), `@MinRole`, `@Can`, `@Premium`, `@PlatformAdmin`; `SchedulerGuard` (OIDC de Google con audiencia y cuentas permitidas, o `Bearer CRON_SECRET`). Contexto armado con `buildAppContext` (nuevo `@mirai/domain/app-context`, misma regla que `getAppContext`) y caché de 30 s por persona. **Pendiente:** `AccountantTokenGuard` (F2-I-4) |
+| B-4 `db/` | ✔ / ◐ | `DbScope`, `SupabaseJsFactory` (JWT + `x-mirai-enlaces`), `SystemScope` con `reason`, `PgKyselyFactory.tx()` (`set local role authenticated` + `set_config` de claims y encabezados) probada con un driver que captura el SQL. **Pendiente:** probarla contra Supabase local (B-10) |
+| B-5 errores, logs, trazas | ✔ / ◐ | `DomainError` + `fromPg`, filtro global (`{ ok:false, msg, code, requestId, details? }`; se agregó `UNAUTHENTICATED` 401 a `API_ERROR_STATUS`), pino con formato de Cloud Logging (severity, `httpRequest`, `logging.googleapis.com/trace` desde `traceparent` o `X-Cloud-Trace-Context`), OpenTelemetry por **OTLP** (http + undici). **Cambio:** el exportador de Cloud Trace 3.1 exige `@opentelemetry/core` 2.x y el SDK es 3.x, así que en Cloud Run va un colector como *sidecar*. **Pendiente:** Sentry (puerto `ErrorReporter`, hoy no-op) |
+| B-6 límites, idempotencia, colas, eventos | ✔ | `@RateLimit(nombre, user\|household\|ip)` con `LIMITS` y `rate_limit_hit` (respaldo en memoria) + límite general por minuto en memoria (no toca la base); `@Idempotent()` con `Idempotency-Key` (repite la respuesta, 409 si sigue en curso o cambia el cuerpo), almacén en memoria o `api_idempotency` (migración `20261103003800`, **escrita y sin aplicar**); `QueuePort` con `InlineQueue` y `CloudTasksQueue` (REST + OIDC, 409 = duplicado); `EventsService` con suscriptores en proceso |
+| B-7 `crypto/` | ✔ | `lib/crypto.ts` pasó a **`packages/crypto` (`@mirai/crypto`)**; `apps/web/lib/crypto.ts` lo re-exporta con `server-only` (la web no cambia). Prueba de compatibilidad: descifra un valor cifrado por la v5 |
+| B-8 `me` + `api_rollout` | ✔ | `GET /v1/me` (contrato `meContract`, `?bookId=`; sin hogar → 404 con `details.redirect = "/bienvenida"`), prueba de los 5 roles con dobles. Migración `20261103003801_api_rollout.sql` (**escrita y sin aplicar**) + `ApiRollout`/`viaApi()` en `packages/contracts/src/rollout.ts` |
+| B-9 Docker y Cloud Build | ✔ / ✘ | `apps/api/Dockerfile` (turbo prune → pnpm install → esbuild+swc → `pnpm deploy --prod --legacy` → `node:22-slim`, usuario `node`, `PORT`), `Dockerfile.dockerignore` y `cloudbuild.yaml`. **Pendiente:** despliegue manual a `mirai-api-pruebas` (no hay acceso a GCP desde aquí) |
+| B-10 arnés de pruebas | ◐ | `test/setup/**`: JWKS locales (ES256 de "Supabase" y RS256 de "Google"), 5 personas (una por rol) + hogar Premium, dobles de los puertos y `createTestApp()` con Fastify `inject`. **Pendiente:** Supabase local con `supabase/migrations` (RLS real) |
+| Ejemplo de punta a punta | ✔ | `modules/catalogs`: `GET /v1/books/:bookId/categories` (contrato → controller → service → `CatalogsRepo` → `SupabaseJsCatalogsRepo` / `PgKyselyCatalogsRepo`), misma consulta que `useCategories()` |
+| `modules/index.ts` | ✔ | 32 entradas (los 31 de `packages/contracts` + `book-tables`) con su dueño; stubs `@Module({})`. `apiContract` en `packages/contracts/src/api.ts` agrupa los contratos implementados (cliente del front y OpenAPI) |
+
+Criterio de terminado: "`/v1/me` = `getAppContext` para 5 roles" y "error de rol 403 `ROLE_DENIED`" cubiertos con dobles (`test/app.int.test.ts`); "`/readyz` en Cloud Run" y "log agrupado por traza en Cloud Logging" quedan para cuando se despliegue (B-9). El formato del log ya lleva `logging.googleapis.com/trace` y está probado.
 
 ### F2-C — Módulos de lectura
 **Dueño de:** `modules/{book-tables (solo lectura), insights, gami, ads (lectura), notifications (solo la campana), refs}` y sus contratos. **Depende de:** F2-B.

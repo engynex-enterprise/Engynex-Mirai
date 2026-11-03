@@ -9,9 +9,9 @@ Mirai: finanzas personales y familiares para Colombia, en español, para persona
 
 ## Estructura (monorepo pnpm + Turborepo, v6 F2-A)
 - `apps/web`: la app Next.js (app/, components/, features/, hooks/, lib/, public/, tests/e2e). Vercel: Root Directory `apps/web`.
-- `apps/api`: NestJS (fase 2; hoy solo la prueba previa de ts-rest + zod 4 en `test/spike`).
+- `apps/api`: NestJS 11 + Fastify + ts-rest (fase 2). F2-B dejó el núcleo (`src/core`: config zod, JWT de Supabase, BookGuard/roles/plan, errores `{ ok:false, msg, code }`, logs de Cloud Logging, límites, idempotencia, colas), los 32 módulos como stubs (`src/modules/index.ts`) y el ejemplo completo `modules/catalogs`. Guía: `apps/api/README.md`.
 - `packages/domain` (`@mirai/domain`): lógica pura y sus pruebas (antes `lib/domain`, roles, planes, motor de automatizaciones, armado del libro). `apps/web/lib/...` la re-exporta: los `import "@/lib/domain/…"` siguen sirviendo, pero **el código se edita en `packages/domain/src`**.
-- `packages/db` (`@mirai/db`): tipos de la base y scripts `db:migrate` / `db:types`. `packages/contracts` (`@mirai/contracts`): zod compartido, `LIVE_TABLES`, `LIMITS`, `BOOK_TABLE_POLICY`. `packages/config`: tsconfig, ESLint, Prettier, Vitest.
+- `packages/db` (`@mirai/db`): tipos de la base y scripts `db:migrate` / `db:types`. `packages/crypto` (`@mirai/crypto`): cifrado AES-256-GCM de secretos (antes `lib/crypto.ts`, solo servidor). `packages/contracts` (`@mirai/contracts`): zod compartido, `LIVE_TABLES`, `LIMITS`, `BOOK_TABLE_POLICY`. `packages/config`: tsconfig, ESLint, Prettier, Vitest.
 - En la raíz: `supabase/migrations`, `legacy/`, `docs/` y la `.env.local` (`apps/web/.env.local` es un enlace a ella).
 - Plan v6: `docs/arquitectura/v6-separacion-front-back.md`.
 

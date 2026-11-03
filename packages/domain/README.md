@@ -11,6 +11,7 @@ Lógica de negocio **pura** de Mirai (F2-A-4): sin React, sin Supabase, sin relo
 | `src/integrations/resolve.ts` | `lib/integrations/resolve.ts` |
 | `src/automations/{engine,schema,types,limits,catalog}.ts` | `lib/automations/…` (`catalog` va porque el motor lo usa) |
 | `src/book-data.ts` | `lib/book-data.ts` sin el cargador: `loadBookDataWith(loader)` recibe un `BookPartLoader` |
+| `src/app-context.ts` | Nuevo (F2-B): `buildAppContext(raw, …)`, la regla de `getAppContext` (`apps/web/lib/dal.ts`) en puro; lo usa `GET /v1/me` |
 
 `apps/web` re-exporta cada módulo en su ruta de antes (`@/lib/domain/…`, `@/lib/plans`…), así que los `import`
 existentes no cambian. Código nuevo puede importar directo: `import { formatCOP } from "@mirai/domain/money"`.

@@ -86,3 +86,17 @@ describe("índice", () => {
     expect(mods.length).toBe(31)
   })
 })
+
+describe("interruptores de la API (api_rollout)", () => {
+  it("off por defecto, qa solo para las personas de _users, on para todos", async () => {
+    const { viaApi } = await import("./rollout")
+    const r = { _users: ["qa-1"], me: "on", catalogs: "qa", expenses: "off" }
+    expect(viaApi(r, "me", "x")).toBe(true)
+    expect(viaApi(r, "catalogs", "qa-1")).toBe(true)
+    expect(viaApi(r, "catalogs", "x")).toBe(false)
+    expect(viaApi(r, "expenses", "qa-1")).toBe(false)
+    expect(viaApi(r, "chat", "qa-1")).toBe(false)
+    expect(viaApi(null, "me", "x")).toBe(false)
+    expect(viaApi({ me: "raro" }, "me", "x")).toBe(false)
+  })
+})

@@ -1,0 +1,21 @@
+{
+  "name": "@mirai/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cifrado de secretos de Mirai (AES-256-GCM, formato v1.iv.tag.data). Solo servidor (node:crypto): lo usan apps/web (lib/crypto.ts) y apps/api (CryptoService).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@mirai/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  }
+}

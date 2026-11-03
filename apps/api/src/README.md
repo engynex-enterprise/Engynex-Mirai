@@ -1,2 +1,3 @@
-Vacío a propósito: F2-B crea aquí `main.ts`, `app.module.ts`, `otel.ts`, `core/**` y `modules/index.ts` (con todos
-los módulos como stubs). Ver `docs/arquitectura/v6-separacion-front-back.md` §6.1 y §8.
+Código de la API (NestJS). Estructura y reglas en `apps/api/README.md`:
+`main.ts` (arranque) · `otel.ts` (trazas) · `app.module.ts` / `app.setup.ts` · `core/**` (transversal, F2-B) ·
+`modules/<módulo>/**` (uno por módulo de §2.6; cada frente llena solo el suyo; ejemplo completo: `modules/catalogs`).

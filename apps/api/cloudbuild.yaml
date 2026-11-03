@@ -1,0 +1,45 @@
+# Cloud Build mínimo para la API (F2-B-9). Desde la raíz del monorepo:
+#   gcloud builds submit --config apps/api/cloudbuild.yaml --substitutions=_ENV=pruebas .
+# Construye la imagen, la sube a Artifact Registry y la despliega en Cloud Run (us-west1, junto a Supabase, D4).
+# Los secretos vienen de Secret Manager (no van en la imagen ni en este archivo). Terraform lo reemplaza en la fase 3.
+substitutions:
+  _ENV: pruebas
+  _REGION: us-west1
+  _REPO: mirai
+  _SERVICE: mirai-api-pruebas
+  _WEB_ORIGINS: https://engynex-mirai-pruebas.vercel.app
+options:
+  logging: CLOUD_LOGGING_ONLY
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    env: ["DOCKER_BUILDKIT=1"]
+    args: ["build", "-f", "apps/api/Dockerfile", "-t", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}", "."]
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}"]
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+      - --region=${_REGION}
+      - --service-account=mirai-api@${PROJECT_ID}.iam.gserviceaccount.com
+      - --port=8080
+      - --cpu=1
+      - --memory=512Mi
+      - --concurrency=80
+      - --timeout=300
+      - --min-instances=0
+      - --allow-unauthenticated
+      - --set-env-vars=MIRAI_ENV=${_ENV},MODE=api,GCP_PROJECT=${PROJECT_ID},GIT_COMMIT=${SHORT_SHA},WEB_ORIGINS=${_WEB_ORIGINS},SCHEDULER_SERVICE_ACCOUNTS=mirai-scheduler@${PROJECT_ID}.iam.gserviceaccount.com
+      - --set-secrets=SUPABASE_URL=mirai-supabase-url:latest,SUPABASE_PUBLISHABLE_KEY=mirai-supabase-publishable-key:latest,SUPABASE_SECRET_KEY=mirai-supabase-secret-key:latest,ENCRYPTION_KEY=mirai-encryption-key:latest,CRON_SECRET=mirai-cron-secret:latest
+      # SCHEDULER_AUDIENCE (la URL del servicio) se fija después del primer despliegue:
+      #   gcloud run services update mirai-api-pruebas --update-env-vars=SCHEDULER_AUDIENCE=$(gcloud run services describe … --format='value(status.url)')
+      - --startup-probe=httpGet.path=/healthz,initialDelaySeconds=0,periodSeconds=2,failureThreshold=15
+      - --liveness-probe=httpGet.path=/healthz,periodSeconds=30

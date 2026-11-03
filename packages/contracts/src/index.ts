@@ -5,6 +5,8 @@ export * from "./zod-es"
 export * from "./live"
 export * from "./limits"
 export * from "./book-tables"
+export * from "./rollout"
+export { apiContract, type ApiContract } from "./api"
 
 // Un namespace por módulo de la API (§2.6), p. ej. `import { expenses } from "@mirai/contracts"`.
 export * as me from "./modules/me"

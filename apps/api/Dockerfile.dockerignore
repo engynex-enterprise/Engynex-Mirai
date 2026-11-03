@@ -1,0 +1,20 @@
+# Contexto de `docker build -f apps/api/Dockerfile .` (BuildKit usa <Dockerfile>.dockerignore).
+# NUNCA entran secretos ni dependencias instaladas.
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/tsconfig.tsbuildinfo
+.git
+.vercel
+legacy
+docs
+assets
+apps/web/tests/.out
+apps/web/public
+graphify-out
+out
