@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useSyncExternalStore } from "react"
+import { BookUser } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -23,6 +24,7 @@ import { geoOf } from "@/lib/geo"
 import type { Row } from "@/lib/supabase/tables"
 import { useContacts, useSettings } from "@/features/catalogs/hooks"
 import { findContact } from "@/lib/domain/registros"
+import { contactPickerSupported, pickContact } from "@/lib/pwa/contacts"
 
 export const DOC_TIPOS = [
   { value: "CC", label: "Cédula de ciudadanía (CC)" },
@@ -77,6 +79,17 @@ function ContactFormBody({ onOpenChange, contact, onSaved, formId }: Props & { f
   const { errors, isSubmitting } = form.formState
   useSubmitState(formId, form)
   const relaciones = cfg?.relaciones ?? []
+  // Android (Chrome): traer nombre, celular y correo de los contactos del teléfono. Mirai solo ve el que escoges.
+  const canPick = useSyncExternalStore(() => () => {}, contactPickerSupported, () => false)
+  const fromPhone = async () => {
+    try {
+      const c = await pickContact()
+      if (!c) return
+      if (c.nombre) form.setValue("nombre", c.nombre, { shouldValidate: true })
+      if (c.telefono) form.setValue("telefono", c.telefono)
+      if (c.email) form.setValue("email", c.email)
+    } catch { toast.error("No se pudieron abrir tus contactos", { description: "Revisa el permiso de contactos del navegador o escribe los datos." }) }
+  }
 
   async function onSubmit(v: Values) {
     // Mismo nombre (sin tildes ni mayúsculas) o mismo documento que otro contacto: no se crea otro igual.
@@ -100,6 +113,9 @@ function ContactFormBody({ onOpenChange, contact, onSaved, formId }: Props & { f
           <Segmented value={field.value} onChange={(v) => { field.onChange(v); if (v === "empresa") form.setValue("doc_tipo", "NIT") }}
             items={[{ value: "persona", label: "Persona", icon: "user-round" }, { value: "empresa", label: "Empresa", icon: "building-2" }]} />
         )} />
+        {canPick && !contact && (
+          <Button type="button" variant="soft" size="sm" className="justify-self-start" onClick={fromPhone}><BookUser /> Traer de los contactos del celular</Button>
+        )}
         <FormField label={form.watch("tipo") === "empresa" ? "Razón social" : "Nombre completo"} htmlFor="c-nombre" error={errors.nombre?.message} required tip="Como aparece en su documento. Se usa en los acuerdos de pago.">
           <Input id="c-nombre" className="h-11" autoFocus placeholder="Ej. Andrés Navarro" {...form.register("nombre")} />
         </FormField>

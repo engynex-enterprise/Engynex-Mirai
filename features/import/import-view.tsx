@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { FileUp, History, Sparkles, Upload } from "lucide-react"
@@ -29,6 +29,7 @@ import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMemb
 import { parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
 import { classifyBatch } from "@/features/expenses/use-ai-category"
 import { importV4Backup } from "./actions"
+import { usePwa } from "@/features/pwa/store"
 
 /** `ext`: id estable del movimiento (no deja importarlo dos veces). `hManual`: la persona cambió la marca de hormiga. */
 type Row = CsvRow & { hormiga: boolean; dup: boolean; manual?: boolean; src?: "ia" | null; ext: string; hManual?: boolean }
@@ -126,6 +127,18 @@ export function ImportView() {
     try { const text = /\.xlsx$/i.test(f.name) ? await xlsxToCsv(f) : await f.text(); setTxt(text); read(text) }
     catch { setErr("No se pudo leer el archivo") }
   }
+
+  // Un extracto abierto con Mirai desde el computador (doble clic en el CSV o Excel, file_handlers del manifest).
+  const launched = usePwa((s) => s.files)
+  const onFileRef = useRef(onFile)
+  useEffect(() => { onFileRef.current = onFile })
+  useEffect(() => {
+    const f = launched.find((x) => /\.(csv|txt|xlsx)$/i.test(x.name))
+    if (!f) return
+    usePwa.getState().set({ files: [] })
+    void onFileRef.current(f)
+    toast.info(`Abrimos ${f.name}`, { description: "Revisa los movimientos y toca Importar." })
+  }, [launched])
 
   const sel = useMemo(() => rows?.filter((r) => r.incl) ?? [], [rows])
   const importar = async () => {

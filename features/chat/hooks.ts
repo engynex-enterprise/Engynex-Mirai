@@ -8,6 +8,7 @@ import { MSG_COLS, THREAD_COLS, toMsg, type ChatMsg, type ChatThread } from "@/l
 import { threadMarkdown, threadPlain } from "@/lib/chat/history"
 import { chatDuplicate, chatHints, chatTitle } from "./actions"
 import { THREADS_KEY, msgsKey, useChat } from "./store"
+import { saveFile } from "@/lib/pwa/save-file"
 
 /** Conversaciones de la persona en el libro activo, también las archivadas (más recientes primero). */
 export function useThreads(enabled = true) {
@@ -55,9 +56,7 @@ export function useThreadSearch(q: string) {
 
 const fileName = (t: ChatThread, ext: string) => `mirai-${t.titulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 50) || "conversacion"}.${ext}`
 const download = (name: string, text: string, type: string) => {
-  const url = URL.createObjectURL(new Blob([text], { type }))
-  const a = document.createElement("a"); a.href = url; a.download = name; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  void saveFile(new Blob([text], { type }), name)
 }
 async function threadMsgs(id: string) {
   const { data } = await createClient().from("chat_messages").select(MSG_COLS).eq("thread_id", id).is("deleted_at", null).order("created_at")

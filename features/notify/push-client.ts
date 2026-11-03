@@ -1,6 +1,7 @@
 "use client"
 
 import { createClient } from "@/utils/supabase/client"
+import { registerServiceWorker } from "@/features/pwa/sw-client"
 
 const b64ToU8 = (s: string) => {
   const pad = "=".repeat((4 - (s.length % 4)) % 4)
@@ -10,11 +11,8 @@ const b64ToU8 = (s: string) => {
 
 export const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
-/** Registra el service worker (PWA) una sola vez. */
-export async function registerSW() {
-  if (!("serviceWorker" in navigator)) return null
-  return navigator.serviceWorker.register("/sw.js", { scope: "/" })
-}
+/** Registra el service worker (PWA) una sola vez (features/pwa/sw-client.ts). */
+export const registerSW = registerServiceWorker
 
 export async function currentPush() {
   if (!pushSupported()) return null

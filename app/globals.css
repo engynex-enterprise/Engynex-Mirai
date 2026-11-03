@@ -355,3 +355,77 @@ html.dense input[data-slot="input"], html.dense [data-slot="input-group"] { heig
 
 /* Anuncios: texto en movimiento (se pausa al pasar el mouse; quieto si la persona reduce el movimiento) */
 @keyframes mirai-ticker { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+
+/* Portada (features/landing): las tarjetas aparecen suavemente al entrar en pantalla, solo donde el navegador
+   soporta animaciones ligadas al desplazamiento y si la persona no pidió reducir el movimiento. */
+@keyframes reveal { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { animation: reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 100%; }
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:has(#landing) { scroll-behavior: smooth; }
+}
+
+/* ───────────── PWA: Mirai instalado como app nativa (docs/PWA.md) ─────────────
+   <html> lleva `standalone` (abierto desde el ícono) e `ios` (iPhone/iPad) desde lib/pwa/platform.ts › PLATFORM_SCRIPT.
+   Las reglas van fuera de @layer a propósito: ganan sobre las utilidades (p. ej. p-0 de un Sheet) solo en lo que tocan. */
+
+/* Toques como en una app: sin el recuadro azul/gris del navegador, sin la espera del doble toque y con respuesta al presionar. */
+html { -webkit-tap-highlight-color: transparent; }
+:where(a, button, input, select, textarea, label, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [role="checkbox"], [role="radio"]) { touch-action: manipulation; }
+@media (hover: none) {
+  :where(button, [role="button"], [role="tab"], [role="menuitem"], [role="option"]):active:not(:disabled) { filter: brightness(.95); }
+}
+
+/* Zonas seguras (notch, isla dinámica, barra de inicio) en paneles y ventanas inferiores. En una pestaña del navegador
+   valen 0, así que no cambia nada fuera de la app instalada. */
+[data-slot="sheet-content"]:is([data-side="left"], [data-side="right"], [data-side="top"]) { padding-top: env(safe-area-inset-top); }
+[data-slot="sheet-content"]:not([data-side="top"]) { padding-bottom: env(safe-area-inset-bottom); }
+[data-slot="sheet-content"]:is([data-side="left"], [data-side="right"], [data-side="top"]) > :is([data-slot="sheet-close"], button.absolute.top-3) { top: calc(.75rem + env(safe-area-inset-top)); }
+[data-slot="drawer-content"][data-vaul-drawer-direction="bottom"]:not(:has([data-slot="drawer-footer"])) { padding-bottom: env(safe-area-inset-bottom); }
+
+/* App instalada: sin rebote ni "deslizar para recargar" del navegador (Mirai trae el suyo: features/pwa/pull-to-refresh),
+   la interfaz no se selecciona como texto (los textos, montos y campos sí) y el contenido respeta la barra de estado. */
+html.standalone, html.standalone body { overscroll-behavior-y: none; }
+html.standalone :where(button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], nav, label, [data-slot="sidebar"], [data-slot="badge"], [data-slot="tabs-list"], svg, img) { -webkit-user-select: none; user-select: none; }
+html.standalone :where(a, img) { -webkit-touch-callout: none; }
+html.standalone body { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+html.standalone [data-slot="sidebar-container"] { top: env(safe-area-inset-top); height: calc(100svh - env(safe-area-inset-top)); }
+/* Lo de alto completo descuenta la barra de estado (si no, la página siempre se desplazaría ese alto). */
+html.standalone :is([data-slot="sidebar-wrapper"], .min-h-svh, .min-h-dvh, .min-h-screen) { min-height: calc(100dvh - env(safe-area-inset-top)); }
+html.standalone .sticky.top-0 { top: env(safe-area-inset-top); }
+html.standalone nav[aria-label="Navegación principal"] { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.nav-progress, .ptr { top: env(safe-area-inset-top); }
+
+/* iPhone/iPad instalado: la barra de estado es translúcida (reloj en blanco); esta franja de marca va detrás. */
+.pwa-statusbar { display: none; }
+html.standalone.ios .pwa-statusbar { display: block; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top); z-index: 80; background: #1F2B4B; pointer-events: none; }
+html.standalone.ios.dark .pwa-statusbar { background: #141418; }
+
+/* Escritorio con la barra de título integrada (Window Controls Overlay): Mirai dibuja la suya (features/pwa/title-bar)
+   en el espacio que dejan los botones del sistema, y lo demás baja ese alto. */
+.pwa-titlebar { display: none; }
+@media (display-mode: window-controls-overlay) {
+  .pwa-titlebar {
+    display: flex; position: fixed; z-index: 80; align-items: center; gap: .5rem; padding: 0 .75rem; font-size: 13px;
+    left: env(titlebar-area-x, 0); top: env(titlebar-area-y, 0); width: env(titlebar-area-width, 100%); height: env(titlebar-area-height, 2.25rem);
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    -webkit-app-region: drag; app-region: drag; -webkit-user-select: none; user-select: none;
+  }
+  .pwa-no-drag { -webkit-app-region: no-drag; app-region: no-drag; }
+  body { padding-top: env(titlebar-area-height, 2.25rem); }
+  :is([data-slot="sidebar-wrapper"], .min-h-svh, .min-h-dvh, .min-h-screen) { min-height: calc(100dvh - env(titlebar-area-height, 2.25rem)); }
+  [data-slot="sidebar-container"] { top: env(titlebar-area-height, 2.25rem); height: calc(100svh - env(titlebar-area-height, 2.25rem)); }
+  [data-slot="sheet-content"]:is([data-side="left"], [data-side="right"]) { top: env(titlebar-area-height, 2.25rem); height: auto; }
+  .sticky.top-0, .nav-progress, .ptr { top: env(titlebar-area-height, 2.25rem); }
+}
+
+/* Cambio de sección (app/(app)/template.tsx): la anterior se desvanece rápido y la nueva entra subiendo un poco. */
+::view-transition-old(.mirai-page-out) { animation: 120ms ease-in both mirai-page-fade reverse; }
+::view-transition-new(.mirai-page-in) { animation: 200ms cubic-bezier(0.14, 1, 0.34, 1) 60ms both mirai-page-rise; }
+@keyframes mirai-page-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mirai-page-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+html.rm::view-transition-group(*), html.rm::view-transition-old(*), html.rm::view-transition-new(*) { animation: none !important; }

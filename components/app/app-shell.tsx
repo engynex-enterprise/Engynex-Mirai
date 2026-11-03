@@ -30,6 +30,8 @@ import { Tour } from "./tour"
 import { GamiCheck } from "@/features/gami/gami-check"
 import { NotifPopups } from "@/features/notify/popups"
 import { AutomationRunner } from "@/features/automations/runner"
+import { PwaShell } from "@/features/pwa/pwa-shell"
+import { SEARCH_EVENT } from "@/features/pwa/title-bar"
 
 export function AppShell({ ctx, sidebarOpen, children }: { ctx: AppContext; sidebarOpen: boolean; children: React.ReactNode }) {
   return (
@@ -59,7 +61,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     <>
       <AppSidebar live={status} online={online} badges={badges} hidden={hidden} unread={unread} />
       <SidebarInset className="min-w-0 bg-transparent">
-        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-28 sm:px-6 md:pb-16 lg:px-8"><AdTicker /><PlatformNotice /><LegalUpdate />{children}</main>
+        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-16 lg:px-8"><AdTicker /><PlatformNotice /><LegalUpdate />{children}</main>
       </SidebarInset>
       <MobileTabBar />
       <AddMenu />
@@ -77,6 +79,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <GamiCheck />
       <NotifPopups />
       <AutomationRunner />
+      <PwaShell unread={unread} />
       <Suspense fallback={null}><Tour /></Suspense>
     </>
   )
@@ -101,7 +104,10 @@ function useShortcuts() {
         setHelp("@")
       }
     }
+    // Botón Buscar de la barra de título de la app instalada en el escritorio (features/pwa/title-bar.tsx).
+    const onSearch = () => setSearch(true)
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    window.addEventListener(SEARCH_EVENT, onSearch)
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener(SEARCH_EVENT, onSearch) }
   }, [setSearch, setAdd, setHelp])
 }

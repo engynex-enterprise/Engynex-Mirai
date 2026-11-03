@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Camera } from "lucide-react"
+import { parseAsString, useQueryStates } from "nuqs"
 import { toast } from "@/components/mirai/toast"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,7 @@ import { useCanEdit } from "@/components/app/app-context"
 import { isHormiga, localCat, localHormiga } from "./logic"
 import { classifyExpenses, readInvoice } from "@/features/ai/actions"
 import { useList } from "@/hooks/use-book-data"
+import { takeShared } from "@/features/pwa/shared"
 
 const schema = z.object({
   descripcion: z.string().trim().min(1, "Escribe en qué gastaste"),
@@ -173,6 +175,30 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
     setFotoMsg("Listo. Revisa los datos antes de guardar.")
     askAI(r.comercio, r.category_id ? "regla" : undefined)
   }
+
+  // Compartido a Mirai desde otra app (Galería, WhatsApp, el correo…): el service worker dejó la foto o el PDF y el
+  // texto (features/pwa/shared.ts); se llenan solos y la factura se lee con IA. Una sola vez por apertura.
+  const [shared, setShared] = useQueryStates({ compartido: parseAsString, desc: parseAsString, valor: parseAsString }, { history: "replace" })
+  const sharedDone = useRef(false)
+  const fill = useRef({ onDesc, onFoto })
+  useEffect(() => { fill.current = { onDesc, onFoto } })
+  useEffect(() => {
+    if (expense || !shared.compartido || sharedDone.current) return
+    sharedDone.current = true
+    const { compartido, desc, valor } = shared
+    void (async () => {
+      const got = compartido === "sin-archivo" ? { file: null, text: null } : await takeShared()
+      const d = got.text?.descripcion || desc || ""
+      const v = got.text?.valor || (Number(valor) > 0 ? Number(valor) : 0)
+      if (d) { form.setValue("descripcion", d, { shouldValidate: true }); fill.current.onDesc(d) }
+      if (v) form.setValue("valor", v, { shouldValidate: true })
+      if (got.file) {
+        if (ia.on === false) toast.info("Recibimos tu factura", { description: "La lectura con IA está apagada en Ajustes › Inteligencia artificial: escribe los datos a mano." })
+        else await fill.current.onFoto(got.file)
+      } else if (compartido !== "texto") setFotoMsg("No alcanzamos a recibir la foto. Toca Leer una factura con foto para tomarla o escogerla.")
+      void setShared({ compartido: null, desc: null, valor: null })
+    })()
+  }, [expense, shared, setShared, form, ia.on])
 
   const umbral = Number(cfg?.umbral ?? 25000)
   const isImprevisto = cats.find((c) => c.id === w.category_id)?.nombre === "Imprevistos"

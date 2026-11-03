@@ -32,6 +32,7 @@ import { useBookData } from "@/features/book/use-book-data"
 import { syncCalendar } from "@/features/correo/actions"
 import { ECAT, calEvents, calIcs, type CalEvent, type ECatKey } from "./events"
 import { useFechasDian } from "./use-dian"
+import { saveFile } from "@/lib/pwa/save-file"
 
 type View = "agenda" | "semana" | "mes"
 const KEY = "mirai-calp"
@@ -112,8 +113,7 @@ export function PaymentsCalendar() {
   const agendaDays = [...new Set(ctl.rows.map((e) => e.fecha))]
   const ics = () => {
     const all = calEvents(book, add(today, -30), add(today, 365), today, prefs.off)
-    const blob = new Blob([calIcs(all)], { type: "text/calendar" }), url = URL.createObjectURL(blob), el = document.createElement("a")
-    el.href = url; el.download = "mirai-pagos.ics"; el.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+    void saveFile(new Blob([calIcs(all)], { type: "text/calendar" }), "mirai-pagos.ics", "Pagos de Mirai")
   }
 
   return (

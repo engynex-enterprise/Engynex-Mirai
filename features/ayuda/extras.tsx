@@ -83,7 +83,7 @@ export function EstadoModule() {
     const read = () => setEnv({
       online: navigator.onLine,
       notif: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
-      pwa: matchMedia("(display-mode: standalone)").matches,
+      pwa: matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true,
     })
     queueMicrotask(read)
     addEventListener("online", read); addEventListener("offline", read)
@@ -102,7 +102,7 @@ export function EstadoModule() {
         <Estado ok={aviso.isPending ? null : !aviso.data?.aviso_global?.trim() || aviso.data.aviso_tono !== "warn"} label="Avisos de la plataforma" detail={aviso.isPending ? "Revisando…" : aviso.data?.aviso_global?.trim() || "Sin avisos: todo funciona con normalidad."} />
         <Estado ok label="Tu plan" detail={<>{plan.nombre} · <AppLink href="/planes" className="font-semibold text-link hover:underline">Ver planes</AppLink></>} />
         <Estado ok={env ? env.notif === "granted" : null} label="Notificaciones del navegador" detail={<>{notifTxt} · <AppLink href="/ajustes?tab=alertas" className="font-semibold text-link hover:underline">Ajustes de alertas</AppLink></>} />
-        <Estado ok={env ? env.pwa : null} label="Mirai como app" detail={env?.pwa ? "Estás usando Mirai instalado como app." : "Puedes instalar Mirai en la pantalla de inicio desde el menú de tu navegador (Agregar a la pantalla de inicio)."} />
+        <Estado ok={env ? env.pwa : null} label="Mirai como app" detail={<>{env?.pwa ? "Estás usando Mirai instalado como app." : "Instálalo en tu pantalla de inicio o en tu computador: se abre como una app, con accesos directos y avisos."} · <AppLink href="/ajustes?tab=app" className="font-semibold text-link hover:underline">{env?.pwa ? "Ajustes de la app" : "Instalar Mirai"}</AppLink></>} />
       </ul>
       <div className="grid gap-1">
         <RowButton icon="bug" title="Reportar algo que no funciona" sub="Con la página donde estás y una captura opcional" onClick={() => go({ v: "opinion", tipo: "error" })} />

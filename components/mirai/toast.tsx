@@ -4,6 +4,7 @@ import { isValidElement } from "react"
 import { toast as sonner, type ExternalToast } from "sonner"
 import { CircleCheck, Info, Loader2, OctagonX, TriangleAlert, X, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/pwa/haptics"
 
 /**
  * Toasts de Mirai al estilo de Facebook: tarjeta con ícono en círculo de color, título, descripción, acción y cerrar,
@@ -77,6 +78,8 @@ function show(kind: Kind, title: React.ReactNode, o: Opts = {}) {
   const duration = d ?? KIND[kind].ms
   const desc = typeof description === "function" ? (description as () => React.ReactNode)() : description
   const dd = dedupeId(kind, title, desc, o)
+  // Vibración suave en el celular al guardar o fallar algo (lib/pwa/haptics.ts; nunca con reducir animaciones).
+  if (kind === "success" || kind === "error" || kind === "warning") haptic(kind)
   return sonner.custom((id) => <MiraiToast key={`${id}-${kind}`} id={id} kind={kind} title={title} description={desc} action={action} cancel={cancel} duration={duration} />,
     { ...rest, duration, ...(dd ? { id: dd } : {}) })
 }

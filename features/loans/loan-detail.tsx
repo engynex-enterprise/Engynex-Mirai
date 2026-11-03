@@ -37,6 +37,7 @@ import { descargarAcuerdo } from "./acuerdo"
 import { LoanEditDialog } from "./loan-edit-dialog"
 import { PayLoanDialog } from "./pay-loan-dialog"
 import { ReminderDialog } from "./reminder-dialog"
+import { saveFile } from "@/lib/pwa/save-file"
 
 // recharts sale del JS inicial de Le debo / Me deben: el gráfico de cuotas llega justo después.
 const LoanChart = dynamic(() => import("./loan-chart"), { ssr: false, loading: () => <div className="h-36 w-full" aria-hidden /> })
@@ -119,11 +120,8 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
       ...e.hist.filter((h) => h.tipo === "cuota").map((h) => [(h as { n: number }).n, (h as { prog: string }).prog, h.valor, h.cap, h.int, h.extra, h.saldo, "Pagada"]),
       ...e.plan.map((p) => [p.n, p.fecha, p.valor, p.cap, p.int, p.extra, p.saldo, p.fecha < today ? "Vencida" : "Pendiente"])]
     const csv = rows.map((r) => r.map((v) => (typeof v === "number" ? String(Math.round(v)) : `"${String(v ?? "").replace(/"/g, '""')}"`)).join(";")).join("\n")
-    const a = document.createElement("a")
-    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }))
-    a.download = `plan-${nm.toLowerCase().replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}-${today}.csv`
-    a.click(); URL.revokeObjectURL(a.href)
-    toast.success("Plan de pagos descargado", { description: "Ábrelo con Excel o Google Sheets." })
+    void saveFile(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `plan-${nm.toLowerCase().replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}-${today}.csv`, "Plan de pagos")
+      .then((r) => { if (r === "descargado") toast.success("Plan de pagos descargado", { description: "Ábrelo con Excel o Google Sheets." }) })
   }
 
   return (

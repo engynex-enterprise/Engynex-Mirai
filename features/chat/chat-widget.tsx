@@ -43,7 +43,7 @@ function Fab({ onClick }: { onClick: () => void }) {
     <button ref={ref} type="button" aria-label={unread ? "Pregúntale a Mirai (tienes una respuesta lista)" : "Pregúntale a Mirai"}
       className={cn(
         "group fixed z-40 grid size-[52px] touch-none place-items-center rounded-full bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#24561A)] shadow-[0_10px_28px_rgba(31,43,75,.38),0_2px_6px_rgba(0,0,0,.12)] ring-4 ring-background transition-all duration-300 hover:-translate-y-0.5 hover:scale-105 md:size-[60px]",
-        !pos && "right-3 bottom-[5.5rem] md:right-6 md:bottom-6", away && "pointer-events-none translate-y-4 scale-75 opacity-0", (unread || busy) && "chat-halo",
+        !pos && "right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:right-6 md:bottom-6", away && "pointer-events-none translate-y-4 scale-75 opacity-0", (unread || busy) && "chat-halo",
       )}
       style={pos ? { left: pos.x, top: pos.y } : undefined}
       onPointerDown={(e) => { const r = ref.current!.getBoundingClientRect(); drag.current = { sx: e.clientX, sy: e.clientY, x: r.left, y: r.top, moved: false }; ref.current!.setPointerCapture(e.pointerId) }}
@@ -142,7 +142,7 @@ export function ChatWidget() {
       {!open && <Fab onClick={() => openChat()} />}
       {open && mobile && (
         <Drawer open onOpenChange={(o) => !o && setOpen(false)} repositionInputs={false}>
-          <DrawerContent className="h-[94dvh] max-h-[94dvh]! bg-popover">
+          <DrawerContent className="h-[min(94dvh,calc(100dvh-env(safe-area-inset-top)-.5rem))] max-h-[min(94dvh,calc(100dvh-env(safe-area-inset-top)-.5rem))]! bg-popover">
             <DrawerTitle className="sr-only">Chat con Mirai</DrawerTitle>
             <DrawerDescription className="sr-only">Pregúntale a Mirai sobre tu plata</DrawerDescription>
             <div className="min-h-0 flex-1" data-vaul-no-drag><Panel onClose={() => setOpen(false)} onExpand={expand} /></div>

@@ -159,7 +159,12 @@ export async function sendWhatsApp(v: IntegrationValue, to: string, values: WaVa
 
 // ── Web Push (VAPID) ──
 export const pushReady = () => !!(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY)
-export async function sendPush(userId: string, msg: { title: string; body: string; url?: string; tag?: string }) {
+/**
+ * Notificación push. public/sw.js la muestra con el ícono de Mirai y, si vienen, con botones (`actions`, máx. 2; Android
+ * y escritorio) y el número en el ícono de la app (`badge`; sin número sale un punto).
+ */
+export type PushMsg = { title: string; body: string; url?: string; tag?: string; badge?: number; image?: string; actions?: { action: string; title: string; url: string }[]; requireInteraction?: boolean; renotify?: boolean }
+export async function sendPush(userId: string, msg: PushMsg) {
   if (!pushReady()) throw new Error("Faltan las llaves VAPID del despliegue (NEXT_PUBLIC_VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY).")
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:soporte@mirai.app", process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!)
   const admin = supabaseAdmin()

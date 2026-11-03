@@ -194,7 +194,8 @@ export async function deliver(o: { householdId: string; userId: string; canal: C
     } else {
       provider = "webpush"
       if (!pushReady()) throw new Error(NOT_READY.push)
-      const n = await sendPush(o.userId, { title: m.push.title, body: m.push.body, url: "/inicio", tag: "mirai-digest" })
+      // Botones de la notificación (Android y escritorio; public/sw.js): ir a los pagos o anotar un gasto de una vez.
+      const n = await sendPush(o.userId, { title: m.push.title, body: m.push.body, url: "/inicio", tag: "mirai-digest", actions: [{ action: "pagos", title: "Ver pagos", url: "/recordatorios" }, { action: "gasto", title: "Registrar gasto", url: "/gastos?nuevo=1" }] })
       destino = `${n} dispositivo${n === 1 ? "" : "s"}`
       if (!n) throw new Error("No tienes dispositivos con push activado. Actívalo en este celular o computador.")
       msg = `Enviado a ${n} dispositivo${n === 1 ? "" : "s"}.`

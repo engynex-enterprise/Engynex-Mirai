@@ -1,6 +1,7 @@
 // Conversación del chat en PDF con @react-pdf/renderer. Se carga solo al descargar (import dinámico).
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer"
 import { plainText } from "@/lib/chat/markdown"
+import { saveFile } from "@/lib/pwa/save-file"
 
 type Msg = { role: string; content: string; created_at: string }
 
@@ -40,8 +41,5 @@ function Chat({ titulo, msgs }: { titulo: string; msgs: Msg[] }) {
 
 export async function downloadChatPdf(titulo: string, msgs: Msg[], filename: string) {
   const blob = await pdf(<Chat titulo={titulo} msgs={msgs} />).toBlob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url; a.download = filename; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  await saveFile(blob, filename, titulo)
 }

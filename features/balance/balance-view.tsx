@@ -30,6 +30,7 @@ import { AssetForm, PUC, type AssetEdit } from "./asset-form"
 import { ComposicionCard, EstadosLeyenda, FlujoColumna, HallazgosBalance, MesCard, MonthNav, TColumn, type Line } from "./balance-parts"
 import { useIntegralExtras } from "./use-integral"
 import { PatrimonioCard } from "@/features/patrimonio/patrimonio-card"
+import { saveFile } from "@/lib/pwa/save-file"
 
 type Tab = "general" | "q1" | "q2" | "mes" | "anio"
 type Filtro = "todo" | "pendiente" | "vencido" | "hecho"
@@ -37,12 +38,8 @@ type Filtro = "todo" | "pendiente" | "vencido" | "hecho"
 /** Descarga un CSV (separado por ; y con BOM para que Excel lea las tildes). */
 function downloadCsv(name: string, rows: (string | number)[][]) {
   const txt = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n")
-  const a = document.createElement("a")
-  a.href = URL.createObjectURL(new Blob(["﻿" + txt], { type: "text/csv;charset=utf-8" }))
-  a.download = `${name}-${todayISO()}.csv`
-  a.click()
-  URL.revokeObjectURL(a.href)
-  toast.success("Balance exportado", { description: "Ábrelo con Excel o Google Sheets." })
+  void saveFile(new Blob(["﻿" + txt], { type: "text/csv;charset=utf-8" }), `${name}-${todayISO()}.csv`, "Balance de Mirai")
+    .then((r) => { if (r === "descargado") toast.success("Balance exportado", { description: "Ábrelo con Excel o Google Sheets." }) })
 }
 
 const PERIODO: Record<Exclude<Tab, "general">, string> = { q1: "1ª quincena", q2: "2ª quincena", mes: "Mes completo", anio: "Año" }

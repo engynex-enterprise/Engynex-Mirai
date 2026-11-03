@@ -28,6 +28,7 @@ const CatalogTab = dynamic(() => import("./tabs/catalogs").then((m) => m.Catalog
 const HogarTab = dynamic(() => import("./tabs/household").then((m) => m.HogarTab), { loading: TabLoading })
 const DatosTab = dynamic(() => import("./tabs/data").then((m) => m.DatosTab), { loading: TabLoading })
 const PlanTab = dynamic(() => import("@/features/planes/plan-tab").then((m) => m.PlanTab), { loading: TabLoading })
+const AppTab = dynamic(() => import("@/features/pwa/app-tab").then((m) => m.AppTab), { loading: TabLoading })
 const ProvidersManager = dynamic(() => import("@/features/providers/providers-view").then((m) => m.ProvidersManager), { loading: TabLoading })
 
 /**
@@ -40,6 +41,7 @@ export const TABS = [
   ["plan", "Mi plan", "crown", "Cuenta", "Premium, renovación y pagos"],
   ["apariencia", "Apariencia", "palette", "Cuenta", "Tema, tamaño de letra y densidad"],
   ["privacidad", "Privacidad", "eye-off", "Cuenta", "Ocultar montos y datos en mensajes"],
+  ["app", "Mirai como app", "smartphone", "Cuenta", "Instalar en el celular o el computador, accesos directos, versión y espacio"],
   ["seguridad", "Seguridad", "shield-check", "Cuenta", "Verificación en dos pasos y bloqueo"],
   ["hogar", "Hogar y familia", "users", "Cuenta", "Quién más usa este hogar y con qué permisos"],
   ["ia", "Inteligencia artificial", "sparkles", "Inteligencia", "Proveedores, claves, modelo y funciones de la IA"],
@@ -58,7 +60,7 @@ export const TABS = [
 ] as const
 type TabId = (typeof TABS)[number][0]
 /** Enlaces viejos: ?tab=integraciones abre la IA (lo único que el hogar configura). */
-const ALIAS: Record<string, TabId> = { integraciones: "ia", servidor: "ia", sesiones: "cuenta" }
+const ALIAS: Record<string, TabId> = { integraciones: "ia", servidor: "ia", sesiones: "cuenta", instalar: "app", pwa: "app" }
 
 function Body({ tab }: { tab: TabId }) {
   switch (tab) {
@@ -67,6 +69,7 @@ function Body({ tab }: { tab: TabId }) {
     case "plan": return <PlanTab />
     case "apariencia": return <AparienciaTab />
     case "privacidad": return <PrivacidadTab />
+    case "app": return <AppTab />
     case "seguridad": return <SeguridadTab />
     case "hogar": return <HogarTab />
     case "ia": return <IaTab />

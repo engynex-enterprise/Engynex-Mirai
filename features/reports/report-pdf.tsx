@@ -2,6 +2,7 @@
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer"
 import type { Indicador, ReportData } from "@/lib/domain"
 import { fmtMoney } from "@/lib/format"
+import { saveFile } from "@/lib/pwa/save-file"
 
 export type ReportPdfInput = {
   mes: string; libro: string; hoy: string; R: ReportData
@@ -60,8 +61,6 @@ function Report(d: ReportPdfInput) {
 
 export async function downloadReport(d: ReportPdfInput, filename: string) {
   const blob = await pdf(<Report {...d} />).toBlob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url; a.download = filename; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  // En la app instalada del celular abre Compartir (Guardar en Archivos, WhatsApp…): lib/pwa/save-file.ts.
+  await saveFile(blob, filename, "Reporte de Mirai")
 }

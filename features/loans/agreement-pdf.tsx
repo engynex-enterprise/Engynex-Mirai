@@ -3,6 +3,7 @@ import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer
 import { FRECS, SISTEMAS, type LoanEngine, type Sistema } from "@/lib/domain"
 import { fmtDate, fmtMoney, fmtPct, monthName } from "@/lib/format"
 import { numLetras } from "@/lib/num-letras"
+import { saveFile } from "@/lib/pwa/save-file"
 
 export type Party = { nombre: string; doc: string; ciudad?: string; direccion?: string; telefono?: string }
 export type AgreementInput = {
@@ -74,8 +75,5 @@ function Agreement(d: AgreementInput) {
 /** Genera el PDF y lo descarga. */
 export async function downloadAgreement(d: AgreementInput, filename: string) {
   const blob = await pdf(<Agreement {...d} />).toBlob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url; a.download = filename; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  await saveFile(blob, filename, "Acuerdo de pago")
 }

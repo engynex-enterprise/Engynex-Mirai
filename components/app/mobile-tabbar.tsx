@@ -7,6 +7,7 @@ import { Bell, House, Menu, Plus, Receipt } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { useShell } from "./shell-store"
+import { haptic } from "@/lib/pwa/haptics"
 
 /** Barra inferior en celular: Inicio, Gastos, Agregar, Pagos y Menú. */
 export function MobileTabBar() {
@@ -25,7 +26,7 @@ export function MobileTabBar() {
       <div className="mx-auto flex max-w-lg items-end">
         {tab("/inicio", "Inicio", <House className="size-5" />)}
         {tab("/gastos", "Gastos", <Receipt className="size-5" />)}
-        <button type="button" onClick={() => setAdd(true)} className="group -mt-5 flex flex-1 flex-col items-center gap-0.5 rounded-lg text-[11px] font-semibold text-muted-foreground focus-visible:outline-none" aria-label="Agregar" aria-haspopup="dialog">
+        <button type="button" onClick={() => { haptic("light"); setAdd(true) }} className="group -mt-5 flex flex-1 flex-col items-center gap-0.5 rounded-lg text-[11px] font-semibold text-muted-foreground focus-visible:outline-none" aria-label="Agregar" aria-haspopup="dialog">
           <span className="bg-brand-gradient grid size-13 place-items-center rounded-full text-white shadow-[0_4px_14px_rgba(42,127,20,.45)] ring-4 ring-card transition-transform group-active:scale-95 group-focus-visible:ring-ring/60"><Plus className="size-7" /></span>
           Agregar
         </button>

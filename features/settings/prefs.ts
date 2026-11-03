@@ -65,9 +65,6 @@ export function ApplyPrefs() {
     window.addEventListener("blur", on); window.addEventListener("focus", off); document.addEventListener("visibilitychange", vis)
     return () => { window.removeEventListener("blur", on); window.removeEventListener("focus", off); document.removeEventListener("visibilitychange", vis) }
   }, [prefs])
-  // PWA: registra el service worker (push y "Agregar a inicio") solo en producción.
-  useEffect(() => {
-    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
-  }, [])
+  // El service worker (push, app instalada, sin conexión) lo registra features/pwa/pwa-root.tsx en todas las páginas.
   return null
 }

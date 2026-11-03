@@ -3,6 +3,7 @@ import ExcelJS from "exceljs"
 import { RDK, RIK, bValor, compraEstado, conv, depInfo, depsDe, inv, loanName, rLines, saldoPrestamoAl, type Renta, type patrimonio } from "@/lib/domain"
 import { todayISO } from "@/lib/format"
 import type { RentaData } from "./data"
+import { saveFile } from "@/lib/pwa/save-file"
 
 const BT: Record<string, string> = { inmueble: "Inmueble", vehiculo: "Vehículo", cuenta: "Cuenta", inversion: "Inversión", cripto: "Cripto", exterior: "Exterior", cobrar: "Por cobrar", otro: "Otro" }
 
@@ -34,6 +35,5 @@ export async function downloadRentaXlsx({ data, y, mid, C, P }: { data: RentaDat
   const cat = new Map(data.book.categories.map((c) => [c.id, c.nombre]))
   sheet(`Gastos ${y}`, ["Fecha", "Descripción", "Categoría", "Valor"], data.book.expenses.filter((g) => g.fecha.startsWith(yr)).sort((a, b) => a.fecha.localeCompare(b.fecha)).map((g) => [g.fecha, g.descripcion, cat.get(g.category_id ?? "") ?? "", +g.valor]))
   const buf = await wb.xlsx.writeBuffer()
-  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })), download: filename })
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  await saveFile(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename, "Renta en Excel")
 }

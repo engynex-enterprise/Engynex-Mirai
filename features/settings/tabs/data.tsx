@@ -26,6 +26,7 @@ import { createClient } from "@/utils/supabase/client"
 import { SampleButton } from "@/features/setup/sample-button"
 import { backupUrl, createBackup, deleteAccount, deleteBackup, exportBookJson, exportMyData, formatBlocks, restoreBackup, restoreFromJson } from "@/features/data/actions"
 import { SettingRow, SettingSection, SettingStack } from "../ui"
+import { saveFile } from "@/lib/pwa/save-file"
 
 const TIPO = { auto: "Automático", manual: "Manual", antes_restaurar: "Antes de restaurar", importado: "Importado" } as Record<string, string>
 const ACC = { crear: ["Creó", "pagado"], editar: ["Editó", "info"], borrar: ["Borró", "vencido"], restaurar: ["Recuperó", "estimado"] } as const
@@ -43,9 +44,7 @@ const BLOCKS = [["gastos", "Gastos"], ["ingresos", "Ingresos"], ["fijos", "Gasto
 
 const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }))
-  const a = Object.assign(document.createElement("a"), { href: url, download: name })
-  a.click(); URL.revokeObjectURL(url)
+  void saveFile(new Blob([text], { type: "application/json" }), name, "Copia de Mirai")
 }
 
 function Backups() {

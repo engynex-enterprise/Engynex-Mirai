@@ -3,6 +3,7 @@ import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer
 import { RDK, RDOCS, RIK, depInfo, depsDe, rLines, type RentaInput, type Renta, type patrimonio, type topes } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { RentaData } from "./data"
+import { saveFile } from "@/lib/pwa/save-file"
 
 type In = { data: RentaData; y: number; mid: string; quien: string; R: RentaInput; C: Renta; P: ReturnType<typeof patrimonio>; T: ReturnType<typeof topes>; docs: Record<string, boolean> }
 
@@ -49,6 +50,5 @@ function Informe({ data, y, mid, quien, C, P, T, docs }: In) {
 
 export async function downloadRentaPdf(d: In, filename: string) {
   const blob = await pdf(<Informe {...d} />).toBlob()
-  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: filename })
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  await saveFile(blob, filename, "Informe de renta")
 }

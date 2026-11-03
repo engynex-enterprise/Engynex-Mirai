@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { useQueryClient } from "@tanstack/react-query"
-import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Crown, Eye, EyeOff, LifeBuoy, LogOut, MessageSquareHeart, Moon, Plus, Search, Settings, ShieldCheck, Sun, User } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, CirclePlus, Crown, Download, Eye, EyeOff, LifeBuoy, LogOut, MessageSquareHeart, Moon, Plus, Search, Settings, ShieldCheck, Sun, User } from "lucide-react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge,
   SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, SidebarTrigger, useSidebar,
@@ -31,6 +31,7 @@ import { switchBook } from "./actions"
 import { ModeSwitch } from "./mode-switch"
 import { togglePrivacy } from "./privacy"
 import { useGami } from "@/features/gami/use-gami"
+import { useInstall } from "@/features/pwa/install"
 
 /** Abre el Centro de ayuda desde el menú: en celular primero cierra el menú (dos paneles a la vez bloquean los clics). */
 function openHelpFromMenu(isMobile: boolean, setOpenMobile: (v: boolean) => void, openHelp: (k: string) => void) {
@@ -289,6 +290,7 @@ function UserMenu() {
   const router = useRouter()
   const g = useGami()
   const lvl = g?.st.on ? g.L : null
+  const inst = useInstall()
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -310,6 +312,7 @@ function UserMenu() {
             <DropdownMenuItem onSelect={() => togglePrivacy()}><EyeOff /> Ocultar o mostrar montos</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => openHelpFromMenu(isMobile, setOpenMobile, openHelp)}><LifeBuoy /> Centro de ayuda</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => openFeedback()}><MessageSquareHeart /> Danos tu opinión</DropdownMenuItem>
+            {inst.can && <DropdownMenuItem onSelect={() => { if (isMobile) setOpenMobile(false); setTimeout(() => void inst.install(), isMobile ? 250 : 0) }}><Download /> Instalar Mirai</DropdownMenuItem>}
             {isAdmin && <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck /> Admin</Link></DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
               {resolvedTheme === "dark" ? <Sun /> : <Moon />} {resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"}

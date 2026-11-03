@@ -15,6 +15,8 @@
     "db:types": "node --env-file=.env.local -e \"require('child_process').execSync('npx supabase gen types typescript --db-url '+process.env.SUPABASE_DB_URL+' --schema public > lib/supabase/database.types.ts',{stdio:'inherit'})\"",
     "legacy:extract": "node scripts/extract-legacy.mjs",
     "icons": "node scripts/gen-icons.mjs",
+    "pwa:assets": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/pwa-assets.mjs",
+    "pwa:screenshots": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/pwa-screenshots.mjs",
     "prebuild": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
