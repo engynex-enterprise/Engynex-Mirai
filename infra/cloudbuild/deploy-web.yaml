@@ -1,0 +1,100 @@
+# Despliegue de la web (Next.js standalone) en Cloud Run con canario y vuelta atrás automática.
+# Disparador: push a pruebas o main (stack/cicd.tf). Las sustituciones las pone Terraform por ambiente.
+#   verificar ─┐
+#   construir ─┴─► publicar ─► escanear ─► desplegar (sin tráfico → humo → 10 % → 50 % → 100 %)
+# La imagen es por ambiente: los NEXT_PUBLIC_* se incrustan al compilar (_WEB_BUILD_ENV_B64).
+
+substitutions:
+  _ENV: pruebas
+  _RUN_PROJECT: ""
+  _REGION: us-west1
+  _AR_REPO: "" # us-west1-docker.pkg.dev/<cicd>/mirai
+  _SERVICE: "" # mirai-<ambiente>-web
+  _CANARY_URL: "" # https://canary.<dominio>/api/public/version (vacío = sin prueba de humo)
+  _WEB_BUILD_ENV_B64: ""
+  _FAIL_SEVERITY: CRITICAL
+  _CANARY_STEPS: "10,50"
+  _BAKE_SECONDS: "300"
+  _MAX_5XX_RATIO: "0.02"
+  _NODE_VERSION: "26"
+  _SKIP_VERIFY: "false"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+  automapSubstitutions: true
+  substitutionOption: ALLOW_LOOSE
+  env:
+    - DOCKER_BUILDKIT=1
+
+timeout: 3600s
+
+steps:
+  - id: verificar
+    name: node:${_NODE_VERSION}-bookworm
+    waitFor: ["-"]
+    env:
+      - TZ=America/Bogota
+      - CI=1
+      - TURBO_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_SUPABASE_URL=https://ci.supabase.co
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ci_placeholder
+      - SUPABASE_SECRET_KEY=ci-placeholder-no-real-secret
+      - ENCRYPTION_KEY=Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtYmFzZTY0LXh4eA==
+      - CRON_SECRET=ci-placeholder-cron-secret
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      if [[ "${_SKIP_VERIFY}" == "true" ]]; then echo "Verificación omitida a mano (_SKIP_VERIFY)"; exit 0; fi
+      bash infra/cloudbuild/scripts/setup-pnpm.sh
+      pnpm install --frozen-lockfile
+      pnpm turbo run lint typecheck test --filter=web...
+
+  - id: construir
+    name: gcr.io/cloud-builders/docker
+    waitFor: ["-"]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      IMG="${_AR_REPO}/web"
+      SHA="${SHORT_SHA:-manual}"
+      docker build -f infra/docker/web.Dockerfile \
+        --build-arg NODE_VERSION="${_NODE_VERSION}" \
+        --build-arg WEB_BUILD_ENV_B64="${_WEB_BUILD_ENV_B64}" \
+        --build-arg GIT_SHA="${COMMIT_SHA:-$SHA}" \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --cache-from "${IMG}:cache-${_ENV}" \
+        -t "${IMG}:${_ENV}-${SHA}" \
+        -t "${IMG}:cache-${_ENV}" \
+        .
+
+  - id: publicar
+    name: gcr.io/cloud-builders/docker
+    waitFor: [verificar, construir]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      IMG="${_AR_REPO}/web"
+      SHA="${SHORT_SHA:-manual}"
+      docker push "${IMG}:${_ENV}-${SHA}"
+      docker push "${IMG}:cache-${_ENV}"
+      docker inspect --format='{{index .RepoDigests 0}}' "${IMG}:${_ENV}-${SHA}" > /workspace/imagen.txt
+      echo "Imagen: $(cat /workspace/imagen.txt)"
+
+  - id: escanear
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [publicar]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      bash infra/cloudbuild/scripts/scan.sh "$(cat /workspace/imagen.txt)" "${_FAIL_SEVERITY}"
+
+  - id: desplegar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [escanear]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SERVICE="${_SERVICE}" REGION="${_REGION}" PROJECT="${_RUN_PROJECT}" IMAGE="$(cat /workspace/imagen.txt)" \
+      CANARY_URL="${_CANARY_URL}" STEPS="${_CANARY_STEPS}" BAKE="${_BAKE_SECONDS}" MAX_RATIO="${_MAX_5XX_RATIO}" \
+        bash infra/cloudbuild/scripts/rollout.sh

@@ -1,0 +1,139 @@
+# Despliegue de la API (NestJS) en Cloud Run con canario y vuelta atrás automática.
+# Imagen: apps/api/Dockerfile (la escribe F2-B: turbo prune api --docker + pnpm deploy). Contexto: raíz.
+# Promoción: si el mismo commit ya pasó por pruebas (etiqueta ok-<sha>), producción reutiliza ESA imagen
+# (mismo digest) y no vuelve a compilar ni escanear.
+#   buscar ─► verificar ─┐
+#          └► construir ─┴─► publicar ─► escanear ─► migrar (etapa 3) ─► desplegar ─► aprobar (ok-<sha>)
+
+substitutions:
+  _ENV: pruebas
+  _RUN_PROJECT: ""
+  _REGION: us-west1
+  _AR_REPO: ""
+  _SERVICE: "" # mirai-<ambiente>-api
+  _CANARY_URL: "" # https://canary-api.<dominio>/healthz
+  _DOCKERFILE: apps/api/Dockerfile
+  _MIGRATE_JOB: "" # mirai-<ambiente>-db-migrate (solo con Cloud SQL)
+  _FAIL_SEVERITY: CRITICAL
+  _CANARY_STEPS: "10,50"
+  _BAKE_SECONDS: "300"
+  _MAX_5XX_RATIO: "0.02"
+  _NODE_VERSION: "26"
+  _SKIP_VERIFY: "false"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+  automapSubstitutions: true
+  substitutionOption: ALLOW_LOOSE
+  env:
+    - DOCKER_BUILDKIT=1
+
+timeout: 3600s
+
+steps:
+  - id: buscar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SHA="${SHORT_SHA:-manual}"
+      if [[ "$SHA" != "manual" ]] && D="$(gcloud artifacts docker images describe "${_AR_REPO}/api:ok-${SHA}" --format='value(image_summary.digest)' 2>/dev/null)" && [[ -n "$D" ]]; then
+        echo "${_AR_REPO}/api@${D}" > /workspace/imagen.txt
+        touch /workspace/reusar
+        echo "Se reutiliza la imagen aprobada de este commit: $(cat /workspace/imagen.txt)"
+      else
+        echo "No hay imagen aprobada para ${SHA}: se compila."
+      fi
+      if [[ ! -f /workspace/reusar && ! -f "${_DOCKERFILE}" ]]; then
+        echo "Falta ${_DOCKERFILE} (lo crea F2-B en apps/api). No hay nada que desplegar."; exit 1
+      fi
+
+  - id: verificar
+    name: node:${_NODE_VERSION}-bookworm
+    waitFor: [buscar]
+    env:
+      - TZ=America/Bogota
+      - CI=1
+      - TURBO_TELEMETRY_DISABLED=1
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      if [[ -f /workspace/reusar || "${_SKIP_VERIFY}" == "true" ]]; then echo "Verificación omitida"; exit 0; fi
+      bash infra/cloudbuild/scripts/setup-pnpm.sh
+      pnpm install --frozen-lockfile
+      pnpm turbo run lint typecheck test --filter=api...
+
+  - id: construir
+    name: gcr.io/cloud-builders/docker
+    waitFor: [buscar]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      if [[ -f /workspace/reusar ]]; then exit 0; fi
+      IMG="${_AR_REPO}/api"
+      SHA="${SHORT_SHA:-manual}"
+      docker build -f "${_DOCKERFILE}" \
+        --build-arg NODE_VERSION="${_NODE_VERSION}" \
+        --build-arg GIT_SHA="${COMMIT_SHA:-$SHA}" \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --cache-from "${IMG}:cache" \
+        -t "${IMG}:sha-${SHA}" \
+        -t "${IMG}:cache" \
+        .
+
+  - id: publicar
+    name: gcr.io/cloud-builders/docker
+    waitFor: [verificar, construir]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      if [[ -f /workspace/reusar ]]; then exit 0; fi
+      IMG="${_AR_REPO}/api"
+      SHA="${SHORT_SHA:-manual}"
+      docker push "${IMG}:sha-${SHA}"
+      docker push "${IMG}:cache"
+      docker inspect --format='{{index .RepoDigests 0}}' "${IMG}:sha-${SHA}" > /workspace/imagen.txt
+      echo "Imagen: $(cat /workspace/imagen.txt)"
+
+  - id: escanear
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [publicar]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      if [[ -f /workspace/reusar ]]; then echo "Ya escaneada en pruebas"; exit 0; fi
+      bash infra/cloudbuild/scripts/scan.sh "$(cat /workspace/imagen.txt)" "${_FAIL_SEVERITY}"
+
+  # Etapa 3: migraciones SQL (aditivas) dentro de la VPC antes de mover tráfico.
+  - id: migrar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [escanear]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      if [[ -z "${_MIGRATE_JOB}" ]]; then echo "Sin Cloud SQL: las migraciones siguen con pnpm db:migrate"; exit 0; fi
+      gcloud run jobs update "${_MIGRATE_JOB}" --image "$(cat /workspace/imagen.txt)" \
+        --project "${_RUN_PROJECT}" --region "${_REGION}" --quiet
+      gcloud run jobs execute "${_MIGRATE_JOB}" --wait --project "${_RUN_PROJECT}" --region "${_REGION}"
+
+  - id: desplegar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [migrar]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SERVICE="${_SERVICE}" REGION="${_REGION}" PROJECT="${_RUN_PROJECT}" IMAGE="$(cat /workspace/imagen.txt)" \
+      CANARY_URL="${_CANARY_URL}" STEPS="${_CANARY_STEPS}" BAKE="${_BAKE_SECONDS}" MAX_RATIO="${_MAX_5XX_RATIO}" \
+        bash infra/cloudbuild/scripts/rollout.sh
+
+  # Marca la imagen como aprobada: la promoción a producción y el gateway realtime solo usan imágenes ok-<sha>.
+  - id: aprobar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [desplegar]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SHA="${SHORT_SHA:-manual}"
+      if [[ -f /workspace/reusar || "$SHA" == "manual" ]]; then exit 0; fi
+      gcloud artifacts docker tags add "$(cat /workspace/imagen.txt)" "${_AR_REPO}/api:ok-${SHA}" --quiet

@@ -1,0 +1,50 @@
+# Despliegue del gateway realtime (socket.io) en Cloud Run. Misma imagen que la API (MODE=realtime lo pone
+# Terraform): espera a que deploy-api marque ok-<sha> y despliega ese digest con canario por métricas.
+# Sin prueba de humo previa: el servicio solo es accesible por el balanceador y no tiene host canario.
+# Solo existe en la etapa 3 (stages.realtime).
+
+substitutions:
+  _ENV: pruebas
+  _RUN_PROJECT: ""
+  _REGION: us-west1
+  _AR_REPO: ""
+  _SERVICE: "" # mirai-<ambiente>-realtime
+  _CANARY_URL: ""
+  _CANARY_STEPS: "10,50"
+  _BAKE_SECONDS: "300"
+  _MAX_5XX_RATIO: "0.05"
+  _WAIT_MINUTES: "50"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  automapSubstitutions: true
+  substitutionOption: ALLOW_LOOSE
+
+timeout: 5400s
+
+steps:
+  - id: esperar-imagen
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SHA="${SHORT_SHA:?Este build necesita un commit (disparador de push)}"
+      for i in $(seq 1 $(( ${_WAIT_MINUTES} * 2 ))); do
+        D="$(gcloud artifacts docker images describe "${_AR_REPO}/api:ok-${SHA}" --format='value(image_summary.digest)' 2>/dev/null || true)"
+        if [[ -n "$D" ]]; then
+          echo "${_AR_REPO}/api@${D}" > /workspace/imagen.txt
+          echo "Imagen aprobada: $(cat /workspace/imagen.txt)"; exit 0
+        fi
+        echo "Esperando api:ok-${SHA} ($i)…"; sleep 30
+      done
+      echo "deploy-api no aprobó la imagen de ${SHA} en ${_WAIT_MINUTES} min: no se despliega realtime."; exit 1
+
+  - id: desplegar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [esperar-imagen]
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SERVICE="${_SERVICE}" REGION="${_REGION}" PROJECT="${_RUN_PROJECT}" IMAGE="$(cat /workspace/imagen.txt)" \
+      CANARY_URL="${_CANARY_URL}" STEPS="${_CANARY_STEPS}" BAKE="${_BAKE_SECONDS}" MAX_RATIO="${_MAX_5XX_RATIO}" \
+        bash infra/cloudbuild/scripts/rollout.sh

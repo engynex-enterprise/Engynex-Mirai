@@ -1,0 +1,15 @@
+# Terraform de Mirai: nunca subir el estado, los planes ni los valores reales.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+terraform.tfvars
+*.auto.tfvars
+backend.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# Sí se suben: .terraform.lock.hcl, terraform.tfvars.example y backend.hcl.example

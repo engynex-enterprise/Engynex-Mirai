@@ -1,0 +1,33 @@
+# Copia a terraform.tfvars (ignorado por git). Sin secretos: el token de GitHub va en Secret Manager.
+
+projects = {
+  cicd       = "engynex-mirai-cicd"
+  pruebas    = "engynex-mirai-pruebas"
+  produccion = "engynex-mirai-prod"
+}
+
+create_projects = false        # true si la cuenta que aplica puede crear proyectos
+folder_id       = null         # p. ej. "123456789012" (carpeta "Mirai")
+org_id          = null         # p. ej. "987654321098"
+billing_account = "000000-000000-000000"
+
+region                = "us-west1"
+state_bucket_name     = "engynex-mirai-tfstate"
+state_bucket_location = "US"
+
+github_owner         = "engynex"
+github_repository    = "mirai"
+github_repository_id = null # gh api repos/engynex/mirai --jq .id
+
+# Conexión GitHub ↔ Cloud Build: primero instala la app "Google Cloud Build" en el repositorio y guarda el token
+# OAuth en Secret Manager (runbook §1.3). Mientras tanto déjalos en null.
+github_app_installation_id        = null
+github_oauth_token_secret_version = null # "projects/engynex-mirai-cicd/secrets/github-oauth-token/versions/1"
+
+enable_ci_trigger            = false
+manage_org_policy_exceptions = false # true si hay organización con "secure by default" y se quiere el bucket público
+grant_billing_roles          = false
+
+cicd_budget_amount = 30
+budget_currency    = "USD"
+alert_email        = "alertas@engynex.com"

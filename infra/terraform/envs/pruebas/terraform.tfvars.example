@@ -1,0 +1,53 @@
+# Copia a terraform.tfvars (ignorado por git). Aquí NO van secretos: esos se cargan en Secret Manager
+# (docs/infra/runbook.md §2). Los valores NEXT_PUBLIC_* son públicos (van al navegador).
+
+project_id      = "engynex-mirai-pruebas"
+cicd_project_id = "engynex-mirai-cicd"
+region          = "us-west1"
+bucket_suffix   = "engynex"
+
+# Salidas del bootstrap
+artifact_registry_path   = "us-west1-docker.pkg.dev/engynex-mirai-cicd/mirai"
+artifact_registry_repo   = "mirai"
+cloudbuild_repository_id = null # "projects/engynex-mirai-cicd/locations/us-west1/connections/github/repositories/mirai"
+
+# Etapa 1: API y web en Cloud Run con Supabase. Cron en pausa (base compartida con producción).
+stages = {
+  load_balancer     = true
+  storage           = true
+  cloud_sql         = false
+  redis             = false
+  realtime          = false
+  identity_platform = false
+  scheduler_paused  = true
+  uptime_checks     = false
+}
+
+public_config = {
+  NEXT_PUBLIC_SUPABASE_URL             = "https://ofcuvjixvtdixcwzdzqa.supabase.co"
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_OWNER              = "Engynex S.A.S."
+  NEXT_PUBLIC_LEGAL_NIT                = "REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_EMAIL              = "datos@engynex.com"
+  NEXT_PUBLIC_LEGAL_CITY               = "Bogotá D.C., Colombia"
+  GOOGLE_CLIENT_ID                     = "REEMPLAZA.apps.googleusercontent.com"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY         = "REEMPLAZA"
+  VAPID_SUBJECT                        = "mailto:soporte@engynex.com"
+  NEXT_PUBLIC_WOMPI_PUBLIC_KEY         = "pub_test_REEMPLAZA"
+  MIRAI_CSP_ENFORCE                    = "0"
+}
+
+# Se agregan aquí a medida que se carga su valor (Cloud Run no arranca si un secreto montado está vacío).
+optional_secrets = [
+  # "google-client-secret",
+  # "vapid-private-key",
+  # "ai-gateway-api-key",
+]
+
+alert_emails = {
+  dueno = "alertas@engynex.com"
+}
+
+billing_account = null # "000000-000000-000000"
+budget_amount   = 60
+budget_currency = "USD"

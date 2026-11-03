@@ -1,0 +1,52 @@
+# CI de Mirai en Cloud Build: lint, typecheck, Vitest y build con Turborepo + revisión de Terraform.
+# Disparador opcional para PR hacia pruebas/main (envs/bootstrap, enable_ci_trigger). GitHub Actions
+# (.github/workflows/ci.yml) sigue siendo la verificación principal de los PR.
+# A mano: gcloud builds submit --config infra/cloudbuild/ci.yaml --region us-west1 --project <cicd> .
+
+substitutions:
+  _NODE_VERSION: "26"
+  _TERRAFORM_VERSION: "1.16.4"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+  automapSubstitutions: true
+  substitutionOption: ALLOW_LOOSE
+
+timeout: 2400s
+
+steps:
+  - id: verificar
+    name: node:${_NODE_VERSION}-bookworm # imagen completa: trae python3 para la paridad con la v4
+    env:
+      - TZ=America/Bogota
+      - CI=1
+      - TURBO_TELEMETRY_DISABLED=1
+      - NEXT_TELEMETRY_DISABLED=1
+      # Marcadores públicos o falsos, como en GitHub Actions: compilar no necesita secretos reales.
+      - NEXT_PUBLIC_SUPABASE_URL=https://ci.supabase.co
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ci_placeholder
+      - NEXT_PUBLIC_SITE_URL=https://pruebas.mirai.engynex.com
+      - SUPABASE_SECRET_KEY=ci-placeholder-no-real-secret
+      - ENCRYPTION_KEY=Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtYmFzZTY0LXh4eA==
+      - CRON_SECRET=ci-placeholder-cron-secret
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      bash infra/cloudbuild/scripts/setup-pnpm.sh
+      pnpm install --frozen-lockfile
+      pnpm turbo run lint typecheck test build
+
+  - id: terraform
+    name: hashicorp/terraform:${_TERRAFORM_VERSION}
+    waitFor: ["-"]
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        cd infra/terraform
+        terraform fmt -check -recursive
+        for r in envs/bootstrap envs/pruebas envs/produccion; do
+          (cd "$$r" && terraform init -backend=false -input=false >/dev/null && terraform validate)
+        done
+        cd stack && terraform init -backend=false -input=false >/dev/null && terraform test

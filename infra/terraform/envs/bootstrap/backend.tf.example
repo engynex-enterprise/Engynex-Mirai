@@ -1,0 +1,7 @@
+# Copia este archivo a backend.tf después del primer apply y corre `terraform init -migrate-state`.
+terraform {
+  backend "gcs" {
+    bucket = "REEMPLAZA-con-output-state_bucket"
+    prefix = "bootstrap"
+  }
+}

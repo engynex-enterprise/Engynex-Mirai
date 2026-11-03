@@ -1,0 +1,60 @@
+# Copia a terraform.tfvars (ignorado por git). Aquí NO van secretos (docs/infra/runbook.md §2).
+
+project_id      = "engynex-mirai-prod"
+cicd_project_id = "engynex-mirai-cicd"
+region          = "us-west1"
+bucket_suffix   = "engynex"
+
+artifact_registry_path   = "us-west1-docker.pkg.dev/engynex-mirai-cicd/mirai"
+artifact_registry_repo   = "mirai"
+cloudbuild_repository_id = null
+
+# Etapa 1. En la etapa 2 (cron y colas en GCP): scheduler_paused = false y se apaga pg_cron (runbook §5).
+stages = {
+  load_balancer     = true
+  storage           = true
+  cloud_sql         = false
+  redis             = false
+  realtime          = false
+  identity_platform = false
+  scheduler_paused  = true
+  uptime_checks     = false
+}
+
+public_config = {
+  NEXT_PUBLIC_SUPABASE_URL             = "https://ofcuvjixvtdixcwzdzqa.supabase.co"
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_OWNER              = "Engynex S.A.S."
+  NEXT_PUBLIC_LEGAL_NIT                = "REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_EMAIL              = "datos@engynex.com"
+  NEXT_PUBLIC_LEGAL_CITY               = "Bogotá D.C., Colombia"
+  GOOGLE_CLIENT_ID                     = "REEMPLAZA.apps.googleusercontent.com"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY         = "REEMPLAZA"
+  VAPID_SUBJECT                        = "mailto:soporte@engynex.com"
+  NEXT_PUBLIC_WOMPI_PUBLIC_KEY         = "pub_prod_REEMPLAZA"
+  NEXT_PUBLIC_SENTRY_DSN               = ""
+  MIRAI_CSP_ENFORCE                    = "0"
+}
+
+optional_secrets = [
+  # "google-client-secret",
+  # "vapid-private-key",
+  # "ai-gateway-api-key",
+  # "upstash-redis-rest-token",
+  # "mercadopago-access-token",
+  # "mercadopago-webhook-secret",
+  # "wompi-integrity-secret",
+  # "wompi-events-secret",
+]
+
+alert_emails = {
+  dueno = "alertas@engynex.com"
+}
+
+billing_account = null
+budget_amount   = 250
+budget_currency = "USD"
+
+cloud_sql_iam_users = {
+  # dueno = "dueno@engynex.com"
+}

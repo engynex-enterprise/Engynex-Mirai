@@ -1,0 +1,22 @@
+# Contexto de infra/docker/web.Dockerfile (BuildKit lo toma por el nombre). Nunca entran secretos ni artefactos.
+.git
+**/node_modules
+**/.next
+**/.turbo
+**/.vercel
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+**/tests/.out
+**/playwright-report
+**/test-results
+**/coverage
+legacy
+docs
+assets
+infra/terraform
+.claude
+.agents
+.vscode
+**/.DS_Store
