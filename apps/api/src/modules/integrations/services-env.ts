@@ -2,6 +2,7 @@
 // del esquema del núcleo (core/config) para no tocar un archivo compartido: los nombres coinciden con los de la web y
 // con los que define Terraform (infra/terraform/stack/services.tf). Nunca se registran sus valores.
 import { z } from "zod"
+import { AI_PLATFORM_ENV } from "@mirai/ai/providers/env"
 
 /** Vacío = sin definir (Terraform pone "" cuando falta un valor público). */
 const blank = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v)
@@ -39,6 +40,8 @@ export const ServicesEnvSchema = z
     TICK_DAILY_TASKS: bool(true),
     /** ¿Encolar automations/book/:b después de cada escritura de la API (outbox)? */
     AUTOMATIONS_OUTBOX: bool(true),
+    /** IA de la plataforma (V7-P): AI_PLATFORM_PROVIDER y credenciales de Vertex, Bedrock y Azure (packages/ai/src/providers/env.ts). */
+    ...(Object.fromEntries(AI_PLATFORM_ENV.map((k) => [k, opt])) as Record<(typeof AI_PLATFORM_ENV)[number], typeof opt>),
   })
   .transform((e) => {
     const site = (e.SITE_URL ?? e.NEXT_PUBLIC_SITE_URL ?? (e.MIRAI_ENV === "produccion" ? "https://mirai.engynex.com" : e.MIRAI_ENV === "pruebas" ? "https://engynex-mirai-pruebas.vercel.app" : "http://localhost:3000")).replace(/\/+$/, "")
@@ -50,6 +53,7 @@ export const ServicesEnvSchema = z
       VAPID_PRIVATE_KEY: e.VAPID_PRIVATE_KEY,
       VAPID_SUBJECT: e.VAPID_SUBJECT,
       AI_GATEWAY_API_KEY: e.AI_GATEWAY_API_KEY,
+      ...Object.fromEntries(AI_PLATFORM_ENV.map((k) => [k, e[k]])),
     }
     return {
       siteUrl: site,

@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto"
 import { generateObject, generateText, isStepCount, streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from "ai"
 import type { z } from "zod"
-import { aiErrMsg, aiSettings, modelFrom, modelIdOf } from "./model"
-import { enabledOf, getIntegration, type IntegrationValue } from "@mirai/services/integrations/store"
+import { aiCandidates, aiErrMsg, aiSettings, modelFrom, modelIdOf } from "./model"
+import { getIntegration, type IntegrationValue } from "@mirai/services/integrations/store"
 import { planOf } from "@mirai/services/plan"
 import { rt } from "@mirai/services/runtime"
 import { can } from "@mirai/domain/plans"
-import { AI_KINDS, integrationByKind } from "@mirai/services/integrations/registry"
+import { integrationByKind } from "@mirai/services/integrations/registry"
 import { AI_FEATURES, type AiFeature } from "./features"
 import { systemFor } from "./prompts"
 import { cheapModelFor, costFromMetadata, costUSD, creditsFor, estimateTokens } from "./pricing"
@@ -18,7 +18,7 @@ import { limitMsg, rateLimit as dbRateLimit } from "./limit"
 //   proveedores en el orden del hogar (modelo barato primero en tareas simples) → registro en ai_usage → caché.
 // El system prompt sale de prompts.ts según la función (`feature`), salvo que se pase uno propio.
 // Movido de apps/web/lib/ai/run.ts (F2-F): corre igual en la web y en la API con el runtime de @mirai/services
-// (rt().admin() para ai_usage, ai_cache, cupos y límites; rt().env() para AI_GATEWAY_API_KEY y Upstash).
+// (rt().admin() para ai_usage, ai_cache, cupos y límites; rt().env() para AI_GATEWAY_API_KEY, AI_PLATFORM_PROVIDER, las credenciales de nube y Upstash).
 
 export class AiUnavailable extends Error {}
 
@@ -110,7 +110,8 @@ async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; 
   }
 
   // Proveedores y cupo: si el hogar agotó sus créditos, solo quedan los proveedores con su propia clave.
-  let list = await enabledOf(b.householdId, [...new Set([...(ia.orden ?? []), ...AI_KINDS])].filter((k) => AI_KINDS.includes(k)))
+  // Orden: ia.orden del hogar → AI_PLATFORM_PROVIDER → registro; solo los activos y con credenciales (model.ts).
+  let list = await aiCandidates(b.householdId, ia.orden)
   if (!list.length) throw new AiUnavailable("Activa un proveedor de IA en Ajustes › Inteligencia artificial (Gemini tiene plan gratis).")
   if (s.cuposActivo && list.some((v) => v.source === "plataforma")) {
     const q = await householdQuota(b.householdId, plan.id)

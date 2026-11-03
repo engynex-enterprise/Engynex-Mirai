@@ -1,0 +1,71 @@
+# Colector OpenTelemetry LOCAL de Mirai (V7-Q). Imagen: otel/opentelemetry-collector-contrib:0.164.0.
+#
+# Qué hace: recibe OTLP de la API (mirai-api / mirai-realtime / mirai-worker) y de la web (mirai-web) en 4317 (gRPC) y
+# 4318 (HTTP) y lo saca a:
+#   · `debug`      → la consola del colector (docker compose logs otel-collector). Sirve para ver trace ids y métricas.
+#   · Jaeger       → trazas en la UI de Jaeger (compose.yaml lo levanta; UI en http://localhost:26686).
+#   · `prometheus` → métricas en formato Prometheus en :8889 (el Prometheus del perfil `metrics` las lee).
+# Nada de esto sale de tu máquina. Se usa con infra/otel/compose.yaml (ver los puertos del host allí).
+#
+# Variables que lee (todas opcionales):
+#   OTEL_DEBUG_VERBOSITY   basic | normal | detailed (por defecto detailed: muestra trace_id/span_id de cada span)
+#   JAEGER_OTLP_ENDPOINT   destino OTLP/gRPC de Jaeger (por defecto jaeger:4317, el del compose). Si corres el colector
+#                          sin Jaeger, solo verás reintentos de ese exportador en el log: no afecta a los demás.
+#
+# Cómo apuntar la API a este colector (desde tu máquina, puertos del compose):
+#   OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=otlp OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318
+#   (opcional) OTEL_LOGS_EXPORTER=otlp  OTEL_METRIC_EXPORT_INTERVAL=5000 (métricas cada 5 s en vez de 60 s)
+
+extensions:
+  # GET :13133/ → 200 cuando el colector está listo (healthcheck de Docker / sondas de las nubes).
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Protege la memoria del contenedor antes que nada.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch:
+    timeout: 2s
+
+exporters:
+  debug:
+    verbosity: ${env:OTEL_DEBUG_VERBOSITY:-detailed}
+  otlp_grpc/jaeger:
+    endpoint: ${env:JAEGER_OTLP_ENDPOINT:-jaeger:4317}
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Nombres clásicos de Prometheus (http_server_request_duration_seconds, mirai_queue_enqueued_total…): los del panel.
+    translation_strategy: UnderscoreEscapingWithSuffixes
+    # job = service.namespace/service.name e instance = service.instance.id los pone el exportador; del resto del
+    # recurso solo el ambiente y la versión como etiquetas (deployment_environment_name, service_version).
+    resource_constant_labels:
+      included: [deployment.environment.name, service.version]
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug, otlp_grpc/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug, prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]

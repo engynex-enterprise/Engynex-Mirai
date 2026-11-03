@@ -1,7 +1,7 @@
 // /v1/admin/**: solo administradores de la plataforma (@PlatformAdmin en la clase: ninguna ruta queda sin guarda).
 import { Controller } from "@nestjs/common"
 import { TsRestHandler, tsRestHandler } from "@ts-rest/nest"
-import { adminContract as c } from "@mirai/contracts/modules/admin"
+import { adminCoreContract as c } from "@mirai/contracts/modules/admin"
 import { PlatformAdmin } from "../../core/context/decorators"
 import { AdminService } from "./admin.service"
 

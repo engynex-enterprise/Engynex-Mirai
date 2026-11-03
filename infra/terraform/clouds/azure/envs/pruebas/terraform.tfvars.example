@@ -1,0 +1,62 @@
+# Copia a terraform.tfvars (ignorado por git). Aquí NO van secretos: se cargan en Key Vault
+# (az keyvault secret set --vault-name <secret_ids> --name <clave> --file /dev/stdin). Los NEXT_PUBLIC_* son públicos.
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+tenant_id       = "00000000-0000-0000-0000-000000000000"
+region          = "eastus2"
+
+# Salidas del bootstrap
+resource_group_name   = "mirai-pruebas-rg"
+create_resource_group = false
+registry_server       = "miraiREEMPLAZA.azurecr.io"
+registry_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mirai-cicd-rg/providers/Microsoft.ContainerRegistry/registries/miraiREEMPLAZA"
+
+# Primer apply: el digest de las imágenes ya publicadas por GitHub Actions (images.yml) para que la primera revisión
+# arranque; después las cambia el despliegue.
+# images = {
+#   web = "miraiREEMPLAZA.azurecr.io/mirai/web@sha256:…"
+#   api = "miraiREEMPLAZA.azurecr.io/mirai/api@sha256:…"
+# }
+
+features = {
+  edge             = true
+  storage          = true
+  postgres         = true
+  redis            = false # una sola instancia del gateway: no hace falta
+  realtime         = true
+  postgrest        = false
+  worker           = true # en Azure las colas son de extracción: el worker es obligatorio
+  scheduler_paused = true # en pausa hasta que la base de pruebas sea propia
+  uptime_checks    = false
+}
+queue_driver = "servicebus" # o "http" (sin cola ni worker: features.worker = false)
+
+public_config = {
+  NEXT_PUBLIC_LEGAL_OWNER      = "Engynex S.A.S."
+  NEXT_PUBLIC_LEGAL_NIT        = "REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_EMAIL      = "datos@engynex.com"
+  NEXT_PUBLIC_LEGAL_CITY       = "Bogotá D.C., Colombia"
+  GOOGLE_CLIENT_ID             = "REEMPLAZA.apps.googleusercontent.com"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY = "REEMPLAZA"
+  VAPID_SUBJECT                = "mailto:soporte@engynex.com"
+  NEXT_PUBLIC_WOMPI_PUBLIC_KEY = "pub_test_REEMPLAZA"
+  MIRAI_CSP_ENFORCE            = "0"
+}
+
+# Se agregan a medida que se carga su valor en Key Vault.
+optional_secrets = [
+  # "google-client-secret",
+  # "google-oauth-state-key",
+  # "turnstile-secret",
+  # "vapid-private-key",
+  # "mercadopago-access-token",
+  # "mercadopago-webhook-secret",
+  # "wompi-integrity-secret",
+  # "wompi-events-secret",
+]
+
+alert_emails = {
+  dueno = "alertas@engynex.com"
+}
+
+budget_amount = 80

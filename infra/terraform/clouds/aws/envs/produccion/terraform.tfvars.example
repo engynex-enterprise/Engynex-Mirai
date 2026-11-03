@@ -1,0 +1,56 @@
+# Copia a terraform.tfvars (ignorado por git). Aquí NO van secretos: esos se cargan en Secrets Manager
+# (aws secretsmanager put-secret-value --secret-id mirai-produccion/<clave> --secret-string file:///dev/stdin).
+# Los NEXT_PUBLIC_* son públicos (van al navegador).
+
+region        = "us-east-1"
+bucket_suffix = "engynex"
+registry_url  = "000000000000.dkr.ecr.us-east-1.amazonaws.com/mirai" # salida registry_url del bootstrap
+
+# Base de la nube como principal (v7), sin Supabase. Cron encendido después del corte (scheduler_paused = false).
+features = {
+  edge             = true
+  storage          = true
+  postgres         = true
+  redis            = true
+  realtime         = true
+  postgrest        = true
+  supabase         = false
+  scheduler_paused = true
+  uptime_checks    = true
+}
+
+auth_provider = "mirai"
+db_adapter    = "pg"
+live_source   = "gateway"
+queue_enabled = true # false = cola en Postgres (QUEUE_DRIVER=pg), sin SQS
+
+public_config = {
+  NEXT_PUBLIC_LEGAL_OWNER        = "Engynex S.A.S."
+  NEXT_PUBLIC_LEGAL_NIT          = "REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_EMAIL        = "datos@engynex.com"
+  NEXT_PUBLIC_LEGAL_CITY         = "Bogotá D.C., Colombia"
+  GOOGLE_CLIENT_ID               = "REEMPLAZA.apps.googleusercontent.com"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY   = "REEMPLAZA"
+  VAPID_SUBJECT                  = "mailto:soporte@engynex.com"
+  NEXT_PUBLIC_WOMPI_PUBLIC_KEY   = "pub_prod_REEMPLAZA"
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY = "REEMPLAZA"
+  MIRAI_CSP_ENFORCE              = "0"
+}
+
+# Se agregan a medida que se carga su valor (una tarea no arranca si un secreto montado está vacío).
+optional_secrets = [
+  # "google-client-secret",
+  # "google-oauth-state-key",
+  # "turnstile-secret",
+  # "vapid-private-key",
+  # "mercadopago-access-token",   # credenciales de producción
+  # "mercadopago-webhook-secret",
+  # "wompi-integrity-secret",
+  # "wompi-events-secret",
+]
+
+alert_emails = {
+  dueno = "alertas@engynex.com"
+}
+
+budget_amount = 600

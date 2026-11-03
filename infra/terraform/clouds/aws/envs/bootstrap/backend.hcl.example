@@ -1,0 +1,4 @@
+# Después del primer apply: cp backend.hcl.example backend.hcl, descomenta el backend "s3" de versions.tf y
+# terraform init -backend-config=backend.hcl -migrate-state
+bucket = "engynex-mirai-tfstate-aws" # salida state_bucket
+region = "us-east-1"

@@ -16,10 +16,17 @@ import { Tip } from "@/components/mirai/tip"
 import { createClient } from "@/utils/supabase/client"
 import { SettingRow, SettingSection, SettingStack } from "../ui"
 import { usePrefs } from "../prefs"
+import { isMiraiAuth } from "@/lib/auth/provider"
+import { MiraiSeguridadTab } from "./security-mirai"
 
 type Factor = { id: string; friendly_name?: string; status: string }
 
+/** v7: con AUTH_PROVIDER=mirai, la versión de Better Auth; con supabase, la de siempre. */
 export function SeguridadTab() {
+  return isMiraiAuth() ? <MiraiSeguridadTab /> : <SupabaseSeguridadTab />
+}
+
+function SupabaseSeguridadTab() {
   const sb = createClient()
   const { prefs, save } = usePrefs()
   const [factors, setFactors] = useState<Factor[] | null>(null)

@@ -53,6 +53,15 @@ variable "host_rules" {
   type        = map(string)
 }
 
+variable "path_rules" {
+  description = "Reglas por camino dentro del path matcher de un backend: clave = backend del dominio (p. ej. web) → [{ paths = [\"/v1/*\"], backend = \"api\" }]. Vacío = solo por dominio."
+  type = map(list(object({
+    paths   = list(string)
+    backend = string
+  })))
+  default = {}
+}
+
 variable "default_backend" {
   description = "Backend para dominios que no estén en host_rules (normalmente web)."
   type        = string

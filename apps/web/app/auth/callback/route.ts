@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import type { User } from "@supabase/supabase-js"
 import { supabaseServer } from "@/utils/supabase/server"
 import { safeNext } from "@/lib/security/safe-next"
+import { serverAuthProvider } from "@/lib/auth/provider"
 
 /** Agrega parámetros a una ruta interna conservando su ?query y su #ancla. */
 function withParams(path: string, params: Record<string, string>) {
@@ -18,6 +19,7 @@ function withParams(path: string, params: Record<string, string>) {
  * - "Cambio de correo seguro": el primer enlace (de dos) vuelve sin código y con ?message → ?correo=falta_otro.
  */
 export async function GET(request: NextRequest) {
+  if (serverAuthProvider() === "mirai") return miraiCallback(request)
   const { searchParams, origin } = request.nextUrl
   const code = searchParams.get("code")
   const next = safeNext(searchParams.get("next"))
@@ -56,4 +58,20 @@ async function googlePhoto(supabase: Awaited<ReturnType<typeof supabaseServer>>,
   const pic = (g?.avatar_url ?? g?.picture ?? user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture) as string | undefined
   if (!user || !g || !pic) return
   await supabase.from("profiles").update({ avatar_url: pic }).eq("id", user.id).or("avatar_url.is.null,avatar_url.eq.")
+}
+
+/**
+ * AUTH_PROVIDER=mirai: Better Auth ya hizo todo en /api/auth/* (Google, enlace, verificación, cambio de correo) y vuelve
+ * aquí solo como `callbackURL`. Se respeta `next` y se traducen sus errores a los mismos motivos de siempre.
+ */
+function miraiCallback(request: NextRequest) {
+  const { searchParams, origin } = request.nextUrl
+  const next = safeNext(searchParams.get("next"))
+  const err = searchParams.get("error") ?? ""
+  if (!err) return NextResponse.redirect(`${origin}${next}`)
+  if (/correo=/.test(next) || /#cuentas/.test(next)) {
+    const motivo = /MIRAI_ENLACE_CANCELADO/.test(err) ? "cancelado" : /LINKED|already|exists/i.test(err) ? "ya_existe" : "error"
+    return NextResponse.redirect(`${origin}${withParams(next, motivo === "error" || motivo === "cancelado" ? { correo: motivo } : { cuentas: motivo })}`)
+  }
+  return NextResponse.redirect(`${origin}/login?error=enlace`)
 }

@@ -10,6 +10,7 @@ import { apiContract } from "@mirai/contracts/api"
 import { createClient } from "@/utils/supabase/client"
 import { createApiFetcher, createRawFetch, type TokenSource } from "./fetcher"
 import { apiSession } from "./session"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 export { unwrap, unwrapData } from "./unwrap"
 
@@ -18,6 +19,8 @@ const CLIENT = `web@${process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"}`
 /** Token de la sesión del navegador. */
 export const browserToken: TokenSource = {
   get: async (force) => {
+    // v7 (AUTH_PROVIDER=mirai): la sesión es una cookie httpOnly del mismo origen; el navegador no maneja tokens.
+    if (isMiraiAuth()) return null
     const sb = createClient()
     if (force) {
       const { data } = await sb.auth.refreshSession()
@@ -33,7 +36,7 @@ export type MiraiApi = ReturnType<typeof make>
 let cached: { url: string; api: MiraiApi } | null = null
 
 /** Cliente para el origen de la API que mandó el servidor (AppContext.api.url). */
-export function browserApi(url = apiSession()?.cfg.url ?? ""): MiraiApi {
+export function browserApi(url = isMiraiAuth() ? window.location.origin : (apiSession()?.cfg.url ?? "")): MiraiApi {
   if (!url) throw new Error("La API de Mirai no está configurada")
   if (cached?.url !== url) cached = { url, api: make(url) }
   return cached.api

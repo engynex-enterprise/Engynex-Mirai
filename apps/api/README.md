@@ -246,3 +246,26 @@ persona (RLS). Los tipos del chat (`ChatEvent`, `Propuesta`, `Consulta`…) est�
   `test/f2f-engine.int.test.ts` (la API con el motor real de la web sobre la base en memoria).
 - **Pendiente**: proxy o cambio del front (F2-H: `features/chat/store.ts` a `NEXT_PUBLIC_API_URL`), multipart (hoy base64),
   E2E `f14-chat` con `api-on`, medir el tiempo al primer token en Cloud Run y conectar la escritura a los servicios de F2-D.
+
+## Endpoints que faltaban (V7-G)
+
+Datos fuera de `BookStore` por el puerto **`RowStore`** (`src/core/store`: un puerto con adaptadores supabase-js y
+Kysely, filtros `eq/neq/in/notNull/gte/lte/gt/lt/ilike`, `update`/`delete` nunca sin filtro, jsonb según
+`json-columns.ts`, revisado contra los tipos de la base). Los módulos lo importan con `RowStoreModule`. Pruebas con la
+app real y dobles en memoria: `test/v7g/*` (`createV7gApp`, `MemoryRowStore`, `MemoryObjectStore` de V7-E).
+
+| Módulo | Rutas | Rol / plan |
+|---|---|---|
+| `books` | `POST /v1/books` (create_book + límite de libros) · `PATCH/DELETE /v1/books/:b` (papelera; nunca el principal ni el último) · `POST /v1/trash/books/:id/restore` · `GET/PATCH …/settings` | crear: editor del hogar · editar/ajustes: editor · borrar/restaurar: dueño |
+| `me` | `PUT /v1/me/active-book` · `GET/PATCH /v1/me/profile` (con CC los dígitos DIAN salen del documento) · `GET/PATCH /v1/me/preferences` (`extraPatch` mezcla) · `GET /v1/platform/notice` (público) · `GET /v1/platform/integrations` | la persona (RLS «propio») |
+| `files` | `POST /v1/files/uploads` → PUT directo → `POST /v1/files/uploads/complete { uploadId }` · `GET /v1/files/url` (5 min) · `DELETE /v1/files` | reglas por bucket en `FilesService` (libro, carpeta propia o consola); límite `subidas`; puerto `ObjectStore` de `core/files` |
+| `import` | `GET …/backups` · `GET …/backups/:id/url` · `POST …/backups/:id/restore` · `DELETE …/backups/:id` · `POST …/import/{json,v4,sample}` · `POST …/data/format` | `ajustes` / admin / editor |
+| `account` | `GET /v1/account/export` (exportMyData con `BookDumpService`) | la persona |
+| `gami` | `POST …/gami/{visit,check,logros}` (insignias, misiones, nivel y campana con dedupe) | viewer (nivel: quien edita) |
+| `feedback` | `POST /v1/feedback` · `POST /v1/feedback/rating` · `GET /v1/me/feedback` · `DELETE /v1/me/feedback/:id` | la persona; límite `opiniones` |
+| `ads` | `POST /v1/ads/events` · `GET /v1/public/{adsense,ads.txt}` · `/v1/admin/ads/**` | sesión / público / `@PlatformAdmin` |
+| `chat` | `POST …/chat/messages/:m/rating` · `GET …/chat/search?q=` · `GET …/chat/threads/count` | viewer (solo lo propio) |
+| `billing` | `GET /v1/plans` (público) · `GET /v1/households/:h/subscription` (pagos solo el dueño) | miembro del hogar |
+| `tax` | `/v1/books/:b/accountant/{shares,notes,files}` (token una vez, se guarda el hash) | ver: viewer · crear/rotar/documentos: admin + «impuestos» · notas: editor + «impuestos» |
+| `admin` | `/v1/admin/{plans,coupons,integrations,whatsapp}/**` (secretos cifrados, solo máscaras; `admin_audit`) | `@PlatformAdmin` |
+| `automations` | `GET/PUT/DELETE …/automations[/:id]` · `POST …/:id/{restore,test}` · `POST …/automations/{defaults,drain}` · `GET …/automation-runs` | leer/probar: viewer · escribir: editor; cupo del plan (409) e «ia» (402) |

@@ -5,10 +5,10 @@
 //                                /v1/me/gami como decía §2.6) porque el estado de logros es de cada libro: así pasa por
 //                                BookGuard (miembro del hogar) y usa el libro completo para los puntos.
 //   GET /v1/me/referrals       → misReferidos de apps/web/features/referidos/actions.ts.
-// Las escrituras (registrar visita, otorgar logros, preferencias) quedan para F2-D/F2-C siguiente.
+// V7-G: escrituras → POST …/gami/visit, …/gami/check (evalúa y guarda en el servidor) y …/gami/logros (= logroNotifs).
 import { initContract } from "@ts-rest/core"
 import { z } from "zod"
-import { COMMON_ERRORS, IsoDate, Uuid } from "../common"
+import { ApiOk, COMMON_ERRORS, IsoDate, Uuid } from "../common"
 
 export const meta = { id: "gami", owner: "F2-C" } as const
 
@@ -49,6 +49,24 @@ export const Referidos = z.object({
 })
 export type Referidos = z.infer<typeof Referidos>
 
+// ── V7-G: escrituras de logros (gami-check.tsx y logroNotifs de apps/web/features/notify/actions.ts) ──
+/** Insignia y subida de nivel para la campana (misma entrada que la Server Action logroNotifs). */
+export const LogroIn = z.object({
+  badges: z.array(z.object({ id: z.string().max(60), n: z.string().max(120), d: z.string().max(300) })).max(20),
+  nivel: z.object({ n: z.number().int().min(1).max(200), name: z.string().max(80) }).nullable(),
+})
+export type LogroIn = z.infer<typeof LogroIn>
+export const Visited = z.object({ dia: z.string() })
+/** Lo que hay que celebrar después de guardar (la primera evaluación del libro no celebra nada: `first`). */
+export const GamiChecked = z.object({
+  on: z.boolean(),
+  first: z.boolean(),
+  badges: z.array(z.object({ id: z.string(), n: z.string(), d: z.string(), icon: z.string(), tier: Tier })),
+  missions: z.array(z.object({ k: z.string(), t: z.string(), xp: z.number(), wk: z.string() })),
+  nivel: z.object({ n: z.number(), name: z.string() }).nullable(),
+})
+export type GamiChecked = z.infer<typeof GamiChecked>
+
 const c = initContract()
 export const gamiContract = c.router(
   {
@@ -66,6 +84,33 @@ export const gamiContract = c.router(
       responses: { ...COMMON_ERRORS, 200: Referidos },
       summary: "Tu código de referidos y a quiénes has invitado (solo el primer nombre)",
       description: "La primera vez crea tu código (como misReferidos de la web).",
+    },
+    visit: {
+      method: "POST",
+      path: "/v1/books/:bookId/gami/visit",
+      pathParams: BookParams,
+      query: GamiQuery,
+      body: c.noBody(),
+      responses: { ...COMMON_ERRORS, 200: ApiOk(Visited) },
+      summary: "Registra tu visita del día (racha). Repetirla el mismo día no cambia nada",
+    },
+    check: {
+      method: "POST",
+      path: "/v1/books/:bookId/gami/check",
+      pathParams: BookParams,
+      query: GamiQuery,
+      body: c.noBody(),
+      responses: { ...COMMON_ERRORS, 200: ApiOk(GamiChecked) },
+      summary: "Evalúa y guarda insignias, misiones y nivel; devuelve qué celebrar",
+      description: "Con logros apagados en el libro no guarda nada. El nivel máximo solo lo guarda quien puede editar todo (como la web). Las insignias y el nivel nuevos quedan en la campana (salvo la primera evaluación del libro).",
+    },
+    logros: {
+      method: "POST",
+      path: "/v1/books/:bookId/gami/logros",
+      pathParams: BookParams,
+      body: LogroIn,
+      responses: { ...COMMON_ERRORS, 200: ApiOk(z.object({ saved: z.number() })) },
+      summary: "Insignias nuevas y subida de nivel → campana (kind «logro», sin duplicados). Igual que logroNotifs",
     },
   },
   { strictStatusCodes: true },

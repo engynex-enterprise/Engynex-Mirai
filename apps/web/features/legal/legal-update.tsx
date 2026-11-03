@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { createClient } from "@/utils/supabase/client"
 import { LEGAL_CHANGES, LEGAL_VERSION } from "@/lib/legal/version"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 /** Pide aceptar los Términos y la Política cuando cambian (Ley 1581: autorización previa para usos nuevos). */
 export function LegalUpdate() {
@@ -17,12 +18,20 @@ export function LegalUpdate() {
   const [busy, setBusy] = useState(false)
   const { data: version } = useQuery({
     queryKey: ["legal-version"],
-    queryFn: async () => String((await createClient().auth.getUser()).data.user?.user_metadata?.acepta_version ?? ""),
+    // v7: con AUTH_PROVIDER=mirai la versión aceptada sale de /v1/me/consents (tabla consents).
+    queryFn: async () => (isMiraiAuth() ? (await import("./actions")).miraiLegalVersion() : String((await createClient().auth.getUser()).data.user?.user_metadata?.acepta_version ?? "")),
     staleTime: Infinity,
   })
   if (version === undefined || version >= LEGAL_VERSION) return null
   const accept = async () => {
     setBusy(true)
+    if (isMiraiAuth()) {
+      const r = await (await import("./actions")).miraiAcceptLegal(LEGAL_VERSION)
+      setBusy(false)
+      if (!r.ok) return toast.error("No se pudo guardar", { description: r.msg })
+      qc.setQueryData(["legal-version"], LEGAL_VERSION)
+      return toast.success("Gracias. Aceptaste la nueva versión.")
+    }
     const { error } = await createClient().auth.updateUser({ data: { acepta_version: LEGAL_VERSION, acepta_at: new Date().toISOString() } })
     setBusy(false)
     if (error) return toast.error("No se pudo guardar", { description: error.message })

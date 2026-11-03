@@ -11,6 +11,7 @@
 import { initContract } from "@ts-rest/core"
 import { z } from "zod"
 import { ApiError, ApiOk, COMMON_ERRORS, IsoDate, Uuid } from "../common"
+import { adminPlatformContract } from "./admin-platform"
 import { Msg } from "./households"
 
 export const meta = { id: "admin", owner: "F2-I" } as const
@@ -137,7 +138,8 @@ export const TestDefaults = z.object({ email: z.string(), whatsapp: z.string() }
 
 const A = "/v1/admin"
 const c = initContract()
-export const adminContract = c.router(
+/** Rutas de F2-I (las atiende AdminController). */
+export const adminCoreContract = c.router(
   {
     overview: { method: "GET", path: `${A}/overview`, responses: { ...ADMIN_ERRORS, 200: Overview }, summary: "Resumen: personas, actividad de 30 días y calificación promedio" },
     clients: { method: "GET", path: `${A}/clients`, responses: { ...ADMIN_ERRORS, 200: z.array(Client) }, summary: "Cada cuenta con su hogar, plan, último ingreso y actividad del mes" },
@@ -176,3 +178,6 @@ export const adminContract = c.router(
   },
   { strictStatusCodes: true },
 )
+
+/** Consola completa para el cliente tipado: F2-I + V7-G (planes, cupones, integraciones globales y WhatsApp: admin-platform.ts). */
+export const adminContract = c.router({ ...adminCoreContract, ...adminPlatformContract }, { strictStatusCodes: true })

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
+import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ExternalLink, ImagePlus, Pencil, Phone, Plus, RefreshCw, Reply, Send, Trash2, X } from "lucide-react"
@@ -39,6 +40,12 @@ const CAT_N: Record<string, string> = { UTILITY: "Utilidad", MARKETING: "Marketi
 async function uploadImage(f: File) {
   if (!["image/png", "image/jpeg"].includes(f.type)) throw new Error("La imagen debe ser JPG o PNG.")
   if (f.size > 5 * 1024 * 1024) throw new Error("La imagen pesa más de 5 MB.")
+  // v7 (interruptor `files`): bucket público `public-assets` (carpeta whatsapp/) por la API.
+  if (filesViaApi()) {
+    const r = await uploadFile({ bucket: "public-assets", body: f, name: f.name, folder: "whatsapp" })
+    if (!r.publicUrl) throw new Error("No se pudo obtener la dirección de la imagen.")
+    return r.publicUrl
+  }
   const sb = createClient()
   const path = `whatsapp/${crypto.randomUUID()}.${f.type === "image/png" ? "png" : "jpg"}`
   const { error } = await sb.storage.from("public-assets").upload(path, f, { contentType: f.type })

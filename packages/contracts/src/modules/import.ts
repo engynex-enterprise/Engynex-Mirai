@@ -7,6 +7,8 @@
 //   ingresos extra; con una tarjeta, compras (add_card_purchase) y pagos (pay_credit_card). Nunca duplica un `csv:`.
 // - Respaldo: `export.json` (copia completa del libro, con la papelera, en el formato `BookDump` v5 de
 //   features/data/backup.ts; lo usa también GET /v1/account/export de F2-I) y `backups` (la guarda en Storage).
+// - V7-G: lista, enlace, restaurar y borrar respaldos; restaurar un JSON v5; importar un respaldo v4; libro de ejemplo y
+//   formatear por bloques (los mismos pasos y mensajes de la web).
 import { initContract } from "@ts-rest/core"
 import { z } from "zod"
 import { ApiOk, IsoDate, Uuid } from "../common"
@@ -42,6 +44,20 @@ export const BookDump = z.object({
 export type BookDump = z.infer<typeof BookDump>
 export const BackupOut = z.object({ path: z.string(), size: z.number() })
 
+// V7-G: respaldos guardados, restaurar, formatear e importar (features/data/actions.ts y features/import/actions.ts).
+export const BackupParams = z.object({ bookId: Uuid, backupId: Uuid })
+export const BackupRowOut = z.object({ id: z.string(), book_id: z.string(), tipo: z.string(), path: z.string(), size: z.number(), created_at: z.string(), created_by: z.string().nullable() })
+/** El archivo tal como lo leyó el navegador (respaldo v5 para restaurar o v4 para importar). Máximo ~7 MB. */
+export const JsonFile = z.object({ json: z.string().min(1, "El archivo está vacío").max(7_000_000, "El archivo es demasiado grande (máximo 7 MB)") })
+export const Restored = z.object({ tablas: z.number(), filas: z.number() })
+export const ImportReport = z.record(z.string(), z.number())
+export const FORMAT_BLOCK_IDS = ["gastos", "ingresos", "fijos", "prestamos", "contactos", "inversiones", "balance", "metas", "consejos", "calendario"] as const
+export const FormatInput = z.object({
+  blocks: z.array(z.enum(FORMAT_BLOCK_IDS, { error: "Bloque desconocido" })).min(1, "Escoge al menos un bloque").max(FORMAT_BLOCK_IDS.length),
+  /** Hay que escribir BORRAR. */
+  confirm: z.string().max(20),
+})
+
 const c = initContract()
 export const importContract = c.router(
   {
@@ -60,6 +76,40 @@ export const importContract = c.router(
     backup: {
       method: "POST", path: "/v1/books/:bookId/backups", pathParams: BookParams, body: c.noBody(),
       responses: { ...WRITE_ERRORS, 200: ApiOk(BackupOut) }, summary: "Guarda un respaldo del libro en la nube (bucket privado backups)",
+    },
+    backups: {
+      method: "GET", path: "/v1/books/:bookId/backups", pathParams: BookParams,
+      responses: { ...WRITE_ERRORS, 200: z.array(BackupRowOut) }, summary: "Respaldos guardados del libro (del más reciente). Rol: «Administra» o más",
+    },
+    backupUrl: {
+      method: "GET", path: "/v1/books/:bookId/backups/:backupId/url", pathParams: BackupParams,
+      responses: { ...WRITE_ERRORS, 200: z.object({ url: z.string().nullable() }) }, summary: "Enlace de descarga del respaldo (2 minutos)",
+    },
+    restoreBackup: {
+      method: "POST", path: "/v1/books/:bookId/backups/:backupId/restore", pathParams: BackupParams, body: c.noBody(),
+      responses: { ...WRITE_ERRORS, 200: ApiOk(Restored) }, summary: "Reemplaza el libro por un respaldo guardado (antes guarda uno «antes de restaurar»). Rol: «Administra»",
+    },
+    deleteBackup: {
+      method: "DELETE", path: "/v1/books/:bookId/backups/:backupId", pathParams: BackupParams, body: c.noBody(),
+      responses: { ...WRITE_ERRORS, 200: ApiOk(z.object({ deleted: z.boolean() })) }, summary: "Borra un respaldo (archivo y registro). Rol: «Administra»",
+    },
+    restoreJson: {
+      method: "POST", path: "/v1/books/:bookId/import/json", pathParams: BookParams, body: JsonFile,
+      responses: { ...WRITE_ERRORS, 200: ApiOk(Restored) }, summary: "Restaura un respaldo JSON de Mirai 5 de este mismo hogar. Rol: «Administra»",
+    },
+    importV4: {
+      method: "POST", path: "/v1/books/:bookId/import/v4", pathParams: BookParams, body: JsonFile,
+      responses: { ...WRITE_ERRORS, 200: ApiOk(ImportReport) }, summary: "Importa un respaldo de Mirai 4.0 al libro (cuántas filas por tabla). Rol: «Colabora» o más",
+    },
+    sample: {
+      method: "POST", path: "/v1/books/:bookId/import/sample", pathParams: BookParams, body: c.noBody(),
+      responses: { ...WRITE_ERRORS, 200: ApiOk(z.object({ bookId: z.string(), report: ImportReport })) },
+      summary: "Crea un libro de ejemplo (familia Navarro, fechas al día) en el hogar de este libro. Rol: «Colabora» o más",
+      description: "Respeta el límite de libros del plan (402). La web cambia luego al libro nuevo (cookie mirai-book).",
+    },
+    format: {
+      method: "POST", path: "/v1/books/:bookId/data/format", pathParams: BookParams, body: FormatInput,
+      responses: { ...WRITE_ERRORS, 200: ApiOk(z.object({ borrados: z.number() })) }, summary: "Envía a la papelera los bloques escogidos (escribiendo BORRAR; antes guarda un respaldo). Rol: «Administra»",
     },
   },
   { strictStatusCodes: true },

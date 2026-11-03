@@ -72,10 +72,15 @@ export type FileRef = z.infer<typeof FileRef>
 export const AttachBody = z.object({ file: FileRef, text: z.string().max(1000).optional(), threadId: Uuid.nullable().optional() })
 export const AttachData = z.object({ threadId: z.string(), titulo: z.string(), nuevo: z.boolean(), user: ChatMsgSchema, answer: ChatMsgSchema })
 
+// V7-G (E15): calificar una respuesta, buscar en las conversaciones y contar los hilos (lo que hooks.ts hacía directo).
+export const MessageRating = z.object({ feedback: z.union([z.literal(1), z.literal(-1), z.null()], { error: "Califica con 1 (buena) o -1 (mala), o null para quitarla" }) })
+export const ChatSearchQuery = z.object({ q: z.string().trim().min(3, "Escribe al menos 3 letras para buscar").max(100, "Máximo 100 caracteres") })
+
 const ERR = { ...COMMON_ERRORS, 402: ApiError, 409: ApiError, 502: ApiError } as const
 const book = z.object({ bookId: Uuid })
 const thread = z.object({ bookId: Uuid, threadId: Uuid })
 const prop = z.object({ bookId: Uuid, messageId: Uuid, propId: Uuid })
+const msg = z.object({ bookId: Uuid, messageId: Uuid })
 const c = initContract()
 
 export const chatContract = c.router(
@@ -180,6 +185,29 @@ export const chatContract = c.router(
       body: AttachBody,
       responses: { ...ERR, 200: ApiOk(AttachData) },
       summary: "Leer una foto o PDF en el chat (factura → propuesta de gasto; comprobante o préstamo → resumen). Límite `chatAdjunto`",
+    },
+    rateMessage: {
+      method: "POST",
+      path: "/v1/books/:bookId/chat/messages/:messageId/rating",
+      pathParams: msg,
+      body: MessageRating,
+      responses: { ...ERR, 200: ApiOk(z.object({ id: z.string(), feedback: z.number().nullable() })) },
+      summary: "Calificar una respuesta de Mirai (👍 1, 👎 -1 o null para quitarla). Solo en tus conversaciones",
+    },
+    search: {
+      method: "GET",
+      path: "/v1/books/:bookId/chat/search",
+      pathParams: book,
+      query: ChatSearchQuery,
+      responses: { ...ERR, 200: z.object({ threadIds: z.array(z.string()) }) },
+      summary: "Conversaciones propias cuyo texto contiene la búsqueda (hasta 80 mensajes)",
+    },
+    threadsCount: {
+      method: "GET",
+      path: "/v1/books/:bookId/chat/threads/count",
+      pathParams: book,
+      responses: { ...ERR, 200: z.object({ total: z.number() }) },
+      summary: "Cuántas conversaciones tienes en el libro (incluye archivadas y borradas, como el conteo de logros)",
     },
   },
   { strictStatusCodes: true },

@@ -1,8 +1,9 @@
 // Mismas consultas que features/admin/server.ts y features/admin/actions.ts de apps/web (clave del sistema).
-import { Injectable } from "@nestjs/common"
+import { Injectable, Optional } from "@nestjs/common"
 import type { DbScope, UserScope } from "../../../core/db/scope"
 import { SupabaseJsFactory } from "../../../core/db/supabase-js.factory"
 import { DomainError } from "../../../core/errors/domain-error"
+import { ObjectStore } from "../../../core/files/object-store"
 import { AdminRepo, type AuditActivity, type MemberRow, type Notice, type PayRow, type ProfileRow, type SubRow } from "../admin.repository"
 
 type PgErr = { code?: string; message?: string } | null
@@ -13,7 +14,11 @@ const must = <R extends { data: unknown; error: PgErr }>(r: R): R["data"] => {
 
 @Injectable()
 export class SupabaseJsAdminRepo extends AdminRepo {
-  constructor(private readonly sb: SupabaseJsFactory) {
+  constructor(
+    private readonly sb: SupabaseJsFactory,
+    // V7-E: con OBJECT_STORE distinto de `supabase`, las capturas de las opiniones se firman en el puerto.
+    @Optional() private readonly files?: ObjectStore,
+  ) {
     super()
   }
   private db(scope: DbScope) {
@@ -167,6 +172,11 @@ export class SupabaseJsAdminRepo extends AdminRepo {
   }
   async signedFeedbackUrls(scope: DbScope, paths: string[], seconds: number): Promise<Map<string, string>> {
     if (!paths.length) return new Map()
+    if (this.files && this.files.driver !== "supabase") {
+      const store = this.files
+      const signed = await Promise.all(paths.map(async (p) => [p, await store.signDownload({ bucket: "feedback", key: p, ttlS: seconds }).catch(() => null)] as const))
+      return new Map(signed.filter((x): x is readonly [string, string] => !!x[1]))
+    }
     const { data } = await this.db(scope).storage.from("feedback").createSignedUrls(paths, seconds)
     const out = new Map<string, string>()
     for (const s of data ?? []) if (s.path && s.signedUrl) out.set(s.path, s.signedUrl)

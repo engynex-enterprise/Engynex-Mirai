@@ -18,6 +18,12 @@ describe("variables de F2-E", () => {
     expect(v.googleStateKey).toBeUndefined()
     expect(v.tickDailyTasks).toBe(false)
   })
+  it("IA de la plataforma (V7-P): las variables de la nube llegan a rt().env; vacías = sin definir", () => {
+    const v = loadServicesEnv({ AI_PLATFORM_PROVIDER: "vertex", GOOGLE_VERTEX_PROJECT: "mirai-pruebas", AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/v2/c", AZURE_OPENAI_ENDPOINT: "" })
+    expect(v.vars).toMatchObject({ AI_PLATFORM_PROVIDER: "vertex", GOOGLE_VERTEX_PROJECT: "mirai-pruebas", AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/v2/c" })
+    expect(v.vars.AZURE_OPENAI_ENDPOINT).toBeUndefined()
+    expect(v.vars.AI_GATEWAY_API_KEY).toBeUndefined()
+  })
   it("una llave del state corta o una URL inválida: error con el nombre (nunca el valor)", () => {
     expect(() => loadServicesEnv({ GOOGLE_OAUTH_STATE_KEY: "corta" })).toThrow(/GOOGLE_OAUTH_STATE_KEY/)
     expect(() => loadServicesEnv({ SITE_URL: "no-es-url" })).toThrow(/SITE_URL/)

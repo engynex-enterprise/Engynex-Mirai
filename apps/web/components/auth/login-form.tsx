@@ -20,6 +20,7 @@ import { useCaptcha } from "./turnstile"
 import { GoogleButton } from "./google-button"
 import { AuthDone, AuthHeader, PasswordInput, useAutofilled } from "./auth-ui"
 import { safeNext } from "@/lib/security/safe-next"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 const FORM_ID = "login"
 const schema = z.object({
@@ -47,12 +48,34 @@ export function LoginForm() {
   const mode = useWatch({ control: form.control, name: "mode" })
   const remember = useWatch({ control: form.control, name: "remember" })
   const captcha = useCaptcha()
+  const mirai = isMiraiAuth()
   // El navegador puede haber llenado el correo y la contraseña sin avisar: en ese caso Entrar queda activo.
   const autofilled = useAutofilled(mode === "magic" ? ["email"] : ["email", "password"])
   const captchaOk = !captcha.enabled || !!captcha.token
   useSubmitState(FORM_ID, form, { valid: (form.formState.isValid || autofilled) && captchaOk, busy: leaving })
 
+  /** AUTH_PROVIDER=mirai (Better Auth): mismas pantallas y mensajes; el segundo factor llega como `twoFactor`. */
+  async function onSubmitMirai(v: Values) {
+    const m = await import("@/lib/auth/mirai")
+    if (v.mode === "magic") {
+      const r = await m.sendMagicLink({ email: v.email, next, captcha: captcha.token })
+      captcha.reset()
+      if (!r.ok) return toast.error("No pudimos enviar el enlace", { description: r.msg })
+      setSent(true)
+      return
+    }
+    const r = await m.signInPassword({ email: v.email, password: v.password, remember: v.remember, captcha: captcha.token })
+    captcha.reset()
+    if (!r.ok) return toast.error("No pudiste entrar", { description: r.msg })
+    try { localStorage.setItem("mirai-remember", v.remember ? "1" : "0") } catch {}
+    setLeaving(true)
+    const q = encodeURIComponent(next)
+    router.replace(r.twoFactor ? `/verificacion?next=${q}` : r.reactivar ? `/verificacion?reactivar=1&next=${q}` : next)
+    router.refresh()
+  }
+
   async function onSubmit(v: Values) {
+    if (isMiraiAuth()) return onSubmitMirai(v)
     const sb = createClient()
     if (v.mode === "magic") {
       const { error } = await sb.auth.signInWithOtp({
@@ -86,6 +109,9 @@ export function LoginForm() {
       <AuthHeader title="Hola de nuevo" description="Entra para ver las finanzas de tu hogar." />
       {params.get("aviso") === "correo" && <Notice tone="info" title="Revisa tu correo">Si cambiaste el correo de tu cuenta, entra con el correo nuevo. Si aún falta confirmar, abre el enlace que te llegó al otro correo.</Notice>}
       {params.get("salida") === "todas" && <Notice tone="info" title="Cerramos tu sesión en todos los dispositivos">Vuelve a entrar cuando quieras.</Notice>}
+      {mirai && params.get("aviso") === "clave" && <Notice tone="info" title="Guardamos tu contraseña nueva">Entra con ella. Cerramos tu sesión en los demás dispositivos.</Notice>}
+      {mirai && params.get("error") === "enlace" && <Notice tone="warn" title="Ese enlace ya no sirve">Venció o ya lo usaste. Pide uno nuevo.</Notice>}
+      {mirai && params.get("error") === "google" && <Notice tone="warn" title="No pudimos entrar con Google">Intenta de nuevo o entra con tu correo.</Notice>}
       <GoogleButton next={next} />
       <FieldSeparator>o con tu correo</FieldSeparator>
       <Tabs value={mode} onValueChange={(m) => { form.setValue("mode", m as Values["mode"], { shouldValidate: true }); form.clearErrors("password") }}>

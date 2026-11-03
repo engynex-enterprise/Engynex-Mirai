@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest"
 import { cheapModelFor, costFromMetadata, costUSD, creditsFor, estimateTokens, FALLBACK_PRICE, priceFor } from "./pricing"
 
+describe("priceFor: nubes de la plataforma (precio estimado del proveedor del modelo)", () => {
+  it("Bedrock: quita región, proveedor y versión (us.anthropic.claude-haiku-4-5-…-v1:0 → claude-haiku-4)", () => {
+    expect(priceFor("us.anthropic.claude-haiku-4-5-20251001-v1:0")).toMatchObject({ in: 1, out: 5, known: true })
+    expect(priceFor("global.anthropic.claude-sonnet-4-5-20250929-v1:0")).toMatchObject({ in: 3, out: 15 })
+    expect(priceFor("openai.gpt-oss-120b-1:0")).toMatchObject({ in: 0.15, out: 0.75 })
+    // Sin precio en la tabla (Nova): el de respaldo, no uno inventado.
+    expect(priceFor("amazon.nova-lite-v1:0")).toMatchObject({ ...FALLBACK_PRICE, known: false })
+  })
+  it("Vertex y Azure usan los nombres de Gemini y OpenAI tal cual", () => {
+    expect(priceFor("gemini-2.5-flash")).toMatchObject({ in: 0.3, out: 2.5 })
+    expect(priceFor("gpt-5-mini")).toMatchObject({ in: 0.25, out: 2 })
+  })
+  it("modelo barato: Vertex → Flash Lite; Bedrock y Azure no tienen uno fijo", () => {
+    expect(cheapModelFor("ai_vertex", "gemini-2.5-flash")).toBe("gemini-2.5-flash-lite")
+    expect(cheapModelFor("ai_bedrock", "us.anthropic.claude-haiku-4-5-20251001-v1:0")).toBeNull()
+    expect(cheapModelFor("ai_azure", "gpt-5-mini")).toBeNull()
+  })
+})
+
 describe("priceFor", () => {
   it("quita el prefijo del proveedor y elige la clave más específica", () => {
     expect(priceFor("google/gemini-2.5-flash")).toMatchObject({ in: 0.3, out: 2.5, known: true })

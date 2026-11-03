@@ -15,10 +15,17 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e --filter=web",
+    "e2e:local": "node infra/local/e2e-local.mjs",
     "db:migrate": "turbo run db:migrate --filter=@mirai/db",
     "db:migrate:prod": "turbo run db:migrate:prod --filter=@mirai/db",
     "db:types": "turbo run db:types --filter=@mirai/db",
-    "ci": "turbo run lint typecheck test build"
+    "ci": "turbo run lint typecheck test build",
+    "local:up": "node infra/local/stack.mjs up --supa",
+    "local:down": "node infra/local/stack.mjs down",
+    "local:reset": "node infra/local/stack.mjs reset --supa",
+    "local:test": "node infra/local/stack.mjs test",
+    "db:destino": "node packages/db/scripts/db-destino.mjs",
+    "migrate:ensayo": "node --experimental-strip-types --no-warnings scripts/migrate/ensayo.ts"
   },
   "prettier": "@mirai/config/prettier",
   "devDependencies": {

@@ -1,7 +1,11 @@
-# CI de Mirai (F2-A-7, docs/arquitectura/v6-separacion-front-back.md §8).
+# CI de Mirai (F2-A-7 y V7-N, docs/arquitectura/v7-gcp-total.md §3.12). GitHub Actions es el CI/CD principal; Cloud
+# Build (infra/cloudbuild/*) queda como alternativa con los mismos pasos.
 # - En cada PR y push a pruebas/main: lint, typecheck, Vitest y build con Turborepo (caché local de turbo en Actions).
-# - E2E (Playwright): contra el despliegue de pruebas de Vercel cuando termina (deployment_status), nunca contra
-#   un servidor local en CI. La base es compartida: las E2E usan solo el usuario QA (tests/e2e/qa.ts).
+# - Infraestructura: terraform fmt, prueba de contrato entre nubes, validate de las 9 raíces (GCP, AWS, Azure ×
+#   bootstrap/pruebas/produccion), terraform test con proveedores simulados, actionlint y bash -n de los scripts.
+# - Cuando este flujo termina en verde en pruebas o main, deploy.yml construye y despliega (workflow_run).
+# - E2E (Playwright): contra el despliegue de pruebas (Vercel mientras exista: deployment_status) o una URL a mano.
+#   La base es compartida: las E2E usan solo el usuario QA (tests/e2e/qa.ts).
 name: CI
 
 on:
@@ -49,6 +53,55 @@ jobs:
           restore-keys: turbo-${{ runner.os }}-
       # Las pruebas de paridad con la v4 compilan legacy/dist/app.check.js con python3 (viene en el runner).
       - run: pnpm turbo run lint typecheck test build --cache-dir=.turbo/cache
+
+  infra:
+    if: github.event_name != 'deployment_status'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugins
+      TF_IN_AUTOMATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
+      - name: Formato
+        run: terraform fmt -check -recursive infra/terraform
+      - name: Contrato entre nubes (mismas entradas y salidas)
+        run: python3 infra/terraform/scripts/contrato.py
+      - name: Validar las raíces de cada nube (sin backend ni credenciales)
+        run: |
+          set -euo pipefail
+          for r in infra/terraform/clouds/*/envs/*; do
+            echo "::group::$r"
+            terraform -chdir="$r" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$r" validate
+            echo "::endgroup::"
+          done
+      - name: Pruebas con proveedores simulados
+        run: |
+          set -euo pipefail
+          for d in infra/terraform/capabilities/app-config infra/terraform/clouds/gcp/stack infra/terraform/clouds/aws/stack infra/terraform/clouds/azure/stack; do
+            echo "::group::$d"
+            terraform -chdir="$d" init -backend=false -input=false
+            terraform -chdir="$d" test
+            echo "::endgroup::"
+          done
+      - name: Flujos de GitHub Actions (actionlint)
+        run: |
+          set -euo pipefail
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+      - name: Scripts de despliegue (bash -n)
+        run: for f in infra/deploy/*/*.sh infra/cloudbuild/scripts/*.sh; do bash -n "$f"; done
 
   e2e:
     # Despliegue de Vercel listo en la rama pruebas (Preview) o corrida manual con una URL.

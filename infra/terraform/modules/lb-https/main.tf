@@ -295,13 +295,26 @@ resource "google_compute_url_map" "https" {
     content {
       name            = "pm-${path_matcher.key}"
       default_service = local.backend_ids[path_matcher.key]
+
+      # Mismo origen (v7, D2): /v1/* y /api/auth/* → api, /socket.io/* → realtime dentro del dominio de la web.
+      dynamic "path_rule" {
+        for_each = lookup(var.path_rules, path_matcher.key, [])
+        content {
+          paths   = path_rule.value.paths
+          service = local.backend_ids[path_rule.value.backend]
+        }
+      }
     }
   }
 
   lifecycle {
     precondition {
-      condition     = alltrue([for b in values(var.host_rules) : contains(local.all_backend_keys, b)]) && contains(local.all_backend_keys, var.default_backend)
-      error_message = "Cada host_rule y default_backend debe apuntar a un backend definido."
+      condition = alltrue(concat(
+        [for b in values(var.host_rules) : contains(local.all_backend_keys, b)],
+        [contains(local.all_backend_keys, var.default_backend)],
+        flatten([for m, rules in var.path_rules : [for r in rules : contains(local.all_backend_keys, r.backend) && contains(keys(local.hosts_by_backend), m)]]),
+      ))
+      error_message = "Cada host_rule, default_backend y path_rules debe apuntar a un backend definido (y cada path_rules a un backend con dominio)."
     }
   }
 }

@@ -24,6 +24,7 @@ pnpm typecheck       # next typegen + tsc en la web, tsc en cada paquete
 pnpm lint            # ESLint (0 errores)
 pnpm test            # Vitest: packages/domain (cálculos + paridad v4), packages/contracts, apps/web, apps/api (spike)
 pnpm test:e2e        # Playwright escritorio 1366 px + móvil 400 px en apps/web (compila antes; crea el usuario QA)
+pnpm e2e:local       # LA MISMA batería contra el stack LOCAL en Docker (Supabase local + API + web; nunca la base compartida). Úsala por defecto: infra/local/README.md
 pnpm db:migrate      # aplica supabase/migrations/*.sql en orden (SUPABASE_DB_URL de la .env.local de la raíz; :prod lee .env.produccion.local)
 pnpm db:types        # regenera packages/db/src/database.types.ts desde la BD
 pnpm --filter web <script>   # scripts propios de la web: pwa:assets, pwa:screenshots, legacy:extract, icons, start

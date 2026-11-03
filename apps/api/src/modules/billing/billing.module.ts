@@ -3,7 +3,9 @@ import { HouseholdAccess } from "../households/household-access"
 import { SiteUrl } from "../households/site-url"
 import { SupabaseJsBillingRepo } from "./adapters/supabase-js.billing.repo"
 import { BillingConfig } from "./billing.config"
-import { BillingController, WebhooksController } from "./billing.controller"
+import { BillingController, PlansController, WebhooksController } from "./billing.controller"
+import { PlansReadService } from "./plans-read.service"
+import { RowStoreModule } from "../../core/store/row-store.module"
 import { BillingRepo } from "./billing.repository"
 import { BillingService } from "./billing.service"
 import { HttpMercadoPagoClient, MercadoPagoClient } from "./mercadopago.client"
@@ -12,9 +14,11 @@ import { HttpMercadoPagoClient, MercadoPagoClient } from "./mercadopago.client"
 // Exporta BillingService (applyPayment, renovaciones) para households, account y admin.
 // Adaptadores: supabase-js (hoy); pg-kysely llega con Cloud SQL (fase 4) con las mismas firmas del puerto.
 @Module({
-  controllers: [BillingController, WebhooksController],
+  controllers: [BillingController, PlansController, WebhooksController],
+  imports: [RowStoreModule],
   providers: [
     BillingService,
+    PlansReadService,
     BillingConfig,
     HouseholdAccess,
     SiteUrl,

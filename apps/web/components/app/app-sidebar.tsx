@@ -22,6 +22,7 @@ import { IsoIcon, hasIso } from "@/components/mirai/iso-icon"
 import { NAV, isGroup, navIdOf, type NavGroup, type NavLeaf } from "@/lib/nav"
 import { can, featureOfSection } from "@/lib/plans"
 import { createClient } from "@/utils/supabase/client"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import { cn } from "@/lib/utils"
 import { useApp } from "./app-context"
 import { ROLE_INFO } from "@/lib/household/roles"
@@ -321,7 +322,8 @@ function UserMenu() {
             <DropdownMenuItem
               variant="destructive"
               onSelect={async () => {
-                await createClient().auth.signOut()
+                if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut()
+                else await createClient().auth.signOut()
                 router.replace("/login")
                 router.refresh()
               }}

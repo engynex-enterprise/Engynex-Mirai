@@ -1,0 +1,74 @@
+# Despliegue de Mirai (V7-N, docs/arquitectura/v7-gcp-total.md §3.12 y docs/infra/cambiar-de-nube.md).
+# - pruebas: automático cuando CI termina en verde en la rama `pruebas`.
+# - produccion: cuando CI termina en verde en `main`, espera la aprobación del entorno `produccion` de GitHub
+#   (Settings › Environments › produccion › Required reviewers).
+# - A mano (workflow_dispatch): elegir ambiente y, si se quiere, modo seco (construye sin publicar ni desplegar).
+# La nube activa la decide la variable MIRAI_CLOUD de cada entorno (gcp | aws | azure); las demás variables salen de
+# `terraform output ci_variables` de clouds/<nube>/envs/<ambiente> (más las de identidad del bootstrap). Sin
+# MIRAI_CLOUD el flujo no hace nada (hoy la web sigue en Vercel).
+name: Desplegar
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [pruebas, main]
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente"
+        type: choice
+        options: [pruebas, produccion]
+        default: pruebas
+      seco:
+        description: "Modo seco: construye las imágenes sin publicarlas y muestra lo que haría"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch || inputs.ambiente }}
+  cancel-in-progress: false # nunca cortar un despliegue a la mitad
+
+jobs:
+  preparar:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      ambiente: ${{ steps.p.outputs.ambiente }}
+      sha: ${{ steps.p.outputs.sha }}
+      seco: ${{ steps.p.outputs.seco }}
+    steps:
+      - id: p
+        env:
+          EVENTO: ${{ github.event_name }}
+          RAMA: ${{ github.event.workflow_run.head_branch }}
+          SHA_RUN: ${{ github.event.workflow_run.head_sha }}
+          AMBIENTE_MANUAL: ${{ inputs.ambiente }}
+          SECO_MANUAL: ${{ inputs.seco }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENTO" == "workflow_dispatch" ]]; then
+            AMBIENTE="$AMBIENTE_MANUAL"; SHA="$GITHUB_SHA"; SECO="$SECO_MANUAL"
+          else
+            if [[ "$RAMA" == "main" ]]; then AMBIENTE=produccion; else AMBIENTE=pruebas; fi
+            SHA="$SHA_RUN"; SECO=false
+          fi
+          echo "ambiente=$AMBIENTE" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "seco=$SECO" >> "$GITHUB_OUTPUT"
+          echo "Despliegue de ${SHA:0:12} en $AMBIENTE (seco=$SECO)" >> "$GITHUB_STEP_SUMMARY"
+
+  desplegar:
+    needs: preparar
+    uses: ./.github/workflows/_desplegar.yml
+    with:
+      ambiente: ${{ needs.preparar.outputs.ambiente }}
+      sha: ${{ needs.preparar.outputs.sha }}
+      seco: ${{ needs.preparar.outputs.seco == 'true' }}
+    permissions:
+      contents: read
+      id-token: write # OIDC: la nube cambia el token de GitHub por credenciales de corta vida (sin llaves)
+    secrets: inherit

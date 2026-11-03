@@ -1,0 +1,273 @@
+# Despliegue reutilizable de un ambiente en la nube activa (lo llama deploy.yml). Un solo trabajo con el entorno de
+# GitHub del ambiente: producción pide UNA aprobación antes de construir y desplegar.
+#   entrar a la nube (OIDC) → imágenes (turbo prune dentro de cada Dockerfile; la API se promueve por digest si ya pasó
+#   por pruebas) → escaneo (Trivy) → firma (cosign, sin llaves) → migraciones → api, realtime, worker y web con canario y
+#   vuelta atrás (infra/deploy/<nube>/desplegar.sh) → humo → etiqueta ok-<sha> en la imagen de la API.
+# Variables del entorno (Settings › Environments › <ambiente> › Variables), de `terraform output ci_variables`:
+#   comunes: MIRAI_CLOUD, MIRAI_REGISTRY, MIRAI_SERVICE_WEB, MIRAI_SERVICE_API, MIRAI_SERVICE_REALTIME,
+#            MIRAI_SERVICE_WORKER, MIRAI_MIGRATE_JOB, MIRAI_CANARY_WEB_URL, MIRAI_CANARY_API_URL, MIRAI_SMOKE_URL,
+#            WEB_BUILD_ENV (NEXT_PUBLIC_* del build), MIRAI_CANARY_STEPS, MIRAI_BAKE_SECONDS, MIRAI_MAX_5XX_RATIO
+#   gcp:     GCP_PROJECT, GCP_REGION, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOY_SERVICE_ACCOUNT
+#   aws:     AWS_REGION, ECS_CLUSTER, AWS_ROLE_ARN (bootstrap: rol mirai-deploy-<ambiente>)
+#   azure:   AZURE_RESOURCE_GROUP, AZURE_ACR_NAME, AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID (bootstrap)
+name: _desplegar
+
+on:
+  workflow_call:
+    inputs:
+      ambiente:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+      seco:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: ${{ inputs.ambiente }}
+      url: ${{ vars.MIRAI_SMOKE_URL }}
+    env:
+      MIRAI_ENV: ${{ inputs.ambiente }}
+      CLOUD: ${{ vars.MIRAI_CLOUD }}
+      REGISTRY: ${{ vars.MIRAI_REGISTRY }}
+      SHA: ${{ inputs.sha }}
+      SECO: ${{ inputs.seco }}
+      STEPS: ${{ vars.MIRAI_CANARY_STEPS || (inputs.ambiente == 'produccion' && '10,50' || '50') }}
+      BAKE: ${{ vars.MIRAI_BAKE_SECONDS || (inputs.ambiente == 'produccion' && '300' || '120') }}
+      MAX_RATIO: ${{ vars.MIRAI_MAX_5XX_RATIO || '0.02' }}
+      GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      MIGRATE_JOB: ${{ vars.MIRAI_MIGRATE_JOB }}
+    steps:
+      - name: ¿Hay nube configurada?
+        id: nube
+        run: |
+          if [[ -z "$CLOUD" ]]; then
+            echo "El entorno ${MIRAI_ENV} no tiene MIRAI_CLOUD: no se despliega (la web sigue en Vercel)." >> "$GITHUB_STEP_SUMMARY"
+            echo "activa=false" >> "$GITHUB_OUTPUT"
+          else
+            case "$CLOUD" in gcp|aws|azure) ;; *) echo "MIRAI_CLOUD debe ser gcp, aws o azure (es '$CLOUD')"; exit 1 ;; esac
+            echo "activa=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.nube.outputs.activa == 'true'
+        with:
+          ref: ${{ inputs.sha }}
+
+      # ── Entrar a la nube sin llaves (OIDC) ────────────────────────────────────────────────────────────────────────
+      - name: Entrar a GCP (Workload Identity Federation)
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'gcp' && !inputs.seco
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - name: gcloud
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'gcp' && !inputs.seco
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Registro de GCP (Artifact Registry)
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'gcp' && !inputs.seco
+        run: gcloud auth configure-docker "${REGISTRY%%/*}" --quiet
+
+      - name: Entrar a AWS (rol por OIDC)
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'aws' && !inputs.seco
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Registro de AWS (ECR)
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'aws' && !inputs.seco
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Entrar a Azure (credencial federada)
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'azure' && !inputs.seco
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Registro de Azure (ACR)
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'azure' && !inputs.seco
+        run: az acr login --name "${{ vars.AZURE_ACR_NAME }}"
+
+      # ── Imágenes ──────────────────────────────────────────────────────────────────────────────────────────────────
+      - uses: docker/setup-buildx-action@v3
+        if: steps.nube.outputs.activa == 'true'
+
+      - name: ¿La API de este commit ya pasó por pruebas? (se promueve el mismo digest)
+        id: api_ok
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+        run: |
+          set -euo pipefail
+          if D="$(docker buildx imagetools inspect "${REGISTRY}/api:ok-${SHA}" --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest)" && [[ -n "$D" && "$D" != "null" ]]; then
+            echo "imagen=${REGISTRY}/api@${D}" >> "$GITHUB_OUTPUT"
+            echo "Se promueve la API aprobada: ${REGISTRY}/api@${D}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Construir la API (turbo prune api)
+        id: api
+        if: steps.nube.outputs.activa == 'true' && steps.api_ok.outputs.imagen == ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: ${{ !inputs.seco }}
+          provenance: true
+          sbom: true
+          build-args: GIT_SHA=${{ inputs.sha }}
+          tags: ${{ vars.MIRAI_REGISTRY || 'mirai' }}/api:sha-${{ inputs.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Configuración pública del build de la web
+        id: webenv
+        if: steps.nube.outputs.activa == 'true'
+        env:
+          WEB_BUILD_ENV: ${{ vars.WEB_BUILD_ENV }}
+        run: echo "b64=$(printf '%s' "$WEB_BUILD_ENV" | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+      - name: Construir la web (turbo prune web, Next standalone)
+        id: web
+        if: steps.nube.outputs.activa == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          push: ${{ !inputs.seco }}
+          provenance: true
+          sbom: true
+          build-args: |
+            GIT_SHA=${{ inputs.sha }}
+            WEB_BUILD_ENV_B64=${{ steps.webenv.outputs.b64 }}
+          tags: ${{ vars.MIRAI_REGISTRY || 'mirai' }}/web:${{ inputs.ambiente }}-${{ inputs.sha }}
+          cache-from: type=gha,scope=web-${{ inputs.ambiente }}
+          cache-to: type=gha,scope=web-${{ inputs.ambiente }},mode=max
+
+      - name: Referencias por digest
+        id: img
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+        env:
+          API_OK: ${{ steps.api_ok.outputs.imagen }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          set -euo pipefail
+          API="${API_OK:-${REGISTRY}/api@${API_DIGEST}}"
+          WEB="${REGISTRY}/web@${WEB_DIGEST}"
+          echo "api=$API" >> "$GITHUB_OUTPUT"
+          echo "web=$WEB" >> "$GITHUB_OUTPUT"
+          printf -- '- api: `%s`\n- web: `%s`\n' "$API" "$WEB" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Escanear la web (Trivy, falla con CRITICAL)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.img.outputs.web }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Escanear la API (Trivy, falla con CRITICAL)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco && steps.api_ok.outputs.imagen == ''
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.img.outputs.api }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - uses: sigstore/cosign-installer@v3
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+      - name: Firmar las imágenes (cosign sin llaves, OIDC de GitHub)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+        env:
+          WEB: ${{ steps.img.outputs.web }}
+          API: ${{ steps.img.outputs.api }}
+        run: cosign sign --yes "$WEB" "$API"
+
+      # ── Despliegue ────────────────────────────────────────────────────────────────────────────────────────────────
+      - name: Modo seco
+        if: steps.nube.outputs.activa == 'true' && inputs.seco
+        run: |
+          set -euo pipefail
+          for f in infra/deploy/"$CLOUD"/*.sh; do bash -n "$f"; done
+          {
+            echo "### Modo seco ($CLOUD, $MIRAI_ENV)"
+            echo "Se habría corrido, en orden:"
+            echo "1. infra/deploy/$CLOUD/migrar.sh con la imagen de la API (${MIGRATE_JOB:-sin trabajo})"
+            echo "2. desplegar.sh: ${{ vars.MIRAI_SERVICE_API }} ${{ vars.MIRAI_SERVICE_REALTIME }} ${{ vars.MIRAI_SERVICE_WORKER }} (imagen de la API) y ${{ vars.MIRAI_SERVICE_WEB }} (web), STEPS=$STEPS BAKE=$BAKE MAX_RATIO=$MAX_RATIO"
+            echo "3. humo en ${{ vars.MIRAI_SMOKE_URL }} y etiqueta api:ok-<sha>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Migraciones (aditivas, antes de mover tráfico)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco && vars.MIRAI_MIGRATE_JOB != ''
+        env:
+          IMAGE: ${{ steps.img.outputs.api }}
+        run: bash "infra/deploy/$CLOUD/migrar.sh"
+
+      - name: API
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+        env:
+          SERVICE: ${{ vars.MIRAI_SERVICE_API }}
+          IMAGE: ${{ steps.img.outputs.api }}
+          CANARY_URL: ${{ vars.MIRAI_CANARY_API_URL }}
+        run: bash "infra/deploy/$CLOUD/desplegar.sh"
+
+      - name: Gateway de tiempo real (misma imagen, MODE=realtime)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco && vars.MIRAI_SERVICE_REALTIME != ''
+        env:
+          SERVICE: ${{ vars.MIRAI_SERVICE_REALTIME }}
+          IMAGE: ${{ steps.img.outputs.api }}
+          CANARY_URL: ""
+          MAX_RATIO: "0.05"
+        run: bash "infra/deploy/$CLOUD/desplegar.sh"
+
+      - name: Worker (misma imagen, MODE=worker)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco && vars.MIRAI_SERVICE_WORKER != ''
+        env:
+          SERVICE: ${{ vars.MIRAI_SERVICE_WORKER }}
+          IMAGE: ${{ steps.img.outputs.api }}
+          CANARY_URL: ""
+        run: bash "infra/deploy/$CLOUD/desplegar.sh"
+
+      - name: Web
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco
+        env:
+          SERVICE: ${{ vars.MIRAI_SERVICE_WEB }}
+          IMAGE: ${{ steps.img.outputs.web }}
+          CANARY_URL: ${{ vars.MIRAI_CANARY_WEB_URL }}
+        run: bash "infra/deploy/$CLOUD/desplegar.sh"
+
+      - name: Humo (versión publicada = este commit)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco && vars.MIRAI_SMOKE_URL != ''
+        env:
+          SMOKE_URL: ${{ vars.MIRAI_SMOKE_URL }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            if body="$(curl -fsS --max-time 10 "$SMOKE_URL")"; then
+              echo "OK: $body"
+              grep -q "${SHA:0:12}" <<<"$body" || echo "::warning::La versión publicada aún no muestra ${SHA:0:12} (caché o CDN)."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "La prueba de humo falló en $SMOKE_URL"; exit 1
+
+      - name: Aprobar la imagen de la API (ok-<sha>, la promueve producción)
+        if: steps.nube.outputs.activa == 'true' && !inputs.seco && steps.api_ok.outputs.imagen == ''
+        env:
+          API: ${{ steps.img.outputs.api }}
+        run: docker buildx imagetools create -t "${REGISTRY}/api:ok-${SHA}" "$API"

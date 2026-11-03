@@ -5,9 +5,11 @@ import { createGroq } from "@ai-sdk/groq"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
-import { AI_KINDS, integrationByKind } from "@mirai/services/integrations/registry"
+import { integrationByKind } from "@mirai/services/integrations/registry"
 import { enabledOf, type IntegrationValue } from "@mirai/services/integrations/store"
 import { rt } from "@mirai/services/runtime"
+import { aiKindOrder } from "./providers/order"
+import { cloudModel, providerReady } from "./providers/platform"
 
 const supabaseAdmin = () => rt().admin()
 
@@ -31,19 +33,32 @@ export function modelFrom(v: IntegrationValue, override?: string): LanguageModel
     case "ai_openrouter": return createOpenRouter({ apiKey: key }).chat(m)
     case "ai_anthropic": return createAnthropic({ apiKey: key })(m)
     case "ai_openai": return createOpenAI({ apiKey: key })(m)
+    // Nube de la plataforma (V7-P): ADC de Google, rol del contenedor de AWS o identidad administrada de Azure.
+    case "ai_vertex": case "ai_bedrock": case "ai_azure": return cloudModel(v, m, { env: (n) => rt().env(n) })
     default: throw new Error(`Proveedor de IA desconocido: ${v.kind}`)
   }
 }
 
 export type AiChoice = { model: LanguageModel; kind: string; name: string }
 
+/** Orden de respaldo del hogar: su ia.orden y luego el base (AI_PLATFORM_PROVIDER pone primero el de la plataforma). */
+export const aiOrderFor = (orden?: string[]) => aiKindOrder(orden, rt().env("AI_PLATFORM_PROVIDER"))
+
 /**
- * Proveedores de IA activos del hogar, en el orden de respaldo configurado en book_settings.ia.orden
- * (por defecto: Gateway, Gemini, Groq, OpenRouter, Claude, OpenAI). Si uno falla se usa el siguiente.
+ * Integraciones de IA que se intentan para un hogar, en orden: activas (hogar, plataforma o variable del despliegue) y
+ * listas para entrar (providerReady: p. ej. sin AI_GATEWAY_API_KEY el Gateway de la plataforma ni se intenta).
+ */
+export async function aiCandidates(householdId: string, orden?: string[]): Promise<IntegrationValue[]> {
+  const env = (n: string) => rt().env(n)
+  return (await enabledOf(householdId, aiOrderFor(orden))).filter((v) => providerReady(v, env))
+}
+
+/**
+ * Proveedores de IA activos del hogar, en el orden de respaldo (book_settings.ia.orden, luego AI_PLATFORM_PROVIDER y el
+ * registro: Gateway, Vertex, Bedrock, Azure, Gemini, Groq, OpenRouter, Claude, OpenAI). Si uno falla se usa el siguiente.
  */
 export async function aiProviders(householdId: string, order?: string[]): Promise<AiChoice[]> {
-  const kinds = [...new Set([...(order ?? []), ...AI_KINDS])].filter((k) => AI_KINDS.includes(k))
-  const list = await enabledOf(householdId, kinds)
+  const list = await aiCandidates(householdId, order)
   return list.map((v) => ({ model: modelFrom(v), kind: v.kind, name: integrationByKind(v.kind)!.n }))
 }
 

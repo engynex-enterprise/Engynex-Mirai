@@ -1,0 +1,77 @@
+# Copia a terraform.tfvars (ignorado por git). Aquí NO van secretos: esos se cargan en Secret Manager
+# (docs/infra/runbook.md §2). Los valores NEXT_PUBLIC_* son públicos (van al navegador).
+# Las variables de la app (features, public_config, *_env, optional_secrets…) son las MISMAS en AWS y Azure.
+
+project_id      = "engynex-mirai-prod"
+cicd_project_id = "engynex-mirai-cicd"
+region          = "us-east1" # D12. Paso A junto a Supabase: "us-west1"
+bucket_suffix   = "engynex"
+
+# Salidas del bootstrap
+artifact_registry_path   = "us-east1-docker.pkg.dev/engynex-mirai-cicd/mirai"
+artifact_registry_repo   = "mirai"
+workload_identity_pool   = null # "projects/<número cicd>/locations/global/workloadIdentityPools/github"
+cloudbuild_repository_id = null # alternativa: "projects/engynex-mirai-cicd/locations/us-east1/connections/github/repositories/mirai"
+
+# v7: Cloud SQL de producción (HA) como base principal, Better Auth, mismo origen y gateway.
+features = {
+  edge             = true
+  storage          = true
+  postgres         = true
+  redis            = true
+  realtime         = true
+  postgrest        = false # D4: encender cuando V7-D esté listo (y db_adapter = "postgrest" o por módulo)
+  worker           = false # GCP usa Cloud Tasks; el worker solo hace falta con la cola en Postgres
+  supabase         = false # paso A: true + NEXT_PUBLIC_SUPABASE_* (y auth_provider/db_adapter/live_source = supabase)
+  scheduler_paused = false # con pg_cron apagado en Supabase (runbook §5)
+  uptime_checks    = true # cuando el DNS ya apunte al balanceador
+}
+auth_provider = "mirai"
+db_adapter    = "pg"
+live_source   = "gateway"
+
+public_config = {
+  NEXT_PUBLIC_LEGAL_OWNER        = "Engynex S.A.S."
+  NEXT_PUBLIC_LEGAL_NIT          = "REEMPLAZA"
+  NEXT_PUBLIC_LEGAL_EMAIL        = "datos@engynex.com"
+  NEXT_PUBLIC_LEGAL_CITY         = "Bogotá D.C., Colombia"
+  GOOGLE_CLIENT_ID               = "REEMPLAZA.apps.googleusercontent.com"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY   = "REEMPLAZA"
+  VAPID_SUBJECT                  = "mailto:soporte@engynex.com"
+  NEXT_PUBLIC_WOMPI_PUBLIC_KEY   = "pub_prod_REEMPLAZA"
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY = "REEMPLAZA"
+  NEXT_PUBLIC_SENTRY_DSN         = ""
+  MIRAI_CSP_ENFORCE              = "0"
+  # Paso A (features.supabase = true):
+  # NEXT_PUBLIC_SUPABASE_URL             = "https://ofcuvjixvtdixcwzdzqa.supabase.co"
+  # NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_REEMPLAZA"
+}
+
+# Se agregan a medida que se carga su valor (Cloud Run no arranca si un secreto montado está vacío).
+# Los de la base, Redis, BETTER_AUTH_SECRET y PostgREST los genera Terraform: no van aquí.
+optional_secrets = [
+  # "google-client-secret",
+  # "google-oauth-state-key",   # HMAC del state de Google en la API
+  # "turnstile-secret",         # Cloudflare Turnstile (lo verifica la API)
+  # "vapid-private-key",
+  # "mercadopago-access-token",
+  # "mercadopago-webhook-secret", # obligatorio en producción
+  # "wompi-integrity-secret",
+  # "wompi-events-secret",
+  # "supabase-secret-key",      # solo paso A
+]
+
+# Transición: la web sigue en Vercel y llama a esta API → su origen debe estar en WEB_ORIGINS.
+# extra_web_origins = [] # WEB_ORIGINS ya incluye https://mirai.engynex.com y canary.
+
+alert_emails = {
+  dueno = "alertas@engynex.com"
+}
+
+billing_account = null # "000000-000000-000000"
+budget_amount   = 300
+budget_currency = "USD"
+
+cloud_sql_iam_users = {
+  # dueno = "dueno@engynex.com"
+}

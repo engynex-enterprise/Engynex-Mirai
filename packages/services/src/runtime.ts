@@ -3,12 +3,14 @@
 // - apps/api (IntegrationsModule): el cliente de SystemScope, la configuración validada y CryptoService.
 // Así el mismo código de avisos, integraciones y Google corre en Next y en la API, y las pruebas lo cambian por dobles.
 // Solo servidor (lo que importa este archivo puede tocar la clave secreta).
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "@mirai/db"
+import type { DbClient } from "@mirai/db"
 import type { LoadedBook } from "@mirai/domain/book-data"
 
-/** Cliente de Supabase tipado (con la clave secreta: salta RLS). */
-export type Db = SupabaseClient<Database>
+/**
+ * Cliente de datos con permisos del servidor (salta RLS): `.from()` / `.rpc()` de PostgREST. En la web es
+ * supabaseAdmin() (SupabaseClient); en la API, el SystemScope de SupabaseJsFactory o el PostgREST interno (v7, V7-D).
+ */
+export type Db = DbClient
 
 /** Lo que necesita una automatización con un nodo de IA (lib/ai/run.ts de la web; F2-F lo lleva a la API). */
 export type AiTextInput = { householdId: string; bookId: string; userId: string | null; feature: string; system: string; prompt: string; maxOutputTokens?: number }

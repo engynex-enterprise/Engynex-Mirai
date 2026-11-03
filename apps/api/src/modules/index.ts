@@ -35,10 +35,12 @@ import { RealtimeModule } from "./realtime/realtime.module"
 import { RealtimePublisherModule } from "./realtime/realtime-publisher.module"
 import { JobsModule } from "./jobs/jobs.module"
 import { HealthModule } from "./health/health.module"
+import { AuthModule } from "./auth/auth.module"
 
 export type ApiModuleEntry = { id: string; owner: string; module: Type }
 
 export const API_MODULES: readonly ApiModuleEntry[] = [
+  { id: "auth", owner: "V7-A", module: AuthModule },
   { id: "me", owner: "F2-B", module: MeModule },
   { id: "account", owner: "F2-I", module: AccountModule },
   { id: "households", owner: "F2-I", module: HouseholdsModule },

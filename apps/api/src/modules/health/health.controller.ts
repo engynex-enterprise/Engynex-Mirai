@@ -35,7 +35,7 @@ export class HealthController {
   version() {
     return tsRestHandler(healthContract.version, async () => ({
       status: 200,
-      body: { name: "mirai-api" as const, version: this.config.version, commit: this.config.commit, env: this.config.env, mode: this.config.mode, startedAt: STARTED },
+      body: { name: "mirai-api" as const, version: this.config.version, commit: this.config.commit, env: this.config.env, mode: this.config.mode as "api" | "realtime" /* MODE=worker no monta Nest */, startedAt: STARTED },
     }))
   }
 }

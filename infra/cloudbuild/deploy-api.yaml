@@ -5,7 +5,7 @@
 #   buscar ─► verificar ─┐
 #          └► construir ─┴─► publicar ─► escanear ─► migrar (etapa 3) ─► desplegar ─► aprobar (ok-<sha>)
 # Variables y secretos: NO se tocan aquí. `gcloud run deploy --image` conserva los de la revisión anterior, que define
-# Terraform (infra/terraform/stack/services.tf y secrets.tf) con los nombres del esquema zod de la API
+# Terraform (infra/terraform/clouds/gcp/stack/services.tf y capabilities/app-config) con los nombres del esquema zod de la API
 # (GCP_PROJECT, GCP_LOCATION, TASKS_SERVICE_ACCOUNT, API_BASE_URL, SCHEDULER_AUDIENCE, SCHEDULER_SERVICE_ACCOUNTS…).
 # Poner --set-env-vars aquí crearía diferencias que el siguiente `terraform apply` revertiría. El commit que muestra la
 # API sale de K_REVISION (nombre de la revisión de Cloud Run): apps/api/Dockerfile no usa GIT_SHA.

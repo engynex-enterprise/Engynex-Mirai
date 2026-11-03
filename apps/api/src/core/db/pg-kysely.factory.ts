@@ -1,7 +1,7 @@
 // Adaptador para Cloud SQL (fase 4, §2.3): pg + Kysely. Cada operación con UserScope corre en una transacción que
 // primero hace `set local role authenticated` y fija `request.jwt.claims` / `request.headers`, así las políticas RLS,
 // auth.uid(), auth.jwt() y sync_enlaces_on() siguen funcionando sin reescribirlas. `set local` vive solo en la
-// transacción: es seguro con un pool y con poolers en modo transacción. SystemScope usa la conexión del dueño.
+// transacción: es seguro con un pool y con poolers en modo transacción. SystemScope corre como service_role (V7-D).
 //
 // Hoy NO se usa contra la base compartida (DB_ADAPTER=supabase). Se elige con DB_ADAPTER=pg + DATABASE_URL.
 import { Inject, Injectable, Optional, type OnApplicationShutdown } from "@nestjs/common"
@@ -23,9 +23,23 @@ export const PG_DIALECT = Symbol("mirai.pg-dialect")
 /** Encabezados que la RLS lee con current_setting('request.headers'). */
 export const RLS_HEADERS = JSON.stringify({ "x-mirai-enlaces": "1" })
 
-/** Prepara la transacción para el alcance (exportado para las pruebas). */
+/** Claims del SystemScope: lo que lee auth.role() en las 5 comprobaciones `auth.role() = 'service_role'` (§3.2). */
+export const SYSTEM_CLAIMS = JSON.stringify({ role: "service_role" })
+
+/**
+ * Prepara la transacción para el alcance (exportado para las pruebas).
+ * - UserScope: `set local role authenticated` + claims de la persona + `request.headers`.
+ * - SystemScope (v7, V7-D): `set local role service_role` + `{"role":"service_role"}`. Antes no ponía nada y corría
+ *   como el usuario de la conexión: salta la RLS por ser dueño, pero auth.role() quedaba vacío y fallaban
+ *   ai_creditos_desde, ai_usage_rollup (x2), member_access y profiles_lock_email. El usuario de DATABASE_URL debe
+ *   poder cambiar a service_role (0000_compat.sql: `grant … service_role to <usuario>`).
+ */
 export async function applyScope(trx: Trx, scope: DbScope): Promise<void> {
-  if (scope.kind !== "user") return
+  if (scope.kind === "system") {
+    await sql`set local role service_role`.execute(trx)
+    await sql`select set_config('request.jwt.claims', ${SYSTEM_CLAIMS}, true)`.execute(trx)
+    return
+  }
   const claims = JSON.stringify({ ...scope.claims, sub: scope.userId, role: "authenticated" })
   await sql`set local role authenticated`.execute(trx)
   await sql`select set_config('request.jwt.claims', ${claims}, true), set_config('request.jwt.claim.sub', ${scope.userId}, true), set_config('request.headers', ${RLS_HEADERS}, true)`.execute(trx)

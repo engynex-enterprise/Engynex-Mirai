@@ -1,0 +1,48 @@
+# Observabilidad LOCAL de Mirai (V7-Q): colector OpenTelemetry + Jaeger (+ Prometheus con el perfil `metrics`).
+#
+#   docker compose -f infra/otel/compose.yaml up -d                     # colector + Jaeger
+#   docker compose -f infra/otel/compose.yaml --profile metrics up -d   # + Prometheus (panel base con PromQL)
+#   docker compose -f infra/otel/compose.yaml logs -f otel-collector    # exportador debug: trace ids, métricas, logs
+#   docker compose -f infra/otel/compose.yaml down                      # apaga y borra los contenedores
+#
+# Puertos del HOST (solo 127.0.0.1) elegidos para NO chocar con 4317/4318/16686/9090 de otros proyectos; cámbialos
+# con estas variables si alguno está ocupado:
+#   OTEL_GRPC_PORT=14317  OTEL_HTTP_PORT=14318  OTEL_PROM_PORT=18889  OTEL_HEALTH_PORT=23133
+#   JAEGER_UI_PORT=26686  PROM_UI_PORT=19090
+#
+# La API apuntando aquí (la app NO se conecta a ninguna nube):
+#   OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=otlp OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318
+#   (gRPC: OTEL_EXPORTER_OTLP_PROTOCOL=grpc y http://localhost:14317)
+name: mirai-otel
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./collector.local.yaml:/etc/otelcol-contrib/config.yaml:ro
+    environment:
+      OTEL_DEBUG_VERBOSITY: ${OTEL_DEBUG_VERBOSITY:-detailed}
+    ports:
+      - "127.0.0.1:${OTEL_GRPC_PORT:-14317}:4317"
+      - "127.0.0.1:${OTEL_HTTP_PORT:-14318}:4318"
+      - "127.0.0.1:${OTEL_PROM_PORT:-18889}:8889"
+      - "127.0.0.1:${OTEL_HEALTH_PORT:-23133}:13133"
+    depends_on:
+      - jaeger
+
+  # Jaeger v2 (recibe OTLP por la red interna en jaeger:4317; solo la UI se publica en el host).
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "127.0.0.1:${JAEGER_UI_PORT:-26686}:16686"
+
+  prometheus:
+    profiles: [metrics]
+    image: prom/prometheus:v3.15.1
+    volumes:
+      - ./prometheus.local.yaml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${PROM_UI_PORT:-19090}:9090"
+    depends_on:
+      - otel-collector

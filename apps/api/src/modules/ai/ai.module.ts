@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common"
 import { IntegrationsModule } from "../integrations/integrations.module"
 import { PackageAi, PackageAiAdmin } from "./adapters/package.ai"
+import { byObjectStore } from "../../core/files/by-driver"
+import { ObjectStoreAiFiles } from "./adapters/object-store.ai-files"
 import { SupabaseJsAiFiles } from "./adapters/supabase-js.ai-files"
 import { AiAdminController, AiAdminService } from "./ai-admin.controller"
 import { AiContext } from "./ai-context"
@@ -25,7 +27,7 @@ import { AiService } from "./ai.service"
     AiRuntime,
     { provide: AiPort, useClass: PackageAi },
     { provide: AiAdminPort, useClass: PackageAiAdmin },
-    { provide: AiFiles, useClass: SupabaseJsAiFiles },
+    byObjectStore(AiFiles, SupabaseJsAiFiles, ObjectStoreAiFiles),
   ],
   exports: [AiContext, AiFiles],
 })

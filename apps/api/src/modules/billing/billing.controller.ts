@@ -9,12 +9,21 @@ import { Public } from "../../core/auth/decorators"
 import { Idempotent } from "../../core/idempotency/idempotency.interceptor"
 import { SkipDefaultLimit } from "../../core/rate-limit/rate-limit.guard"
 import { BillingService } from "./billing.service"
+import { PlansReadService } from "./plans-read.service"
 
 type RawReq = { rawBody?: Buffer; headers: Record<string, string | string[] | undefined> }
 
 @Controller()
 export class BillingController {
-  constructor(private readonly svc: BillingService) {}
+  constructor(
+    private readonly svc: BillingService,
+    private readonly reads: PlansReadService,
+  ) {}
+
+  @TsRestHandler(billingContract.subscription)
+  subscription() {
+    return tsRestHandler(billingContract.subscription, async ({ params }) => ({ status: 200, body: await this.reads.subscription(params.householdId) }))
+  }
 
   @TsRestHandler(billingContract.paymentOptions)
   paymentOptions() {
@@ -40,6 +49,18 @@ export class BillingController {
   @TsRestHandler(billingContract.cancelRenewal)
   cancelRenewal() {
     return tsRestHandler(billingContract.cancelRenewal, async ({ params }) => ({ status: 200, body: { ok: true as const, data: await this.svc.cancelRenewal(params.householdId) } }))
+  }
+}
+
+/** GET /v1/plans: sin sesión (portada y /planes). Con el límite general por IP. */
+@Controller()
+@Public()
+export class PlansController {
+  constructor(private readonly reads: PlansReadService) {}
+
+  @TsRestHandler(billingContract.plans)
+  plans() {
+    return tsRestHandler(billingContract.plans, async () => ({ status: 200, body: await this.reads.publicPlans() }))
   }
 }
 

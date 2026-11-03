@@ -10,7 +10,7 @@ describe("modules/index.ts", () => {
       .filter((v): v is { meta: { id: string; owner: string } } => typeof v === "object" && v !== null && "meta" in v && typeof v.meta === "object" && v.meta !== null && "owner" in v.meta)
       .map((v) => v.meta.id)
       .sort()
-    expect(metas).toHaveLength(31)
+    expect(metas.length).toBeGreaterThanOrEqual(31) // v7 agrega módulos (auth, …): se revisa que coincidan, no el número
     const ids = API_MODULES.map((m) => m.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids.filter((i) => i !== "book-tables").sort()).toEqual(metas)

@@ -35,6 +35,31 @@ variable "image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "command" {
+  description = "Comando del contenedor (null = el de la imagen). PostgREST y MODE=worker usan el de la imagen."
+  type        = list(string)
+  default     = null
+}
+
+variable "args" {
+  description = "Argumentos del contenedor (null = los de la imagen)."
+  type        = list(string)
+  default     = null
+}
+
+variable "sidecars" {
+  description = "Contenedores acompañantes (nombre → imagen, argumentos, variables, recursos y puerto de salud). La app arranca después de ellos."
+  type = map(object({
+    image       = string
+    args        = optional(list(string))
+    env         = optional(map(string), {})
+    cpu         = optional(string, "0.5")
+    memory      = optional(string, "256Mi")
+    health_port = optional(number)
+  }))
+  default = {}
+}
+
 variable "service_account_email" {
   description = "Cuenta de servicio con la que corre el contenedor."
   type        = string

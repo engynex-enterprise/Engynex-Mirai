@@ -1,0 +1,112 @@
+# Terraform en la nube activa (V7-N). Nada corre si el entorno no tiene MIRAI_CLOUD.
+# - PR que toca infra/terraform: plan de pruebas y de producción con la identidad de solo lectura (mirai-tf-plan) y el
+#   resumen en el registro del trabajo. Sin -lock (lectura).
+# - A mano (workflow_dispatch): plan o apply de un ambiente con su identidad de apply (mirai-tf-<ambiente>); el
+#   entorno de GitHub `terraform-<ambiente>` pide aprobación (para producción, con revisores obligatorios).
+# Variables por entorno (pruebas, produccion, terraform-pruebas, terraform-produccion):
+#   MIRAI_CLOUD, TF_BACKEND (contenido de backend.hcl: bucket/prefix, bucket/key/region o RG/cuenta/contenedor/key),
+#   TF_VARS (contenido de terraform.tfvars, sin secretos) y la identidad: GCP_WORKLOAD_IDENTITY_PROVIDER +
+#   GCP_TF_SERVICE_ACCOUNT | AWS_TF_ROLE_ARN + AWS_REGION | AZURE_TF_CLIENT_ID + AZURE_TENANT_ID + AZURE_SUBSCRIPTION_ID.
+name: Terraform
+
+on:
+  pull_request:
+    paths: ["infra/terraform/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente"
+        type: choice
+        options: [pruebas, produccion]
+      accion:
+        description: "plan o apply"
+        type: choice
+        options: [plan, apply]
+        default: plan
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: read
+
+concurrency:
+  group: terraform-${{ inputs.ambiente || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    strategy:
+      fail-fast: false
+      matrix:
+        ambiente: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.ambiente)) || fromJSON('["pruebas","produccion"]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.accion == 'apply' && format('terraform-{0}', matrix.ambiente) || matrix.ambiente }}
+    env:
+      CLOUD: ${{ vars.MIRAI_CLOUD }}
+      ACCION: ${{ github.event_name == 'workflow_dispatch' && inputs.accion || 'plan' }}
+      RAIZ: infra/terraform/clouds/${{ vars.MIRAI_CLOUD }}/envs/${{ matrix.ambiente }}
+      TF_IN_AUTOMATION: "1"
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_TF_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - name: ¿Hay nube configurada?
+        id: nube
+        run: |
+          if [[ -z "$CLOUD" ]]; then echo "Sin MIRAI_CLOUD en ${{ matrix.ambiente }}: no hay nada que planear." >> "$GITHUB_STEP_SUMMARY"; echo "activa=false" >> "$GITHUB_OUTPUT"; else echo "activa=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.nube.outputs.activa == 'true'
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.nube.outputs.activa == 'true'
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Entrar a GCP
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'gcp'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.ACCION == 'apply' && vars.GCP_TF_SERVICE_ACCOUNT || vars.GCP_TF_PLAN_SERVICE_ACCOUNT }}
+      - name: Entrar a AWS
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ACCION == 'apply' && vars.AWS_TF_ROLE_ARN || vars.AWS_TF_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Entrar a Azure
+        if: steps.nube.outputs.activa == 'true' && env.CLOUD == 'azure'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ACCION == 'apply' && vars.AZURE_TF_CLIENT_ID || vars.AZURE_TF_PLAN_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Backend y variables
+        if: steps.nube.outputs.activa == 'true'
+        env:
+          TF_BACKEND: ${{ vars.TF_BACKEND }}
+          TF_VARS: ${{ vars.TF_VARS }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$TF_BACKEND" > "$RAIZ/backend.hcl"
+          printf '%s\n' "$TF_VARS" > "$RAIZ/terraform.tfvars"
+
+      - name: init
+        if: steps.nube.outputs.activa == 'true'
+        run: terraform -chdir="$RAIZ" init -input=false -backend-config=backend.hcl -lockfile=readonly
+
+      - name: plan
+        if: steps.nube.outputs.activa == 'true'
+        run: |
+          set -euo pipefail
+          LOCK=$([[ "$ACCION" == "apply" ]] && echo "-lock=true" || echo "-lock=false")
+          terraform -chdir="$RAIZ" plan -input=false $LOCK -out=tfplan -no-color | tee plan.txt
+          { echo "### Plan de ${{ matrix.ambiente }} ($CLOUD)"; echo '```'; grep -E '^(Plan:|No changes)|will be destroyed|must be replaced' plan.txt || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if grep -qE 'will be destroyed|must be replaced' plan.txt; then echo "::warning::El plan destruye o reemplaza recursos: revísalo antes de aplicar."; fi
+
+      - name: apply
+        if: steps.nube.outputs.activa == 'true' && env.ACCION == 'apply'
+        run: terraform -chdir="$RAIZ" apply -input=false tfplan

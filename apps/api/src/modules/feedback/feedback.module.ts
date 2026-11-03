@@ -1,7 +1,14 @@
 import { Module } from "@nestjs/common"
+import { RowStoreModule } from "../../core/store/row-store.module"
+import { FeedbackController } from "./feedback.controller"
+import { FeedbackService } from "./feedback.service"
 
-// Módulo `feedback` (docs/arquitectura/v6-separacion-front-back.md §2.6): opiniones con adjunto.
-// Dueño: F2-D. Stub vacío de F2-B: su dueño agrega controllers, servicios, repositorios (puerto) y adaptadores
-// en esta carpeta, y su contrato en packages/contracts/src/modules/feedback.ts. Ejemplo completo: modules/catalogs.
-@Module({})
+// Módulo `feedback` (docs/arquitectura/v6-separacion-front-back.md §2.6): opiniones y casos de soporte de la persona.
+// Dueño: F2-D → V7-G. Tabla `feedback` por RowStore (supabase-js hoy, Kysely en Postgres propio) con la sesión de la
+// persona. La captura la sube la web con el módulo `files`; la consola de opiniones vive en `admin`.
+@Module({
+  imports: [RowStoreModule],
+  controllers: [FeedbackController],
+  providers: [FeedbackService],
+})
 export class FeedbackModule {}

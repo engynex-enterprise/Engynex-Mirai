@@ -1,7 +1,9 @@
 // Fetcher de la API de Mirai (v6 F2-H-1): el mismo para el navegador y el servidor de Next. Agrega a cada petición
 //   · Authorization: Bearer <JWT de Supabase> (y, si la API responde 401, renueva la sesión una vez y reintenta)
 //   · Idempotency-Key en las escrituras (POST/PUT/PATCH/DELETE): la API repite la misma respuesta si llega dos veces
-//   · X-Mirai-Client (web@<build>) y traceparent (W3C) para seguir la petición en Cloud Logging / Cloud Trace
+//   · X-Mirai-Client (web@<build>) y traceparent (W3C) para seguir la petición en cualquier backend de trazas. El
+//     traceparent lo da `traceparent()`: en el servidor de Next es el de la traza ACTIVA de OpenTelemetry (la petición
+//     a la API queda como hija del span de Next, lib/telemetry/traceparent.ts); si no hay, uno aleatorio.
 // Reintentos sensatos:
 //   · Lecturas (GET): hasta 2 reintentos si no hubo respuesta o la API dio 502/503/504 (espera 300 ms y 900 ms).
 //   · Escrituras: 1 reintento solo si no hubo respuesta o dio 503 (Cloud Run sin instancia: no se procesó), con la
@@ -24,6 +26,8 @@ export type FetcherOptions = {
   sleep?: (ms: number) => Promise<void>
   /** Para las pruebas: llave fija. */
   newKey?: () => string
+  /** traceparent W3C de cada petición (por defecto uno nuevo y aleatorio: `newTraceparent`). */
+  traceparent?: () => string
 }
 
 const READ_RETRY = [300, 900]
@@ -38,6 +42,13 @@ const hex = (n: number) => {
 }
 /** traceparent W3C nuevo (versión 00, muestreado). */
 export const newTraceparent = () => `00-${hex(16)}-${hex(8)}-01`
+
+const TRACEPARENT = /^[\da-f]{2}-(?!0{32})[\da-f]{32}-(?!0{16})[\da-f]{16}-[\da-f]{2}$/
+/** El que dio la fuente si es un traceparent W3C válido; si no (o si la fuente falla), uno nuevo. */
+export function validTraceparent(v: string | null | undefined): string {
+  const tp = String(v ?? "").trim().toLowerCase()
+  return TRACEPARENT.test(tp) ? tp : newTraceparent()
+}
 
 const isWrite = (method: string) => !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())
 const isAbort = (e: unknown) => (e as { name?: string })?.name === "AbortError"
@@ -66,6 +77,10 @@ export function createRawFetch(o: FetcherOptions) {
   const f = o.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a))
   const sleep = o.sleep ?? wait
   const newKey = o.newKey ?? (() => crypto.randomUUID())
+  const source = o.traceparent ?? newTraceparent
+  const traceparent = () => {
+    try { return validTraceparent(source()) } catch { return newTraceparent() }
+  }
 
   return async function raw(req: RawRequest): Promise<Response> {
     const method = req.method.toUpperCase()
@@ -73,7 +88,7 @@ export function createRawFetch(o: FetcherOptions) {
     const headers: Record<string, string> = {}
     for (const [k, v] of Object.entries(req.headers ?? {})) headers[k.toLowerCase()] = v
     if (o.client) headers["x-mirai-client"] = o.client
-    headers.traceparent ??= newTraceparent()
+    headers.traceparent ??= traceparent()
     if (write) headers["idempotency-key"] ??= newKey()
     const plan = write ? WRITE_RETRY : READ_RETRY
     const retryStatus = write ? WRITE_RETRY_STATUS : READ_RETRY_STATUS

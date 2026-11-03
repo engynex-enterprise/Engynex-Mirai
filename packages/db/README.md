@@ -14,3 +14,14 @@ pnpm typecheck
 
 `apps/web/lib/supabase/{database.types,tables}.ts` re-exportan este paquete, así que `@/lib/supabase/tables` sigue funcionando.
 Más adelante (fase 4) aquí van los tipos de Kysely (`kysely-codegen`).
+
+## Postgres destino (v7: Cloud SQL, RDS, Azure o Docker)
+
+- `db/postgres/` (raíz): `0000_compat.sql` (roles `anon`, `authenticated`, `service_role`, `authenticator`, `mirai_app`;
+  `auth.uid()/role()/jwt()`), `0003_auth_better.sql` (Better Auth, copia de V7-A), `0001_baseline.sql` y `0001_seed.sql`
+  (generados), `0002_cloud_overrides.sql` (cron, tiempo real, storage, triggers de `auth.users`, permisos de `mirai_app`).
+- `scripts/db-destino.mjs <historia|destino|baseline|diff|preparar|cierre> --url …` (guía: `infra/local/README.md`).
+- `DATABASE_URL=… pnpm db:migrate`: aplica el esquema destino (no las migraciones de Supabase). Contraseñas de los
+  roles con login desde `MIRAI_AUTHENTICATOR_PASSWORD` y `MIRAI_APP_PASSWORD` (Terraform de AWS/Azure las deja en el
+  secreto del trabajo de migración; nunca van en el SQL). Sin la variable, en una base remota la contraseña no cambia.
+- Cambios nuevos al esquema destino: `db/postgres/0004_*.sql` en adelante (los aplica `destino` en orden).

@@ -1,0 +1,10 @@
+# Copia este archivo a backend.tf después del primer apply y corre `terraform init -migrate-state`.
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "mirai-cicd-rg"
+    storage_account_name = "REEMPLAZA-con-output-state_storage_account"
+    container_name       = "tfstate"
+    key                  = "bootstrap.tfstate"
+    use_azuread_auth     = true
+  }
+}

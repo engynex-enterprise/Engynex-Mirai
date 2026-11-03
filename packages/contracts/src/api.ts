@@ -10,7 +10,7 @@ import { accountContract } from "./modules/account"
 import { adminContract } from "./modules/admin"
 import { billingContract } from "./modules/billing"
 import { householdsContract } from "./modules/households"
-import { accountantPortalContract } from "./modules/tax"
+import { accountantOwnerContract, accountantPortalContract } from "./modules/tax"
 // F2-C: lecturas (CRUD genérico, refs, vistas, campana, logros y anuncios).
 import { adsContract } from "./modules/ads"
 import { bookTablesContract } from "./modules/book-tables"
@@ -35,6 +35,13 @@ import { importContract } from "./modules/import"
 import { incomesContract } from "./modules/incomes"
 import { loansContract } from "./modules/loans"
 import { savingsContract } from "./modules/savings"
+// V7-A: lo de auth que no monta Better Auth (consentimientos, contraseña, segundo factor, sesiones de la consola).
+import { authContract } from "./modules/auth"
+// V7-G: endpoints que faltaban (libros, automatizaciones, opiniones, archivos y el lado del titular del contador).
+import { automationsContract } from "./modules/automations"
+import { booksContract } from "./modules/books"
+import { feedbackContract } from "./modules/feedback"
+import { filesContract } from "./modules/files"
 
 const c = initContract()
 export const apiContract = c.router({
@@ -68,5 +75,11 @@ export const apiContract = c.router({
   assets: assetsContract,
   budget: budgetContract,
   importer: importContract,
+  auth: authContract,
+  books: booksContract,
+  automations: automationsContract,
+  feedback: feedbackContract,
+  files: filesContract,
+  accountantOwner: accountantOwnerContract,
 })
 export type ApiContract = typeof apiContract

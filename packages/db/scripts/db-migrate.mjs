@@ -1,4 +1,5 @@
 // Aplica las migraciones de supabase/migrations en orden (idempotente) usando SUPABASE_DB_URL.
+// Con DATABASE_URL en el entorno aplica, en cambio, el esquema de la Postgres destino (v7, ver abajo).
 // Uso: pnpm db:migrate (pruebas, lee .env.local de la raíz) · pnpm db:migrate:prod (producción, lee .env.produccion.local)
 // Registra lo aplicado en public._mirai_migrations. Vive en packages/db; las migraciones siguen en supabase/migrations (raíz).
 import { readFileSync, readdirSync } from 'node:fs'
@@ -7,6 +8,20 @@ import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
+
+// v7: con DATABASE_URL en el entorno (Cloud SQL, RDS, Azure Flexible Server, CI) se aplica el esquema de la Postgres
+// DESTINO (db/postgres: compat + Better Auth + línea base + overrides + 0004_* en adelante) con db-destino.mjs, no las
+// migraciones crudas de Supabase (pg_cron/pg_net no existen allá). Se lee ANTES de .env.local, que nunca la define.
+// Contraseñas de los roles: MIRAI_AUTHENTICATOR_PASSWORD y MIRAI_APP_PASSWORD. Nunca acepta un host de Supabase.
+if (process.env.DATABASE_URL && !process.argv.includes('--supabase')) {
+  const { assertSafeUrl, destino } = await import('./db-destino.mjs')
+  const target = process.env.DATABASE_URL
+  const u = assertSafeUrl(target, true)
+  console.log(`Base destino: ${u.hostname}:${u.port || 5432}${u.pathname} (DATABASE_URL)`)
+  await destino(target, { seed: !process.argv.includes('--no-seed') })
+  process.exit(0)
+}
+
 const envFile = process.argv.includes('--prod') ? '.env.produccion.local' : '.env.local'
 try { process.loadEnvFile?.(join(ROOT, envFile)) } catch { console.error(`No existe ${envFile} en la raíz del repositorio. Mientras pruebas y producción compartan base, usa pnpm db:migrate.`); process.exit(1) }
 const url = process.env.SUPABASE_DB_URL

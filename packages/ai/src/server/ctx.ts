@@ -1,12 +1,11 @@
 // Quién llama a los casos de uso de la IA y el chat. La web pasa su AppContext (lib/dal.ts) tal cual; la API lo arma con
 // lo que dejó BookGuard (libro de la ruta, hogar, rol fino y plan) y la persona del token. Solo los campos que se usan.
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "@mirai/db"
+import type { DbClient } from "@mirai/db"
 import type { AccessRole } from "@mirai/domain/household/roles"
 import type { PlanInfo } from "@mirai/domain/plans"
 
-/** Cliente de Supabase de la persona (RLS): la web usa supabaseServer(), la API el UserScope. */
-export type Sb = SupabaseClient<Database>
+/** Cliente de datos de la persona (RLS): la web usa supabaseServer(), la API el UserScope (supabase-js o PostgREST). */
+export type Sb = DbClient
 
 export type AiCtx = {
   user: { id: string; nombre?: string | null; apodo?: string | null }

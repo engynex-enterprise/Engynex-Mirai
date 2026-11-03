@@ -1,0 +1,84 @@
+# Colector OpenTelemetry para GOOGLE CLOUD (Cloud Run), sidecar de cada servicio de Mirai (V7-Q).
+# Imagen: otel/opentelemetry-collector-contrib:0.164.0 (o us-docker.pkg.dev/cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google, la distribución de Google con los mismos componentes).
+#
+# Qué hace: recibe OTLP de la app por localhost (4317 gRPC / 4318 HTTP) y lo manda a
+#   · trazas  → Cloud Trace                  (exportador `googlecloud`)
+#   · métricas → Managed Service for Prometheus (exportador `googlemanagedprometheus`; consultas PromQL del panel base)
+#   · logs    → Cloud Logging               (exportador `googlecloud`; opcional, ver abajo)
+# El detector `gcp` agrega cloud.provider, cloud.region, faas.name/faas.instance (Cloud Run)… y el proyecto lo toma
+# del servidor de metadatos: no hace falta ningún secreto ni llave (usa la cuenta de servicio del servicio).
+#
+# Permisos de la cuenta de servicio del servicio de Cloud Run:
+#   roles/cloudtrace.agent  roles/monitoring.metricWriter  roles/logging.logWriter
+#
+# Variables que lee (opcionales):
+#   GOOGLE_CLOUD_PROJECT   fuerza el proyecto (si no, el de los metadatos)
+#   OTEL_LOG_NAME          nombre del log de Cloud Logging para los logs por OTLP (por defecto mirai-otel)
+#
+# Logs: en Cloud Run lo que la app escribe a stdout ya llega a Cloud Logging (JSON con `severity` y
+# `logging.googleapis.com/trace`). Por eso en la app se deja OTEL_LOGS_EXPORTER=none (sin duplicar costo); el
+# pipeline de logs queda listo por si algún día se apaga stdout.
+#
+# Cómo se monta como sidecar en Cloud Run (lo hace Terraform):
+#   1. La config se guarda en Secret Manager (p. ej. `mirai-otel-config`) y se monta como volumen en
+#      /etc/otelcol-contrib/config.yaml del contenedor del colector (args: ["--config=/etc/otelcol-contrib/config.yaml"]).
+#   2. El contenedor de la app (ingress, puerto 8080) declara dependencia del colector
+#      (container_dependencies / anotación run.googleapis.com/container-dependencies) y lleva
+#      OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=otlp.
+#   3. startup_probe del colector: HTTP GET :13133/ (extensión health_check). CPU siempre asignada
+#      (cpu_idle=false) para que el colector exporte también entre peticiones; 0.25 vCPU / 256 MiB alcanzan.
+
+extensions:
+  health_check:
+    endpoint: localhost:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: localhost:4317
+      http:
+        endpoint: localhost:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20
+  # Atributos de GCP (región, servicio e instancia de Cloud Run). override=false: los de la app (service.name…) mandan.
+  resourcedetection:
+    detectors: [env, gcp]
+    timeout: 2s
+    override: false
+  batch:
+    send_batch_size: 200
+    send_batch_max_size: 200
+    timeout: 5s
+
+exporters:
+  googlecloud:
+    log:
+      default_log_name: ${env:OTEL_LOG_NAME:-mirai-otel}
+  googlemanagedprometheus:
+    metric:
+      # job = service.namespace/service.name e instance = service.instance.id (los pone el exportador); además el
+      # ambiente y la versión como etiquetas para filtrar en el panel (deployment_environment_name, service_version).
+      resource_filters:
+        - prefix: deployment.environment
+        - prefix: service.version
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [googlecloud]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [googlemanagedprometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [googlecloud]

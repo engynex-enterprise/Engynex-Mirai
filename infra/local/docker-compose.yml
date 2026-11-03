@@ -1,0 +1,207 @@
+# Arnés local de Mirai v7 (frentes V7-C, V7-D, V7-I, V7-J). Guía: infra/local/README.md.
+# NUNCA apunta a Supabase ni a la base compartida: todo vive en contenedores y puertos de 127.0.0.1.
+#
+#   Siempre (base destino, como Cloud SQL):  db · postgrest · redis · minio (+ minio-init) · gcs
+#   Perfil "supa" ("Supabase local": la web de hoy habla con supabase-js, así que la E2E necesita la misma superficie
+#   HTTP /auth/v1, /rest/v1 y /storage/v1; también es la base ORIGEN de los ensayos de migración de V7-J):
+#                                            supa-db · supa-auth (GoTrue) · supa-rest · supa-storage · supa-gateway
+#
+# Los valores de aquí son SOLO para Docker local (no son secretos de ningún ambiente). Las llaves JWT anon/service
+# para el perfil "supa" las calcula infra/local/stack.mjs con el mismo secreto local y las pasa por el entorno.
+name: mirai-local
+
+x-pg: &pg
+  image: postgres:17-alpine
+  environment:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: mirai-local
+    POSTGRES_DB: mirai
+  command: ["postgres", "-c", "wal_level=logical", "-c", "max_connections=200", "-c", "fsync=off", "-c", "synchronous_commit=off"]
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres -d mirai"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+
+services:
+  # ── Base destino (Postgres 17 estándar + db/postgres/*) ───────────────────────────────────────────────────────
+  db:
+    <<: *pg
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: ["db-data:/var/lib/postgresql/data"]
+
+  # PostgREST interno (§3.3, D4): solo la API le habla, con un JWT interno de 60 s (POSTGREST_JWT_SECRET).
+  postgrest:
+    image: postgrest/postgrest:v12.2.12
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      PGRST_DB_URI: postgres://authenticator:mirai-local-authenticator@db:5432/mirai
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${MIRAI_LOCAL_JWT_SECRET:-mirai-local-solo-docker-jwt-secret-000000001}
+      PGRST_DB_POOL: "10"
+      PGRST_DB_CHANNEL_ENABLED: "true"
+      PGRST_DB_MAX_ROWS: "10000"
+      PGRST_SERVER_PORT: "3000"
+    ports: ["127.0.0.1:55430:3000"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:55379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 20
+
+  # Archivos S3 (adaptador `s3` de ObjectStore, V7-E). Consola en http://localhost:55901 (mirai / mirai-local-minio).
+  minio:
+    image: quay.io/minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: mirai
+      MINIO_ROOT_PASSWORD: mirai-local-minio
+    ports: ["127.0.0.1:55900:9000", "127.0.0.1:55901:9001"]
+    volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      retries: 30
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mc alias set local http://minio:9000 mirai mirai-local-minio &&
+        mc mb -p local/mirai-local-private local/mirai-local-backups local/mirai-local-public &&
+        mc anonymous set download local/mirai-local-public
+
+  # Emulador de Cloud Storage (adaptador `gcs` de ObjectStore, V7-E). API en http://localhost:55443/storage/v1/b.
+  gcs:
+    image: fsouza/fake-gcs-server:1.52.2
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mkdir -p /data/mirai-local-private /data/mirai-local-backups /data/mirai-local-public &&
+        exec /bin/fake-gcs-server -data /data -scheme http -port 4443 -external-url http://localhost:55443 -public-host localhost:55443
+    ports: ["127.0.0.1:55443:4443"]
+
+  # ── Perfil "supa": Supabase local (E2E de la web de hoy y base origen de V7-J) ─────────────────────────────────
+  supa-db:
+    <<: *pg
+    profiles: ["supa"]
+    ports: ["127.0.0.1:55434:5432"]
+    volumes: ["supa-db-data:/var/lib/postgresql/data", "./supa-init:/docker-entrypoint-initdb.d:ro"]
+
+  supa-auth:
+    image: supabase/gotrue:v2.177.0
+    profiles: ["supa"]
+    depends_on: { supa-db: { condition: service_healthy } }
+    restart: on-failure
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: http://localhost:55421/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:mirai-local@supa-db:5432/mirai?search_path=auth&sslmode=disable
+      GOTRUE_SITE_URL: ${MIRAI_LOCAL_WEB_URL:-http://localhost:55300}
+      GOTRUE_URI_ALLOW_LIST: "${MIRAI_LOCAL_WEB_URL:-http://localhost:55300}/**,http://localhost:3000/**"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_SECRET: ${MIRAI_LOCAL_JWT_SECRET:-mirai-local-solo-docker-jwt-secret-000000001}
+      GOTRUE_JWT_ISSUER: http://localhost:55421/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      # "Entrar con Google" redirige a accounts.google.com como en producción (credenciales de mentira: la E2E solo
+      # revisa la redirección, nunca completa el inicio con Google).
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: mirai-local.apps.googleusercontent.com
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: mirai-local-no-es-secreto
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: http://localhost:55421/auth/v1/callback
+      GOTRUE_SECURITY_MANUAL_LINKING_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: "10"
+      GOTRUE_SMTP_HOST: supa-mail
+      GOTRUE_SMTP_PORT: "1025"
+      GOTRUE_SMTP_ADMIN_EMAIL: no-responder@mirai.local
+      GOTRUE_SMTP_SENDER_NAME: Mirai local
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_RATE_LIMIT_HEADER: ""
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "100000"
+      GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "100000"
+      GOTRUE_RATE_LIMIT_VERIFY: "100000"
+      GOTRUE_RATE_LIMIT_OTP: "100000"
+      GOTRUE_RATE_LIMIT_SSO: "100000"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_LOG_LEVEL: warn
+
+  supa-rest:
+    image: postgrest/postgrest:v12.2.12
+    profiles: ["supa"]
+    depends_on: { supa-db: { condition: service_healthy } }
+    environment:
+      PGRST_DB_URI: postgres://authenticator:mirai-local-authenticator@supa-db:5432/mirai
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${MIRAI_LOCAL_JWT_SECRET:-mirai-local-solo-docker-jwt-secret-000000001}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_DB_CHANNEL_ENABLED: "true"
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${MIRAI_LOCAL_JWT_SECRET:-mirai-local-solo-docker-jwt-secret-000000001}
+      PGRST_APP_SETTINGS_JWT_EXP: "3600"
+
+  supa-storage:
+    image: supabase/storage-api:v1.25.7
+    profiles: ["supa"]
+    depends_on: { supa-db: { condition: service_healthy } }
+    restart: on-failure
+    environment:
+      ANON_KEY: ${MIRAI_LOCAL_ANON_KEY:-falta-correr-infra-local-stack}
+      SERVICE_KEY: ${MIRAI_LOCAL_SERVICE_KEY:-falta-correr-infra-local-stack}
+      AUTH_JWT_SECRET: ${MIRAI_LOCAL_JWT_SECRET:-mirai-local-solo-docker-jwt-secret-000000001}
+      AUTH_JWT_ALGORITHM: HS256
+      PGRST_JWT_SECRET: ${MIRAI_LOCAL_JWT_SECRET:-mirai-local-solo-docker-jwt-secret-000000001}
+      POSTGREST_URL: http://supa-rest:3000
+      DATABASE_URL: postgres://supabase_storage_admin:mirai-local@supa-db:5432/mirai
+      DB_INSTALL_ROLES: "false"
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: local
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+      STORAGE_PUBLIC_URL: http://localhost:55421/storage/v1
+    volumes: ["supa-storage-data:/var/lib/storage"]
+
+  # Buzón de correo de mentiras para GoTrue (enlace mágico, recuperar clave). Web en http://localhost:55025.
+  supa-mail:
+    image: axllent/mailpit:v1.27
+    profiles: ["supa"]
+    ports: ["127.0.0.1:55025:8025"]
+
+  # Hace de Kong: la misma URL que espera supabase-js (/auth/v1, /rest/v1, /storage/v1) en http://localhost:55421.
+  supa-gateway:
+    image: nginx:1.27-alpine
+    profiles: ["supa"]
+    depends_on: [supa-auth, supa-rest, supa-storage]
+    volumes: ["./gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    ports: ["127.0.0.1:55421:8000"]
+
+volumes:
+  db-data:
+  minio-data:
+  supa-db-data:
+  supa-storage-data:

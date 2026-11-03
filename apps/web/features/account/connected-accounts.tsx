@@ -16,6 +16,7 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { Tip } from "@/components/mirai/tip"
 import { ToneIcon } from "@/components/mirai/tone-icon"
 import { createClient } from "@/utils/supabase/client"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import { googleIdentities, signInMethods, type Method } from "@/lib/account/account"
 import { haceCuanto } from "@/lib/household/invites"
 import { Confirm } from "@/features/household/roles-ui"
@@ -91,6 +92,11 @@ export function ConnectedAccounts() {
   const linkGoogle = async (oldId?: string) => {
     setLinking(true)
     const next = `${PERFIL}?cuentas=conectada${oldId ? `&old=${oldId}` : ""}#cuentas`
+    if (isMiraiAuth()) {
+      const r = await (await import("@/lib/auth/mirai")).linkGoogle(next)
+      if (!r.ok) { setLinking(false); toast.error("No pudimos abrir Google", { description: r.msg }) }
+      return
+    }
     const { error } = await createClient().auth.linkIdentity({
       provider: "google",
       options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`, queryParams: { prompt: "select_account" } },
@@ -108,7 +114,8 @@ export function ConnectedAccounts() {
   }
 
   const reenter = async () => {
-    await createClient().auth.signOut()
+    if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut()
+    else await createClient().auth.signOut()
     router.replace(`/login?next=${encodeURIComponent(`${PERFIL}#cuentas`)}`)
   }
 

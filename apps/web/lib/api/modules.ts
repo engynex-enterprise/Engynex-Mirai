@@ -26,6 +26,7 @@ export const API_MODULES = {
   accountant: "Contador: accesos del titular y portal público por token (el portal solo con \"on\")",
   gami: "Logros y referidos",
   webhooks: "Proxy de /api/pagos/* hacia los webhooks de la API (sin persona: solo \"on\")",
+  files: "Archivos: subir (URL firmada + PUT directo) y ver/descargar por la API en vez de Supabase Storage (avatar, opiniones, renta, anuncios, WhatsApp)",
 } as const
 
 export type ApiModule = keyof typeof API_MODULES

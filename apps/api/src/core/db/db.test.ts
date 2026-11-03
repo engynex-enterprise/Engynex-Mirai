@@ -55,11 +55,12 @@ describe("PgKyselyFactory.tx", () => {
     expect(JSON.parse(String(log[2].params[2]))).toEqual({ "x-mirai-enlaces": "1" })
   })
 
-  it("SystemScope no cambia de rol; un error hace rollback y sale como DomainError", async () => {
+  it("SystemScope corre como service_role con sus claims (V7-D); un error hace rollback y sale como DomainError", async () => {
     const { dialect, log } = captureDialect()
     const f = factory(dialect)
     await f.tx(systemScope("cron"), async () => 1)
-    expect(log.map((l) => l.sql)).toEqual(["begin", "commit"])
+    expect(log.map((l) => l.sql)).toEqual(["begin", "set local role service_role", "select set_config('request.jwt.claims', $1, true)", "commit"])
+    expect(JSON.parse(String(log[2].params[0]))).toEqual({ role: "service_role" })
     const e = await f.tx(user, async () => Promise.reject(Object.assign(new Error("rls"), { code: "42501" }))).catch((x) => x)
     expect(e).toMatchObject({ code: "ROLE_DENIED" })
     expect(log.at(-1)?.sql).toBe("rollback")

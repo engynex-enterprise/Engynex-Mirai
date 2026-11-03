@@ -1,5 +1,6 @@
 // Modelos de IA disponibles por proveedor: lee la respuesta de su API de modelos, deja solo los de chat
-// y los ordena con el recomendado primero. Puro (sin red): las llamadas están en features/integrations/actions.ts.
+// y los ordena con el recomendado primero. Puro (sin red): las llamadas están en server/integrations-ai.ts (claves del
+// hogar, MODEL_LIST) y en providers/platform.ts › listCloudModels (Vertex, Bedrock y Azure de la plataforma).
 
 export type ModelOption = { value: string; label: string; hint?: string; group?: string }
 type Raw = { id: string; name?: string; created?: number; free?: boolean }
@@ -25,15 +26,19 @@ const PREFER: Record<string, RegExp[]> = {
   ai_openrouter: [/^openrouter\/free$/, /:free$/],
   ai_anthropic: [/^claude-haiku/, /^claude-sonnet/],
   ai_openai: [/^gpt-[\d.]+-mini$/, /^gpt-[\d.]+-nano$/, /^gpt-/],
+  ai_vertex: [/^gemini-[\d.]+-flash$/, /flash/],
+  ai_bedrock: [/^(us|global)\.anthropic\.claude-haiku/, /anthropic\.claude-haiku/, /amazon\.nova-lite/],
+  ai_azure: [/^gpt-[\d.]+-mini$/, /^gpt-[\d.]+-nano$/, /^gpt-/],
 }
 
-type J = Record<string, unknown> & { data?: J[]; models?: J[] }
+type J = Record<string, unknown> & { data?: J[]; models?: J[]; publisherModels?: J[]; modelSummaries?: J[]; inferenceProfileSummaries?: J[] }
 const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v ? Date.parse(v) / 1000 || undefined : undefined)
 const zero = (v: unknown) => v === "0" || v === 0
 
 /** Pasa la respuesta cruda del proveedor a una lista uniforme de modelos de chat. */
 export function parseModels(kind: string, json: J): Raw[] {
-  const rows = (json.data ?? json.models ?? []) as J[]
+  // Vertex: publisherModels · Bedrock: modelSummaries (modelos) o inferenceProfileSummaries (perfiles) · el resto: data/models.
+  const rows = (json.data ?? json.models ?? json.publisherModels ?? json.modelSummaries ?? json.inferenceProfileSummaries ?? []) as J[]
   const list: Raw[] = rows.flatMap((m): Raw[] => {
     const pr = (m.pricing ?? {}) as Record<string, unknown>
     switch (kind) {
@@ -53,6 +58,28 @@ export function parseModels(kind: string, json: J): Raw[] {
         return [{ id: String(m.id), name: m.display_name as string, created: num(m.created_at) }]
       case "ai_openai":
         return /^(gpt-|o\d|chatgpt-)/.test(String(m.id)) ? [{ id: String(m.id), created: num(m.created) }] : []
+      case "ai_vertex": {
+        // "publishers/google/models/gemini-2.5-flash" → "gemini-2.5-flash"; solo Gemini y solo GA o vista previa pública.
+        const id = String(m.name ?? "").replace(/^publishers\/[^/]+\/models\//, "")
+        const stage = String(m.launchStage ?? "GA")
+        return /^gemini-/.test(id) && ["GA", "PUBLIC_PREVIEW"].includes(stage) ? [{ id, name: stage === "PUBLIC_PREVIEW" && !/preview/.test(id) ? `${id} (vista previa)` : undefined }] : []
+      }
+      case "ai_bedrock": {
+        // Perfil de inferencia del sistema (us.anthropic.claude-…): así se llaman Claude 4.x y Nova en Bedrock.
+        if (m.inferenceProfileId) return m.status === undefined || m.status === "ACTIVE" ? [{ id: String(m.inferenceProfileId), name: m.inferenceProfileName as string | undefined }] : []
+        // Modelo base: solo los de texto, activos y que se pueden llamar directo (ON_DEMAND).
+        const out = (m.outputModalities as string[] | undefined) ?? []
+        const life = ((m.modelLifecycle as Record<string, unknown> | undefined)?.status as string | undefined) ?? "ACTIVE"
+        const onDemand = ((m.inferenceTypesSupported as string[] | undefined) ?? ["ON_DEMAND"]).includes("ON_DEMAND")
+        return m.modelId && out.includes("TEXT") && out.length === 1 && life === "ACTIVE" && onDemand
+          ? [{ id: String(m.modelId), name: [m.providerName, m.modelName].filter(Boolean).join(" ") || undefined }] : []
+      }
+      case "ai_azure": {
+        // Modelos del recurso: los que sirven para chat (capabilities.chat_completion) y no están retirados.
+        const cap = m.capabilities as Record<string, unknown> | undefined
+        return (cap ? cap.chat_completion === true : /^(gpt-|o\d)/.test(String(m.id))) && m.lifecycle_status !== "deprecated"
+          ? [{ id: String(m.id), created: num(m.created_at ?? m.created) }] : []
+      }
       default:
         return []
     }

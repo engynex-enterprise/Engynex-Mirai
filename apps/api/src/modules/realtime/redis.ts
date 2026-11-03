@@ -40,6 +40,10 @@ export class RedisClients implements OnApplicationShutdown {
   }
 
   async onApplicationShutdown() {
+    // Al cerrar, el adaptador de socket.io manda punsubscribe/unsubscribe sin esperar y ioredis los junta en el
+    // auto-pipeline (sale en el siguiente setImmediate). Sin esta espera, quit() cerraba antes y quedaba un
+    // "Connection is closed." sin capturar (visto con Redis real en test/pg/realtime.int.test.ts, V7-I).
+    await new Promise((r) => setImmediate(r))
     await Promise.allSettled([this.pubClient?.quit(), this.subClient?.quit()])
   }
 }

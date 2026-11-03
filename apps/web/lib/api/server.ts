@@ -7,6 +7,8 @@ import { apiContract } from "@mirai/contracts/api"
 import { supabaseServer } from "@/utils/supabase/server"
 import { createApiFetcher, createRawFetch, type TokenSource } from "./fetcher"
 import type { ApiConfig } from "./modules"
+import { serverAuthProvider } from "@/lib/auth/provider"
+import { activeTraceparent } from "@/lib/telemetry/traceparent"
 
 export { unwrap, unwrapData } from "./unwrap"
 
@@ -16,13 +18,15 @@ const CLIENT = `web-ssr@${process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"}`
 export function cookieToken(sb?: SupabaseClient): TokenSource {
   return {
     get: async () => {
+      // v7 (AUTH_PROVIDER=mirai): el token de la cookie de Better Auth va como Bearer de sesión.
+      if (serverAuthProvider() === "mirai") return (await import("@/lib/auth/server")).miraiSessionToken()
       const client = sb ?? (await supabaseServer())
       return (await client.auth.getSession()).data.session?.access_token ?? null
     },
   }
 }
 
-const make = (baseUrl: string, token: TokenSource) => initClient(apiContract, { baseUrl, api: createApiFetcher({ token, client: CLIENT }), throwOnUnknownStatus: false })
+const make = (baseUrl: string, token: TokenSource) => initClient(apiContract, { baseUrl, api: createApiFetcher({ token, client: CLIENT, traceparent: () => activeTraceparent() }), throwOnUnknownStatus: false })
 export type MiraiServerApi = ReturnType<typeof make>
 
 /** Cliente con la sesión de la petición actual. */
@@ -37,5 +41,5 @@ export function publicServerApi(cfg: ApiConfig): MiraiServerApi {
 
 /** fetch crudo sin persona (proxy de los webhooks de pagos con el cuerpo tal cual). */
 export function publicRawFetch() {
-  return createRawFetch({ token: { get: async () => null }, client: CLIENT })
+  return createRawFetch({ token: { get: async () => null }, client: CLIENT, traceparent: () => activeTraceparent() })
 }

@@ -8,11 +8,13 @@ import { failure, isApiError } from "@/lib/api/errors"
 import { activeHouseholdId, apiOn } from "@/lib/api/session"
 import { viaApiOr } from "@/lib/api/via"
 import { createClient } from "@/utils/supabase/client"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import type { MiraiApi } from "@/lib/api/client"
 import * as actions from "./actions"
 import type { AccountData, TransferCandidates } from "./types"
 
-const on = () => apiOn("account")
+// v7: con AUTH_PROVIDER=mirai la cuenta siempre va por la API (las acciones de Supabase ya no aplican).
+const on = () => isMiraiAuth() || apiOn("account")
 const client = () => import("@/lib/api/client")
 type Res = { ok: boolean; msg: string; code?: string }
 const uuid = z.uuid()
@@ -56,7 +58,10 @@ export const revokeSession = viaApiOr(on, actions.revokeSession, async (id: stri
 /** La API cierra todas las sesiones; luego se limpia la de este navegador (como hacía signOut en el servidor). */
 export const signOutEverywhere = viaApiOr(on, actions.signOutEverywhere, async () => {
   const r = await msgOf((api) => api.account.signOutEverywhere())
-  if (r.ok) await createClient().auth.signOut({ scope: "local" }).catch(() => {})
+  if (r.ok) {
+    if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut()
+    else await createClient().auth.signOut({ scope: "local" }).catch(() => {})
+  }
   return r
 })
 

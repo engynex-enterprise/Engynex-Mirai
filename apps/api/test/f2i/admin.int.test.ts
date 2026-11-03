@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { z } from "zod"
 import type { AppRoute } from "@ts-rest/core"
-import { adminContract } from "@mirai/contracts/modules/admin"
+import { adminCoreContract as adminContract } from "@mirai/contracts/modules/admin"
 import { H_GRATIS, USERS } from "../setup/fixtures"
 import { userToken } from "../setup/tokens"
 import { createF2iApp, type F2iApp } from "./app"

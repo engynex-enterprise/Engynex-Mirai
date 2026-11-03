@@ -4,7 +4,9 @@ import type { LoggerService } from "@nestjs/common"
 import { ClsServiceManager } from "nestjs-cls"
 import pino, { type Logger } from "pino"
 import { CTX, type RequestContext } from "../context/request-context"
-import { currentTrace, traceFields } from "./trace"
+import { logsBridgeEnabled } from "../telemetry/config"
+import { otlpLogStream } from "./otlp-logs"
+import { currentTrace, traceFields, w3cTraceFields } from "./trace"
 import { PINO_REDACT, scrub } from "./redact"
 
 const SEVERITY: Record<string, string> = { trace: "DEBUG", debug: "DEBUG", info: "INFO", warn: "WARNING", error: "ERROR", fatal: "CRITICAL" }
@@ -20,6 +22,19 @@ export function currentContext(): RequestContext | undefined {
 }
 
 export type LoggerOptions = { level: string; service: string; version: string; project?: string; destination?: pino.DestinationStream }
+
+/**
+ * Destino por defecto: stdout (JSON, portable). Con OTEL_LOGS_EXPORTER=otlp, además, el Logs SDK de OpenTelemetry
+ * (otlp-logs.ts). Con un `destination` explícito (pruebas) se usa ese y nada más.
+ */
+export function defaultDestination(o: Pick<LoggerOptions, "level" | "service">, env: NodeJS.ProcessEnv = process.env): pino.DestinationStream | undefined {
+  if (!logsBridgeEnabled(env)) return undefined
+  const level = o.level as pino.Level
+  return pino.multistream([
+    { level, stream: pino.destination({ dest: 1, sync: true }) },
+    { level, stream: otlpLogStream(o.service) },
+  ])
+}
 
 export function createLogger(o: LoggerOptions): Logger {
   return pino(
@@ -42,16 +57,22 @@ export function createLogger(o: LoggerOptions): Logger {
       },
       mixin() {
         const c = currentContext()
-        if (!c) return {}
+        // Traza activa de OTel (petición, tarea del trabajador…) o la que llegó en los encabezados de la petición.
+        const t = currentTrace(c?.trace)
         return {
-          requestId: c.requestId,
-          ...(c.user ? { userId: c.user.id } : {}),
-          ...(c.bookAccess ? { householdId: c.bookAccess.household.id, bookId: c.bookAccess.book.id } : {}),
-          ...traceFields(currentTrace(c.trace), o.project),
+          ...(c
+            ? {
+                requestId: c.requestId,
+                ...(c.user ? { userId: c.user.id } : {}),
+                ...(c.bookAccess ? { householdId: c.bookAccess.household.id, bookId: c.bookAccess.book.id } : {}),
+              }
+            : {}),
+          ...traceFields(t, o.project),
+          ...w3cTraceFields(t),
         }
       },
     },
-    o.destination,
+    o.destination ?? defaultDestination(o),
   )
 }
 

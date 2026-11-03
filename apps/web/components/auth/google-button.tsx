@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { BrandLogo } from "@/components/mirai/brand-logo"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "@/components/mirai/toast"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 /** Botón "Continuar con Google" con el logo oficial de Google (pautas de marca de Google Sign-In). */
 export function GoogleButton({ next = "/inicio" }: { next?: string }) {
@@ -19,6 +20,14 @@ export function GoogleButton({ next = "/inicio" }: { next?: string }) {
       disabled={busy}
       onClick={async () => {
         setBusy(true)
+        if (isMiraiAuth()) {
+          const r = await (await import("@/lib/auth/mirai")).signInGoogle(next)
+          if (!r.ok) {
+            setBusy(false)
+            toast.error("No pudimos abrir Google", { description: r.msg })
+          }
+          return
+        }
         const { error } = await createClient().auth.signInWithOAuth({
           provider: "google",
           options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },

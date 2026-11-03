@@ -12,6 +12,9 @@ iso/png/
 
 # Next.js
 .next/
+# Compilación de la E2E local (infra/local, pnpm e2e:local)
+.next-local/
+infra/local/.run/
 next-env.d.ts
 .env*.local
 .env

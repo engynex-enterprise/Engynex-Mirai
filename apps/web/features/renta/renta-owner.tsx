@@ -1,6 +1,7 @@
 "use client"
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { fileUrl, filesViaApi, uploadFile } from "@/lib/files/upload"
 import { toast } from "@/components/mirai/toast"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
@@ -47,12 +48,17 @@ export function RentaOwner() {
     },
     async saveMember(id, patch) { chk(await sb.from("family_members").update(patch as never).eq("id", id)); done(); qc.invalidateQueries({ queryKey: ["h", household.id, "family_members"] }) },
     async upload(y, docKey, f) {
-      const path = `${bookId}/renta/${y}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, "_")}`
-      chk(await sb.storage.from("attachments").upload(path, f, { contentType: f.type }))
+      // v7 (interruptor `files`): sube por la API a {libro}/renta/{año}/… (la API revisa rol, tamaño y tipo).
+      let path: string
+      if (filesViaApi()) path = (await uploadFile({ bucket: "attachments", body: f, name: f.name, bookId, folder: `renta/${y}` })).key
+      else {
+        path = `${bookId}/renta/${y}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, "_")}`
+        chk(await sb.storage.from("attachments").upload(path, f, { contentType: f.type }))
+      }
       chk(await sb.from("attachments").insert({ book_id: bookId, doc_key: docKey, year: y, path, nombre: f.name, mime: f.type || "application/octet-stream", size: f.size, ref_table: "tax_years" }))
       done()
     },
     async delAttachment(id) { chk(await sb.from("attachments").update({ deleted_at: new Date().toISOString() }).eq("id", id)); done() },
   }
-  return <RentaView data={data} actions={canEdit ? actions : null} fileUrl={async (p) => (await sb.storage.from("attachments").createSignedUrl(p, 300)).data?.signedUrl ?? null} />
+  return <RentaView data={data} actions={canEdit ? actions : null} fileUrl={async (p) => (filesViaApi() ? fileUrl("attachments", p).catch(() => null) : (await sb.storage.from("attachments").createSignedUrl(p, 300)).data?.signedUrl ?? null)} />
 }

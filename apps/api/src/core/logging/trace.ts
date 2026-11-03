@@ -32,3 +32,13 @@ export function traceFields(t: TraceInfo | undefined, project: string | undefine
     ...(t.sampled !== undefined ? { "logging.googleapis.com/trace_sampled": t.sampled } : {}),
   }
 }
+
+/** Campos neutros (W3C, sin proveedor) para correlacionar en cualquier backend: trace_id, span_id y trace_flags. */
+export function w3cTraceFields(t: TraceInfo | undefined): Record<string, string> {
+  if (!t) return {}
+  return {
+    trace_id: t.traceId,
+    ...(t.spanId ? { span_id: t.spanId } : {}),
+    ...(t.sampled !== undefined ? { trace_flags: t.sampled ? "01" : "00" } : {}),
+  }
+}

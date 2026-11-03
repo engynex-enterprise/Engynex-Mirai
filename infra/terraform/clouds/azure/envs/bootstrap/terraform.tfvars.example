@@ -1,0 +1,17 @@
+# Copia a terraform.tfvars (ignorado por git). Sin secretos: GitHub entra por OIDC.
+# Antes: az login (cuenta Owner de la suscripción y con permiso para crear aplicaciones en Entra ID).
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+tenant_id       = "00000000-0000-0000-0000-000000000000"
+region          = "eastus2"
+
+state_storage_account_name = "miraitfstateREEMPLAZA" # 3–24 minúsculas/números, único en Azure
+registry_name              = null                    # p. ej. "miraiengynex"
+registry_sku               = "Standard"
+
+github_owner         = "engynex"
+github_repository    = "mirai"
+github_repository_id = null # gh api repos/engynex/mirai --jq .id
+
+cicd_budget_amount = 30
+alert_email        = "alertas@engynex.com"

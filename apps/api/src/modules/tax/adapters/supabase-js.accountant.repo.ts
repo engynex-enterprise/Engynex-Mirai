@@ -1,6 +1,6 @@
 // Adaptador de hoy (PostgREST con la clave del sistema). El libro se arma con las mismas partes que loadBookData
 // (BOOK_PARTS de @mirai/domain/book-data) y la Declaración con rentaDataFrom (@mirai/domain/integral-extras).
-import { Injectable } from "@nestjs/common"
+import { Injectable, Optional } from "@nestjs/common"
 import type { PlanRow } from "@mirai/domain/app-context"
 import { BOOK_PARTS, loadBookDataWith, SINGLE_ROW_PARTS, type BookPart, type PartRows } from "@mirai/domain/book-data"
 import { rentaDataFrom, type AttachmentRow, type RentaData } from "@mirai/domain/integral-extras"
@@ -8,11 +8,16 @@ import { refPorAnio } from "@mirai/domain/payroll"
 import type { DbScope } from "../../../core/db/scope"
 import { SupabaseJsFactory } from "../../../core/db/supabase-js.factory"
 import { DomainError } from "../../../core/errors/domain-error"
+import { ObjectStore } from "../../../core/files/object-store"
 import { AccountantRepo, type ShareRow } from "../accountant.repository"
 
 @Injectable()
 export class SupabaseJsAccountantRepo extends AccountantRepo {
-  constructor(private readonly sb: SupabaseJsFactory) {
+  constructor(
+    private readonly sb: SupabaseJsFactory,
+    // V7-E: con OBJECT_STORE distinto de `supabase`, los adjuntos se firman en el puerto (gcs, s3, azure-blob).
+    @Optional() private readonly files?: ObjectStore,
+  ) {
     super()
   }
 
@@ -89,6 +94,7 @@ export class SupabaseJsAccountantRepo extends AccountantRepo {
     return !!data?.visible_contador
   }
   async signedUrl(scope: DbScope, path: string, seconds: number) {
+    if (this.files && this.files.driver !== "supabase") return this.files.signDownload({ bucket: "attachments", key: path, ttlS: seconds }).catch(() => null)
     return (await this.sb.for(scope).storage.from("attachments").createSignedUrl(path, seconds)).data?.signedUrl ?? null
   }
 }

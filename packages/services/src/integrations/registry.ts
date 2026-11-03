@@ -19,7 +19,7 @@ export type IntegrationDef = {
   fields: IntegrationField[]
   /** Variable de entorno que, si existe, la habilita sin configurar nada. */
   env?: string
-  /** Solo se configura en la consola (Integraciones globales); los hogares no la ven. Hoy: todo lo que no es IA (ver `isAdminOnly`). */
+  /** Solo se configura en la consola (Integraciones globales); los hogares no la ven. Hoy: todo lo que no es IA y la IA de la nube de la plataforma (ver `isAdminOnly`). */
   adminOnly?: boolean
   testable?: boolean
 }
@@ -38,6 +38,21 @@ const apiKey = (url: string): IntegrationField => ({ k: "apiKey", l: "Clave de A
 export const INTEGRATIONS: IntegrationDef[] = [
   // ── IA
   { kind: "ai_gateway", cat: "ia", n: "Vercel AI Gateway", d: "Una sola clave para Claude, OpenAI, Gemini, Kimi y más. Requiere una tarjeta registrada en Vercel (incluye créditos gratis).", icon: "network", scope: "platform", free: "plan-gratis", url: "https://vercel.com/ai-gateway", env: "AI_GATEWAY_API_KEY", fields: [{ ...apiKey("vercel.com › AI Gateway"), required: false, help: "Si ya está en las variables de Vercel (AI_GATEWAY_API_KEY) déjalo vacío." }, model("google/gemini-2.5-flash")], testable: true },
+  // IA de la plataforma en la nube donde corre Mirai (V7-P): sin claves de larga vida, con la identidad del servidor.
+  // Solo las configura el administrador (consola › Integraciones globales) o las variables del despliegue; el hogar no
+  // las ve ni las cambia y su uso se descuenta de los créditos de IA. AI_PLATFORM_PROVIDER decide cuál va primero.
+  { kind: "ai_vertex", cat: "ia", n: "Google Vertex AI", d: "Gemini desde la cuenta de Google Cloud de Mirai. No usa claves: entra con la identidad del servidor (Cloud Run).", icon: "cloud", scope: "platform", adminOnly: true, free: "pago", url: "https://console.cloud.google.com/vertex-ai", env: "GOOGLE_VERTEX_PROJECT", fields: [
+    { k: "project", l: "Proyecto de Google Cloud", type: "text", required: true, placeholder: "mirai-produccion", help: "El id del proyecto donde está activado Vertex AI. Si el despliegue tiene GOOGLE_VERTEX_PROJECT, déjalo vacío. La cuenta del servidor necesita el rol «Usuario de Vertex AI» (roles/aiplatform.user)." },
+    { k: "location", l: "Región", type: "text", placeholder: "us-central1", help: "Dónde corre el modelo (us-central1, us-east1 o global). Vacío = GOOGLE_VERTEX_LOCATION o us-central1." },
+    model("gemini-2.5-flash")], testable: true },
+  { kind: "ai_bedrock", cat: "ia", n: "Amazon Bedrock", d: "Claude, Nova y otros modelos desde la cuenta de AWS de Mirai. Entra con el rol del contenedor (ECS), sin claves guardadas.", icon: "server", scope: "platform", adminOnly: true, free: "pago", url: "https://console.aws.amazon.com/bedrock", env: "AI_BEDROCK_REGION", fields: [
+    { k: "region", l: "Región de AWS", type: "text", required: true, placeholder: "us-east-1", help: "Donde activaste los modelos en Bedrock › Acceso a modelos. Si el despliegue tiene AI_BEDROCK_REGION, déjalo vacío. El rol necesita el permiso bedrock:InvokeModel." },
+    { k: "apiKey", l: "Clave de API de Bedrock (opcional)", type: "secret", help: "Solo si no corres en AWS. Lo normal es dejarla vacía: Mirai usa el rol del contenedor o AWS_BEARER_TOKEN_BEDROCK." },
+    model("us.anthropic.claude-haiku-4-5-20251001-v1:0")], testable: true },
+  { kind: "ai_azure", cat: "ia", n: "Azure OpenAI", d: "GPT desde la cuenta de Azure de Mirai. Entra con la identidad administrada del servidor o con una clave.", icon: "cloud", scope: "platform", adminOnly: true, free: "pago", url: "https://ai.azure.com", env: "AZURE_OPENAI_ENDPOINT", fields: [
+    { k: "endpoint", l: "Dirección del recurso", type: "url", required: true, placeholder: "https://mi-recurso.openai.azure.com", help: "Está en el recurso de Azure OpenAI › Claves y punto de conexión. Si el despliegue tiene AZURE_OPENAI_ENDPOINT, déjalo vacío. La identidad necesita el rol «Cognitive Services OpenAI User»." },
+    { k: "apiKey", l: "Clave (opcional)", type: "secret", help: "Vacía = identidad administrada (lo recomendado) o AZURE_OPENAI_API_KEY del despliegue." },
+    { ...model("gpt-5-mini"), help: "El nombre del despliegue en Azure. Si lo llamas igual que el modelo, Mirai lo encuentra en la lista." }], testable: true },
   { kind: "ai_gemini", cat: "ia", n: "Google Gemini", d: "Plan gratis generoso. Recomendado para empezar sin pagar: chat, consejero y lectura de facturas.", icon: "sparkles", scope: "household", free: "plan-gratis", url: "https://aistudio.google.com/apikey", fields: [apiKey("aistudio.google.com"), model("gemini-flash-latest")], testable: true },
   { kind: "ai_groq", cat: "ia", n: "Groq", d: "Modelos abiertos muy rápidos con plan gratis (con límites). Buen respaldo.", icon: "zap", scope: "household", free: "plan-gratis", url: "https://console.groq.com/keys", fields: [apiKey("console.groq.com"), model("llama-3.3-70b-versatile")], testable: true },
   { kind: "ai_openrouter", cat: "ia", n: "OpenRouter", d: "Acceso a muchos modelos, algunos gratis (terminan en :free).", icon: "route", scope: "household", free: "plan-gratis", url: "https://openrouter.ai/keys", fields: [apiKey("openrouter.ai"), model("openrouter/free")], testable: true },
@@ -75,7 +90,13 @@ export const INTEGRATIONS: IntegrationDef[] = [
 ]
 
 export const integrationByKind = (k: string) => INTEGRATIONS.find((i) => i.kind === k)
-export const AI_KINDS = INTEGRATIONS.filter((i) => i.cat === "ia").map((i) => i.kind)
+/** Proveedores de IA que el hogar ve y ordena (Ajustes › Inteligencia artificial). */
+export const AI_KINDS = INTEGRATIONS.filter((i) => i.cat === "ia" && !i.adminOnly).map((i) => i.kind)
+/**
+ * Todos los proveedores de IA, también los de la nube de la plataforma (Vertex, Bedrock, Azure) que solo configura el
+ * administrador. Es el orden de respaldo base de packages/ai (antes de AI_PLATFORM_PROVIDER y de ia.orden del hogar).
+ */
+export const ALL_AI_KINDS = INTEGRATIONS.filter((i) => i.cat === "ia").map((i) => i.kind)
 /**
  * ¿La configura solo el administrador? Todo lo que no es IA: correo, WhatsApp, Telegram, push, datos, Google e
  * infraestructura. Las conexiones de Google son de la cuenta de cada persona (botón "Conectar" en Correo del banco);

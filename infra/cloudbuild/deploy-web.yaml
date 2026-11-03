@@ -1,5 +1,6 @@
 # Despliegue de la web (Next.js standalone) en Cloud Run con canario y vuelta atrás automática.
-# Disparador: push a pruebas o main (stack/cicd.tf). Las sustituciones las pone Terraform por ambiente.
+# ALTERNATIVA a GitHub Actions (.github/workflows/deploy.yml). Disparador: push a pruebas o main
+# (infra/terraform/clouds/gcp/stack/cicd.tf, con cicd.repository_id). Las sustituciones las pone Terraform por ambiente.
 #   verificar ─┐
 #   construir ─┴─► publicar ─► escanear ─► desplegar (sin tráfico → humo → 10 % → 50 % → 100 %)
 # La imagen es por ambiente: los NEXT_PUBLIC_* se incrustan al compilar (_WEB_BUILD_ENV_B64).

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { initClient } from "@ts-rest/core"
 import { apiContract } from "@mirai/contracts/api"
 import { ApiError, failure, NETWORK_MSG } from "./errors"
-import { createApiFetcher, createRawFetch, newTraceparent } from "./fetcher"
+import { createApiFetcher, createRawFetch, newTraceparent, validTraceparent } from "./fetcher"
 import { unwrap, unwrapData } from "./unwrap"
 import { apiRetry } from "./query"
 import { canFallback, listQuery, listableViaApi, readWithFallback, writeBody, writableViaApi } from "./book-tables"
@@ -135,6 +135,24 @@ describe("fetcher", () => {
 
   it("traceparent nuevo en cada llamada", () => {
     expect(newTraceparent()).not.toBe(newTraceparent())
+  })
+
+  it("traceparent de la fuente inyectada (traza activa); el del encabezado explícito gana", async () => {
+    const TP = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    const { f, calls } = fakeFetch(json(200, {}), json(200, {}))
+    const raw = createRawFetch({ token: token(), fetch: f, sleep: noSleep, traceparent: () => TP })
+    await raw({ url: "u", method: "GET" })
+    await raw({ url: "u", method: "GET", headers: { Traceparent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-00" } })
+    expect(calls[0].init.headers.traceparent).toBe(TP)
+    expect(calls[1].init.headers.traceparent).toBe("00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-00")
+  })
+
+  it("si la fuente da basura o falla, traceparent aleatorio (la petición sigue)", async () => {
+    const { f, calls } = fakeFetch(json(200, {}), json(200, {}))
+    await createRawFetch({ token: token(), fetch: f, sleep: noSleep, traceparent: () => "00-" + "0".repeat(32) + "-00f067aa0ba902b7-01" })({ url: "u", method: "GET" })
+    await createRawFetch({ token: token(), fetch: f, sleep: noSleep, traceparent: () => { throw new Error("sin otel") } })({ url: "u", method: "GET" })
+    for (const c of calls) expect(c.init.headers.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
+    expect(validTraceparent(" 00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01 ")).toBe("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
   })
 })
 

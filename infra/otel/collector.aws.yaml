@@ -1,0 +1,98 @@
+# Colector OpenTelemetry para AWS (ECS Fargate), sidecar de cada tarea de Mirai (V7-Q).
+# Imagen: otel/opentelemetry-collector-contrib:0.164.0 (o public.ecr.aws/aws-observability/aws-otel-collector, la
+# distribución de AWS — ADOT — con los mismos exportadores).
+#
+# Qué hace: recibe OTLP de la app por localhost (4317 gRPC / 4318 HTTP) y lo manda a
+#   · trazas   → AWS X-Ray                    (exportador `awsxray`; X-Ray acepta trace ids W3C)
+#   · métricas → CloudWatch con EMF            (exportador `awsemf`: métricas en el namespace Mirai, dimensiones
+#                                               service.name y deployment.environment.name)
+#   · logs     → CloudWatch Logs               (exportador `awscloudwatchlogs`; opcional, ver abajo)
+# Para PromQL (panel base) en vez de CloudWatch: cambia `awsemf` por `prometheusremotewrite` + extensión `sigv4auth`
+# hacia Amazon Managed Service for Prometheus.
+#
+# Permisos del rol de la TAREA (task role), no del de ejecución:
+#   AWSXRayDaemonWriteAccess (xray:PutTraceSegments, xray:PutTelemetryRecords, xray:GetSamplingRules…)
+#   CloudWatchAgentServerPolicy o, mínimo: logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents,
+#   logs:DescribeLogStreams, logs:DescribeLogGroups (EMF escribe por CloudWatch Logs) y cloudwatch:PutMetricData.
+#
+# Variables que lee:
+#   AWS_REGION         región (ECS la pone sola)
+#   MIRAI_ENV          ambiente (local | pruebas | produccion): arma los nombres de los grupos de logs
+#
+# Logs: en ECS el stdout de la app ya va a CloudWatch Logs con el driver `awslogs`. Por eso en la app se deja
+# OTEL_LOGS_EXPORTER=none; el pipeline de logs queda listo por si se apaga stdout.
+#
+# Cómo se monta como sidecar en ECS (lo hace Terraform):
+#   1. En la task definition, un contenedor `otel-collector` (essential=true) con la config en SSM Parameter Store
+#      pasada por la variable AOT_CONFIG_CONTENT (ADOT) o en un archivo de la imagen, y
+#      command ["--config=env:OTEL_CONFIG"] con secrets: [{ name: OTEL_CONFIG, valueFrom: <ARN del parámetro> }].
+#   2. El contenedor de la app con dependsOn [{ containerName: otel-collector, condition: HEALTHY }] y
+#      OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=otlp
+#      (en awsvpc los contenedores de la tarea comparten localhost).
+#   3. healthCheck del colector: ["CMD", "/healthcheck"] (ADOT) o la extensión health_check en :13133.
+
+extensions:
+  health_check:
+    endpoint: localhost:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: localhost:4317
+      http:
+        endpoint: localhost:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20
+  # cloud.provider, cloud.region, aws.ecs.* (cluster, tarea, contenedor). override=false: mandan los de la app.
+  resourcedetection:
+    detectors: [env, ecs]
+    timeout: 2s
+    override: false
+  batch:
+    send_batch_size: 200
+    timeout: 5s
+
+exporters:
+  awsxray:
+    region: ${env:AWS_REGION}
+    # Atributos que se vuelven anotaciones (buscables) en X-Ray.
+    indexed_attributes: [service.name, deployment.environment.name, http.route]
+  awsemf:
+    region: ${env:AWS_REGION}
+    namespace: Mirai
+    log_group_name: /mirai/${env:MIRAI_ENV}/metrics
+    log_stream_name: otel-emf
+    dimension_rollup_option: NoDimensionRollup
+    resource_to_telemetry_conversion:
+      enabled: true
+    metric_declarations:
+      - dimensions: [[service.name, deployment.environment.name]]
+        metric_name_selectors:
+          - "^http\\.server\\.request\\.duration$"
+          - "^mirai\\.queue\\..*"
+          - "^mirai\\.files\\..*"
+  awscloudwatchlogs:
+    region: ${env:AWS_REGION}
+    log_group_name: /mirai/${env:MIRAI_ENV}/otel
+    log_stream_name: otel-logs
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [awsxray]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [awsemf]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [awscloudwatchlogs]

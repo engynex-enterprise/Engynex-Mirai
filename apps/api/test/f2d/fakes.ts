@@ -7,7 +7,7 @@ import type { DbScope } from "../../src/core/db/scope"
 import { BookStore, storeError, type Rec, type RowsQuery, type RpcArgs, type RpcName, type SingleTable } from "../../src/modules/book-tables/book-store"
 import { BookTablesRepo, type ListRows } from "../../src/modules/book-tables/book-tables.repository"
 import { ExpenseClassifier, type ClassifyItem, type ClassifyResult } from "../../src/modules/expenses/expense-classifier"
-import { BackupStorage, type BackupTipo } from "../../src/modules/import/backup-storage"
+import { BackupStorage, type BackupRow, type BackupTipo } from "../../src/modules/import/backup-storage"
 
 /** UUID de prueba válido (v4) a partir de un número. */
 export const uid = (n: number) => `${n.toString(16).padStart(8, "0")}-d000-4000-8000-${n.toString(16).padStart(12, "0")}`
@@ -134,8 +134,34 @@ export class FakeClassifier extends ExpenseClassifier {
 
 export class FakeBackups extends BackupStorage {
   saved: { bookId: string; tipo: BackupTipo; body: string; userId: string | null }[] = []
+  /** V7-G: filas de la tabla `backups` y archivos del bucket (ruta → contenido). */
+  rows: BackupRow[] = []
+  files = new Map<string, string>()
+  removed: string[] = []
   async save(a: { bookId: string; tipo: BackupTipo; body: string; fecha: string; userId: string | null }) {
     this.saved.push(a)
-    return `${a.bookId}/${a.fecha.replace(/[:.]/g, "-")}-${a.tipo}.json`
+    const path = `${a.bookId}/${a.fecha.replace(/[:.]/g, "-")}-${a.tipo}.json`
+    this.files.set(path, a.body)
+    this.rows.unshift({ id: crypto.randomUUID(), book_id: a.bookId, tipo: a.tipo, path, size: a.body.length, created_at: a.fecha, created_by: a.userId })
+    return path
+  }
+  async list(bookId: string) {
+    return this.rows.filter((r) => r.book_id === bookId)
+  }
+  async find(bookId: string, id: string) {
+    return this.rows.find((r) => r.id === id && r.book_id === bookId) ?? null
+  }
+  async read(path: string) {
+    const f = this.files.get(path)
+    if (f === undefined) throw new Error("no existe")
+    return f
+  }
+  async signedUrl(path: string, seconds: number) {
+    return `https://archivos.test/backups/${path}?expira=${seconds}`
+  }
+  async remove(bookId: string, row: BackupRow) {
+    this.removed.push(row.path)
+    this.files.delete(row.path)
+    this.rows = this.rows.filter((r) => !(r.id === row.id && r.book_id === bookId))
   }
 }

@@ -1,0 +1,76 @@
+# Colector OpenTelemetry para AZURE (Container Apps), sidecar de cada app de Mirai (V7-Q).
+# Imagen: otel/opentelemetry-collector-contrib:0.164.0.
+#
+# Qué hace: recibe OTLP de la app por localhost (4317 gRPC / 4318 HTTP) y lo manda a Application Insights
+# (Azure Monitor) con el exportador `azuremonitor`:
+#   · trazas → requests/dependencies   · métricas → customMetrics   · logs → traces (opcional, ver abajo)
+# Para PromQL (panel base): agrega `prometheusremotewrite` hacia Azure Monitor managed service for Prometheus
+# (con la extensión `azureauth` y una identidad administrada).
+#
+# Variables que lee:
+#   APPLICATIONINSIGHTS_CONNECTION_STRING   cadena de conexión del recurso de Application Insights (OBLIGATORIA).
+#                                           No es un secreto fuerte (solo permite escribir telemetría), pero igual
+#                                           va como secreto de Container Apps (secretRef), nunca en el código.
+#
+# Permisos: ninguno de RBAC con la cadena de conexión. Si se desactiva la autenticación local de Application Insights
+# (recomendado en producción), la identidad administrada de la app necesita el rol "Monitoring Metrics Publisher"
+# sobre el recurso de Application Insights.
+#
+# Logs: en Container Apps el stdout de la app ya llega a Log Analytics (ContainerAppConsoleLogs_CL). Por eso en la app
+# se deja OTEL_LOGS_EXPORTER=none; el pipeline de logs queda listo por si se apaga stdout.
+#
+# Cómo se monta como sidecar en Container Apps (lo hace Terraform):
+#   1. En template.containers, un segundo contenedor `otel-collector` con esta config montada desde un volumen de
+#      secretos (volumes: [{ name: otel, storageType: Secret, secrets: [{ secretRef: otel-config, path: config.yaml }] }])
+#      en /etc/otelcol-contrib y args ["--config=/etc/otelcol-contrib/config.yaml"]; env
+#      APPLICATIONINSIGHTS_CONNECTION_STRING con secretRef. Los contenedores de una réplica comparten localhost.
+#   2. La app con OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=otlp.
+#   3. Sonda de inicio (startup probe) del colector: HTTP GET :13133/.
+#   Alternativa sin sidecar: el agente OpenTelemetry administrado del entorno de Container Apps
+#   (appInsightsConfiguration + openTelemetryConfiguration) con el mismo endpoint en la app.
+
+extensions:
+  health_check:
+    endpoint: localhost:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: localhost:4317
+      http:
+        endpoint: localhost:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20
+  # Solo `env`: en Container Apps no hay IMDS de VM (el detector `azure` es para VMs/VMSS).
+  resourcedetection:
+    detectors: [env]
+    timeout: 2s
+    override: false
+  batch:
+    send_batch_size: 200
+    timeout: 5s
+
+exporters:
+  azuremonitor:
+    connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [azuremonitor]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [azuremonitor]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [azuremonitor]

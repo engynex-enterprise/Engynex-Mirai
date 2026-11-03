@@ -1,0 +1,11 @@
+# Copia a terraform.tfvars (ignorado por git). Sin secretos.
+
+region            = "us-east-1"
+state_bucket_name = "engynex-mirai-tfstate-aws"
+registry_name     = "mirai"
+
+github_owner         = "engynex"
+github_repository    = "mirai"
+github_repository_id = null # gh api repos/engynex/mirai --jq .id
+
+existing_github_oidc_provider_arn = null # si la cuenta ya tiene el proveedor de token.actions.githubusercontent.com

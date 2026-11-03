@@ -17,9 +17,12 @@ export type AuthUser = {
   expiresIn: number
 }
 
+/** De dónde salió el token (v7): la cookie de sesión de Better Auth (mismo origen) o `Authorization: Bearer`. */
+export type VerifyHint = { fromCookie?: boolean; cookie?: string }
+
 export abstract class TokenVerifier {
   /** Valida firma, emisor, audiencia y vencimiento. Lanza DomainError UNAUTHENTICATED si no sirve. */
-  abstract verify(token: string): Promise<AuthUser>
+  abstract verify(token: string, hint?: VerifyHint): Promise<AuthUser>
   /** Para /readyz: ¿las llaves públicas (JWKS) están disponibles? */
   abstract ready(): Promise<{ ok: boolean; msg?: string }>
 }

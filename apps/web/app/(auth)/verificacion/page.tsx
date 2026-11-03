@@ -10,6 +10,8 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { AuthSkeleton } from "@/components/auth/auth-skeleton"
 import { AuthHeader } from "@/components/auth/auth-ui"
 import { safeNext } from "@/lib/security/safe-next"
+import { isMiraiAuth } from "@/lib/auth/provider"
+import { MiraiVerification } from "@/components/auth/mirai-verification"
 
 function Verificacion() {
   const router = useRouter()
@@ -53,5 +55,6 @@ function Verificacion() {
 }
 
 export default function Page() {
-  return <Suspense fallback={<AuthSkeleton />}><Verificacion /></Suspense>
+  // v7: con AUTH_PROVIDER=mirai, el reto de Better Auth (código, respaldo o re-enrolamiento).
+  return <Suspense fallback={<AuthSkeleton />}>{isMiraiAuth() ? <MiraiVerification /> : <Verificacion />}</Suspense>
 }

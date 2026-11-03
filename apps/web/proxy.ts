@@ -1,8 +1,14 @@
 import type { NextRequest } from "next/server"
 import { updateSession } from "@/utils/supabase/middleware"
+import { serverAuthProvider } from "@/lib/auth/provider"
+import { updateMiraiSession, withAuthFlag } from "@/lib/auth/proxy"
 
+// v7 (V7-B): AUTH_PROVIDER=supabase (por defecto) = la sesión de Supabase de siempre; mirai = cookie de Better Auth.
 export async function proxy(request: NextRequest) {
-  return updateSession(request)
+  if (serverAuthProvider() === "mirai") return updateMiraiSession(request)
+  const res = await updateSession(request)
+  // Si alguna vez estuvo en `mirai`, el navegador vuelve a las pantallas de Supabase sin recompilar.
+  return request.cookies.get("mirai-auth") ? withAuthFlag(res, request, "supabase") : res
 }
 
 export const config = {

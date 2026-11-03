@@ -12,8 +12,11 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^5.0.132",
     "@ai-sdk/anthropic": "^4.0.94",
+    "@ai-sdk/azure": "^4.0.116",
     "@ai-sdk/google": "^4.0.109",
+    "@ai-sdk/google-vertex": "^5.0.131",
     "@ai-sdk/groq": "^4.0.74",
     "@ai-sdk/openai": "^4.0.106",
     "@mirai/contracts": "workspace:*",

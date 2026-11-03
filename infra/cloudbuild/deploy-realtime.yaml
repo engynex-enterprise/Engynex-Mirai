@@ -2,7 +2,7 @@
 # Terraform): espera a que deploy-api marque ok-<sha> y despliega ese digest con canario por métricas.
 # Sin prueba de humo previa: el servicio solo es accesible por el balanceador y no tiene host canario.
 # Solo existe en la etapa 3 (stages.realtime).
-# Configuración (la pone Terraform, stack/services.tf: no se cambia aquí): MODE=realtime, --session-affinity,
+# Configuración (la pone Terraform, clouds/gcp/stack/services.tf: no se cambia aquí): MODE=realtime, --session-affinity,
 # timeout 3600 s, mínimo 1 instancia en producción, concurrencia 250, Direct VPC egress (PRIVATE_RANGES_ONLY) hacia
 # Memorystore, sondas en /healthz, WEB_ORIGINS y REDIS_URL (Secret Manager). Dominio público: rt.<dominio>.
 

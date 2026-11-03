@@ -1,5 +1,13 @@
 # Mirai en GCP: estrategia de infraestructura como código (fase 3)
 
+> **v7 (2026-11-02):** el Terraform se reorganizó por capacidades y nubes. `infra/terraform/stack` ahora es
+> `infra/terraform/clouds/gcp/stack` y `infra/terraform/envs/*` es `infra/terraform/clouds/gcp/envs/*` (mismos prefijos
+> de estado; `moved.tf` reubica los recursos). Cloud SQL es la base principal, la región por defecto es `us-east1`,
+> `stages` pasó a `features`, `armor` a `waf` y `cloud_sql` a `postgres`. El CI/CD principal es GitHub Actions
+> (`.github/workflows/deploy.yml`); Cloud Build queda como alternativa. Cómo cambiar de nube y qué cambia:
+> [cambiar-de-nube.md](cambiar-de-nube.md); costos por nube: [costos-por-nube.md](costos-por-nube.md). Lo de abajo
+> sigue valiendo para GCP salvo esas rutas y nombres.
+
 > Escrito el 2026-11-02 en la rama `v6`. Base: `docs/arquitectura/v6-separacion-front-back.md` (doc v6), `docs/DEPLOY-VERCEL.md`, `docs/PWA.md` y `apps/web/vercel.json`.
 > Código: `infra/terraform/` (módulos, `stack/` y raíces por ambiente), `infra/cloudbuild/` (pipelines) e `infra/docker/web.Dockerfile`. Operación: `docs/infra/runbook.md`.
 > No se creó nada en la nube: no hay credenciales. Terraform pasa `fmt`, `validate` en las tres raíces y `terraform test` con proveedores simulados (§16). La imagen web se compiló y arrancó en local.

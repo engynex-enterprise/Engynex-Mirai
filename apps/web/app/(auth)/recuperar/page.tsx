@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { AuthDone, AuthHeader } from "@/components/auth/auth-ui"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 const EMAIL = /^\S+@\S+\.\S+$/
 
@@ -21,6 +22,13 @@ export default function RecuperarPage() {
   async function send() {
     if (!valido || busy) return
     setBusy(true)
+    if (isMiraiAuth()) {
+      const r = await (await import("@/lib/auth/mirai")).requestPasswordReset(email.trim())
+      setBusy(false)
+      if (!r.ok) return toast.error("No pudimos enviar el correo", { description: r.msg })
+      setSent(true)
+      return
+    }
     const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${location.origin}/auth/callback?next=/actualizar-clave`,
     })

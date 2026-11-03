@@ -2,13 +2,17 @@ import { Controller } from "@nestjs/common"
 import { TsRestHandler, tsRestHandler } from "@ts-rest/nest"
 import { accountContract as c } from "@mirai/contracts/modules/account"
 import { AccountService } from "./account.service"
+import { AccountExportService } from "./export.service"
 
 const ok = <T>(data: T) => ({ status: 200 as const, body: { ok: true as const, data } })
 
 /** /v1/account/**: siempre de la persona del token (no hay rutas con id de otra cuenta). */
 @Controller()
 export class AccountController {
-  constructor(private readonly svc: AccountService) {}
+  constructor(
+    private readonly svc: AccountService,
+    private readonly exporter: AccountExportService,
+  ) {}
 
   @TsRestHandler(c.get)
   get() {
@@ -53,6 +57,12 @@ export class AccountController {
   @TsRestHandler(c.signOutEverywhere)
   signOutEverywhere() {
     return tsRestHandler(c.signOutEverywhere, async () => ok(await this.svc.signOutEverywhere()))
+  }
+
+  /** V7-G: exportMyData (Ley 1581). */
+  @TsRestHandler(c.exportMyData)
+  exportMyData() {
+    return tsRestHandler(c.exportMyData, async () => ({ status: 200, body: await this.exporter.exportMyData() }))
   }
 
   @TsRestHandler(c.remove)

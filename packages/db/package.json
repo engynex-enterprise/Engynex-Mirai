@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./database.types": "./src/database.types.ts",
-    "./tables": "./src/tables.ts"
+    "./tables": "./src/tables.ts",
+    "./client": "./src/client.ts"
   },
   "scripts": {
     "db:migrate": "node scripts/db-migrate.mjs",
@@ -14,6 +15,9 @@
     "db:types": "node scripts/db-types.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
+  },
+  "dependencies": {
+    "@supabase/postgrest-js": "2.118.0"
   },
   "devDependencies": {
     "@mirai/config": "workspace:*",

@@ -15,5 +15,8 @@ export const LIMITS = {
   cuentaMetodo: { max: 10, windowS: 3600 },    // quitar formas de entrar o cerrar sesiones por hora
   pasarHogar: { max: 12, windowS: 3600 },      // pedir, responder o cancelar pasar el hogar por hora
   borrarHogar: { max: 3, windowS: 3600 },      // borrar o salir de hogares por hora
+  automatizaciones: { max: 60, windowS: 600 }, // probar o procesar ya las automatizaciones de un libro cada 10 minutos (por persona)
+  subidas: { max: 60, windowS: 600 },          // URL firmadas para subir archivos por persona cada 10 minutos
+  opiniones: { max: 10, windowS: 3600 },       // opiniones, casos de soporte o calificaciones por persona por hora
 } as const
 export type LimitName = keyof typeof LIMITS

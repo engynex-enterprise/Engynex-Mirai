@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import { Check, ImageUp, Search, Shuffle, Type, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -96,6 +97,12 @@ export function AvatarPicker({ open, onOpenChange, value, name, onPick, googlePh
     setBusy(true)
     try {
       const blob = await shrink(f)
+      // v7 (interruptor `files`): sube por la API (la ruta {tu id}/… la arma el servidor).
+      if (filesViaApi()) {
+        const r = await uploadFile({ bucket: "avatars", body: blob, name: "avatar.webp", type: "image/webp" })
+        if (r.publicUrl) pick(r.publicUrl)
+        return
+      }
       const sb = createClient()
       const path = `${uploadFor}/${crypto.randomUUID()}.webp`
       const { error } = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/webp", upsert: false })

@@ -1,0 +1,4 @@
+# cp backend.hcl.example backend.hcl && terraform init -backend-config=backend.hcl
+resource_group_name  = "mirai-cicd-rg"     # salida state_resource_group del bootstrap
+storage_account_name = "miraitfstateREEMPLAZA" # salida state_storage_account del bootstrap
+container_name       = "tfstate"

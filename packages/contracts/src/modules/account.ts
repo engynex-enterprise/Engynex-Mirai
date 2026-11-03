@@ -39,6 +39,26 @@ export const EmailChanged = Msg.extend({ prueba: z.boolean() })
 export const IdentityParams = z.object({ identityId: Uuid })
 export const SessionParams = z.object({ sessionId: Uuid })
 export const DeleteAccount = z.object({ confirm: z.string().max(320) })
+/**
+ * V7-G: exportMyData (Ley 1581, derecho de acceso). Mismo JSON que descarga la web: perfil, preferencias,
+ * consentimientos, hogares, reglas de aviso, dispositivos push, Telegram y los libros (completos donde eres Dueño o
+ * Administra; en los demás solo lo que registraste).
+ */
+const Rows = z.array(z.record(z.string(), z.unknown()))
+const AnyRow = z.record(z.string(), z.unknown()).nullable()
+export const MyDataExport = z.object({
+  exportado: z.string(),
+  cuenta: z.object({ email: z.string() }),
+  perfil: AnyRow,
+  preferencias: AnyRow,
+  consentimientos: Rows,
+  hogares: Rows,
+  avisos: Rows,
+  dispositivos_push: Rows,
+  telegram: AnyRow,
+  libros: z.array(z.record(z.string(), z.unknown())),
+})
+export type MyDataExport = z.infer<typeof MyDataExport>
 
 const c = initContract()
 export const accountContract = c.router(
@@ -52,6 +72,7 @@ export const accountContract = c.router(
     sessions: { method: "GET", path: "/v1/account/sessions", responses: { ...ACCOUNT_ERRORS, 200: z.array(SessionRow) }, summary: "Sesiones abiertas (my_sessions)" },
     revokeSession: { method: "DELETE", path: "/v1/account/sessions/:sessionId", pathParams: SessionParams, body: c.noBody(), responses: { ...ACCOUNT_ERRORS, 200: ApiOk(Msg) }, summary: "Cierra una sesión de otro dispositivo" },
     signOutEverywhere: { method: "POST", path: "/v1/account/sign-out-all", body: c.noBody(), responses: { ...ACCOUNT_ERRORS, 200: ApiOk(Msg) }, summary: "Cierra la sesión en todos los dispositivos, incluido este" },
+    exportMyData: { method: "GET", path: "/v1/account/export", responses: { ...ACCOUNT_ERRORS, 200: MyDataExport }, summary: "Todos tus datos personales en JSON (Ley 1581): perfil, preferencias, hogares, avisos y libros (completos donde eres Dueño o Administra)" },
     remove: { method: "DELETE", path: "/v1/account", body: DeleteAccount, responses: { ...ACCOUNT_ERRORS, 200: ApiOk(Msg) }, summary: "Elimina la cuenta y los hogares donde eres la única persona (409 details.hogares si eres dueño de un hogar con más personas)" },
   },
   { strictStatusCodes: true },

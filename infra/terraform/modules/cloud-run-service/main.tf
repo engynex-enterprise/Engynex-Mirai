@@ -42,7 +42,11 @@ resource "google_cloud_run_v2_service" "this" {
     }
 
     containers {
-      image = var.image
+      name       = var.sidecars == {} ? null : "app"
+      image      = var.image
+      command    = var.command
+      args       = var.args
+      depends_on = var.sidecars == {} ? null : keys(var.sidecars)
 
       ports {
         container_port = var.container_port
@@ -109,6 +113,44 @@ resource "google_cloud_run_v2_service" "this" {
           http_get {
             path = liveness_probe.value
             port = var.container_port
+          }
+        }
+      }
+    }
+
+    # Sidecars (p. ej. el colector OpenTelemetry, infra/otel/collector.gcp.yaml): sin puerto, la app habla por localhost.
+    dynamic "containers" {
+      for_each = var.sidecars
+      content {
+        name  = containers.key
+        image = containers.value.image
+        args  = containers.value.args
+
+        dynamic "env" {
+          for_each = containers.value.env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        resources {
+          limits = {
+            cpu    = containers.value.cpu
+            memory = containers.value.memory
+          }
+          cpu_idle = var.cpu_idle
+        }
+
+        dynamic "startup_probe" {
+          for_each = containers.value.health_port == null ? [] : [containers.value.health_port]
+          content {
+            period_seconds    = 5
+            failure_threshold = 24
+            http_get {
+              path = "/"
+              port = startup_probe.value
+            }
           }
         }
       }

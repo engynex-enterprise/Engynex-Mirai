@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
+import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ImagePlus, Plus } from "lucide-react"
@@ -142,6 +143,14 @@ function AdEditor({ ad, campaigns, open, onOpenChange }: { ad: Ad | Omit<Ad, "id
   const upload = async (f?: File, cb?: (url: string) => void) => {
     if (!f) return
     if (!f.type.startsWith("image/") || f.size > 2 * 1024 * 1024) return toast.error("Usa una imagen de máximo 2 MB")
+    if (filesViaApi()) {
+      // v7 (interruptor `files`): bucket público `ads` por la API.
+      try {
+        const r = await uploadFile({ bucket: "ads", body: f, name: f.name })
+        if (r.publicUrl) { if (cb) cb(r.publicUrl); else set("imagen", r.publicUrl) }
+      } catch (e) { toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
+      return
+    }
     const sb = createClient()
     const path = `${crypto.randomUUID()}.${(f.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")}`
     const { error } = await sb.storage.from("ads").upload(path, f, { contentType: f.type })

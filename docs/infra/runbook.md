@@ -1,5 +1,13 @@
 # Runbook de infraestructura de Mirai en GCP
 
+> **v7 (2026-11-02):** el Terraform se reorganizó por capacidades y nubes. `infra/terraform/stack` ahora es
+> `infra/terraform/clouds/gcp/stack` y `infra/terraform/envs/*` es `infra/terraform/clouds/gcp/envs/*` (mismos prefijos
+> de estado; `moved.tf` reubica los recursos). Cloud SQL es la base principal, la región por defecto es `us-east1`,
+> `stages` pasó a `features`, `armor` a `waf` y `cloud_sql` a `postgres`. El CI/CD principal es GitHub Actions
+> (`.github/workflows/deploy.yml`); Cloud Build queda como alternativa. Cómo cambiar de nube y qué cambia:
+> [cambiar-de-nube.md](cambiar-de-nube.md); costos por nube: [costos-por-nube.md](costos-por-nube.md). Lo de abajo
+> sigue valiendo para GCP salvo esas rutas y nombres.
+
 > Cómo operar lo que define `infra/` (estrategia en `docs/infra/estrategia-gcp.md`). Todos los comandos asumen la región `us-west1` y los IDs sugeridos (`engynex-mirai-cicd`, `engynex-mirai-pruebas`, `engynex-mirai-prod`); cámbialos si son otros.
 > Herramientas: `gcloud` (con `gcloud auth login` y `gcloud auth application-default login`), Terraform ≥ 1.9 (probado con 1.16.4), `curl`. Nunca pegues un secreto en un comando que quede en el historial ni en un chat.
 
@@ -19,7 +27,7 @@ export REGION=us-west1 CICD=engynex-mirai-cicd PRUEBAS=engynex-mirai-pruebas PRO
 
 ### 1.2 Primer apply (estado local)
 ```bash
-cd infra/terraform/envs/bootstrap
+cd infra/terraform/clouds/gcp/envs/bootstrap
 cp terraform.tfvars.example terraform.tfvars   # completa IDs, cuenta de facturación, GitHub, correo
 terraform init
 terraform plan -out bootstrap.tfplan
@@ -54,7 +62,7 @@ Cuando los ambientes ya se aplican con `mirai-tf-pruebas` y `mirai-tf-produccion
 
 ### 2.1 Inicializar
 ```bash
-cd infra/terraform/envs/pruebas            # o envs/produccion
+cd infra/terraform/clouds/gcp/envs/pruebas   # o envs/produccion
 cp backend.hcl.example backend.hcl         # bucket = salida state_bucket
 cp terraform.tfvars.example terraform.tfvars
 terraform init -backend-config=backend.hcl

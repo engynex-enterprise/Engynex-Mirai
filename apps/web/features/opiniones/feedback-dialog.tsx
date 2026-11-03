@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import { usePathname, useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ImagePlus, Send } from "lucide-react"
@@ -76,7 +77,12 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
     setBusy(true)
     const sb = createClient()
     let captura: string | null = null
-    if (file) {
+    if (file && filesViaApi()) {
+      // v7 (interruptor `files`): la captura sube por la API a tu carpeta del bucket `feedback`.
+      try {
+        captura = (await uploadFile({ bucket: "feedback", body: file, name: file.name })).key
+      } catch (e) { setBusy(false); return toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
+    } else if (file) {
       const path = `${user.id}/${crypto.randomUUID()}.${(file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")}`
       const up = await sb.storage.from("feedback").upload(path, file, { contentType: file.type, upsert: false })
       if (up.error) { setBusy(false); return toast.error("No se pudo subir la imagen", { description: up.error.message }) }

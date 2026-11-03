@@ -45,6 +45,56 @@ describe("parseModels", () => {
   })
 })
 
+describe("parseModels: nubes de la plataforma (respuestas de ejemplo)", () => {
+  it("Vertex: Model Garden de Google, solo Gemini GA o vista previa pública, sin imágenes ni voz", () => {
+    const list = parseModels("ai_vertex", { publisherModels: [
+      { name: "publishers/google/models/gemini-2.5-flash", versionId: "001", launchStage: "GA" },
+      { name: "publishers/google/models/gemini-3-flash", launchStage: "PUBLIC_PREVIEW" },
+      { name: "publishers/google/models/gemini-2.5-flash-image", launchStage: "GA" },
+      { name: "publishers/google/models/gemini-exp-x", launchStage: "EXPERIMENTAL" },
+      { name: "publishers/google/models/imagen-4.0-generate-001", launchStage: "GA" },
+      { name: "publishers/google/models/gemini-live-2.5-flash", launchStage: "GA" },
+    ] })
+    expect(list.map((m) => m.id)).toEqual(["gemini-2.5-flash", "gemini-3-flash"])
+    expect(list[1].name).toBe("gemini-3-flash (vista previa)")
+    expect(recommended("ai_vertex", list)).toBe("gemini-3-flash")
+  })
+
+  it("Bedrock: modelos de texto activos ON_DEMAND (ListFoundationModels)", () => {
+    const list = parseModels("ai_bedrock", { modelSummaries: [
+      { modelId: "amazon.nova-lite-v1:0", modelName: "Nova Lite", providerName: "Amazon", outputModalities: ["TEXT"], inferenceTypesSupported: ["ON_DEMAND"], modelLifecycle: { status: "ACTIVE" } },
+      { modelId: "anthropic.claude-haiku-4-5-20251001-v1:0", modelName: "Claude Haiku 4.5", providerName: "Anthropic", outputModalities: ["TEXT"], inferenceTypesSupported: ["INFERENCE_PROFILE"], modelLifecycle: { status: "ACTIVE" } },
+      { modelId: "anthropic.claude-v2", outputModalities: ["TEXT"], inferenceTypesSupported: ["ON_DEMAND"], modelLifecycle: { status: "LEGACY" } },
+      { modelId: "amazon.titan-embed-text-v2:0", outputModalities: ["EMBEDDING"], inferenceTypesSupported: ["ON_DEMAND"] },
+      { modelId: "amazon.nova-canvas-v1:0", outputModalities: ["IMAGE"] },
+      { modelId: "cohere.rerank-v3-5:0", outputModalities: ["TEXT"], inferenceTypesSupported: ["ON_DEMAND"] },
+    ] })
+    expect(list.map((m) => [m.id, m.name])).toEqual([["amazon.nova-lite-v1:0", "Amazon Nova Lite"]])
+  })
+
+  it("Bedrock: perfiles de inferencia del sistema (ListInferenceProfiles); el recomendado es Claude Haiku", () => {
+    const list = parseModels("ai_bedrock", { inferenceProfileSummaries: [
+      { inferenceProfileId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0", inferenceProfileName: "US Claude Sonnet 4.5", status: "ACTIVE" },
+      { inferenceProfileId: "us.anthropic.claude-haiku-4-5-20251001-v1:0", inferenceProfileName: "US Claude Haiku 4.5", status: "ACTIVE" },
+      { inferenceProfileId: "us.meta.llama-x", status: "INACTIVE" },
+    ] })
+    expect(list.map((m) => m.id)).toEqual(["us.anthropic.claude-sonnet-4-5-20250929-v1:0", "us.anthropic.claude-haiku-4-5-20251001-v1:0"])
+    expect(recommended("ai_bedrock", list)).toBe("us.anthropic.claude-haiku-4-5-20251001-v1:0")
+  })
+
+  it("Azure OpenAI: solo los que sirven para chat y no están retirados", () => {
+    const list = parseModels("ai_azure", { data: [
+      { id: "gpt-5-mini", created_at: 1754000000, capabilities: { chat_completion: true, inference: true }, lifecycle_status: "generally-available" },
+      { id: "gpt-4o", created_at: 1715000000, capabilities: { chat_completion: true }, lifecycle_status: "deprecated" },
+      { id: "text-embedding-3-large", capabilities: { chat_completion: false, embeddings: true } },
+      { id: "gpt-image-1", capabilities: { chat_completion: false } },
+    ] })
+    expect(list.map((m) => m.id)).toEqual(["gpt-5-mini"])
+    expect(list[0].created).toBe(1754000000)
+    expect(recommended("ai_azure", list)).toBe("gpt-5-mini")
+  })
+})
+
 describe("recommended", () => {
   it("Gemini: el Flash estable más nuevo (por versión), no la vista previa", () => {
     const list = [{ id: "gemini-2.5-flash" }, { id: "gemini-3.8-flash" }, { id: "gemini-4-flash-preview" }, { id: "gemini-3.8-pro" }]

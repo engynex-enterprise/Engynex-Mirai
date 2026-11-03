@@ -17,7 +17,7 @@ Mirai: finanzas personales y familiares para Colombia, en español, para persona
 - Plan v6: `docs/arquitectura/v6-separacion-front-back.md`.
 
 ## Comandos (desde la raíz, con pnpm)
-`pnpm dev` · `pnpm build` · `pnpm typecheck` · `pnpm lint` · `pnpm test` (Vitest de todos los paquetes) · `pnpm test:e2e` (Playwright 1366 px y 400 px) · `pnpm db:migrate` · `pnpm db:types` · `pnpm --filter web pwa:assets` (y demás scripts de la web)
+`pnpm dev` · `pnpm build` · `pnpm typecheck` · `pnpm lint` · `pnpm test` (Vitest de todos los paquetes) · `pnpm test:e2e` (Playwright 1366 px y 400 px) · **`pnpm e2e:local`** (la misma batería contra Docker local, sin tocar Supabase: úsala por defecto; `infra/local/README.md`) · `pnpm local:test` (RLS, PostgREST y tiempo real contra Docker) · `pnpm migrate:ensayo` · `pnpm db:migrate` · `pnpm db:types` · `pnpm --filter web pwa:assets` (y demás scripts de la web)
 
 ## Reglas no negociables
 1. UI y textos en español de Colombia, tuteo, lenguaje simple. Cada sección: `PageHeader` + `HELP`; cada modal: descripción (`MDESC`); cada campo: ayuda (`fieldHelp`).

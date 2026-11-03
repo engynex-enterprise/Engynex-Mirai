@@ -58,7 +58,13 @@ export const DEFAULT_CREDIT_USD = 0.001
  */
 export const DEFAULT_CUPOS: Record<string, number | null> = { premium: 1000, gratis: 100 }
 
-const bare = (model: string) => model.toLowerCase().replace(/^[a-z0-9-]+\//, "").replace(/:free$/, "")
+// Bedrock nombra los modelos "[región.]proveedor.modelo[-vN:M]" (us.anthropic.claude-haiku-4-5-20251001-v1:0): se compara
+// solo "modelo", así Claude, GPT OSS o Llama en Bedrock usan el mismo precio de la lista del proveedor (estimado).
+const BEDROCK_ID = /^(?:(?:us|eu|apac|global|jp|au|ca|us-gov)\.)?(?:anthropic|amazon|meta|mistral|cohere|ai21|deepseek|openai|qwen|google|writer|moonshot|minimax)\.(.+?)(?:-v\d+(?::\d+)?)?$/
+const bare = (model: string) => {
+  const m = model.toLowerCase().replace(/^[a-z0-9-]+\//, "").replace(/:free$/, "")
+  return BEDROCK_ID.exec(m)?.[1] ?? m
+}
 
 /** Precio de un modelo: primero lo que puso el administrador, luego la tabla, luego el de respaldo. */
 export function priceFor(model: string | null | undefined, overrides: PriceTable = {}): Price & { known: boolean } {
@@ -109,6 +115,9 @@ export const CHEAP_MODEL: Record<string, string> = {
   ai_gemini: "gemini-flash-lite-latest",
   ai_anthropic: "claude-haiku-4-5",
   ai_openai: "gpt-5-nano",
+  // Vertex AI: los mismos modelos y precios de Gemini. Bedrock y Azure no tienen barato fijo: en Bedrock depende de los
+  // modelos habilitados en la cuenta y en Azure de los despliegues creados (usa `modelSimple` en la configuración).
+  ai_vertex: "gemini-2.5-flash-lite",
 }
 
 /**

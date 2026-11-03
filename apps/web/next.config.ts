@@ -3,6 +3,10 @@ import { securityHeaders } from "./lib/security/headers";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // v7 (infra/local): la E2E local compila en .next-local para no pisar el build normal (`pnpm e2e:local`).
+  distDir: process.env.MIRAI_NEXT_DIST_DIR || ".next",
+  // v7 (web sin Vercel): servidor Node autónomo para el contenedor (infra/docker/web.Dockerfile). Vercel lo ignora.
+  output: "standalone",
   cacheComponents: true,
   // Paquetes del monorepo (código TypeScript sin compilar): Next los compila como parte de la app.
   transpilePackages: ["@mirai/domain", "@mirai/db", "@mirai/contracts", "@mirai/crypto", "@mirai/services", "@mirai/ai"],

@@ -18,6 +18,7 @@ import { useCaptcha } from "./turnstile"
 import { GoogleButton } from "./google-button"
 import { PasswordMeter, passwordScore } from "./password-meter"
 import { AuthDone, AuthHeader, PasswordInput } from "./auth-ui"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 const FORM_ID = "registro"
 
@@ -44,9 +45,22 @@ export function RegisterForm() {
   // Referidos: /registro?ref=CÓDIGO queda en una cookie (sirve también si se registra con Google).
   const ref = typeof window !== "undefined" ? new URLSearchParams(location.search).get("ref")?.toUpperCase() ?? null : null
   useEffect(() => { if (ref && /^[A-Z0-9]{6,12}$/.test(ref)) document.cookie = `mirai_ref=${ref}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax` }, [ref])
-  const { data: abierto } = useQuery({ queryKey: ["registro-abierto"], queryFn: async () => (await createClient().rpc("registro_abierto")).data ?? true, staleTime: 60_000 })
+  const { data: abierto } = useQuery({
+    queryKey: ["registro-abierto"],
+    queryFn: async () => (isMiraiAuth() ? (await (await import("@/lib/auth/mirai")).authConfig()).registroAbierto : ((await createClient().rpc("registro_abierto")).data ?? true)),
+    staleTime: 60_000,
+  })
+
+  /** AUTH_PROVIDER=mirai: Better Auth guarda nombre, aceptación legal (Ley 1581) y referido para handle_new_user(). */
+  async function onSubmitMirai(v: Values) {
+    const r = await (await import("@/lib/auth/mirai")).signUp({ nombre: v.nombre.trim(), email: v.email, password: v.password, ref, captcha: captcha.token })
+    captcha.reset()
+    if (!r.ok) return toast.error("No pudimos crear tu cuenta", { description: r.msg })
+    setSentTo(v.email)
+  }
 
   async function onSubmit(v: Values) {
+    if (isMiraiAuth()) return onSubmitMirai(v)
     const { error } = await createClient().auth.signUp({
       email: v.email,
       password: v.password,

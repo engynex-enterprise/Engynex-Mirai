@@ -83,7 +83,9 @@ describe("zod en español", () => {
 describe("índice", () => {
   it("lista un namespace por módulo de la API (§2.6)", () => {
     const mods = Object.values(all).filter((v) => typeof v === "object" && v !== null && "meta" in v && typeof v.meta === "object" && v.meta !== null && "owner" in v.meta)
-    expect(mods.length).toBe(31)
+    // 31 de la v6 + `auth` (v7, V7-A). Cada módulo nuevo de v7 suma aquí.
+    expect(mods.length).toBe(32)
+    expect(mods.map((m) => (m as { meta: { id: string } }).meta.id)).toContain("auth")
   })
 })
 

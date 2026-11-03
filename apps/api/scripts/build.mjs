@@ -41,7 +41,9 @@ function runner() {
 
 const options = {
   absWorkingDir: root,
-  entryPoints: { main: "src/main.ts" },
+  // auth-migrate: migración de usuarios Supabase → auth propio (V7-A, src/modules/auth/migrate/cli.ts).
+  // storage-copy: copia de Supabase Storage al ObjectStore destino (V7-E, src/tools/storage-copy.ts).
+  entryPoints: { main: "src/main.ts", "auth-migrate": "src/modules/auth/migrate/cli.ts", "storage-copy": "src/tools/storage-copy.ts" },
   outdir: "dist",
   bundle: true,
   platform: "node",
