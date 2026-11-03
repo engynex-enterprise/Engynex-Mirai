@@ -1,0 +1,27 @@
+{
+  "name": "@mirai/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tipos de la base (supabase gen types), Row/Insert/Update/qk y scripts de migración. El SQL vive en supabase/migrations (raíz).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./database.types": "./src/database.types.ts",
+    "./tables": "./src/tables.ts"
+  },
+  "scripts": {
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:migrate:prod": "node scripts/db-migrate.mjs --prod",
+    "db:types": "node scripts/db-types.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@mirai/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "eslint": "^9",
+    "pg": "^8.23.1",
+    "supabase": "^2.122.0",
+    "typescript": "^5"
+  }
+}

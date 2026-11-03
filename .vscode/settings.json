@@ -1,1 +1,1 @@
-{ "files.exclude": { "tests/.out": true, "**/node_modules": true }, "search.exclude": { "dist/**": true, "vendor/**": true, "iso/iso.json": true }, "editor.wordWrap": "on", "files.encoding": "utf8" }
+{ "files.exclude": { "**/tests/.out": true, "**/.turbo": true, "**/node_modules": true }, "search.exclude": { "dist/**": true, "vendor/**": true, "iso/iso.json": true }, "editor.wordWrap": "on", "files.encoding": "utf8" }

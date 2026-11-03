@@ -3,7 +3,7 @@ server/node_modules/
 server/.env
 .env
 server/data/
-tests/.out/
+**/tests/.out/
 dist/app.check.js
 .DS_Store
 *.log
@@ -22,3 +22,9 @@ test-results/
 legacy/dist/app.check.js
 legacy/server/public/
 .claude/settings.local.json
+
+# Monorepo (pnpm + Turborepo)
+.turbo/
+**/.turbo/
+# Enlace a la .env.local de la raíz (ver docs/DEPLOY-VERCEL.md › Monorepo)
+apps/web/.env.local

@@ -7,8 +7,16 @@ Guía corta para agentes de código. **Lee `CLAUDE.md` para el contexto completo
 ## Proyecto
 Mirai: finanzas personales y familiares para Colombia, en español, para personas sin conocimientos financieros. **v5.0 (migración completa):** Next.js 16 (App Router, `cacheComponents`) + React 19 + Tailwind 4 + shadcn + Supabase (Postgres con RLS, Auth, Realtime, Storage), desplegado en Vercel. La v4 (HTML único) vive en `legacy/` como referencia.
 
-## Comandos
-`npm run dev` · `npm run build` · `npm run typecheck` · `npm run lint` · `npm run test` (Vitest) · `npm run test:e2e` (Playwright 1366 px y 400 px) · `npm run db:migrate` · `npm run db:types`
+## Estructura (monorepo pnpm + Turborepo, v6 F2-A)
+- `apps/web`: la app Next.js (app/, components/, features/, hooks/, lib/, public/, tests/e2e). Vercel: Root Directory `apps/web`.
+- `apps/api`: NestJS (fase 2; hoy solo la prueba previa de ts-rest + zod 4 en `test/spike`).
+- `packages/domain` (`@mirai/domain`): lógica pura y sus pruebas (antes `lib/domain`, roles, planes, motor de automatizaciones, armado del libro). `apps/web/lib/...` la re-exporta: los `import "@/lib/domain/…"` siguen sirviendo, pero **el código se edita en `packages/domain/src`**.
+- `packages/db` (`@mirai/db`): tipos de la base y scripts `db:migrate` / `db:types`. `packages/contracts` (`@mirai/contracts`): zod compartido, `LIVE_TABLES`, `LIMITS`, `BOOK_TABLE_POLICY`. `packages/config`: tsconfig, ESLint, Prettier, Vitest.
+- En la raíz: `supabase/migrations`, `legacy/`, `docs/` y la `.env.local` (`apps/web/.env.local` es un enlace a ella).
+- Plan v6: `docs/arquitectura/v6-separacion-front-back.md`.
+
+## Comandos (desde la raíz, con pnpm)
+`pnpm dev` · `pnpm build` · `pnpm typecheck` · `pnpm lint` · `pnpm test` (Vitest de todos los paquetes) · `pnpm test:e2e` (Playwright 1366 px y 400 px) · `pnpm db:migrate` · `pnpm db:types` · `pnpm --filter web pwa:assets` (y demás scripts de la web)
 
 ## Reglas no negociables
 1. UI y textos en español de Colombia, tuteo, lenguaje simple. Cada sección: `PageHeader` + `HELP`; cada modal: descripción (`MDESC`); cada campo: ayuda (`fieldHelp`).
@@ -18,5 +26,6 @@ Mirai: finanzas personales y familiares para Colombia, en español, para persona
 5. Valores tributarios/laborales de Colombia en tablas `ref_*` con fuente oficial; se muestran como estimados.
 6. Logos de terceros (Google, Netflix, Telegram…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; monograma si no hay logo libre). Nunca como decoración ni como logo de Mirai. Responsive móvil primero, sin scroll horizontal a 400 px.
 7. Cada cambio: build → pruebas → capturas. Nada de la v4 se omite (ver `docs/migracion/`).
-8. Cálculos nuevos o portados: en `lib/domain/` con prueba Vitest; si existían en la v4, compáralos contra el bundle (`lib/domain/__tests__/legacy.ts`).
+8. Cálculos nuevos o portados: en `packages/domain/src/` con prueba Vitest; si existían en la v4, compáralos contra el bundle (`packages/domain/src/__tests__/legacy.ts`). El dominio no importa nada de `apps/web`.
 9. Archivos `"use server"` solo exportan funciones async; valida la entrada con zod y revisa el rol con `requireRole`.
+10. pnpm es estricto: cada paquete declara en su `package.json` lo que importa. Tablas nuevas en vivo: `packages/contracts/src/live.ts` + publicación (migración).

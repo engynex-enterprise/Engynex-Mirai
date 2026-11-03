@@ -73,7 +73,7 @@ y aguantan que Android los recorte en círculo. Cada vista abre el formulario co
   (`proxy.ts` y `utils/supabase/middleware.ts`). Cabeceras en `next.config.ts` (`Cache-Control: no-cache` y
   `Service-Worker-Allowed: /` para el SW). La CSP (`lib/security/headers.ts`) ya permite `worker-src 'self'` y
   `manifest-src 'self'`.
-- El SW se registra solo en producción (`npm run build && npx next start`); en `npm run dev` no.
+- El SW se registra solo en producción (`pnpm build && pnpm start`); en `pnpm dev` no.
 - Push: `lib/notify/channels.ts` › `sendPush` acepta `actions` (máx. 2), `badge`, `image`, `requireInteraction`,
   `renotify`. El resumen diario trae "Ver pagos" y "Registrar gasto".
 - No se usa Periodic/Background Sync: los avisos ya llegan por push y el cron, y sincronizar datos en segundo plano
@@ -91,17 +91,17 @@ y aguantan que Android los recorte en círculo. Cada vista abre el formulario co
 ## Regenerar íconos, splash y capturas
 
 ```bash
-npm run pwa:assets                    # íconos, accesos directos, splash de iPhone/iPad y capturas de muestra (sharp)
-npm run pwa:assets -- --sin-capturas  # todo menos las capturas
+pnpm --filter web pwa:assets          # íconos, accesos directos, splash de iPhone/iPad y capturas de muestra (sharp)
+pnpm --filter web pwa:assets --sin-capturas  # todo menos las capturas
 # Capturas reales con Playwright (app corriendo y una cuenta con datos de ejemplo, nunca de una persona real):
-BASE_URL=http://localhost:3100 PWA_EMAIL=… PWA_PASSWORD=… npm run pwa:screenshots
+BASE_URL=http://localhost:3100 PWA_EMAIL=… PWA_PASSWORD=… pnpm --filter web pwa:screenshots
 npx vitest run lib/pwa                # revisa que todo exista con su tamaño
 ```
 
-- Agregar un acceso directo: súmalo a `PWA_SHORTCUTS` (máx. 10; `short_name` ≤ 12 letras), corre `npm run pwa:assets` y
+- Agregar un acceso directo: súmalo a `PWA_SHORTCUTS` (máx. 10; `short_name` ≤ 12 letras), corre `pnpm --filter web pwa:assets` y
   la prueba.
 - Un iPhone nuevo: agrega su tamaño en `lib/pwa/splash.ts › APPLE_DEVICES` y regenera.
-- `sharp` viene con Next (dependencia opcional). Si faltara: `npm i -D sharp`.
+- `sharp` es dependencia de desarrollo de `apps/web` (con pnpm no se puede usar la que trae Next).
 
 ## Probar en un dispositivo real (pendiente de QA manual)
 

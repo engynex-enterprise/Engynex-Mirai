@@ -1,0 +1,26 @@
+{
+  "name": "@mirai/domain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Lógica de negocio pura de Mirai (cálculos, roles, planes, motor de automatizaciones, armado del libro). Corre en el navegador, en Next y en la API.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@mirai/db": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@mirai/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "@mirai/config/tsconfig.library.json",
+  "compilerOptions": {
+    // NestJS: decoradores "legacy" + metadatos (F2-B agrega swc/unplugin-swc para emitDecoratorMetadata en Vitest).
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "lib": ["ES2023", "DOM"],
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "test/**/*.tsx", "vitest.config.mts"]
+}

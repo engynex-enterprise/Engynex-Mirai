@@ -1,0 +1,85 @@
+# CI de Mirai (F2-A-7, docs/arquitectura/v6-separacion-front-back.md §8).
+# - En cada PR y push a pruebas/main: lint, typecheck, Vitest y build con Turborepo (caché local de turbo en Actions).
+# - E2E (Playwright): contra el despliegue de pruebas de Vercel cuando termina (deployment_status), nunca contra
+#   un servidor local en CI. La base es compartida: las E2E usan solo el usuario QA (tests/e2e/qa.ts).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [pruebas, main]
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "URL del despliegue para las E2E (vacío = no correr E2E)"
+        required: false
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    if: github.event_name != 'deployment_status'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: America/Bogota
+      # Valores públicos (los mismos de Vercel › Config). Los secretos del servidor no hacen falta para compilar:
+      # lib/env.ts solo exige que existan, así que en CI van marcadores.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_ci_placeholder' }}
+      NEXT_PUBLIC_SITE_URL: https://engynex-mirai-pruebas.vercel.app
+      SUPABASE_SECRET_KEY: ci-placeholder-no-real-secret
+      ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtYmFzZTY0LXh4eA==
+      CRON_SECRET: ci-placeholder-cron-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # usa "packageManager" de package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+      # Las pruebas de paridad con la v4 compilan legacy/dist/app.check.js con python3 (viene en el runner).
+      - run: pnpm turbo run lint typecheck test build --cache-dir=.turbo/cache
+
+  e2e:
+    # Despliegue de Vercel listo en la rama pruebas (Preview) o corrida manual con una URL.
+    if: >-
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' && github.event.deployment.ref == 'pruebas') ||
+      (github.event_name == 'workflow_dispatch' && inputs.base_url != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TZ: America/Bogota
+      E2E_BASE_URL: ${{ inputs.base_url || github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      E2E_QA_EMAIL: ${{ secrets.E2E_QA_EMAIL }}
+      E2E_QA_PASSWORD: ${{ secrets.E2E_QA_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - run: pnpm --filter web exec playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-e2e
+          path: apps/web/tests/.out
+          retention-days: 7

@@ -1,6 +1,6 @@
 # Desplegar Mirai en Vercel
 
-1. Importa el repositorio en Vercel (Framework: Next.js, Root Directory: raíz).
+1. Importa el repositorio en Vercel (Framework: Next.js, **Root Directory: `apps/web`**, pnpm + Turborepo). Desde la v6 (F2-A) el repositorio es un monorepo: ver [Monorepo](#monorepo-pnpm--turborepo-v6-f2-a) abajo.
 2. Carga las variables en **Settings › Environment Variables** con el tipo correcto:
 
 | Variable | Tipo en Vercel | Por qué |
@@ -15,7 +15,7 @@
 | `GOOGLE_CLIENT_ID` | Config | |
 | `GOOGLE_CLIENT_SECRET` | **Sensitive** | |
 | `AI_GATEWAY_API_KEY` | **Sensitive** | Vercel AI Gateway (requiere tarjeta registrada en Vercel). |
-| `SUPABASE_DB_URL` | — (no subir) | Solo para `npm run db:migrate` en local. |
+| `SUPABASE_DB_URL` | — (no subir) | Solo para `pnpm db:migrate` en local. |
 
 Nunca pongas el prefijo `NEXT_PUBLIC_` a un secreto: todo lo que lo lleva se incluye en el JavaScript del navegador.
 
@@ -57,6 +57,46 @@ Nunca pongas el prefijo `NEXT_PUBLIC_` a un secreto: todo lo que lo lleva se inc
     - **Plantillas de WhatsApp (consola › WhatsApp, `/admin/whatsapp`):** lista las plantillas de la cuenta (estado, motivo de rechazo, vista previa), crea, edita y elimina plantillas en Meta (`lib/notify/wa-templates.ts` valida las reglas; `lib/notify/wa-meta.ts` sube el ejemplo de imagen con la Resumable Upload API usando el ID de la app del token) y asigna una plantilla por caso (resumen, pagos, cobros, presupuesto, hormiga, inversiones, metas, automatización, prueba) con el dato de Mirai de cada variable. Se guarda en `platform_integrations.config` (`template`, `lang` y `wa`). Al enviar, Mirai lee la plantilla real de Meta (caché de 10 min) y arma todos los componentes: encabezado de imagen/video/documento/texto, cuerpo y botones con parámetros. La imagen del encabezado es un enlace público: se sube al bucket público `public-assets/whatsapp/…` de Supabase (los *media id* de Meta vencen a los 30 días); sin imagen se usa `/brand/whatsapp-header.png` del sitio en https (`publicSiteUrl()`, nunca localhost; se regenera con `node scripts/whatsapp-header.mjs`).
     - **Pruebas y diagnóstico:** cada tarjeta tiene *Probar* (valida la cuenta) y, en correo y WhatsApp, *Enviar prueba* a un destino (funciona aunque esté apagada). Todos los intentos (resúmenes, pruebas, invitaciones, contador) quedan en consola › Registro de envíos (`notification_log`: canal, estado, destino enmascarado y error; sin el contenido).
 
+## Monorepo (pnpm + Turborepo, v6 F2-A)
+
+Desde F2-A (`docs/arquitectura/v6-separacion-front-back.md` §8) el repositorio es un monorepo:
+
+```
+package.json · pnpm-workspace.yaml · pnpm-lock.yaml · turbo.json   (raíz: scripts de Turborepo)
+apps/web        el Next.js de siempre (app/, components/, features/, lib/, public/, tests/e2e, vercel.json)
+apps/api        NestJS (fase 2; F2-B lo llena)
+packages/domain · packages/db · packages/contracts · packages/config
+supabase/migrations · legacy/ · docs/   (siguen en la raíz)
+```
+
+### Ajustes del proyecto `engynex-mirai` en Vercel
+
+| Ajuste (Settings › Build and Deployment) | Antes | Ahora |
+|---|---|---|
+| **Root Directory** | (raíz) | `apps/web` |
+| Include files outside the Root Directory in the Build Step | activado | **activado** (obligatorio: `packages/*`, `pnpm-lock.yaml`, `legacy/` para las pruebas) |
+| Framework Preset | Next.js | Next.js (sin cambio) |
+| **Build Command** | (por defecto) | `turbo run build` (Vercel trae `turbo` global, usa la versión del repo e infiere `--filter=web` por el Root Directory) |
+| Install Command | (por defecto) | (por defecto: Vercel ve `pnpm-lock.yaml` en la raíz e instala todo el workspace) |
+| Output Directory | (por defecto) | (por defecto: `.next` de `apps/web`) |
+| Node.js Version | 26.x | 26.x (sin cambio) |
+| Variable `ENABLE_EXPERIMENTAL_COREPACK` | — | `1` en Production y Preview, para que use exactamente `pnpm@10.34.9` (`packageManager` de la raíz). Sin ella Vercel elige pnpm 9 o 10 según el lockfile (`lockfileVersion: 9.0`), que también sirve. |
+
+- **No** pongas `pnpm install` como Install Command a mano: con un comando propio Vercel usa la versión más vieja de pnpm del contenedor.
+- `vercel.json` (región `pdx1` y el cron diario `/api/cron/notify?daily=1`) ahora está en `apps/web/vercel.json`: Vercel lo lee del Root Directory.
+- Turborepo en Vercel usa la caché remota de Vercel sola. La clave del build incluye `NEXT_PUBLIC_*`, `VERCEL_GIT_COMMIT_SHA` (se incrusta en `NEXT_PUBLIC_BUILD_ID`), `VERCEL_DEPLOYMENT_ID`, `VERCEL_ENV`, `MIRAI_CSP_ENFORCE` y `SENTRY_*` (`turbo.json`). `envMode: "loose"`: el build ve todas las variables, como antes.
+- El build de la web corre `node scripts/gen-icons.mjs && next build` (antes era `prebuild`; pnpm no corre los `pre*` por defecto).
+- **Orden al publicar:** el Root Directory vale para todas las ramas. Cámbialo justo antes de subir a `pruebas` el commit del monorepo. Mientras `main` no tenga el monorepo, un *redeploy* de producción fallaría (lo publicado sigue arriba); por eso el merge a `main` debe ir poco después de validar pruebas. Para volver atrás: Root Directory vacío y Build Command por defecto.
+
+### Local
+
+- `pnpm install` en la raíz (con `corepack enable`, `pnpm` toma la versión de `packageManager`).
+- **`.env.local` vive en la raíz** (la leen `packages/db` y los scripts). `apps/web/.env.local` debe existir para Next, Playwright y Vitest: es un **enlace simbólico** a la de la raíz (`ln -s ../../.env.local apps/web/.env.local`, ignorado por git). `.env.produccion.local` también va en la raíz.
+- `pnpm dev` · `pnpm build` · `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm test:e2e` (compila y corre Playwright en `apps/web`; capturas en `apps/web/tests/.out/`) · `pnpm db:migrate` · `pnpm db:types` (escribe `packages/db/src/database.types.ts`).
+- Scripts propios de la web: `pnpm --filter web pwa:assets`, `pwa:screenshots`, `legacy:extract`, `icons`.
+- E2E contra un despliegue: `E2E_BASE_URL=https://… VERCEL_AUTOMATION_BYPASS_SECRET=… pnpm --filter web exec playwright test` (no levanta `next start`).
+- CI (`.github/workflows/ci.yml`): `turbo run lint typecheck test build` en cada PR y push; Playwright contra el despliegue de `pruebas` cuando Vercel avisa que terminó (`deployment_status`). Secretos de GitHub: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `E2E_QA_EMAIL`, `E2E_QA_PASSWORD` y `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel › Deployment Protection › Protection Bypass for Automation).
+
 ## Ambientes: producción y pruebas
 
 | | Producción | Pruebas |
@@ -79,10 +119,10 @@ El plan gratis de Supabase permite 2 proyectos activos por dueño. Cuando haya c
 
 1. Crea el proyecto "Mirai Pruebas" en la misma región (`us-west-2`).
 2. Copia tu `.env.local` actual (producción) a `.env.produccion.local` y cambia en `.env.local` `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` y `SUPABASE_DB_URL` por los del proyecto nuevo. Usa también un `ENCRYPTION_KEY` nuevo (las integraciones se configuran aparte en cada ambiente).
-3. `npm run db:migrate` aplica las migraciones a pruebas; `npm run db:migrate:prod` a producción (lee `.env.produccion.local`).
+3. `pnpm db:migrate` aplica las migraciones a pruebas; `pnpm db:migrate:prod` a producción (lee `.env.produccion.local`).
 4. En Supabase (proyecto nuevo) › Authentication: *Site URL* = la dirección de pruebas, *Redirect URLs* = esa dirección y `http://localhost:3000/**`; activa Google con el mismo cliente OAuth, TOTP (MFA) y *Manual linking*. En Google Cloud agrega `https://<ref-nuevo>.supabase.co/auth/v1/callback`.
 5. En Vercel › Environment Variables, deja las cuatro variables de Supabase y `ENCRYPTION_KEY` solo en **Production** y créalas de nuevo en **Preview** (rama `pruebas`) con los valores del proyecto nuevo. Vuelve a desplegar `pruebas`.
-6. Desde ese momento las pruebas automáticas (`npm run test:e2e`) y `npm run dev` usan la base de pruebas.
+6. Desde ese momento las pruebas automáticas (`pnpm test:e2e`) y `pnpm dev` usan la base de pruebas.
 
 ## Administradores de la plataforma
 

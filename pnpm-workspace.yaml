@@ -1,0 +1,16 @@
+# Monorepo de Mirai (docs/arquitectura/v6-separacion-front-back.md §0.3 y §6).
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 no corre los scripts de instalación de las dependencias salvo las que se listan aquí
+# (binarios nativos: sharp para las imágenes PWA, esbuild para Vitest/tsx, la CLI de Supabase, Sentry…).
+onlyBuiltDependencies:
+  - "@sentry/cli"
+  - "@swc/core"
+  - "@tailwindcss/oxide"
+  - esbuild
+  - protobufjs
+  - sharp
+  - supabase
+  - unrs-resolver

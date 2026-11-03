@@ -4,6 +4,7 @@
 
 > Punto de entrada para Claude Code y cualquier agente. Reglas de dominio en `.agents/rules/`.
 > **Estado: v5.0 (Next.js + shadcn + Supabase). Todas las secciones de la v4.0 (en `legacy/`) están migradas.**
+> **Monorepo v6 (F2-A):** pnpm workspaces + Turborepo. La app Next está en `apps/web`; la lógica pura en `packages/domain`; tipos de la base en `packages/db`; contratos compartidos en `packages/contracts`; `apps/api` (NestJS) llega con F2-B. Plan: `docs/arquitectura/v6-separacion-front-back.md`.
 > Diseño aprobado: `docs/superpowers/specs/2026-10-31-migracion-nextjs-design.md`. Lista de control funcional: `docs/migracion/inventario-1…5.md` (nada de la v4 se omite).
 
 ## 1. Qué es Mirai
@@ -14,19 +15,42 @@
 - **Ambientes:** producción = rama `main` → https://mirai.engynex.com · pruebas = rama `pruebas` → https://engynex-mirai-pruebas.vercel.app. Hoy comparten la base de Supabase; cómo separarla en `docs/DEPLOY-VERCEL.md`.
 
 ## 2. Comandos
+Desde la raíz (pnpm 10 con `corepack enable`; Turborepo guarda en caché build, typecheck, lint y test por paquete):
 ```bash
-npm run dev          # http://localhost:3000 (lee .env.local)
-npm run build        # build de producción (debe pasar sin errores)
-npm run typecheck    # next typegen + tsc
-npm run lint         # ESLint (0 errores)
-npm run test         # Vitest: cálculos puros (lib/domain)
-npm run test:e2e     # Playwright escritorio 1366 px + móvil 400 px (crea el usuario QA con la clave secreta)
-npm run db:migrate   # aplica supabase/migrations/*.sql en orden (SUPABASE_DB_URL de .env.local; :prod lee .env.produccion.local)
-npm run db:types     # regenera lib/supabase/database.types.ts desde la BD
+pnpm install         # todo el workspace (apps/* y packages/*)
+pnpm dev             # http://localhost:3000 (apps/web; lee apps/web/.env.local → enlace a la .env.local de la raíz)
+pnpm build           # build de producción (turbo run build; la web corre gen-icons + next build)
+pnpm typecheck       # next typegen + tsc en la web, tsc en cada paquete
+pnpm lint            # ESLint (0 errores)
+pnpm test            # Vitest: packages/domain (cálculos + paridad v4), packages/contracts, apps/web, apps/api (spike)
+pnpm test:e2e        # Playwright escritorio 1366 px + móvil 400 px en apps/web (compila antes; crea el usuario QA)
+pnpm db:migrate      # aplica supabase/migrations/*.sql en orden (SUPABASE_DB_URL de la .env.local de la raíz; :prod lee .env.produccion.local)
+pnpm db:types        # regenera packages/db/src/database.types.ts desde la BD
+pnpm --filter web <script>   # scripts propios de la web: pwa:assets, pwa:screenshots, legacy:extract, icons, start
+pnpm --filter @mirai/domain test   # solo el dominio (o cualquier paquete por su nombre)
 ```
-Tras tocar el esquema: `db:migrate` → `db:types` → `typecheck`. Antes de cerrar un cambio: `build` + `test:e2e` y revisar capturas en `tests/.out/`.
+Tras tocar el esquema: `db:migrate` → `db:types` → `typecheck`. Antes de cerrar un cambio: `build` + `test:e2e` y revisar capturas en `apps/web/tests/.out/`.
 
 ## 3. Arquitectura
+Monorepo (pnpm + Turborepo):
+```
+package.json · pnpm-workspace.yaml · turbo.json   raíz: solo scripts de Turborepo y prettier
+apps/web/        el Next.js (todo lo de abajo vive aquí; Vercel: Root Directory apps/web, vercel.json aquí)
+apps/api/        NestJS (fase 2): hoy solo package.json y la prueba previa de ts-rest + zod 4 (test/spike); F2-B lo llena
+packages/domain/ @mirai/domain: lógica pura (antes lib/domain + lib/household/roles, lib/plans, lib/integrations/resolve,
+                 lib/automations/{engine,schema,types,limits,catalog}, el armado de lib/book-data) con sus pruebas Vitest
+packages/db/     @mirai/db: database.types.ts (generado), tables.ts (Row/Insert/qk), scripts db-migrate y db-types
+packages/contracts/ @mirai/contracts: zod común (Uuid, Money, IsoDate, ApiError), zod-es, LIVE_TABLES, LIMITS,
+                 BOOK_TABLE_POLICY (CRUD del libro) y un stub por módulo de la API
+packages/config/ @mirai/config: tsconfig base, ESLint de paquetes, Prettier y preset de Vitest
+supabase/migrations · legacy/ · docs/   siguen en la raíz
+```
+**Re-exportaciones:** `apps/web/lib/domain/*.ts`, `lib/plans.ts`, `lib/household/roles.ts`, `lib/integrations/resolve.ts`,
+`lib/automations/{engine,schema,types,limits,catalog}.ts` y `lib/supabase/{database.types,tables}.ts` solo hacen
+`export * from "@mirai/…"`: los `import "@/lib/domain/…"` de siempre siguen funcionando. **El código se edita en `packages/*`.**
+`apps/web/lib/book-data.ts` conserva el cargador de Supabase (`loadBookData(sb, bookId)`, `loadBookPart`) sobre `loadBookDataWith(loader)` del dominio.
+
+Dentro de `apps/web/`:
 ```
 app/
   (auth)/           login (contraseña, enlace mágico, Google), registro (Ley 1581), recuperar, actualizar-clave, verificacion (MFA)
@@ -50,25 +74,27 @@ features/<módulo>/  vista + acciones de cada sección (settings, integrations, 
                     renta, contador, correo, gami, ayuda, profile, household, data…)
 hooks/              use-book-data (useList/useSave/useSoftDelete), use-realtime (canal por libro)
 lib/dal.ts          getAppContext(): usuario, hogar, libro activo (cookie mirai-book) — solo servidor
-lib/domain/         cálculos puros portados 1:1 de la v4 (+ pruebas Vitest contra el bundle de la v4):
-                    totales, préstamos, renta (art. 241), consejero, reportes, logros, agenda/avisos…
+lib/domain/         re-exporta @mirai/domain (packages/domain/src): cálculos puros portados 1:1 de la v4 (+ pruebas
+                    Vitest contra el bundle de la v4): totales, préstamos, renta (art. 241), consejero, reportes, logros…
 lib/ai/             modelo por proveedor (model.ts) y aiText/aiObject con respaldo entre proveedores (run.ts)
 lib/integrations/   registro único de integraciones (registry.ts); secretos con lib/crypto.ts
 lib/notify/         reglas aviso×canal, resumen (digest), correo, Telegram, push y WhatsApp
-lib/book-data.ts    loadBookData(sb, bookId): el libro en la forma de lib/domain (navegador y servidor)
+lib/book-data.ts    loadBookData(sb, bookId): el libro en la forma de lib/domain (navegador y servidor); armado en @mirai/domain/book-data
 lib/content/ayuda.ts  versión, novedades, FAQ, guías y tour
 lib/content/help.ts HELP / MDESC / fieldHelp (textos literales de la v4 en lib/data/legacy-*.json)
 lib/nav.ts          menú efectivo de la v4 → rutas
-lib/supabase/       database.types.ts (generado), tables.ts (tipos + qk), admin.ts (clave secreta, solo servidor)
+lib/supabase/       database.types.ts y tables.ts (re-exportan @mirai/db), admin.ts (clave secreta, solo servidor)
 utils/supabase/     server.ts, client.ts, middleware.ts (patrón oficial de Supabase)
 proxy.ts            Next 16 (antes middleware): refresca la sesión y protege rutas
-supabase/migrations SQL versionado e idempotente
-legacy/             Mirai 4.0 (referencia; `npm run legacy:extract` saca sus datos a lib/data)
+scripts/            gen-icons (también lee packages/domain), pwa-assets, extract-legacy (lee ../../legacy)…
+tests/e2e           Playwright (capturas en apps/web/tests/.out)
 ```
+En la raíz: `supabase/migrations` (SQL versionado e idempotente, fuente única del esquema) y `legacy/` (Mirai 4.0;
+`pnpm --filter web legacy:extract` saca sus datos a `apps/web/lib/data`).
 
 ### Patrones (léelos antes de tocar código)
 - **Next 16 con `cacheComponents`:** todo lo que lea cookies/sesión va dentro de `<Suspense>` con un skeleton. Usa `supabaseServer()` / `getAppContext()` (ya llaman `connection()`).
-- **Datos en cliente:** TanStack Query con claves `qk(bookId, tabla, …)`. `useList`, `useSave` (optimista) y `useSoftDelete` (borrado lógico + toast "Deshacer"). Realtime invalida por tabla: si agregas una tabla, añádela a la publicación (migración) y a `LIVE_TABLES` en `hooks/use-realtime.ts`.
+- **Datos en cliente:** TanStack Query con claves `qk(bookId, tabla, …)`. `useList`, `useSave` (optimista) y `useSoftDelete` (borrado lógico + toast "Deshacer"). Realtime invalida por tabla: si agregas una tabla, añádela a la publicación (migración) y a `LIVE_TABLES` en `packages/contracts/src/live.ts` (lo usa `hooks/use-realtime.ts`). Si es una tabla del libro (`book_id` + `deleted_at`), la compilación exige su fila en `BOOK_TABLE_POLICY` (`packages/contracts/src/book-tables.ts`).
 - **Seguridad:** RLS en todas las tablas con `is_book_member(book_id, rol)` / `is_household_member`. Roles `owner` > `editor` > `viewer`. Secretos solo en el servidor; integraciones cifradas (AES-256-GCM, `ENCRYPTION_KEY`); el cliente lee `integrations_public`.
 - **Borrado lógico:** `deleted_at`; las consultas filtran `deleted_at is null`. La auditoría (`audit_log`) se llena sola por triggers.
 - **Formularios:** react-hook-form + zod 4 + componentes `Field*` de shadcn. Mensajes en español.
@@ -100,10 +126,10 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 ## 6. Reglas de trabajo
 1. Español en UI y respuestas; términos técnicos explicados.
 2. Cambios pequeños y verificables: `build` → `test:e2e` → capturas.
-3. Prueba E2E por funcionalidad (`tests/e2e/`), pruebas Vitest por cálculo (`lib/domain/*.test.ts`) comparadas con la v4.
-4. Cada sección migrada: reemplaza su entrada en `lib/migration-status.ts` por una ruta real en `app/(app)/<id>/page.tsx` y cubre TODO lo de su inventario.
+3. Prueba E2E por funcionalidad (`apps/web/tests/e2e/`), pruebas Vitest por cálculo (`packages/domain/src/*.test.ts`) comparadas con la v4.
+4. Cada sección migrada: reemplaza su entrada en `apps/web/lib/migration-status.ts` por una ruta real en `apps/web/app/(app)/<id>/page.tsx` y cubre TODO lo de su inventario.
 5. Integraciones: registro único (`lib/integrations/registry.ts`), activables/ajustables en Ajustes › Integraciones.
-6. No metas secretos en el código. `.env.local` está en `.gitignore`; producción usa variables de Vercel (`.env.example`).
+6. No metas secretos en el código. `.env.local` (raíz, enlazada desde `apps/web`) está en `.gitignore`; producción usa variables de Vercel (`.env.example`).
 
 ## 7. Gotchas
 - `components/ui/command.tsx`: `CommandDialog` NO envuelve en `<Command>`; hazlo tú.
@@ -120,14 +146,16 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 - Avatares: `profiles.avatar_url` y `family_members.avatar` guardan una URL (Google o bucket `avatars/{user_id}/…`) o `mirai:<clave>` (`lib/content/avatars.ts`); muéstralos siempre con `<UserAvatar>`. Con cédula (CC), `profiles.digitos` sale solo del documento (`digitosDian`).
 - Aviso de hidratación con atributos raros en `<body>` (`cz-shortcut-listen`, `data-gr-*`): es una extensión del navegador (ColorZilla, Grammarly), no un error de Mirai; `<body>` ya tiene `suppressHydrationWarning`.
 - `ResponsiveDialog` fija Dialog/Drawer mientras está abierta (cambiar de uno a otro remonta el formulario y borra lo escrito; las capturas `fullPage` de Playwright redimensionan la ventana).
-- Si un cambio de `app/globals.css` no aparece en la compilación (clases o variables nuevas ausentes en `.next/static/chunks/*.css`), la caché de Turbopack (`.next/cache/turbopack`) quedó vieja: apártala y vuelve a compilar.
+- Si un cambio de `app/globals.css` no aparece en la compilación (clases o variables nuevas ausentes en `apps/web/.next/static/chunks/*.css`), la caché de Turbopack (`apps/web/.next/cache/turbopack`) quedó vieja: apártala y vuelve a compilar (y `pnpm build --force` para saltar la caché de Turborepo).
 - El `globalSetup` de Playwright borra y recrea el usuario QA: no lances dos `playwright test` a la vez (ni contra :3000 mientras corre la batería en :3100). La base es de cómputo pequeño: baterías largas seguidas agotan el presupuesto de disco y todo (Auth incluido) se vuelve lento; espera a que se recupere.
 - Toda clave foránea nueva necesita índice (`20261103003702_indices_fk_todos.sql` creó los que faltaban): sin él, borrar una cuenta o un hogar revisa tablas completas y Auth corta la petición.
 - Si una prueba E2E muestra la página en blanco sin errores, revisa que no haya un `next start` viejo en el puerto 3100 (`lsof -ti:3100`): Playwright lo reutiliza y sirve una compilación que ya no existe.
+- **Monorepo:** pnpm es estricto: si la web importa un paquete, debe estar en `apps/web/package.json` (no basta con que lo traiga otra dependencia). Los paquetes `@mirai/*` se usan como código TypeScript sin compilar (`exports` → `src/*.ts`, `transpilePackages` en `next.config.ts`). `packages/domain` no puede importar nada de `apps/web` (ni `@/…`): si un cálculo necesita algo de la web, pásalo como parámetro.
+- `.env.local` está en la raíz; `apps/web/.env.local` es un enlace simbólico a ella (créalo con `ln -s ../../.env.local apps/web/.env.local` si falta). Nunca la copies a otro lado.
 - Modelos de IA: el campo `type: "model"` del registro se llena con la API de modelos de cada proveedor (`listModels` + `lib/ai/models.ts`); no escribas nombres de modelos a mano en la UI.
 - Las consultas de Supabase son perezosas: `void sb.rpc(...)` **no se envía**; usa `await` o `.then()`.
 - Ventanas que se abren solas (anuncios): esperan a que no haya otra ventana abierta (`whenFree`), dos Radix cruzados bloquean los clics.
 - Los textos del portal del contador y Ajustes › Integraciones nunca reciben secretos: solo `integrations_public` (máscaras).
 
 ## 8. Documentación
-`AGENTS.md` (resumen para otros agentes) · `docs/DEPLOY-VERCEL.md` (variables, cron, Google, Telegram) · `.agents/rules/` · `.claude/agents/` (finanzas-colombia, qa-playwright, ux-simple) · `docs/BACKLOG.md` · `docs/HISTORIAL.md` · `docs/migracion/` · `docs/superpowers/specs/`.
+`AGENTS.md` (resumen para otros agentes) · `docs/DEPLOY-VERCEL.md` (variables, cron, Google, Telegram, monorepo en Vercel) · `docs/arquitectura/v6-separacion-front-back.md` (v6: front Next + API NestJS) · `.agents/rules/` · `.claude/agents/` (finanzas-colombia, qa-playwright, ux-simple) · `docs/BACKLOG.md` · `docs/HISTORIAL.md` · `docs/migracion/` · `docs/superpowers/specs/`.

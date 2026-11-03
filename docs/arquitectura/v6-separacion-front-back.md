@@ -16,7 +16,7 @@
 | Front | El Next.js actual pasa a `apps/web`: SSR de páginas, PWA, portada, sesión (cookies de Supabase Auth) y nada de lógica de negocio en el servidor | Tomada |
 | Back | NestJS (TypeScript) en `apps/api`, en Cloud Run | Tomada |
 | Monorepo | **pnpm workspaces + Turborepo** (§0.3) | Recomendada |
-| Contratos | `packages/contracts`: esquemas zod 4 como fuente única, contrato **ts-rest**, cliente tipado y OpenAPI generado. Plan B: `nestjs-zod` → OpenAPI → `openapi-fetch` (§2.4) | Recomendada, con prueba previa |
+| Contratos | `packages/contracts`: esquemas zod 4 como fuente única, contrato **ts-rest** (3.53.0-rc.1 fijado), cliente tipado y OpenAPI generado con `z.toJSONSchema`. Plan B: `nestjs-zod` → OpenAPI → `openapi-fetch` (§2.4) | **Tomada** tras la prueba F2-A-6 (§7.2, D2) |
 | Acceso a datos | Puertos (repositorios) con dos adaptadores: **`SupabaseJs`** en la fase 2 (PostgREST con el JWT de la persona, misma RLS y cero conexiones nuevas a la base saturada) y **`PgKysely`** para Cloud SQL (`pg` + Kysely, con contexto RLS por transacción) | Recomendada |
 | ORM | **Kysely** (constructor de consultas tipado), no Prisma ni Drizzle (§2.3) | Recomendada |
 | Seguridad por libro u hogar | Doble capa: guardas en el servicio (rol del hogar y plan) y RLS en la base. En Cloud SQL, `set local role authenticated` + `set_config('request.jwt.claims', …, true)` dentro de cada transacción, con un esquema `auth` de compatibilidad (`auth.uid()`, `auth.jwt()`) | Recomendada |
@@ -842,7 +842,7 @@ Desarrollo: `vitest`, `unplugin-swc`, `@swc/core`, `@nestjs/testing`, `supertest
 | # | Decisión | Opciones | Recomendación |
 |---|---|---|---|
 | D1 | Dominio de la API | (a) `api.mirai.engynex.com` + CORS + Bearer; (b) *rewrite* de Vercel `/api/v1/*` → Cloud Run (mismo origen) | **(a)**: sin doble salto ni límites de Vercel en el streaming, y lista para una app nativa. (b) solo si CORS da problemas con algún navegador |
-| D2 | Contrato | ts-rest frente a OpenAPI primero | **ts-rest**, si pasa la prueba con zod 4 |
+| D2 | Contrato | ts-rest frente a OpenAPI primero | **Decidida (F2-A-6, 2026-11-02): ts-rest.** Ver el resultado de la prueba abajo |
 | D3 | ¿Los cálculos se pasan al servidor? | Cliente (hoy) frente a `insights` en la API | **Se quedan en el cliente**; la API los expone solo para el chat, los avisos, el contador y clientes futuros |
 | D4 | Región definitiva | `us-west1` (junto a Supabase) frente a `us-east1` o `southamerica-*` (más cerca de Colombia) | `us-west1` mientras la base esté en Supabase `us-west-2`. **Elegir la región de Cloud SQL y de todo el sistema juntos en la fase 3** (medir latencia desde Bogotá) |
 | D5 | CRUD genérico frente a módulos explícitos | `book-tables` + comandos frente a 33 controladores | **Genérico + comandos** (§2.5), con la política declarativa revisable |
@@ -850,6 +850,21 @@ Desarrollo: `vitest`, `unplugin-swc`, `@swc/core`, `@nestjs/testing`, `supertest
 | D7 | Redis | Ahora frente a cuando entre el gateway | **Cuando entre el gateway.** El límite de tasa sigue con `rate_limit_hit` hasta entonces |
 | D8 | ¿El servicio WS va aparte? | Mismo servicio frente a `mirai-realtime` | **Aparte**, con la misma imagen y `MODE=realtime` |
 | D9 | Versión de la API | `/v1` en la ruta frente a encabezado | **`/v1` en la ruta** |
+
+#### Resultado de la prueba F2-A-6 (ts-rest + zod 4)
+
+Prueba en `apps/api/test/spike/ts-rest-zod4.test.ts` (corre con `pnpm test`): un contrato `PUT/GET /v1/books/:bookId/t/expenses[/:id]` con esquemas de `@mirai/contracts/common`, servido por NestJS 11 + Fastify con `@ts-rest/nest`, consumido con `initClient` y con `@ts-rest/react-query/v5` (`fetchQuery`).
+
+| Qué | Resultado |
+|---|---|
+| Versión | Solo **3.53.0-rc.1** (jun. 2025) acepta zod 4 vía Standard Schema; la estable 3.52.1 (mar. 2025) exige zod 3. No hay versiones nuevas desde entonces. |
+| Tipos | Entradas y salidas se infieren de punta a punta desde zod 4 (`expectTypeOf`). |
+| Validación en Nest | Body, params y query se validan con zod 4; `TsRestRequestValidationError` trae los *issues* y un filtro los convierte en `ApiError` (`VALIDATION`, mensajes en español de `zod-es.ts`). `validateResponses` también funciona (500 si la respuesta no cumple). |
+| Cliente y TanStack Query v5 | Funcionan contra el servidor; `@ts-rest/react-query` declara React ≤ 18 (aviso de *peer*), los tipos compilan con React 19.3. Falta probar los hooks renderizados (F2-H). |
+| NestJS | `@ts-rest/nest` declara Nest ≤ 11. La prueba pasa con Nest 11.2.8 y también con 12.3.2 (solo aviso de *peer*). |
+| OpenAPI | `@ts-rest/open-api` usa por defecto un transformador de zod 3: con zod 4 deja los esquemas **vacíos sin avisar**. Con `schemaTransformer` + `z.toJSONSchema()` (nativo de zod 4) el documento sale completo. |
+
+**Decisión D2:** ts-rest, con estas condiciones: (1) versiones **fijas** `3.53.0-rc.1` de `@ts-rest/{core,nest,react-query,open-api}`; (2) OpenAPI siempre con `schemaTransformer` + `z.toJSONSchema` (nunca el transformador por defecto); (3) NestJS 11 mientras ts-rest no declare 12 (12 funciona, pero sin soporte declarado); (4) ts-rest solo en `packages/contracts` (contratos) y en los controladores: los esquemas zod no dependen de él. Si ts-rest se abandona o rompe con una versión de Nest/React, el plan B (`nestjs-zod` + `z.toJSONSchema` + `openapi-fetch`) reutiliza los mismos esquemas.
 
 ---
 
@@ -875,6 +890,13 @@ F2-A ──► F2-B ──┬──► F2-C ──► F2-D ───────
 7. **F2-A-7** CI: `turbo run lint typecheck test build` en cada PR; Playwright contra el despliegue de pruebas.
 
 **Terminado cuando:** `pnpm i && pnpm turbo build typecheck lint test` en verde; E2E en verde en `pruebas`; Vercel despliega `apps/web` igual que antes (mismas capturas); las pruebas de paridad v4 corren desde `packages/domain`.
+
+**Estado F2-A (2026-11-02, sin commit):** A-1 a A-7 hechos en el árbol de trabajo. `pnpm install`, `pnpm typecheck`, `pnpm lint` (0 errores), `pnpm test` (1 431 dominio + 428 web + 10 contratos + 9 spike) y `pnpm --filter web build` en verde; Turborepo con caché (FULL TURBO en la segunda pasada). Pendiente para cerrar: aplicar los ajustes de Vercel (`docs/DEPLOY-VERCEL.md` › Monorepo), E2E en `pruebas` y comparar capturas. Notas de implementación:
+- `apps/web/lib/{domain/*,plans,household/roles,integrations/resolve,automations/{engine,schema,types,limits,catalog}}.ts` y `lib/supabase/{database.types,tables}.ts` son re-exportaciones (`export * from "@mirai/…"`); `lib/automations/catalog.ts` se movió también porque el motor lo usa.
+- `loadBookData(sb, bookId)` sigue en `apps/web/lib/book-data.ts` sobre `loadBookDataWith(loader)` de `@mirai/domain/book-data`.
+- `LIVE_TABLES`/`HOUSEHOLD_TABLES` (`hooks/use-realtime.ts`), `LIMITS` (`lib/security/rate-limit.ts`) y `BOOK_TABLES` (`features/data/backup.ts`) ahora se importan de `@mirai/contracts`.
+- `BOOK_TABLE_POLICY` cubre las **42** tablas con la forma estándar del libro (`satisfies Record<BookTable, …>`), no solo las 33 de la copia de seguridad; F2-C/F2-D la revisan contra la RLS y le agregan `schema`.
+- Las pruebas que dependían de la web (`lib/brands` y `lib/list-helpers`) pasaron a `apps/web/lib/{brands,list-helpers}.test.ts`; `engine.test.ts`, `schema.test.ts` y `household.test.ts` siguen en la web porque prueban plantillas, `layout` e invitaciones.
 
 ### F2-B — Esqueleto NestJS, autenticación y transversal
 **Dueño de:** `apps/api/src/{main.ts,app.module.ts,otel.ts,core/**}`, `apps/api/Dockerfile`, `apps/api/test/setup/**` y `modules/index.ts` (con todos los stubs). **Depende de:** F2-A-1, A-3, A-5 y A-6.

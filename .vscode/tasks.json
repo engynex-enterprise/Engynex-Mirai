@@ -1,8 +1,8 @@
 {
   "version": "2.0.0",
   "tasks": [
-    { "label": "Mirai: build", "type": "shell", "command": "npm run build", "group": { "kind": "build", "isDefault": true }, "problemMatcher": [] },
-    { "label": "Mirai: pruebas", "type": "shell", "command": "npm test", "group": "test", "problemMatcher": [] },
-    { "label": "Mirai: servidor local", "type": "shell", "command": "npm run dev", "isBackground": true, "problemMatcher": [] }
+    { "label": "Mirai: build", "type": "shell", "command": "pnpm build", "group": { "kind": "build", "isDefault": true }, "problemMatcher": [] },
+    { "label": "Mirai: pruebas", "type": "shell", "command": "pnpm test", "group": "test", "problemMatcher": [] },
+    { "label": "Mirai: servidor local", "type": "shell", "command": "pnpm dev", "isBackground": true, "problemMatcher": [] }
   ]
 }

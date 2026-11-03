@@ -1,0 +1,27 @@
+{
+  "name": "@mirai/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Contratos compartidos entre apps/web y apps/api: esquemas zod 4 (mensajes en español), errores, tablas en vivo, límites y la política del CRUD del libro.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@mirai/db": "workspace:*",
+    "@mirai/domain": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@mirai/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  }
+}
