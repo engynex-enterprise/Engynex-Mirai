@@ -1,63 +1,20 @@
 "use server"
 
-import { z } from "zod"
+import "@/lib/services"
 import { requireRole } from "@/lib/dal"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { supabaseServer } from "@/utils/supabase/server"
-import { googleFetch } from "@/lib/google"
 import { calSyncMsg, calendarConnected, syncCalendarFor } from "@/lib/google-calendar"
-import { aiObject } from "@/lib/ai/run"
-import { mailMayBePurchase } from "@/lib/ai/router"
-import { clip } from "@/lib/ai/compact"
-import { aiSettings } from "@/lib/ai/model"
 import { todayBogota } from "@/lib/domain"
-import { MAILQ_DEFAULT } from "./query"
+import { scanMailWith, type MailScan } from "@mirai/ai/server/mail"
 import { can } from "@/lib/plans"
 
-export type MailRow = { id: string; fecha: string; comercio: string; valor: number; asunto: string; remitente: string }
+export type { MailRow } from "@mirai/ai/server/mail"
 
-const hdr = (m: { payload?: { headers?: { name: string; value: string }[] } }, n: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? ""
-const pnum = (s: string) => { const t = s.replace(/\s/g, ""); const v = /,\d{2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/[.,](?=\d{3}\b)/g, "").replace(",", "."); return Math.round(parseFloat(v) || 0) }
-
-/** Lee las notificaciones del banco en Gmail y extrae las compras (mailScan de la v4). */
-export async function scanMail(query?: string): Promise<{ ok: boolean; rows: MailRow[]; msg?: string; ia?: boolean }> {
+/** Lee las notificaciones del banco en Gmail y extrae las compras (mailScan de la v4). Vive en @mirai/ai/server/mail. */
+export async function scanMail(query?: string): Promise<MailScan> {
   const ctx = await requireRole("editor")
-  if (!can(ctx.plan, "banco")) return { ok: false, rows: [], msg: "Leer el correo del banco no está incluido en tu plan." }
-  const q = (query || MAILQ_DEFAULT).slice(0, 1000)
-  let list: { messages?: { id: string }[] }
-  try { list = await googleFetch(ctx.user.id, "gmail", `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${encodeURIComponent(q)}`) }
-  catch (e) { return { ok: false, rows: [], msg: (e as Error).message } }
-  const ids = (list.messages ?? []).map((m) => m.id)
-  if (!ids.length) return { ok: true, rows: [] }
-  const sb = await supabaseServer()
-  const { data: seen } = await sb.from("expenses").select("external_id").eq("book_id", ctx.book.id).in("external_id", ids.map((i) => `gmail:${i}`))
-  const done = new Set((seen ?? []).map((x) => x.external_id))
-  const nuevos = ids.filter((i) => !done.has(`gmail:${i}`))
-  const msgs = await Promise.all(nuevos.map((id) => googleFetch<{ id: string; snippet: string; internalDate: string; payload?: { headers?: { name: string; value: string }[] } }>(ctx.user.id, "gmail", `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`).catch(() => null)))
-  const correos = msgs.filter(Boolean).map((m, i) => ({ i, id: m!.id, asunto: hdr(m!, "subject"), texto: m!.snippet, fecha_correo: new Date(+m!.internalDate).toISOString().slice(0, 10), remitente: hdr(m!, "from") }))
-  if (!correos.length) return { ok: true, rows: [] }
-  const ia = await aiSettings(ctx.book.id)
-  // Sin un monto no puede ser una compra (publicidad, avisos de seguridad…): esos ni se le mandan a la IA.
-  const candidatos = correos.filter((c) => mailMayBePurchase(`${c.asunto} ${c.texto}`))
-  if (!candidatos.length) return { ok: true, rows: [] }
-  if (ia.on !== false) {
-    try {
-      const { object } = await aiObject({
-        householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id, feature: "correo_banco",
-        schema: z.object({ items: z.array(z.object({ i: z.number(), es_gasto: z.boolean(), fecha: z.string(), comercio: z.string(), valor: z.number() })) }),
-        prompt: `CORREOS (i | fecha del correo | remitente | asunto | texto):\n${candidatos.map((c) => `${c.i} | ${c.fecha_correo} | ${clip(c.remitente.replace(/.*<|>.*/g, ""), 40)} | ${clip(c.asunto, 100)} | ${clip(c.texto, 260)}`).join("\n")}`,
-      })
-      const rows = object.items.filter((x) => x.es_gasto && x.valor > 0 && correos[x.i]).map((x) => { const c = correos[x.i]; return { id: c.id, fecha: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? x.fecha : c.fecha_correo, comercio: x.comercio.slice(0, 80), valor: Math.round(x.valor), asunto: c.asunto, remitente: c.remitente } })
-      return { ok: true, rows, ia: true }
-    } catch { /* respaldo sin IA */ }
-  }
-  const rows = candidatos.map((c) => {
-    const t = `${c.asunto} ${c.texto}`
-    const m = t.match(/\$\s?([\d.,]+)/)
-    const com = t.match(/en ([A-Z0-9 *.]{3,30})/)
-    return { id: c.id, fecha: c.fecha_correo, comercio: (com?.[1] ?? c.asunto).trim().slice(0, 80), valor: m ? pnum(m[1]) : 0, asunto: c.asunto, remitente: c.remitente }
-  }).filter((r) => r.valor > 0)
-  return { ok: true, rows, ia: false }
+  return scanMailWith(ctx, await supabaseServer(), query)
 }
 
 export async function googleDisconnect() {

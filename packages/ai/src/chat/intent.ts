@@ -2,8 +2,8 @@
 // - Decisión: "¿me conviene comprar una moto de 8 millones a 24 cuotas?" → el consejero la analiza con los cálculos de
 //   lib/domain y la muestra como tarjeta dentro del chat (antes era un formulario).
 // - Registrar: "registra un gasto de 15 mil en almuerzo" → tarjeta para confirmar antes de guardar.
-import { dudasLocales, interpConfiable } from "@/lib/ai/router"
-import { CONS_RE, completeInterp, localInterp, moneyIn, norm, type AdvisorInput } from "@/lib/domain"
+import { dudasLocales, interpConfiable } from "../router"
+import { CONS_RE, completeInterp, localInterp, moneyIn, norm, type AdvisorInput } from "@mirai/domain"
 
 const clean = (t: string) => norm(t).replace(/[¿?¡!"“”]/g, " ").replace(/\s+/g, " ").trim()
 

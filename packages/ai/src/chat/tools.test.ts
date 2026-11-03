@@ -6,7 +6,7 @@ import { PERM_PROPUESTA, puedeProponer, tiposDelRol } from "./permisos"
 import { PROPUESTA_TIPOS, type Propuesta } from "./types"
 import { TIPO_INFO } from "./propuestas"
 import { HOY, libroPrueba } from "./libro-prueba"
-import type { AccessRole } from "@/lib/household/roles"
+import type { AccessRole } from "@mirai/domain/household/roles"
 
 // Herramientas del chat: cada una valida su entrada con zod, prepara la tarjeta con los cálculos de lib/domain y solo
 // se entrega a los roles que pueden registrar eso. La categoría llega con un doble del modelo (sin IA real).

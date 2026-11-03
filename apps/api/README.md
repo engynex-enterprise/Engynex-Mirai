@@ -169,3 +169,80 @@ El código de envíos vive en **`packages/services` (`@mirai/services`)**, el mi
   con dobles de los puertos; nunca contra la base compartida).
 - Pendiente: `mail/scan` y probar/listar modelos de IA (F2-F), CRUD de automatizaciones (sigue en la web),
   `PlanRemindersPort` real (F2-I) y adaptadores Kysely (fase 4).
+
+## Escrituras del libro (F2-D)
+
+Todo con el JWT de la persona (UserScope: la RLS vuelve a revisar) y `x-mirai-enlaces: 1` (las cascadas de la base),
+avisos de cambio con `EventsService.changed` (tiempo real y outbox de automatizaciones, `book-tables/cascades.ts`),
+`Idempotency-Key` en los comandos y errores `{ ok:false, msg, code }` en español (los textos de las funciones de la
+base salen con su código: «Sin permiso» → 403, «… no encontrado» → 404, «ya está pagado / enlazado» → 409).
+
+- **Puerto `BookStore`** (`book-tables/book-store.ts`): find/rows/insert/update/single/upsertSingle/rpc con dos
+  adaptadores (supabase-js hoy, Kysely en Cloud SQL). Uno compartido en vez de uno por módulo: las reglas viven en los
+  servicios; lo que cambia entre módulos son tablas y RPC. `BookWritesService` reúne las revisiones (rol, filas propias,
+  plan, esquema zod, referencias del mismo libro) para el CRUD genérico y los comandos.
+- **CRUD genérico**: `PUT /v1/books/:b/t/:table/:id` (crear con el id del navegador o editar), `DELETE …/:id` (borrado
+  lógico) y `POST …/:id/restore` («Deshacer»), con `BOOK_TABLE_POLICY` (revisada contra la RLS) y `BOOK_TABLE_SCHEMAS`
+  (`packages/contracts/src/book-table-schemas.ts`, generado de los tipos de la base). Borrar no exige el plan; crear,
+  editar y restaurar sí. Columnas del sistema y de enlaces nunca entran por aquí.
+
+| Módulo | Rutas (`/v1/books/:b/…`) | Rol |
+|---|---|---|
+| `expenses` | `POST expenses` (reglas: categoría manual → regla → historial → palabras → IA, hormiga, deducible, medio por defecto, fondo para «Imprevistos», sugerencia de fijo) · `POST expenses/:id/{link-fixed,unlink-fixed,use-fund}` | registra (lo suyo) / editor |
+| `incomes` | `POST incomes/plan` (planIngreso) · `POST incomes` (reparto por quincena; valor = promedio por pago; categoría del tipo) | viewer / registra |
+| `fixed` | `POST fixed/:id/pay` · `DELETE fixed/payments/:id` · `POST subscriptions/:id/charge` | editor |
+| `cards` | `POST cards/:id/purchases` · `POST cards/:id/payments` | editor |
+| `loans` | `POST loans` (por tipo; quién presta sin duplicar; `acreedor` → regla de la migración) · `POST loans/:id/payments` (N cuotas del plan o abono) | editor |
+| `savings` | `POST goals/:id/contribute` · `POST fund/{save,use}` · `PUT fund` | editor |
+| `assets` | `POST/DELETE assets/:id/reconcile` · `PUT net-worth/:mes` | editor |
+| `budget` | `PATCH categories/:id/tope` · `PUT budget/topes` | editor |
+| `catalogs` | `POST registros/resolve` (contacto, entidad o proveedor sin duplicar) | registra (buscar) / editor (crear) |
+| `import` | `POST import/statement/preview` · `POST import/statement` (ids `csv:`) · `GET export.json` · `POST backups` | editor / admin (`ajustes`) |
+
+- **Puertos para otros frentes**: `ExpenseClassifier` (IA de gastos, hoy `NoExpenseClassifier`: F2-F lo reemplaza en
+  `expenses.module.ts`), `BookDumpService` (exportado por `import`: `dump(scope, libro)` y `ownRows` para
+  `GET /v1/account/export` de F2-I), `BackupStorage` (Storage `backups` con SystemScope y motivo).
+- **Pruebas**: `src/modules/book-tables/book-store.test.ts` (adaptadores y errores), `packages/contracts/src/book-table-schemas.test.ts`
+  y `test/f2d/*.int.test.ts` (app real con una base en memoria: roles, filas propias, plan, validación, papelera,
+  cascadas, idempotencia y los argumentos exactos de cada RPC que hoy manda el navegador).
+- **Pendiente**: `files` y `feedback`, `tax` (renta/:año; el CRUD de tax_years/tax_assets ya va por el genérico), importar
+  respaldo v4 y ejemplo, restaurar y borrar respaldos, precios de inversiones y probar con RLS real en Supabase local.
+
+## IA y chat (F2-F)
+
+El código vive en **`packages/ai` (`@mirai/ai`)**, el mismo que usa la web (sus `lib/ai/*`, `lib/chat/*`,
+`features/ai/classify.ts`, `features/advisor/engine.ts`, `features/chat/{server,confirm}.ts` re-exportan el paquete y las
+Server Actions / `app/api/chat` solo arman la sesión). Corre con el runtime de `@mirai/services` que configura
+`ServicesRuntime` (F2-E): `ai_usage`, `ai_cache`, cupos y límites con SystemScope; el libro y los hilos con el JWT de la
+persona (RLS). Los tipos del chat (`ChatEvent`, `Propuesta`, `Consulta`…) están en `@mirai/contracts/chat-types`.
+
+| Módulo | Rutas | Rol |
+|---|---|---|
+| `ai` | `POST /v1/books/:b/ai/{invoice,receipt,loan-doc,classify,hormiga,category,entity,cobro,prima,parse,advisor}` · `GET …/ai/usage` · `POST …/reports/:mes/summary` · `POST …/mail/scan` · `POST …/integrations/:kind/{test,models}` | los de la web: factura, clasificar, cobro, prima y frase = `registrarPropio`; comprobante, préstamo, hormiga, asistentes, resumen y correo = editor; modelos = admin; consejero y uso = viewer |
+| `ai` (consola) | `GET /v1/admin/ai/usage` · `PATCH /v1/admin/ai/settings` · `PUT /v1/admin/ai/plans/:planId/cupo` · `PUT /v1/admin/ai/prices` · `DELETE /v1/admin/ai/cache` | `@PlatformAdmin`; todo en `admin_audit` |
+| `chat` | `POST /v1/books/:b/chat/messages` (**NDJSON**) · `GET …/chat/hints` · `GET …/chat/threads` · `GET …/threads/:t/messages` · `PATCH/DELETE …/threads/:t` · `POST …/threads/:t/{restore,duplicate,title}` · `GET …/threads/:t/info` · `POST …/chat/messages/:m/proposals/:p/{confirm,cancel}` · `POST …/chat/attachments` | cualquier rol; permisos finos por tipo de propuesta (`chat/permisos.ts`); límites `chat` y `chatAdjunto` |
+
+- **Streaming**: `application/x-ndjson`, un `ChatEvent` por línea (mismo protocolo de `app/api/chat`), Fastify con un
+  `PassThrough` (sin búfer), latido `{"t":"ping"}` cada 15 s y cancelación al cerrar la conexión (`reply.raw` `close` →
+  `AbortSignal` del turno: se guarda lo que alcanzó a llegar con `detenido`). Las guardas responden JSON antes del stream.
+- **Errores**: lo que la web devolvía como `{ ok:false, msg }` sale como ApiError con el **mismo texto** (`ai/ai-errors.ts`):
+  plan → 402 `PLAN_REQUIRED` (el mensaje de `run.ts`), créditos o límite → 429, IA apagada / falta la clave / datos → 400,
+  no existe → 404, ya cancelada → 409, el proveedor o la lectura falló → 502. "Sin sugerencia" es `data: null`; el
+  resultado de "probar conexión" es dato (`data.ok`).
+- **Fotos y PDF**: `file: { fileId }` (ruta `<bookId>/…` del bucket `attachments`, descargada con el JWT: la RLS de Storage
+  exige ser miembro) o `file: { name, type, data }` en base64 (compatibilidad; con el bodyLimit de 8 MB caben hasta ~6 MB).
+  Puerto `AiFiles` (adaptador Supabase Storage); cuando exista `files` (F2-D-2) puede delegar en él.
+- **Puertos**: `AiPort`/`AiAdminPort` (adaptador `PackageAi`, llama a `@mirai/ai`), `ChatPort` (`PackageChat`) y
+  `ChatWritesPort` (escritura al confirmar; hoy `SupabaseJsChatWrites` = `server/confirm.ts`, las mismas RPC de la web;
+  los servicios de F2-D se conectan con otro adaptador sin tocar el chat). Al confirmar, `EventsService.changed` con las
+  tablas de la propuesta. `AiExpenseClassifier` implementa el puerto `ExpenseClassifier` de F2-D (`expenses.module.ts`).
+- **Automatizaciones**: `AiRuntime` agrega `aiText` de `@mirai/ai/run` al runtime de `@mirai/services` (nodo "Consejo de
+  la IA" en la API). Variables: `AI_GATEWAY_API_KEY` (ya en `ServicesEnv`); Upstash no se lee en la API (usa
+  `rate_limit_hit`, como la web sin Upstash).
+- **Pruebas** (sin proveedor real ni base): `packages/ai/src/**/*.test.ts` (modelo simulado `MockLanguageModelV4`, base en
+  memoria `@mirai/ai/testing/fake-db`: orden de `run.ts`, respaldo entre proveedores, caché, créditos, límite, turno del
+  chat, confirmar/cancelar, hilos, casos de uso), `src/modules/ai/ai.test.ts`, `test/f2f.int.test.ts` (rutas, roles,
+  errores, NDJSON, límite `chat`, adjuntos, consola), `test/f2f-stream.int.test.ts` (cancelación con un socket real) y
+  `test/f2f-engine.int.test.ts` (la API con el motor real de la web sobre la base en memoria).
+- **Pendiente**: proxy o cambio del front (F2-H: `features/chat/store.ts` a `NEXT_PUBLIC_API_URL`), multipart (hoy base64),
+  E2E `f14-chat` con `api-on`, medir el tiempo al primer token en Cloud Run y conectar la escritura a los servicios de F2-D.

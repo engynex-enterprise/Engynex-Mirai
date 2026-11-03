@@ -1,7 +1,15 @@
 import { Module } from "@nestjs/common"
+import { BookTablesModule } from "../book-tables/book-tables.module"
+import { IncomesController } from "./incomes.controller"
+import { IncomesService } from "./incomes.service"
 
-// Módulo `incomes` (docs/arquitectura/v6-separacion-front-back.md §2.6): ingresos, extras y planIngreso.
-// Dueño: F2-D. Stub vacío de F2-B: su dueño agrega controllers, servicios, repositorios (puerto) y adaptadores
-// en esta carpeta, y su contrato en packages/contracts/src/modules/incomes.ts. Ejemplo completo: modules/catalogs.
-@Module({})
+// Módulo `incomes` (docs/arquitectura/v6-separacion-front-back.md §2.6). Dueño: F2-D.
+// Plan del ingreso (sin guardar) y guardar con reparto por quincena; el CRUD de incomes y extra_incomes va por
+// book-tables. Contrato: packages/contracts/src/modules/incomes.ts.
+@Module({
+  imports: [BookTablesModule],
+  controllers: [IncomesController],
+  providers: [IncomesService],
+  exports: [IncomesService],
+})
 export class IncomesModule {}

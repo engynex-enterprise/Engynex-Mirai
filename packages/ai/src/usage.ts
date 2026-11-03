@@ -1,11 +1,13 @@
-import "server-only"
 import { createHash } from "node:crypto"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { rt } from "@mirai/services/runtime"
 import { DEFAULT_CREDIT_USD, DEFAULT_CUPOS, type PriceTable } from "./pricing"
 import { monthStartBogota, quotaState, type Quota } from "./credits"
 import type { AiFeature } from "./features"
 
-// Registro de uso de la IA, cupo de créditos y caché de respuestas (solo servidor, con la clave de servicio).
+// Registro de uso de la IA, cupo de créditos y caché de respuestas (solo servidor, con la clave de servicio: en la web
+// supabaseAdmin(), en la API el SystemScope de @mirai/services). Movido de apps/web/lib/ai/usage.ts (F2-F).
+
+const supabaseAdmin = () => rt().admin()
 
 export type AiPlatformSettings = { creditUsd: number; cuposActivo: boolean; avisoPct: number; cacheHoras: number; precios: PriceTable }
 

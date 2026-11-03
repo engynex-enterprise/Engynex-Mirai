@@ -1,0 +1,35 @@
+{
+  "name": "@mirai/ai",
+  "version": "0.0.0",
+  "private": true,
+  "description": "IA y chat de Mirai que comparten apps/web y apps/api (F2-F): modelos por proveedor, aiText/aiObject/aiStream con respaldo, router de reglas, caché ai_cache, prompts, precios, créditos y registro en ai_usage, bloqueo por plan; el motor del chat (intenciones, herramientas, propuestas con confirmación, permisos por rol, contexto con el cálculo integral) y los casos de uso del servidor (consejero, clasificar, leer documentos, confirmar propuestas, uso de IA). Las subrutas puras (features, pricing, credits, compact, models, router, chat/*) también corren en el navegador.",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.94",
+    "@ai-sdk/google": "^4.0.109",
+    "@ai-sdk/groq": "^4.0.74",
+    "@ai-sdk/openai": "^4.0.106",
+    "@mirai/contracts": "workspace:*",
+    "@mirai/db": "workspace:*",
+    "@mirai/domain": "workspace:*",
+    "@mirai/services": "workspace:*",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@supabase/supabase-js": "^2.118.0",
+    "ai": "^7.0.159",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@mirai/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  }
+}

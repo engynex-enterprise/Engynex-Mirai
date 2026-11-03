@@ -971,6 +971,22 @@ Pendientes generales: integración con RLS real en Supabase local (B-10) y la la
 
 **Terminado cuando:** cada comando tiene pruebas de integración (rol permitido y denegado, idempotencia con la misma llave, cascadas de la base verificadas con `x-mirai-enlaces`); la paridad con la RPC llamada desde el navegador da filas idénticas.
 
+**Estado F2-D (2026-11-02, sin commit):** escrituras hechas con dobles (sin tocar la base compartida). `pnpm typecheck`, `pnpm lint` (0 errores), `pnpm test` (api: 3 archivos nuevos de F2-D, 61 pruebas; contratos: esquemas de escritura) y `pnpm --filter api build` en verde. Detalle: `apps/api/README.md` › Escrituras del libro.
+
+| Ítem | Estado | Dónde / nota |
+|---|---|---|
+| D-1 `book-tables` escritura | ✔ | `PUT/DELETE /t/:table/:id` y `POST …/restore` con `BookWritesService`. `BOOK_TABLE_POLICY` revisada contra la RLS (sin cambios; comentario en `book-tables.ts`). Esquema zod por tabla en `packages/contracts/src/book-table-schemas.ts` (generado del `Insert` de cada tabla, con los `check` de las migraciones; sin columnas del sistema ni de enlaces). Referencias `*_id` revisadas contra el mismo libro. Puerto compartido **`BookStore`** (supabase-js + Kysely) en vez de un repositorio por módulo |
+| D-2 `files` | ✘ | Pendiente |
+| D-3 `expenses` | ✔ | `POST expenses` con las reglas del formulario (IA por el puerto `ExpenseClassifier`, que conecta F2-F) y `link-fixed`/`unlink-fixed`/`use-fund`. La importación de extractos quedó en `import` |
+| D-4 `fixed` | ✔ | `pay` (valor del periodo con `fijoValor` si no llega; sufijo de quincena), `unpay`, `charge` |
+| D-5 `cards` | ✔ | `purchases`, `payments` |
+| D-6 `savings` y `assets` | ✔ | `contribute`, `fund/save|use`, `PUT fund`; `reconcile` (y quitarlo), `PUT net-worth/:mes` (una foto por mes, nunca futura) |
+| D-7 `loans` | ✔ | Crear por tipo con `primera`/`vence`, quién presta sin duplicar (`RegistrosService` en catalogs + `POST registros/resolve`) y pagos (cuotas del plan de `loanEngine` o abono). El recordatorio es de F2-E |
+| D-8 `tax`, `budget`, `incomes/plan` | ◐ | `budget` (topes) e `incomes` (`plan` y guardar con reparto) ✔. `tax`: el CRUD va por el genérico con `impuestos`; falta `renta/:año` |
+| D-9 `import` y `feedback` | ◐ | Extractos (`preview` + `statement`, ids `csv:`), `export.json` (BookDump v5, con la papelera) y `backups` ✔; `BookDumpService` exportado para `GET /v1/account/export` (F2-I). Faltan v4, ejemplo, restaurar, borrar respaldos y `feedback` |
+
+Pendientes generales: integración con RLS real en Supabase local (cascadas verificadas en la base), `PgKyselyFactory` con `date` como texto para `DB_ADAPTER=pg`, y `findEntity` no reconoce el NIT con dígito de verificación (`890903938-8` ≠ `890903938`; regla del dominio, no se cambió).
+
 ### F2-E — Notificaciones, integraciones, Google, cron y colas
 **Dueño de:** `modules/{notifications (envíos, reglas, push, telegram), integrations, google, automations, jobs}`. **Depende de:** F2-B (F2-D solo para que las automatizaciones usen los servicios de escritura, por inyección).
 1. **F2-E-1** `integrations`: mover `registry.ts`, `store.ts` (`getIntegration`, `getOwnIntegration`, `getGlobalIntegration`) y `refresh.ts`/`data-sources.ts`; endpoints del hogar (con máscara) y `test`/`models`.
@@ -1003,6 +1019,20 @@ Pendientes generales: integración con RLS real en Supabase local (B-10) y la la
 5. **F2-F-5** Consejero (`features/advisor/engine.ts`) y `reports/:mes/summary`.
 
 **Terminado cuando:** `ai_usage` registra igual (la misma `feature`, los mismos créditos ±1 %); tiempo al primer token ≤ el actual + 150 ms; el plan Gratis recibe `PLAN_REQUIRED` con el mismo mensaje de `run.ts:91`; E2E `f14-chat` en verde con `qa`.
+
+**Estado F2-F (2026-11-02, sin commit):** hecho con dobles (modelo simulado `MockLanguageModelV4`, base en memoria; sin proveedor real, sin créditos y sin la base compartida). `pnpm typecheck`, `pnpm lint` (0 errores), `pnpm test` (`@mirai/ai` 170, api 394 con 4 archivos nuevos de F2-F), `pnpm --filter api build` y `pnpm --filter web build` en verde. Detalle: `apps/api/README.md` › IA y chat y `packages/ai/README.md`.
+
+| Ítem | Estado | Dónde / nota |
+|---|---|---|
+| F-1 `lib/ai/*` y `lib/chat/*` | ✔ | **`packages/ai` (`@mirai/ai`)**: run (plan → interruptor → caché → cupo → límite → proveedores → `ai_usage`), model, models, router, usage, prompts, pricing, credits, features, compact, errors y `chat/*` con sus pruebas (`git mv`). Supabase admin → `rt().admin()` de `@mirai/services`; el límite `ia` usa `rate_limit_hit` (`limit.ts`). Los tipos del chat (`ChatEvent`…) pasaron a `@mirai/contracts/chat-types`. La web re-exporta todo (`lib/ai/*`, `lib/chat/*` y, con `server-only`, run/model/usage) |
+| Casos de uso compartidos | ✔ | `@mirai/ai/server/*`: `chat-turn` (el cuerpo de `app/api/chat`), `chat-actions`, `chat-book` (contexto con el cálculo integral), `confirm`, `advisor`, `classify`, `ai-actions` (las 10 de `features/ai/actions.ts`), `mail` (`scanMail`), `integrations-ai` (probar y listar modelos), `reports` (resumen del mes) y `usage-report` (uso del hogar y las 5 de la consola). Las Server Actions de la web y `app/api/chat/route.ts` solo arman sesión, rol, límite y stream (mismo comportamiento) |
+| F-2 endpoints de IA | ✔ | `POST /v1/books/:b/ai/{invoice,receipt,loan-doc,classify,hormiga,category,entity,cobro,prima,parse,advisor}`; archivos por `fileId` (bucket `attachments`) o base64 (en vez de multipart). `{ ok:false, msg }` → ApiError con el mismo texto (plan 402, créditos/límite 429, configuración 400, proveedor 502) |
+| F-3 `chat/messages` NDJSON | ✔ | Fastify + `PassThrough`, latido `{"t":"ping"}` cada 15 s, cancelación por `close`; mismo `ChatEvent` (`packages/contracts/src/modules/chat.ts`, con prueba de tipos contra el del motor) |
+| F-4 hilos, propuestas, adjuntos | ✔ | hilos (listar, mensajes, renombrar/fijar/archivar, borrar y deshacer, duplicar, título, detalles), `hints`, `proposals/:p/{confirm,cancel}` (escritura por `ChatWritesPort`, hoy `confirm.ts`; avisa con `EventsService.changed`) y `attachments` (límite `chatAdjunto`) |
+| F-5 consejero y resumen | ✔ | `POST …/ai/advisor` (la rama "decisión" del chat sin hilo) y `POST …/reports/:mes/summary` |
+| Pendientes de otros frentes | ✔ | E-1 `integrations/:kind/{test,models}`, E-3 `mail/scan`, E-4 `aiText` en la API (`AiRuntime`), C-6 `GET /v1/books/:b/ai/usage`, I-5 consola › Uso de IA (`/v1/admin/ai/*`) y el puerto `ExpenseClassifier` de F2-D (`AiExpenseClassifier`) |
+
+Pendientes: el front sigue usando `/api/chat` y las Server Actions (F2-H-6 cambia `features/chat/store.ts`); multipart; E2E `f14-chat` con `api-on`; medir el tiempo al primer token en Cloud Run; conectar `ChatWritesPort` a los servicios de F2-D cuando se decida si confirmar en el chat debe aplicar las reglas del formulario (hoy escribe igual que la web).
 
 ### F2-G — Gateway de WebSocket
 **Dueño de:** `modules/realtime/**`, la migración de los triggers `mirai_live_notify` (aditiva, **sin aplicarla en la base compartida** hasta la fase 4) y `apps/web/hooks/use-live-gateway.ts` (archivo nuevo). **Depende de:** F2-B-2, B-3 y B-6.

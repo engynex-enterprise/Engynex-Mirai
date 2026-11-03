@@ -1,22 +1,21 @@
-import "server-only"
 import { z } from "zod"
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "@/lib/supabase/database.types"
-import { aiAllowed, aiObject, logAlgorithm, tokensFor } from "@/lib/ai/run"
-import { aiSettings } from "@/lib/ai/model"
-import { routeClassify, type ClassifyItem, type ClassifyOut } from "@/lib/ai/router"
-import { clip } from "@/lib/ai/compact"
+import { aiAllowed, aiObject, logAlgorithm, tokensFor } from "../run"
+import { aiSettings } from "../model"
+import { routeClassify, type ClassifyItem, type ClassifyOut } from "../router"
+import { clip } from "../compact"
+import type { Sb } from "./ctx"
 
 // Categoría y gasto hormiga con reglas primero y la IA para decidir (aiClassify de la v4). Un solo motor para el
 // formulario de gastos (classifyExpenses), la entrada rápida y el chat: así un gasto cae en la misma categoría sin
 // importar por dónde se registró. Solo servidor: recibe quién llama (ya validado) y su cliente de Supabase.
+// Movido de apps/web/features/ai/classify.ts (F2-F).
 
 const GRP = { n: "necesidad", g: "gusto", a: "ahorro" } as Record<string, string>
 
 export type Who = { householdId: string; bookId: string; userId: string }
 
 /** null si la IA está apagada, sin plan o sin las funciones de categoría y hormiga. */
-export async function classifyWith(sb: SupabaseClient<Database>, who: Who, items: ClassifyItem[]): Promise<{ out: ClassifyOut[]; creditos: number } | null> {
+export async function classifyWith(sb: Sb, who: Who, items: ClassifyItem[]): Promise<{ out: ClassifyOut[]; creditos: number } | null> {
   const ia = await aiSettings(who.bookId)
   if (ia.on === false || (ia.autocat === false && ia.hormiga === false) || !items.length) return null
   if (!(await aiAllowed(who.householdId, who.bookId))) return null

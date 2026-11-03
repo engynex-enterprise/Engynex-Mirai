@@ -22,6 +22,19 @@ import { refsContract } from "./modules/refs"
 import { googleContract } from "./modules/google"
 import { integrationsContract } from "./modules/integrations"
 import { notifyDeliveryContract } from "./modules/notifications-delivery"
+// F2-F: IA, chat (streaming NDJSON) y consola › Uso de IA.
+import { aiAdminContract, aiContract } from "./modules/ai"
+import { chatContract } from "./modules/chat"
+// F2-D: escrituras (CRUD genérico en bookTables + comandos con reglas de cada módulo).
+import { assetsContract } from "./modules/assets"
+import { budgetContract } from "./modules/budget"
+import { cardsContract } from "./modules/cards"
+import { expensesContract } from "./modules/expenses"
+import { fixedContract } from "./modules/fixed"
+import { importContract } from "./modules/import"
+import { incomesContract } from "./modules/incomes"
+import { loansContract } from "./modules/loans"
+import { savingsContract } from "./modules/savings"
 
 const c = initContract()
 export const apiContract = c.router({
@@ -43,5 +56,17 @@ export const apiContract = c.router({
   integrations: integrationsContract,
   notify: notifyDeliveryContract,
   google: googleContract,
+  ai: aiContract,
+  aiAdmin: aiAdminContract,
+  chat: chatContract,
+  expenses: expensesContract,
+  incomes: incomesContract,
+  fixed: fixedContract,
+  cards: cardsContract,
+  loans: loansContract,
+  savings: savingsContract,
+  assets: assetsContract,
+  budget: budgetContract,
+  importer: importContract,
 })
 export type ApiContract = typeof apiContract

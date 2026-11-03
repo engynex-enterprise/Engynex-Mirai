@@ -1,19 +1,20 @@
-import "server-only"
 import { z } from "zod"
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { AppContext } from "@/lib/dal"
-import type { Database } from "@/lib/supabase/database.types"
-import type { LoadedBook } from "@/lib/book-data"
-import { aiObject, AiUnavailable, logAlgorithm, tokensFor } from "@/lib/ai/run"
-import { aiSettings } from "@/lib/ai/model"
-import { interpConfiable } from "@/lib/ai/router"
-import { toLines } from "@/lib/ai/compact"
-import { ATIPOS, asAnalyze, completeInterp, localInterp, todayBogota, type AdvisorInput, type Atipo } from "@/lib/domain"
-import type { AiVerdict, Consulta } from "@/lib/chat/types"
+import type { LoadedBook } from "@mirai/domain/book-data"
+import { aiObject, AiUnavailable, logAlgorithm, tokensFor } from "../run"
+import { aiSettings } from "../model"
+import { interpConfiable } from "../router"
+import { toLines } from "../compact"
+import { ATIPOS, asAnalyze, completeInterp, localInterp, todayBogota, type AdvisorInput, type Atipo } from "@mirai/domain"
+import type { AiVerdict, Consulta } from "../chat/types"
+import { rt } from "@mirai/services/runtime"
+import { detectDecision, preguntaValor } from "../chat/intent"
+import { chatAi } from "./chat-book"
+import { whoOf, type AiCtx, type Sb } from "./ctx"
 
 // Consejero antes de gastar, ahora dentro del chat (sin formulario): entiende la frase, analiza con los cálculos de
-// lib/domain (asAnalyze) y, si hay IA, agrega su concepto. Lo usa app/api/chat. Cada análisis se guarda también en
-// advisor_consultations (historial del consejero de la v4).
+// lib/domain (asAnalyze) y, si hay IA, agrega su concepto. Lo usan el chat (web y API) y POST /v1/books/:b/ai/advisor.
+// Cada análisis se guarda también en advisor_consultations (historial del consejero de la v4). Movido de
+// apps/web/features/advisor/engine.ts (F2-F).
 
 const TIPOS = Object.keys(ATIPOS) as [Atipo, ...Atipo[]]
 const n = z.number().nullable().optional()
@@ -30,8 +31,8 @@ const VerdictSchema = z.object({
   tecnico: z.object({ resumen: z.string(), indicadores: z.array(z.object({ nombre: z.string(), valor: z.string(), lectura: z.enum(["sano", "alerta", "riesgo"]) })), recomendacion: z.string() }),
 }) satisfies z.ZodType<AiVerdict>
 
-type Ctx = Pick<AppContext, "household" | "book" | "user">
-const who = (ctx: Ctx) => ({ householdId: ctx.household.id, bookId: ctx.book.id, userId: ctx.user.id })
+type Ctx = Pick<AiCtx, "household" | "book" | "user">
+const who = whoOf
 
 /** Interruptor "Consejero IA" (Ajustes › Inteligencia artificial): apagado, el consejero analiza solo con tus números. */
 const consejeroOn = async (bookId: string) => (await aiSettings(bookId)).consejero !== false
@@ -62,7 +63,7 @@ export async function interpretText(ctx: Ctx, text: string, useAi: boolean): Pro
 }
 
 /** Análisis con reglas (+ concepto de la IA si se puede) y se guarda en advisor_consultations. */
-export async function analyzeInput(ctx: Ctx, sb: SupabaseClient<Database>, book: LoadedBook, d: AdvisorInput, txt: string, useAi: boolean): Promise<Consulta> {
+export async function analyzeInput(ctx: Ctx, sb: Sb, book: LoadedBook, d: AdvisorInput, txt: string, useAi: boolean): Promise<Consulta> {
   const today = todayBogota()
   const { data: cfg } = await sb.from("book_settings").select("estricto,usura").eq("book_id", ctx.book.id).single()
   const usura = +(cfg?.usura ?? 26)
@@ -95,4 +96,21 @@ export async function analyzeInput(ctx: Ctx, sb: SupabaseClient<Database>, book:
   // Sin cuentas ni inversiones registradas, "disponible" y "colchón" no son un dato real (la tarjeta lo explica).
   const datos = { cuentas: book.assets.some((a) => +a.valor > 0) || book.investments.length > 0, ingresos: m.ing > 0 }
   return { id: row?.id ?? crypto.randomUUID(), fecha: today, v, usura, datos, creditos, ...payload }
+}
+
+export type AdvisorConsult = { ok: true; consulta: Consulta; faltan: string[] } | { ok: false; d: AdvisorInput; preguntas: string[] }
+
+/**
+ * Consejero sin chat (POST /v1/books/:b/ai/advisor): la frase → interpretación → análisis con tus números (+ concepto de
+ * la IA si se puede), igual que la rama "decisión" del chat. Sin valor, devuelve las preguntas que faltan.
+ */
+export async function advisorConsultWith(ctx: Ctx & Pick<AiCtx, "plan">, sb: Sb, text: string): Promise<AdvisorConsult> {
+  const t = text.trim().slice(0, 600)
+  const ai = await chatAi(ctx)
+  const dec = detectDecision(t)
+  const { d } = dec && (dec.confiable || !ai.allowed) ? { d: dec.input } : await interpretText(ctx, t, ai.allowed)
+  if (!+(d.valor ?? 0)) return { ok: false, d, preguntas: [preguntaValor(d), ...(d.dudas ?? dec?.faltan ?? []).filter((q) => q !== preguntaValor(d))].slice(0, 3) }
+  const book = await rt().loadBook(sb, ctx.book.id)
+  const consulta = await analyzeInput(ctx, sb, book, d, t, ai.allowed)
+  return { ok: true, consulta, faltan: (d.dudas?.length ? d.dudas : dec?.faltan ?? []).slice(0, 2) }
 }

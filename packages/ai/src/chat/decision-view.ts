@@ -6,7 +6,7 @@
 //   4. "¿Por qué?" (2-4 razones) y "Qué te recomiendo" (1-3 pasos).
 // Sin cuentas ni fondo registrados no se muestran "disponible" ni "colchón" como si fueran datos: se explica qué falta.
 // Sin IA (o en plan Gratis) los textos salen de plantillas variadas por tipo de decisión y veredicto.
-import { ATIPOS, formatCOP, type Veredicto } from "@/lib/domain"
+import { ATIPOS, formatCOP, type Veredicto } from "@mirai/domain"
 import type { Consulta } from "./types"
 
 export type Grupo = "contado" | "cuotas" | "mensual" | "tarjeta" | "inversion" | "abono" | "prestamo" | "empeno"

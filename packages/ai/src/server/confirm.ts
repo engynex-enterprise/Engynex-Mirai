@@ -1,13 +1,11 @@
-import "server-only"
 import { z } from "zod"
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "@/lib/supabase/database.types"
-import type { AppContext } from "@/lib/dal"
-import { loadBookData, type LoadedBook } from "@/lib/book-data"
-import { loanEngine, norm, todayBogota } from "@/lib/domain"
-import { publicError } from "@/lib/security/errors"
-import { PARECE_ENTIDAD, armarAbonoMeta, armarCobroSub, armarCompraTarjeta, armarPagoTarjeta, armarPagoCuota, armarPagoFijo, armarPrestamo, type Datos } from "@/lib/chat/acciones"
-import type { Propuesta } from "@/lib/chat/types"
+import type { LoadedBook } from "@mirai/domain/book-data"
+import { rt } from "@mirai/services/runtime"
+import { loanEngine, norm, todayBogota } from "@mirai/domain"
+import { publicError } from "../public-error"
+import { PARECE_ENTIDAD, armarAbonoMeta, armarCobroSub, armarCompraTarjeta, armarPagoTarjeta, armarPagoCuota, armarPagoFijo, armarPrestamo, type Datos } from "../chat/acciones"
+import type { Propuesta } from "../chat/types"
+import type { AiCtx, Sb } from "./ctx"
 
 // Escribir en el libro lo que la persona confirmó en el chat. La propuesta vive en chat_messages.meta, que se puede
 // editar desde el navegador: aquí NO se confía en ella. Se valida con zod, se comprueba que cada registro al que
@@ -15,7 +13,6 @@ import type { Propuesta } from "@/lib/chat/types"
 // el libro de hoy (lib/chat/acciones.ts, los mismos cálculos de los formularios). Las operaciones enlazadas usan las
 // RPC transaccionales: pay_fixed_expense, pay_subscription y add_card_purchase (F2) y goal_contribute (F1).
 
-type Sb = SupabaseClient<Database>
 export type Escrito = { ok: true; id: string; datos: Datos } | { ok: false; msg: string }
 
 const Fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -66,7 +63,7 @@ async function categoria(sb: Sb, bookId: string, id: string | null | undefined, 
 }
 
 /** Escribe la propuesta confirmada. Los permisos por rol ya se revisaron en chatConfirm; la RLS los vuelve a exigir. */
-export async function escribir(ctx: AppContext, sb: Sb, p: Propuesta): Promise<Escrito> {
+export async function escribir(ctx: Pick<AiCtx, "book">, sb: Sb, p: Propuesta): Promise<Escrito> {
   const parsed = DatosZ.safeParse(p.datos ?? {})
   if (!parsed.success) return { ok: false, msg: "Los datos de la propuesta no son válidos. Pídela de nuevo en el chat." }
   const d = parsed.data as Datos & z.infer<typeof DatosZ>
@@ -75,7 +72,7 @@ export async function escribir(ctx: AppContext, sb: Sb, p: Propuesta): Promise<E
   const fecha = d.fecha ?? today
   const id = crypto.randomUUID()
   let book: LoadedBook | null = null
-  const libro = async () => (book ??= await loadBookData(sb, bookId))
+  const libro = async () => (book ??= await rt().loadBook(sb, bookId))
 
   switch (p.tipo) {
     case "gasto": {

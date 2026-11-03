@@ -12,6 +12,7 @@
     "lint": "eslint ."
   },
   "devDependencies": {
+    "@mirai/ai": "workspace:*",
     "@mirai/config": "workspace:*",
     "@mirai/contracts": "workspace:*",
     "@mirai/crypto": "workspace:*",
@@ -34,11 +35,16 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.94",
+    "@ai-sdk/google": "^4.0.109",
+    "@ai-sdk/groq": "^4.0.74",
+    "@ai-sdk/openai": "^4.0.106",
     "@nestjs/common": "^11.2.8",
     "@nestjs/core": "^11.2.8",
     "@nestjs/platform-fastify": "^11.2.8",
     "@nestjs/platform-socket.io": "^11.2.8",
     "@nestjs/websockets": "^11.2.8",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
     "@opentelemetry/api": "~1.10.0",
     "@opentelemetry/instrumentation-http": "0.300.0",
     "@opentelemetry/instrumentation-undici": "0.34.0",
@@ -49,6 +55,7 @@
     "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/nest": "3.53.0-rc.1",
     "@ts-rest/open-api": "3.53.0-rc.1",
+    "ai": "^7.0.159",
     "ioredis": "^5.11.1",
     "jose": "^6.2.15",
     "kysely": "^0.29.8",

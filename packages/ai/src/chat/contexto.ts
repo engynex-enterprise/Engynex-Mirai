@@ -2,11 +2,11 @@
 // compromisos, capacidad, deudas y metas). Puro: lo arma features/chat/server.ts con el libro ya cargado.
 // Antes el chat solo veía ingresos fijos, gastos por categoría y deudas de Le debo; ahora también ingresos extra,
 // tarjetas, otras deudas, impuestos por pagar, topes del presupuesto, cuentas y lo que te conviene hacer.
-import { addDays, conv, gastosMesK, iso, mkey, toDay, type BookData } from "@/lib/domain"
-import { estadoIntegral, flujoIntegral, type ExtrasIntegral } from "@/lib/domain/flujo-integral"
-import { capacidad, compromisos, decisiones, deudas, metasAvance } from "@/lib/domain/dashboard"
-import { clip, toLines, topN } from "@/lib/ai/compact"
-import type { ChatFacts } from "@/lib/ai/router"
+import { addDays, conv, gastosMesK, iso, mkey, toDay, type BookData } from "@mirai/domain"
+import { estadoIntegral, flujoIntegral, type ExtrasIntegral } from "@mirai/domain/flujo-integral"
+import { capacidad, compromisos, decisiones, deudas, metasAvance } from "@mirai/domain/dashboard"
+import { clip, toLines, topN } from "../compact"
+import type { ChatFacts } from "../router"
 
 const r0 = (v: number) => Math.round(+v || 0)
 

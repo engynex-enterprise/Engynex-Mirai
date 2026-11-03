@@ -1,4 +1,3 @@
-import "server-only"
 import type { LanguageModel } from "ai"
 import { createGateway } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -6,9 +5,11 @@ import { createGroq } from "@ai-sdk/groq"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
-import { AI_KINDS, integrationByKind } from "@/lib/integrations/registry"
-import { enabledOf, type IntegrationValue } from "@/features/integrations/store"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { AI_KINDS, integrationByKind } from "@mirai/services/integrations/registry"
+import { enabledOf, type IntegrationValue } from "@mirai/services/integrations/store"
+import { rt } from "@mirai/services/runtime"
+
+const supabaseAdmin = () => rt().admin()
 
 const def = (kind: string) => String(integrationByKind(kind)?.fields.find((f) => f.k === "model")?.def ?? "")
 
@@ -24,7 +25,7 @@ export function modelFrom(v: IntegrationValue, override?: string): LanguageModel
       // La clave del despliegue solo vale cuando la IA es la de la plataforma (se cobra en créditos). Un hogar con su
       // propio Gateway debe traer su clave: sin esto, usaría la de Mirai sin descontar créditos.
       if (!key && v.source === "hogar") throw new Error("Pega la clave de tu Vercel AI Gateway en Ajustes › Inteligencia artificial.")
-      return createGateway({ apiKey: key || process.env.AI_GATEWAY_API_KEY })(m)
+      return createGateway({ apiKey: key || rt().env("AI_GATEWAY_API_KEY") })(m)
     case "ai_gemini": return createGoogleGenerativeAI({ apiKey: key })(m)
     case "ai_groq": return createGroq({ apiKey: key })(m)
     case "ai_openrouter": return createOpenRouter({ apiKey: key }).chat(m)

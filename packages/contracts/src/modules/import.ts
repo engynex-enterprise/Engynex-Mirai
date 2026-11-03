@@ -1,4 +1,66 @@
 // Módulo `import` (docs/arquitectura/v6-separacion-front-back.md §2.6). Dueño: F2-D.
-// Endpoints: Respaldo v4, ejemplo, copias de seguridad, restaurar y exportar.
-// Aquí van sus DTO zod (V4Backup, BookDump) y su contrato. Stub vacío de F2-A: solo lo llena su dueño.
+// - Extractos (features/import/import-view.tsx): `statement/preview` lee el CSV (parseCSV de @mirai/domain/csv), da a
+//   cada movimiento su id estable `csv:` (csvExternalIds: el mismo extracto subido otra vez da los mismos ids), marca los
+//   que ya están (por id o por fecha + descripción + valor) y propone categoría (reglas → historial → palabras; la IA
+//   por el puerto ExpenseClassifier si el plan la incluye) y gasto hormiga. `statement` vuelve a leer el MISMO CSV,
+//   toma las filas escogidas (`i`) con sus cambios y escribe: con un medio de pago, gastos (`origen: importar`) e
+//   ingresos extra; con una tarjeta, compras (add_card_purchase) y pagos (pay_credit_card). Nunca duplica un `csv:`.
+// - Respaldo: `export.json` (copia completa del libro, con la papelera, en el formato `BookDump` v5 de
+//   features/data/backup.ts; lo usa también GET /v1/account/export de F2-I) y `backups` (la guarda en Storage).
+import { initContract } from "@ts-rest/core"
+import { z } from "zod"
+import { ApiOk, IsoDate, Uuid } from "../common"
+import { BookParams, Row, WRITE_ERRORS } from "./write-common"
+
 export const meta = { id: "import", owner: "F2-D" } as const
+
+/** Texto del extracto (CSV o lo que la web convirtió desde Excel). */
+const Csv = z.string().trim().min(1, "Pega el contenido del extracto").max(2_000_000, "El extracto es demasiado grande (máximo 2 MB)")
+export const PreviewInput = z.object({ csv: Csv })
+export const StatementRow = z.object({
+  i: z.number(), fecha: IsoDate, descripcion: z.string(), valor: z.number(), abono: z.boolean(), ext: z.string(),
+  dup: z.boolean(), incl: z.boolean(), category_id: z.string().nullable(), src: z.string().nullable(), hormiga: z.boolean(),
+})
+export type StatementRow = z.infer<typeof StatementRow>
+export const Preview = z.object({ rows: z.array(StatementRow), skipped: z.number(), ia: z.boolean() })
+
+export const CommitInput = z.object({
+  csv: Csv,
+  /** De dónde salió la plata: un medio de pago o una tarjeta de crédito del libro. */
+  fuente: z.object({ tipo: z.enum(["medio", "tarjeta"]), id: Uuid }),
+  member_id: Uuid.nullable().optional(),
+  /** Filas escogidas del preview (por `i`) con lo que la persona cambió a mano. */
+  filas: z.array(z.object({ i: z.number().int().min(0), category_id: Uuid.nullable().optional(), hormiga: z.boolean().optional() })).min(1, "Selecciona al menos un movimiento").max(5000),
+})
+export const Committed = z.object({ gastos: z.number(), entradas: z.number(), repetidos: z.number(), errores: z.array(z.string()) })
+
+/** Copia del libro (BookDump v5 de la web): ajustes y todas las tablas de BOOK_TABLES, incluida la papelera. */
+export const BookDump = z.object({
+  app: z.literal("mirai"), v: z.literal(5), book_id: z.string(), household_id: z.string(), nombre: z.string(), fecha: z.string(),
+  settings: z.record(z.string(), z.unknown()), data: z.record(z.string(), z.array(Row)),
+})
+export type BookDump = z.infer<typeof BookDump>
+export const BackupOut = z.object({ path: z.string(), size: z.number() })
+
+const c = initContract()
+export const importContract = c.router(
+  {
+    preview: {
+      method: "POST", path: "/v1/books/:bookId/import/statement/preview", pathParams: BookParams, body: PreviewInput,
+      responses: { ...WRITE_ERRORS, 200: Preview }, summary: "Lee el extracto y propone qué importar (sin guardar)",
+    },
+    commit: {
+      method: "POST", path: "/v1/books/:bookId/import/statement", pathParams: BookParams, body: CommitInput,
+      responses: { ...WRITE_ERRORS, 200: ApiOk(Committed) }, summary: "Importa las filas escogidas del extracto (sin duplicar)",
+    },
+    exportJson: {
+      method: "GET", path: "/v1/books/:bookId/export.json", pathParams: BookParams,
+      responses: { ...WRITE_ERRORS, 200: BookDump }, summary: "Copia completa del libro en JSON (incluye la papelera). Rol: «Administra» o más",
+    },
+    backup: {
+      method: "POST", path: "/v1/books/:bookId/backups", pathParams: BookParams, body: c.noBody(),
+      responses: { ...WRITE_ERRORS, 200: ApiOk(BackupOut) }, summary: "Guarda un respaldo del libro en la nube (bucket privado backups)",
+    },
+  },
+  { strictStatusCodes: true },
+)

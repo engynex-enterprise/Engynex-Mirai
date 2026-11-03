@@ -1,6 +1,6 @@
 // Sugerencias del chat: banco de preguntas útiles para Colombia, elección al azar (4 de temas distintos) personalizada con
 // lo que tiene el libro, y preguntas de seguimiento después de cada respuesta. Puro, con pruebas en suggestions.test.ts.
-import { norm } from "@/lib/domain"
+import { norm } from "@mirai/domain"
 import type { ChatFlags } from "./types"
 
 export type Tema = "datos" | "ahorro" | "deudas" | "tarjeta" | "impuestos" | "nomina" | "metas" | "presupuesto" | "inversion" | "compras"

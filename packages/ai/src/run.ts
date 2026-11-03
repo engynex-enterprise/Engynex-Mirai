@@ -1,25 +1,30 @@
-import "server-only"
 import { createHash } from "node:crypto"
 import { generateObject, generateText, isStepCount, streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from "ai"
 import type { z } from "zod"
 import { aiErrMsg, aiSettings, modelFrom, modelIdOf } from "./model"
-import { enabledOf, getIntegration, type IntegrationValue } from "@/features/integrations/store"
-import { planOf } from "@/lib/plan-server"
-import { can } from "@/lib/plans"
-import { AI_KINDS, integrationByKind } from "@/lib/integrations/registry"
+import { enabledOf, getIntegration, type IntegrationValue } from "@mirai/services/integrations/store"
+import { planOf } from "@mirai/services/plan"
+import { rt } from "@mirai/services/runtime"
+import { can } from "@mirai/domain/plans"
+import { AI_KINDS, integrationByKind } from "@mirai/services/integrations/registry"
 import { AI_FEATURES, type AiFeature } from "./features"
 import { systemFor } from "./prompts"
 import { cheapModelFor, costFromMetadata, costUSD, creditsFor, estimateTokens } from "./pricing"
 import { aiPlatformSettings, cacheGet, cacheKey, cacheSet, householdQuota, logUsage } from "./usage"
-import { rateLimit as dbRateLimit } from "@/lib/security/rate-limit"
-import { limitMsg } from "@/lib/security/rate-limit-core"
+import { limitMsg, rateLimit as dbRateLimit } from "./limit"
 
 // Punto único para llamar a la IA. Orden de cada llamada:
 //   plan (Premium) → IA encendida → caché (respuesta idéntica reciente) → cupo de créditos → límite por hora →
 //   proveedores en el orden del hogar (modelo barato primero en tareas simples) → registro en ai_usage → caché.
-// El system prompt sale de lib/ai/prompts.ts según la función (`feature`), salvo que se pase uno propio.
+// El system prompt sale de prompts.ts según la función (`feature`), salvo que se pase uno propio.
+// Movido de apps/web/lib/ai/run.ts (F2-F): corre igual en la web y en la API con el runtime de @mirai/services
+// (rt().admin() para ai_usage, ai_cache, cupos y límites; rt().env() para AI_GATEWAY_API_KEY y Upstash).
 
 export class AiUnavailable extends Error {}
+
+/** Mensajes de AiUnavailable (la API los traduce a PLAN_REQUIRED, VALIDATION o RATE_LIMITED con el mismo texto). */
+export const AI_PLAN_MSG = "La inteligencia artificial no está incluida en tu plan. Conoce los planes en /planes."
+export const AI_OFF_MSG = "La inteligencia artificial está apagada. Actívala en Ajustes › Inteligencia artificial."
 
 type Base = {
   householdId: string; bookId: string; userId?: string | null
@@ -39,8 +44,8 @@ const asMessages = (b: Base): ModelMessage[] =>
 /** Límite de consultas de IA por hogar y hora con Upstash Redis (si la integración o las variables existen). */
 async function rateLimit(householdId: string) {
   const up = await getIntegration(householdId, "upstash")
-  const url = (up?.enabled && String(up.config.url || "")) || process.env.UPSTASH_REDIS_REST_URL
-  const token = (up?.enabled && up.secrets.token) || process.env.UPSTASH_REDIS_REST_TOKEN
+  const url = (up?.enabled && String(up.config.url || "")) || rt().env("UPSTASH_REDIS_REST_URL")
+  const token = (up?.enabled && up.secrets.token) || rt().env("UPSTASH_REDIS_REST_TOKEN")
   if (!url || !token) {
     // Sin Upstash: el límite compartido de la base (rate_limits), por hogar y hora.
     const r = await dbRateLimit("ia", householdId)
@@ -88,8 +93,8 @@ async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; 
   const feature: AiFeature = b.feature ?? "otro"
   const f = AI_FEATURES[feature]
   const [plan, ia, s] = await Promise.all([planOf(b.householdId), aiSettings(b.bookId), aiPlatformSettings()])
-  if (!can(plan, "ia")) throw new AiUnavailable("La inteligencia artificial no está incluida en tu plan. Conoce los planes en /planes.")
-  if (ia.on === false) throw new AiUnavailable("La inteligencia artificial está apagada. Actívala en Ajustes › Inteligencia artificial.")
+  if (!can(plan, "ia")) throw new AiUnavailable(AI_PLAN_MSG)
+  if (ia.on === false) throw new AiUnavailable(AI_OFF_MSG)
   const system = b.system ?? systemFor(feature, { tono: b.tono })
   const messages = asMessages(b)
   const who = { householdId: b.householdId, bookId: b.bookId, userId: b.userId ?? null, plan: plan.id, feature }

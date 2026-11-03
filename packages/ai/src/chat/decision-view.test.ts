@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { asAnalyze, type AdvisorInput, type BookData } from "@/lib/domain"
+import { asAnalyze, type AdvisorInput, type BookData } from "@mirai/domain"
 import { concepto, decisionView, grupoDe, num } from "./decision-view"
 import { detectDecision } from "./intent"
 import type { Consulta } from "./types"

@@ -1,22 +1,43 @@
-import "server-only"
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { AppContext } from "@/lib/dal"
-import type { Database } from "@/lib/supabase/database.types"
-import { loadBookData, type LoadedBook } from "@/lib/book-data"
-import { aiSettings } from "@/lib/ai/model"
-import { aiPlatformSettings, householdQuota } from "@/lib/ai/usage"
-import { chatFacts, type ChatFacts } from "@/lib/ai/router"
-import { clip } from "@/lib/ai/compact"
-import { can } from "@/lib/plans"
-import { registraAlgo } from "@/lib/chat/permisos"
-import { contextoChat } from "@/lib/chat/contexto"
-import { integralExtras, necesitaRenta } from "@/lib/chat/extras"
-import type { ExtrasIntegral } from "@/lib/domain/flujo-integral"
-import { loadRentaData } from "@/features/renta/data"
-import { todayBogota } from "@/lib/domain"
-import type { ChatFlags, ChatHints } from "@/lib/chat/types"
+import type { LoadedBook } from "@mirai/domain/book-data"
+import { rentaDataFrom } from "@mirai/domain/integral-extras"
+import { refPorAnio } from "@mirai/domain/payroll"
+import { rt } from "@mirai/services/runtime"
+import { aiSettings } from "../model"
+import { aiPlatformSettings, householdQuota } from "../usage"
+import { chatFacts, type ChatFacts } from "../router"
+import { clip } from "../compact"
+import { can } from "@mirai/domain/plans"
+import { registraAlgo } from "../chat/permisos"
+import { contextoChat } from "../chat/contexto"
+import { integralExtras, necesitaRenta } from "../chat/extras"
+import type { ExtrasIntegral } from "@mirai/domain/flujo-integral"
+import { todayBogota } from "@mirai/domain"
+import type { ChatFlags, ChatHints } from "../chat/types"
+import type { AiCtx, Sb } from "./ctx"
 
-// Datos del libro que usa el chat (servidor): hechos ya calculados, banderas para las sugerencias y estado de la IA.
+// Datos del libro que usa el chat (servidor: web y API): hechos ya calculados, banderas para las sugerencias y estado
+// de la IA. Movido de apps/web/features/chat/server.ts (F2-F). El libro se carga con rt().loadBook (el cargador de la web
+// o el de @mirai/services en la API: las mismas consultas) y el cliente de la persona (RLS).
+
+const loadBookData = (sb: Sb, bookId: string) => rt().loadBook(sb, bookId)
+
+/**
+ * Lo que el borrador de la Declaración necesita para estimar la renta del calendario (como loadRentaData de
+ * apps/web/features/renta/data.ts, sin perfil, fechas ni documentos, que el cálculo no usa). Mismas consultas que el
+ * módulo insights de la API. Si las tablas de referencia fallan, los cálculos usan las constantes del código.
+ */
+async function loadRentaCalc(sb: Sb, book: LoadedBook, bookId: string, householdId: string) {
+  const [mem, cats, bienes, years, u, s] = await Promise.all([
+    sb.from("family_members").select("*").eq("household_id", householdId).is("deleted_at", null).order("sort").order("created_at"),
+    sb.from("income_categories").select("id,nombre").eq("book_id", bookId),
+    sb.from("tax_assets").select("*").eq("book_id", bookId).is("deleted_at", null).order("created_at"),
+    sb.from("tax_years").select("*").eq("book_id", bookId).is("deleted_at", null),
+    sb.from("ref_uvt").select("year,valor"),
+    sb.from("ref_smmlv").select("year,valor"),
+  ])
+  const ref = { uvt: refPorAnio(u.data), smmlv: refPorAnio(s.data) }
+  return rentaDataFrom(book, { members: mem.data ?? [], incomeCategories: cats.data ?? [], bienes: bienes.data ?? [], years: years.data ?? [], perfil: null, fechas: [], attachments: [], liabilities: [], ref })
+}
 
 export type ChatBook = { book: LoadedBook; facts: ChatFacts; flags: ChatFlags; datos: string; today: string; X: ExtrasIntegral }
 
@@ -24,7 +45,7 @@ export type ChatBook = { book: LoadedBook; facts: ChatFacts; flags: ChatFlags; d
  * Libro + lo que el flujo integral necesita y no viaja en él (estimados de impuestos, mesadas y fondo), armado igual
  * que en el Balance (lib/chat/extras.ts). Así las cifras del chat son las del Balance y el Dashboard.
  */
-export async function loadChatBook(sb: SupabaseClient<Database>, bookId: string, householdId?: string): Promise<ChatBook> {
+export async function loadChatBook(sb: Sb, bookId: string, householdId: string): Promise<ChatBook> {
   const today = todayBogota()
   const [book, fondo, taxAssets, incCats, allowances, movs, members] = await Promise.all([
     loadBookData(sb, bookId),
@@ -33,10 +54,10 @@ export async function loadChatBook(sb: SupabaseClient<Database>, bookId: string,
     sb.from("income_categories").select("id,nombre").eq("book_id", bookId).is("deleted_at", null),
     sb.from("allowances").select("id,member_id,mesada,frec").eq("book_id", bookId).is("deleted_at", null),
     sb.from("allowance_movements").select("allowance_id,fecha,valor").eq("book_id", bookId).is("deleted_at", null),
-    householdId ? sb.from("family_members").select("id,nombre").eq("household_id", householdId).is("deleted_at", null) : Promise.resolve({ data: [] as { id: string; nombre: string }[] }),
+    sb.from("family_members").select("id,nombre").eq("household_id", householdId).is("deleted_at", null),
   ])
   // La renta del calendario sin valor se estima con el borrador de la Declaración (solo si hace falta: es costoso).
-  const renta = necesitaRenta(book) ? await loadRentaData(sb, bookId).catch(() => null) : null
+  const renta = necesitaRenta(book) ? await loadRentaCalc(sb, book, bookId, householdId).catch(() => null) : null
   const X = integralExtras(book, today, {
     taxAssets: taxAssets.data ?? [], incCats: incCats.data ?? [], allowances: allowances.data ?? [], movs: movs.data ?? [],
     fondo: fondo.data ?? [], members: members.data ?? [], renta,
@@ -54,7 +75,7 @@ export async function loadChatBook(sb: SupabaseClient<Database>, bookId: string,
 }
 
 /** Banderas del libro para las sugerencias (sin montos ni el flujo integral: más liviano que loadChatBook). */
-async function loadChatFlags(sb: SupabaseClient<Database>, bookId: string): Promise<{ flags: ChatFlags }> {
+async function loadChatFlags(sb: Sb, bookId: string): Promise<{ flags: ChatFlags }> {
   const today = todayBogota()
   const book = await loadBookData(sb, bookId)
   const k = today.slice(0, 7)
@@ -73,14 +94,14 @@ async function loadChatFlags(sb: SupabaseClient<Database>, bookId: string): Prom
 }
 
 /** ¿Puede usar IA el chat? Plan Premium + IA encendida. */
-export async function chatAi(ctx: AppContext) {
+export async function chatAi(ctx: Pick<AiCtx, "plan" | "book">) {
   const premium = can(ctx.plan, "ia")
   const ia = await aiSettings(ctx.book.id)
   return { premium, off: ia.on === false, allowed: premium && ia.on !== false }
 }
 
 /** Datos para la pantalla del chat: nombre, rol, banderas para sugerencias y créditos de IA. */
-export async function chatHintsFor(ctx: AppContext, sb: SupabaseClient<Database>): Promise<ChatHints> {
+export async function chatHintsFor(ctx: AiCtx, sb: Sb): Promise<ChatHints> {
   const [{ flags }, ai, s] = await Promise.all([loadChatFlags(sb, ctx.book.id), chatAi(ctx), aiPlatformSettings()])
   let quota: ChatHints["ia"]["quota"] = null
   if (ai.allowed && s.cuposActivo) {

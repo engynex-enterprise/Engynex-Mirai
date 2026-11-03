@@ -5,6 +5,18 @@
 //
 // Propuesta inicial de F2-A: F2-C (lectura) y F2-D (escritura) la revisan contra la RLS de supabase/migrations y le
 // agregan el esquema zod de cada tabla (`schema`, p. ej. `ExpenseUpsert`).
+//
+// Revisión de F2-D contra la RLS (2026-11-02), sin cambios en la tabla:
+// - `write: "editor"` = políticas "crear/editar/borrar <t>" con is_book_member(book_id, 'editor') (20261031000200,
+//   20261101000900, 20261103000300, 20261103000700, 20261103003100 y 20261103003200).
+// - `own: true` (expenses, incomes, extra_incomes) = políticas "propios …" con created_by = auth.uid() y 'registra'
+//   (20261103000900_hogar_roles.sql). La API pone `created_by` y nunca lo deja cambiar.
+// - `feature` = políticas restrictivas "plan crear/editar <t>" (20261103003400, detrás de platform_settings.premium_db):
+//   borrar (deleted_at) no exige el plan; crear, editar y restaurar sí.
+// - accountant_notes: la RLS exige además autor = 'titular' y un acceso del mismo libro (el esquema fija el autor).
+// - `system`: chat_threads/chat_messages (de cada persona, módulo chat), automation_runs (solo update de editor) y
+//   monthly_summaries (la RLS deja a editor, pero solo los escribe el servidor): la API es más estricta que la base.
+// El esquema zod de cada tabla está en ./book-table-schemas.ts (BOOK_TABLE_SCHEMAS).
 import type { BookTable } from "@mirai/db/tables"
 import type { AccessRole } from "@mirai/domain/household/roles"
 import type { PremiumFeature } from "@mirai/domain/plans"

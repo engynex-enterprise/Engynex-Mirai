@@ -1,5 +1,5 @@
 // Libro de ejemplo para las pruebas del chat (Vitest): parecido al ejemplo de la familia Navarro. No lo usa la app.
-import type { LoadedBook } from "@/lib/book-data"
+import type { LoadedBook } from "@mirai/domain/book-data"
 
 export const HOY = "2026-11-02"
 

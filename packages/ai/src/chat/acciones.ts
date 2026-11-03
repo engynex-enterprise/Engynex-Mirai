@@ -5,7 +5,7 @@
 import {
   addMonths, annuity, conv, deudaTarjeta, esTipo, tarjetaPagoMes, fijoStatus, fijoValor, findContact, findEntity, iso, loanEngine, loanName, loanTipo,
   norm, parseDate, previewLoan, tipoDef, tipoDefaults, toDay, type BookData, type LoanTipo,
-} from "@/lib/domain"
+} from "@mirai/domain"
 import type { Propuesta } from "./types"
 
 type Loan = BookData["loans"][number]

@@ -1,8 +1,8 @@
 // De la frase a la tarjeta, sin IA: cruza las interpretaciones de detectActions (lib/chat/intent.ts) con el libro
 // (lib/chat/acciones.ts) y devuelve la propuesta para confirmar, una pregunta (falta un dato o hay varias opciones) o
 // null (no era un registro: sigue la respuesta con datos o la IA). Puro: la categoría llega con `categorize`.
-import { addDays, iso, toDay, type BookData } from "@/lib/domain"
-import type { AccessRole } from "@/lib/household/roles"
+import { addDays, iso, toDay, type BookData } from "@mirai/domain"
+import type { AccessRole } from "@mirai/domain/household/roles"
 import {
   armarAbonoMeta, armarCobroSub, armarCompraTarjeta, armarPagoCuota, armarPagoFijo, armarPagoTarjeta, armarPrestamo, findCard, findFixed, findGoal, findLoan, findSub,
   fijoDelGasto, medioEnTexto, type Armado,

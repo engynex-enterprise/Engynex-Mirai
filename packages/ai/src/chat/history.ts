@@ -1,7 +1,7 @@
 // Historial del chat: título automático (sin IA), agrupación por fecha (Fijadas, Hoy, Ayer, 7 días, Antes) y búsqueda.
 // Puro, con pruebas en history.test.ts.
-import { clip } from "@/lib/ai/compact"
-import { norm } from "@/lib/domain"
+import { clip } from "../compact"
+import { norm } from "@mirai/domain"
 
 const SALUDO = /^(buenos d[ií]as|buenas tardes|buenas noches|buenas|hola|holi|hey|oye|mirai)\b[\s,!.:]*/i
 const RELLENO = /^(por favor|porfa|me puedes decir|me podr[ií]as decir|me dices|quiero saber|quisiera saber|necesito saber|dime|cu[eé]ntame|ay[uú]dame a saber|una pregunta)\b[\s,:]*/i

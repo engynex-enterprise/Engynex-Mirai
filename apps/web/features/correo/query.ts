@@ -1,2 +1,2 @@
-/** Búsqueda por defecto (MAILQ de la v4). */
-export const MAILQ_DEFAULT = "(compra OR compraste OR transaccion OR transacción OR pago OR débito OR retiro) (from:bancolombia OR from:davivienda OR from:nequi OR from:daviplata OR from:bancodebogota OR from:nu.com.co OR from:scotiabankcolpatria OR from:bbva OR from:avvillas OR from:lulobank OR from:bancopopular OR from:bancodeoccidente OR from:falabella) newer_than:30d"
+// Re-exportación: vive en packages/ai (@mirai/ai/mail-query). Puro (también en el navegador).
+export { MAILQ_DEFAULT } from "@mirai/ai/mail-query"

@@ -1,7 +1,15 @@
 import { Module } from "@nestjs/common"
+import { BookTablesModule } from "../book-tables/book-tables.module"
+import { FixedController } from "./fixed.controller"
+import { FixedService } from "./fixed.service"
 
-// Módulo `fixed` (docs/arquitectura/v6-separacion-front-back.md §2.6): gastos fijos y suscripciones: pay, unpay, charge.
-// Dueño: F2-D. Stub vacío de F2-B: su dueño agrega controllers, servicios, repositorios (puerto) y adaptadores
-// en esta carpeta, y su contrato en packages/contracts/src/modules/fixed.ts. Ejemplo completo: modules/catalogs.
-@Module({})
+// Módulo `fixed & subscriptions` (docs/arquitectura/v6-separacion-front-back.md §2.6). Dueño: F2-D.
+// pay / unpay de gastos fijos y charge de suscripciones (RPC de la base); el CRUD va por book-tables.
+// Exporta FixedService (automatizaciones: "pagar fijo"; chat: propuestas confirmadas).
+@Module({
+  imports: [BookTablesModule],
+  controllers: [FixedController],
+  providers: [FixedService],
+  exports: [FixedService],
+})
 export class FixedModule {}

@@ -3,8 +3,8 @@ import { BANCO, TEMAS, eligible, followUps, pickSuggestions, rng, temaDe } from 
 import { autoTitle, groupOf, groupThreads, matchThread, preview } from "./history"
 import { continueDecision, detectDecision, detectQuickAction } from "./intent"
 import { inline, parseMarkdown, plainText } from "./markdown"
-import { chatFacts, quickAnswer } from "@/lib/ai/router"
-import type { BookData } from "@/lib/domain"
+import { chatFacts, quickAnswer } from "../router"
+import type { BookData } from "@mirai/domain"
 
 // ── Banco de sugerencias y su selección ──
 describe("sugerencias", () => {

@@ -6,9 +6,9 @@ import { contextoChat } from "./contexto"
 import { integralExtras } from "./extras"
 import type { Categorize } from "./tools"
 import { HOY, libroPrueba } from "./libro-prueba"
-import { chatFacts, quickAnswer } from "@/lib/ai/router"
-import { estadoIntegral, flujoIntegral, periodo } from "@/lib/domain/flujo-integral"
-import { capacidad, compromisos } from "@/lib/domain/dashboard"
+import { chatFacts, quickAnswer } from "../router"
+import { estadoIntegral, flujoIntegral, periodo } from "@mirai/domain/flujo-integral"
+import { capacidad, compromisos } from "@mirai/domain/dashboard"
 
 // Registrar en todos los módulos desde el chat sin IA: frase → interpretación → registro del libro → tarjeta.
 

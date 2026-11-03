@@ -2,11 +2,15 @@
 // Endpoints: CRUD genérico de categorías, entidades, medios de pago, reglas, proveedores y contactos; sugerir categoría.
 //
 // F2-B dejó aquí el módulo de ejemplo de punta a punta (solo lectura): GET /v1/books/:bookId/categories, con la misma
-// consulta que `useCategories()` de apps/web (book_id del libro, sin borradas, orden por `sort`). F2-D agrega el resto.
+// consulta que `useCategories()` de apps/web (book_id del libro, sin borradas, orden por `sort`). F2-D agrega:
+//   POST …/registros/resolve → busca un contacto, entidad o proveedor igual (documento/NIT o nombre normalizado:
+//   findContact / findEntity / normProv de @mirai/domain) y solo si no existe lo crea. Lo usan préstamos, importar y
+//   el chat para no duplicar registros. El CRUD de cada catálogo sale del contrato genérico book-tables.
 import { initContract } from "@ts-rest/core"
 import { z } from "zod"
 import type { Row } from "@mirai/db/tables"
-import { COMMON_ERRORS, Uuid } from "../common"
+import { ApiError, ApiOk, COMMON_ERRORS, Uuid } from "../common"
+import { NuevoRegistro, Registro } from "./loans"
 
 export const meta = { id: "catalogs", owner: "F2-D" } as const
 
@@ -42,6 +46,15 @@ export const catalogsContract = c.router(
       query: CategoriesQuery,
       responses: { ...COMMON_ERRORS, 200: z.array(CategoryRow) },
       summary: "Categorías de gasto del libro (sin las borradas), en el orden de la persona",
+    },
+    resolve: {
+      method: "POST",
+      path: "/v1/books/:bookId/registros/resolve",
+      pathParams: BookParams,
+      body: z.object({ registro: NuevoRegistro, crear: z.boolean().default(true) }),
+      responses: { ...COMMON_ERRORS, 402: ApiError, 409: ApiError, 200: ApiOk(Registro.nullable()) },
+      summary: "Contacto, entidad o proveedor: usa el que ya existe (mismo documento/NIT o nombre) o lo crea",
+      description: "Con `crear: false` solo busca (null si no hay uno igual). Crear: «Colabora» o más.",
     },
   },
   { strictStatusCodes: true },

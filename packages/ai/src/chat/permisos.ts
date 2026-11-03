@@ -3,7 +3,7 @@
 // - "Registra sus gastos" (registra) solo agrega gastos e ingresos propios (OWN_ROW_TABLES).
 // - Colabora, Administra y el dueño (editor y superiores) registran en todos los módulos.
 // - "Solo mira" (viewer) solo consulta.
-import { can, type AccessRole, type Perm } from "@/lib/household/roles"
+import { can, type AccessRole, type Perm } from "@mirai/domain/household/roles"
 import { PROPUESTA_TIPOS, type PropuestaTipo } from "./types"
 
 /** Permiso que exige cada tipo de propuesta. */

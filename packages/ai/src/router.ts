@@ -9,9 +9,9 @@
 // - Consejero: si la frase trae tipo y valor claros, se interpreta con reglas y las preguntas de "faltan datos" se
 //   generan aquí.
 // - Correo del banco: los correos sin un monto no pueden ser compras y no se mandan a la IA.
-import { CONS_RE, HKW, addMonths, finCtx, formatCOP, gastosMesK, localCat, localInterp, mkey, moneyIn, norm, toDay, type AdvisorInput, type BookData, type CategoryIn, type DateInput, type LocalCatContext } from "@/lib/domain"
-import { estadoIntegral, flujoIntegral, periodo, type ExtrasIntegral } from "@/lib/domain/flujo-integral"
-import { capacidad, compromisos } from "@/lib/domain/dashboard"
+import { CONS_RE, HKW, addMonths, finCtx, formatCOP, gastosMesK, localCat, localInterp, mkey, moneyIn, norm, toDay, type AdvisorInput, type BookData, type CategoryIn, type DateInput, type LocalCatContext } from "@mirai/domain"
+import { estadoIntegral, flujoIntegral, periodo, type ExtrasIntegral } from "@mirai/domain/flujo-integral"
+import { capacidad, compromisos } from "@mirai/domain/dashboard"
 
 // ── Categorizar y gasto hormiga ──────────────────────────────────────────────────────────────────────────────────
 
