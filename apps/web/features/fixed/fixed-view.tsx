@@ -16,7 +16,7 @@ import { DataTable, catalogMatch, catalogOptions, type DTColumn } from "@/compon
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useSoftDelete } from "@/hooks/use-book-data"
 import { useIdParam, useNewParam } from "@/hooks/use-new-param"
-import { createClient } from "@/utils/supabase/client"
+import { unpayFixedExpense } from "./commands"
 import { FFREC, fijoStatus, fijoValor, fijosMes, fixedReparto, relTime, toDay, type FixedExpenseIn, type FixedStatus } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import { DUE_HINT, daysBetween } from "@/lib/list-helpers"
@@ -63,7 +63,7 @@ export function FixedView() {
   const paidThisMonth: Pago[] = fixed.flatMap((f) => f.payments.filter((p) => p.fecha.startsWith(mes)).map((p) => ({ f, p }))).sort((a, b) => b.p.fecha.localeCompare(a.p.fecha))
 
   const unpay = async (paymentId: string) => {
-    const { error } = await createClient().rpc("unpay_fixed_expense", { p_payment: paymentId })
+    const { error } = await unpayFixedExpense({ p_payment: paymentId })
     if (error) return toast.error("No se pudo deshacer", { description: error.message })
     toast("Pago deshecho")
     invalidateBook(qc, bookId, "fixed_expenses"); invalidateBook(qc, bookId, "expenses")

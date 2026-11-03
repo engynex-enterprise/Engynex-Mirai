@@ -20,7 +20,7 @@ import { googleIdentities, signInMethods, type Method } from "@/lib/account/acco
 import { haceCuanto } from "@/lib/household/invites"
 import { Confirm } from "@/features/household/roles-ui"
 import { openHelpCenter } from "@/components/app/help-sheet"
-import { removeMethod } from "./actions"
+import { removeMethod } from "./api"
 import { EmailChangeDialog, PendingEmail } from "./email-change"
 import { MoveAccountDialog } from "./move-account"
 import { PasswordForm } from "./password-form"

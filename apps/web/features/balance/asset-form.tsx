@@ -18,6 +18,7 @@ import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { assetCuadrar } from "./commands"
 import { esCuentaDinero, type SaldoCuenta } from "@/lib/domain/cuentas"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -76,7 +77,7 @@ function Body({ onOpenChange, initialSide, edit }: { onOpenChange: (o: boolean) 
       if (side === "activos") {
         const sb = createClient()
         if (dinero && auto) {
-          const { error } = await sb.rpc("asset_cuadrar", { p_asset: id, p_saldo: valor })
+          const { error } = await assetCuadrar({ p_asset: id, p_saldo: valor })
           if (error) throw new Error(error.message)
         } else if (edit?.row.saldo_base != null) {
           await sb.from("assets").update({ saldo_base: null, saldo_fecha: null, saldo_at: null }).eq("id", id)

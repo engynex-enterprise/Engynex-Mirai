@@ -18,8 +18,8 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
 import { useSettings } from "@/features/catalogs/hooks"
-import { notifyChannels, sendDigestNow, sendTestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/actions"
-import { calendarStatus, syncCalendar } from "@/features/correo/actions"
+import { notifyChannels, sendDigestNow, sendTestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/api"
+import { calendarStatus, connectGoogleViaApi, googleViaApi, syncCalendar } from "@/features/correo/api"
 import { BrandLogo } from "@/components/mirai/brand-logo"
 import { currentPush, disablePush, enablePush, pushSupported } from "@/features/notify/push-client"
 import { AVISOS, CANALES, defaultMatriz, onFor, type CanalKey, type Canales, type Matriz } from "@/lib/notify/rules"
@@ -132,7 +132,7 @@ function GoogleCalendarSection({ on, onChange }: { on: boolean; onChange: (v: bo
       {!st ? <Spinner /> : !st.plan ? <p className="pt-3 text-sm text-muted-foreground">Llevar tus pagos a Google Calendar está en Mirai Premium.</p> : !st.conectado ? (
         <div className="flex flex-wrap items-center gap-3 pt-3">
           <p className="text-sm text-muted-foreground">Aún no conectas tu Google Calendar.</p>
-          <Button variant="outline" size="sm" asChild><a href={`/api/google/connect?s=calendar&back=${encodeURIComponent("/ajustes?tab=alertas")}`}><BrandLogo k="google-calendar" size={16} bare /> Conectar Google Calendar</a></Button>
+          <Button variant="outline" size="sm" asChild><a href={`/api/google/connect?s=calendar&back=${encodeURIComponent("/ajustes?tab=alertas")}`} onClick={(e) => { if (googleViaApi()) { e.preventDefault(); void connectGoogleViaApi("calendar", "/ajustes?tab=alertas") } }}><BrandLogo k="google-calendar" size={16} bare /> Conectar Google Calendar</a></Button>
         </div>
       ) : <>
         <SettingRow title="Mantener mis pagos en Google Calendar" desc={st.eventos ? `Mirai lleva ${st.eventos} evento${st.eventos === 1 ? "" : "s"} en tu calendario.` : "Cada mañana revisamos tus pagos y cobros."}>

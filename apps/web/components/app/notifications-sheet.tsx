@@ -13,7 +13,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Icon } from "@/components/mirai/icon"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { TONE, type IconTone } from "@/components/mirai/tone-icon"
-import { createClient } from "@/utils/supabase/client"
+import { bellList, bellReadAll, bellReadOne } from "@/features/notify/bell"
 import { cn } from "@/lib/utils"
 import { Illustration } from "@/components/mirai/illustration"
 import { useShell } from "./shell-store"
@@ -28,13 +28,8 @@ export function useNotifications() {
   const { user, book } = useApp()
   return useQuery({
     queryKey: ["notifications", user.id, book.id],
-    queryFn: async () => {
-      const { data, error } = await createClient()
-        .from("notifications").select("*").eq("user_id", user.id)
-        .or(`book_id.eq.${book.id},book_id.is.null`).order("created_at", { ascending: false }).limit(50)
-      if (error) throw new Error(error.message)
-      return data
-    },
+    // v6: con el interruptor `bell` encendido va por la API (features/notify/bell.ts); apagado, la consulta de siempre.
+    queryFn: () => bellList(user.id, book.id),
   })
 }
 
@@ -48,12 +43,10 @@ export function NotificationsSheet() {
   const unread = data?.filter((n) => !n.read_at).length ?? 0
   const list = ver === "sin-leer" ? data?.filter((n) => !n.read_at) : data
   const markAll = useMutation({
-    mutationFn: async () => {
-      await createClient().from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", user.id).is("read_at", null)
-    },
+    mutationFn: () => bellReadAll(user.id),
     onSettled: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   })
-  const markOne = (id: string) => createClient().from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))
+  const markOne = (id: string) => bellReadOne(id).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

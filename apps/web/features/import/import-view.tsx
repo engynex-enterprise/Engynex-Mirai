@@ -22,6 +22,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { addCardPurchase, payCreditCard } from "@/features/cards/commands"
 import { qk } from "@/lib/supabase/tables"
 import { csvExternalIds, detectSubs, localCat, localHormiga, parseCSV, type CsvRow } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
@@ -155,8 +156,8 @@ export function ImportView() {
     if (src.kind === "tarjeta") {
       // Extracto de la tarjeta: cada débito es una compra con tarjeta (y su gasto); cada abono, un pago a la tarjeta.
       const rs = await Promise.all([
-        ...gastos.map((r) => sb.rpc("add_card_purchase", { p_card: src.id, p_fecha: r.fecha, p_descripcion: r.descripcion, p_valor: r.valor, p_cuotas: 1, p_category: (r.category_id ?? otros) ?? undefined, p_como_gasto: true, p_external_id: r.ext, p_member: member_id ?? undefined })),
-        ...entradas.map((r) => sb.rpc("pay_credit_card", { p_card: src.id, p_valor: r.valor, p_fecha: r.fecha, p_tipo: "otro", p_nota: `Importado: ${r.descripcion}` })),
+        ...gastos.map((r) => addCardPurchase({ p_card: src.id, p_fecha: r.fecha, p_descripcion: r.descripcion, p_valor: r.valor, p_cuotas: 1, p_category: (r.category_id ?? otros) ?? undefined, p_como_gasto: true, p_external_id: r.ext, p_member: member_id ?? undefined })),
+        ...entradas.map((r) => payCreditCard({ p_card: src.id, p_valor: r.valor, p_fecha: r.fecha, p_tipo: "otro", p_nota: `Importado: ${r.descripcion}` })),
       ])
       rs.forEach((x) => x.error && errores.push(x.error.message))
     } else {

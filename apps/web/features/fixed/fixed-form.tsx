@@ -21,6 +21,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
+import { payFixedExpense } from "./commands"
 import { FFREC, FSTEP, categoriaSugerida, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -145,7 +146,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
         : v.yaPagoM === "si" ? [{ per: `prev-${v.fpag.slice(0, 7)}`, due: v.fpag }] : []
       for (const p of toPay) {
         const suf = p.per.endsWith("Q1") ? " (1ª quincena)" : p.per.endsWith("Q2") ? " (2ª quincena)" : ""
-        await sb.rpc("pay_fixed_expense", { p_fixed: nf.id, p_periodo: p.per, p_fecha: v.frec === "quincenal" ? p.due : v.fpag, p_valor: v.vpag || fijoValor({ frec: v.frec, valor, reparto }, p.per), p_medio: v.medio ?? undefined, p_desc_suffix: suf })
+        await payFixedExpense({ p_fixed: nf.id, p_periodo: p.per, p_fecha: v.frec === "quincenal" ? p.due : v.fpag, p_valor: v.vpag || fijoValor({ frec: v.frec, valor, reparto }, p.per), p_medio: v.medio ?? undefined, p_desc_suffix: suf })
       }
       const st = fijoProxIso({ ...nf, valor: Number(nf.valor), payments: toPay.map((p) => ({ periodo: p.per, fecha: v.fpag, valor })) } as never, today)
       toast.success(`${o.nombre} guardado`, {

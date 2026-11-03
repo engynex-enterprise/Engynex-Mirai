@@ -14,7 +14,8 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? process.env.VERCEL_DEPLOYMENT_ID ?? "dev" },
   // Cabeceras de seguridad (CSP, HSTS, iframes, permisos): lib/security/headers.ts.
   async headers() {
-    const h = securityHeaders({ dev: process.env.NODE_ENV !== "production", supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL, enforceCsp: process.env.MIRAI_CSP_ENFORCE === "1" });
+    // v6 F2-H-7: connect-src suma el origen de la API (MIRAI_API_URL) y del gateway de tiempo real (NEXT_PUBLIC_REALTIME_URL).
+    const h = securityHeaders({ dev: process.env.NODE_ENV !== "production", supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL, apiUrl: process.env.MIRAI_API_URL || process.env.NEXT_PUBLIC_API_URL, realtimeUrl: process.env.NEXT_PUBLIC_REALTIME_URL, enforceCsp: process.env.MIRAI_CSP_ENFORCE === "1" });
     return [
       { source: "/:path*", headers: h },
       // PWA (docs/PWA.md): el service worker siempre se revisa en la red (si no, las actualizaciones tardan hasta 24 h)

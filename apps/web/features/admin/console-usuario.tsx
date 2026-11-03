@@ -23,7 +23,7 @@ import { fmtDate } from "@/lib/format"
 import { precio } from "@/lib/plans"
 import { ESTADOS, TIPOS, type FeedbackEstado, type FeedbackTipo } from "@/lib/content/opiniones"
 import { AssignPlanDialog, usePlanOptions } from "./console-negocio"
-import { adminAddNote, adminDeleteNote, adminDeleteUser, adminRecoveryLink, adminSetPlatformAdmin, adminSetSuspended, adminUser } from "./server"
+import { adminAddNote, adminDeleteNote, adminDeleteUser, adminRecoveryLink, adminSetPlatformAdmin, adminSetSuspended, adminUser } from "./api"
 import { tablaLabel } from "@/lib/admin-nav"
 import { AdminSkeleton, Empty, InfoRow, rel, SeeAll, useAsk, useDialogTarget } from "./ui"
 

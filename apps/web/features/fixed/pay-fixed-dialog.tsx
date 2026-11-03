@@ -14,7 +14,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
+import { payFixedExpense } from "./commands"
 import { fijoStatus, fijoValor, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { methodOptions, usePaymentMethods } from "@/features/catalogs/hooks"
@@ -50,7 +50,7 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
     if (!valor) return toast.error("Escribe el valor que pagaste")
     setBusy(true)
     const q = qLabel(per)
-    const { data, error } = await createClient().rpc("pay_fixed_expense", { p_fixed: fixed.id, p_periodo: per, p_fecha: fecha, p_valor: valor, p_medio: medio ?? undefined, p_desc_suffix: q ? ` (${q})` : "" })
+    const { data, error } = await payFixedExpense({ p_fixed: fixed.id, p_periodo: per, p_fecha: fecha, p_valor: valor, p_medio: medio ?? undefined, p_desc_suffix: q ? ` (${q})` : "" })
     setBusy(false)
     if (error) return toast.error("No se pudo registrar el pago", { description: error.message })
     const r = data as { ajuste: string | null; aporte: { t: string; v: number; saldo?: number; nombre?: string; ahorrado?: number; objetivo?: number } | null }

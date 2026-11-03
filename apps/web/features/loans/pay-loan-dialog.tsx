@@ -1,7 +1,7 @@
 "use client"
 
 import { Camera } from "lucide-react"
-import { readReceipt } from "@/features/ai/actions"
+import { readReceipt } from "@/features/ai/api"
 import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"

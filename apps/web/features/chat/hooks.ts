@@ -4,9 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"
 import { useApp } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
-import { MSG_COLS, THREAD_COLS, toMsg, type ChatMsg, type ChatThread } from "@/lib/chat/types"
+import { MSG_COLS, toMsg, type ChatMsg, type ChatThread } from "@/lib/chat/types"
 import { threadMarkdown, threadPlain } from "@/lib/chat/history"
-import { chatDuplicate, chatHints, chatTitle } from "./actions"
+import { apiOn } from "@/lib/api/session"
+import { chatDuplicate, chatHints, chatTitle, listMessages, listThreads, updateThreads } from "./api"
 import { THREADS_KEY, msgsKey, useChat } from "./store"
 import { saveFile } from "@/lib/pwa/save-file"
 
@@ -15,11 +16,8 @@ export function useThreads(enabled = true) {
   const { user, book } = useApp()
   return useQuery({
     queryKey: [...THREADS_KEY, user.id, book.id], enabled,
-    queryFn: async () => {
-      const { data, error } = await createClient().from("chat_threads").select(THREAD_COLS).eq("book_id", book.id).eq("user_id", user.id).is("deleted_at", null).order("updated_at", { ascending: false }).limit(200)
-      if (error) throw new Error(error.message)
-      return (data ?? []) as ChatThread[]
-    },
+    // Interruptor `chat`: GET /v1/books/:b/chat/threads (./api.ts); apagado, la misma consulta de siempre.
+    queryFn: () => listThreads(book.id, user.id),
   })
 }
 
@@ -27,11 +25,7 @@ export function useThreads(enabled = true) {
 export function useThreadMessages(threadId: string | null) {
   return useQuery({
     queryKey: msgsKey(threadId), enabled: !!threadId && !threadId.startsWith("local"),
-    queryFn: async () => {
-      const { data, error } = await createClient().from("chat_messages").select(MSG_COLS).eq("thread_id", threadId!).is("deleted_at", null).order("created_at")
-      if (error) throw new Error(error.message)
-      return (data ?? []).map(toMsg)
-    },
+    queryFn: () => listMessages(threadId!),
   })
 }
 
@@ -59,6 +53,7 @@ const download = (name: string, text: string, type: string) => {
   void saveFile(new Blob([text], { type }), name)
 }
 async function threadMsgs(id: string) {
+  if (apiOn("chat")) return listMessages(id)
   const { data } = await createClient().from("chat_messages").select(MSG_COLS).eq("thread_id", id).is("deleted_at", null).order("created_at")
   return (data ?? []).map(toMsg)
 }
@@ -71,8 +66,8 @@ export function useThreadActions() {
     qc.setQueriesData<ChatThread[]>({ queryKey: THREADS_KEY }, (old) => old?.map((t) => (ids.includes(t.id) ? { ...t, ...v } : t)).filter((t) => !(ids.includes(t.id) && v.deleted_at)))
   const upd = async (ids: string[], v: Record<string, unknown>) => {
     patchList(ids, v) // cambio optimista: se siente inmediato
-    const { error } = await createClient().from("chat_threads").update(v as never).in("id", ids)
-    if (error) toast.error("No se pudo guardar", { description: error.message })
+    const error = await updateThreads(ids, v)
+    if (error) toast.error("No se pudo guardar", { description: error })
     refresh()
     return !error
   }

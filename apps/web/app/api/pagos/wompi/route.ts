@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { proxyWebhook } from "@/lib/api/webhook-proxy"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { applyPayment, type PayState } from "@/lib/payments/apply"
 import { wompiVerifyEvent } from "@/lib/payments/signatures"
@@ -7,6 +8,9 @@ const STATE: Record<string, PayState> = { APPROVED: "aprobado", DECLINED: "recha
 
 /** Eventos de Wompi (transaction.updated). Se valida el checksum y que el monto sea el que Mirai generó. */
 export async function POST(req: NextRequest) {
+  // v6: con el interruptor `webhooks` en "on" lo procesa la API (cuerpo crudo y firma tal cual); si no, lo de siempre.
+  const proxied = await proxyWebhook(req, "wompi")
+  if (proxied) return proxied
   const secret = process.env.WOMPI_EVENTS_SECRET
   if (!secret) return NextResponse.json({ error: "Wompi no está configurado" }, { status: 503 })
   const body = await req.json().catch(() => null)

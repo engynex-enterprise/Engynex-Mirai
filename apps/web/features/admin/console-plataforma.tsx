@@ -38,7 +38,7 @@ import { integrationBrand } from "@/lib/brands"
 import { FEATURES, FEATURE_LIST, ahorroAnual, precio } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 import { usePlanOptions } from "./console-negocio"
-import { adminAddAdminByEmail, adminAdmins, adminAuditLog, adminBroadcast, adminCleanOrphanHouseholds, adminGlobalIntegrations, adminNotifyLog, adminSaveGlobalIntegration, adminSaveSettings, adminSendTest, adminSetPlatformAdmin, adminSystem, adminTestDefaults, adminTestGlobal } from "./server"
+import { adminAddAdminByEmail, adminAdmins, adminAuditLog, adminBroadcast, adminCleanOrphanHouseholds, adminGlobalIntegrations, adminNotifyLog, adminSaveGlobalIntegration, adminSaveSettings, adminSendTest, adminSetPlatformAdmin, adminSystem, adminTestDefaults, adminTestGlobal } from "./api"
 import { EMAIL_KINDS } from "@/lib/notify/email-kinds"
 import { CheckGroup, Empty, fday, nf, plural, rel, ToggleRow, useAsk, useDialogTarget } from "./ui"
 

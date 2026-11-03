@@ -18,7 +18,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import PARENT_IC from "@/lib/data/legacy-parent_ic.json"
 import type { Row } from "@/lib/supabase/tables"
-import { saveFamilyMember } from "./actions"
+import { saveFamilyMember } from "./api"
 
 const PARENTESCOS = Object.entries(PARENT_IC as Record<string, string>).filter(([k]) => k !== "Cónyuge" && k !== "Hijo/a")
 

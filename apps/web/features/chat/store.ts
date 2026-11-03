@@ -4,7 +4,8 @@ import { create } from "zustand"
 import type { QueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"
 import type { ChatEvent, ChatMsg, Consulta, Propuesta, Tono } from "@/lib/chat/types"
-import { chatAttach } from "./actions"
+import { chatAttach } from "./api"
+import { apiOn } from "@/lib/api/session"
 
 // Un solo motor de chat para la burbuja y /consejero: la conversación actual, la respuesta en curso (streaming) y el
 // tono viven aquí (zustand), así la respuesta sigue llegando aunque cierres la ventana o abras la pantalla completa.
@@ -112,10 +113,11 @@ export async function sendChat(qc: QueryClient, input: { text: string; editId?: 
   let done: ChatMsg | null = null
   let failed: string | null = null
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST", headers: { "content-type": "application/json" }, signal: ctrl.signal,
-      body: JSON.stringify({ threadId, text, tono: st.tono, editId: input.editId, regenerate: input.regenerate }),
-    })
+    const payload = { threadId, text, tono: st.tono, editId: input.editId, regenerate: input.regenerate }
+    // Interruptor `chat`: el mismo NDJSON desde la API (Bearer; errores ya en español). Apagado: /api/chat de siempre.
+    const res = apiOn("chat")
+      ? await (await import("@/lib/api/chat")).apiChatSend(payload, ctrl.signal)
+      : await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, signal: ctrl.signal, body: JSON.stringify(payload) })
     if (res.status === 429) throw new Error(((await res.json().catch(() => ({}))) as { msg?: string }).msg ?? "Enviaste muchos mensajes seguidos. Espera un momento.")
     if (!res.ok || !res.body) throw new Error(res.status === 401 ? "Tu sesión se cerró. Vuelve a entrar." : "No pudimos conectarnos con Mirai. Revisa tu conexión.")
     const reader = res.body.getReader()

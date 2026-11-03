@@ -11,7 +11,7 @@ import { Notice } from "@/components/mirai/notice"
 import { createClient } from "@/utils/supabase/client"
 import { ROLE_INFO } from "@/lib/household/roles"
 import { fmtVence } from "@/lib/household/invites"
-import { acceptInvitation } from "./actions"
+import { acceptInvitation } from "./api"
 import type { InvitationInfo } from "./query"
 
 const NO_SIRVE: Record<string, { t: string; d: string }> = {

@@ -18,6 +18,7 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { paySubscription } from "@/features/fixed/commands"
 import { conv, detectSubs, iso, subMensual, subsMes } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { DUE_HINT, DUE_TONE, dueState, dueText } from "@/lib/list-helpers"
@@ -55,7 +56,7 @@ export function SubscriptionsView() {
     const sb = createClient()
     const valor = Math.round(conv(Number(s.valor), s.currency, trm) / Math.max(1, s.comparte))
     const fecha = s.proximo && s.proximo <= today ? s.proximo : today
-    const { data, error } = await sb.rpc("pay_subscription", { p_sub: s.id, p_fecha: fecha, p_valor: valor })
+    const { data, error } = await paySubscription({ p_sub: s.id, p_fecha: fecha, p_valor: valor })
     if (error) return toast.error("No se pudo registrar", { description: error.message })
     kickAutomations()
     const r = (data ?? {}) as { expense_id?: string; proximo?: string }

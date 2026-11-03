@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useApp } from "@/components/app/app-context"
-import { loadAccount } from "./actions"
+import { loadAccount } from "./api"
 
 export const accountKey = (userId: string) => ["account", userId] as const
 

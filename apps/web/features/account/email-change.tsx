@@ -12,7 +12,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { Spinner } from "@/components/ui/spinner"
 import { checkNewEmail, emailChangeState, type AccountState } from "@/lib/account/account"
 import { haceCuanto } from "@/lib/household/invites"
-import { cancelEmailChange, requestEmailChange, resendEmailChange } from "./actions"
+import { cancelEmailChange, requestEmailChange, resendEmailChange } from "./api"
 
 /** Ventana "Cambiar el correo de tu cuenta". */
 export function EmailChangeDialog({ open, onOpenChange, current, initial = "", onDone }: { open: boolean; onOpenChange: (o: boolean) => void; current: string; initial?: string; onDone: () => void }) {

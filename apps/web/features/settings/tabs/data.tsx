@@ -24,7 +24,7 @@ import { useApp } from "@/components/app/app-context"
 import { can } from "@/lib/household/roles"
 import { createClient } from "@/utils/supabase/client"
 import { SampleButton } from "@/features/setup/sample-button"
-import { backupUrl, createBackup, deleteAccount, deleteBackup, exportBookJson, exportMyData, formatBlocks, restoreBackup, restoreFromJson } from "@/features/data/actions"
+import { backupUrl, createBackup, deleteAccount, deleteBackup, exportBookJson, exportMyData, formatBlocks, restoreBackup, restoreFromJson } from "@/features/data/api"
 import { SettingRow, SettingSection, SettingStack } from "../ui"
 import { saveFile } from "@/lib/pwa/save-file"
 

@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { connection } from "next/server"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
-import { contadorOpen } from "@/features/contador/actions"
+import { contadorOpen } from "@/features/contador/api"
 import { ContadorPortal } from "@/features/contador/portal"
 
 export const metadata = { title: "Portal del contador", robots: { index: false, follow: false } }

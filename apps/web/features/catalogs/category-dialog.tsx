@@ -2,7 +2,7 @@
 
 import { Sparkles } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import { suggestCategory } from "@/features/ai/actions"
+import { suggestCategory } from "@/features/ai/api"
 import { localCatGuess } from "@/features/ai/local"
 import { useState } from "react"
 import { toast } from "@/components/mirai/toast"

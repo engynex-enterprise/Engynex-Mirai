@@ -21,6 +21,7 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { goalContribute } from "./commands"
 import { aporteFondoSugerido, fijoStatus, imprevistos, liquidez, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
 import { fondoEstado } from "@/lib/domain/savings"
 import { Combobox } from "@/components/mirai/combobox"
@@ -110,7 +111,7 @@ export function GoalsView() {
     if (!v) return toast.error("Escribe cuánto guardaste")
     setAbonando(g.id)
     const sb = createClient()
-    const { data, error } = await sb.rpc("goal_contribute", { p_goal: g.id, p_valor: v, p_fecha: today, p_medio: medio[g.id] || undefined })
+    const { data, error } = await goalContribute({ p_goal: g.id, p_valor: v, p_fecha: today, p_medio: medio[g.id] || undefined })
     setAbonando(null)
     if (error) return toast.error("No se pudo abonar", { description: error.message })
     const r = data as { id: string; ahorrado: number; objetivo: number }

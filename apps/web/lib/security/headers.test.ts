@@ -35,4 +35,13 @@ describe("cabeceras de seguridad", () => {
     expect(get(h, "Strict-Transport-Security")).toBeUndefined()
     expect(cspDirectives({ dev: true })).toContain("'unsafe-eval'")
   })
+
+  it("v6: connect-src suma el origen de la API y el del gateway (http y ws del mismo host)", () => {
+    const csp = cspDirectives({ dev: false, supabaseUrl: "https://x.supabase.co", apiUrl: "https://api.mirai.engynex.com/", realtimeUrl: "https://rt.mirai.engynex.com" })
+    const connect = csp.split("; ").find((d) => d.startsWith("connect-src"))!
+    expect(connect).toContain("https://api.mirai.engynex.com")
+    expect(connect).toContain("https://rt.mirai.engynex.com wss://rt.mirai.engynex.com")
+    expect(cspDirectives({ dev: false, apiUrl: "basura" })).not.toContain("basura")
+    expect(cspDirectives({ dev: true, realtimeUrl: "http://localhost:8081" })).toContain("ws://localhost:8081")
+  })
 })

@@ -23,7 +23,9 @@ export function watchErrors(page: Page) {
   return list
 }
 
-export const shot = (page: Page, name: string, project: string) => page.screenshot({ path: `tests/.out/${name}-${project}.png`, fullPage: true })
+/** Modo de la batería (v6 F2-H-8): `api-on` guarda sus capturas aparte (`…-api.png`) para comparar con `api-off`. */
+export const API_MODE = process.env.E2E_API === "on" ? "on" : "off"
+export const shot = (page: Page, name: string, project: string) => page.screenshot({ path: `tests/.out/${name}-${project}${API_MODE === "on" ? "-api" : ""}.png`, fullPage: true })
 
 /**
  * Crea una entidad (banco o casa de empeño) desde el selector de una deuda. Si ya existía con ese nombre (p. ej. en un

@@ -19,6 +19,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { addCardPurchase, payCreditCard } from "./commands"
 import { annuity, deudaTarjeta, localCat, tarjetaPagoMes, type CardConPagos } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -115,7 +116,7 @@ function PurchaseBody({ card, purchase, onOpenChange }: { card: Row<"credit_card
       toast.success("Compra actualizada", { description: purchase.expense_id ? "También quedó así en tus gastos." : undefined })
     } else {
       // Una sola transacción: la compra y (si se pide) su gasto enlazado, o nada.
-      const { error } = await sb.rpc("add_card_purchase", { p_card: card.id, p_fecha: fecha, p_descripcion: desc.trim(), p_valor: valor, p_cuotas: n, p_category: category ?? undefined, p_como_gasto: comoGasto })
+      const { error } = await addCardPurchase({ p_card: card.id, p_fecha: fecha, p_descripcion: desc.trim(), p_valor: valor, p_cuotas: n, p_category: category ?? undefined, p_como_gasto: comoGasto })
       setBusy(false)
       if (error) return toast.error("No se pudo guardar la compra", { description: error.message })
       kickAutomations()
@@ -189,7 +190,7 @@ function PayCardBody({ card, onOpenChange }: { card: CardPagable; onOpenChange: 
     if (!valido) return
     setBusy(true)
     const sb = createClient()
-    const { data, error } = await sb.rpc("pay_credit_card", { p_card: card.id, p_valor: valor, p_fecha: fecha, p_tipo: tipo, p_medio: medio ?? undefined })
+    const { data, error } = await payCreditCard({ p_card: card.id, p_valor: valor, p_fecha: fecha, p_tipo: tipo, p_medio: medio ?? undefined })
     setBusy(false)
     if (error) return toast.error("No se pudo registrar el pago", { description: error.message })
     const id = (data as { payment_id?: string } | null)?.payment_id

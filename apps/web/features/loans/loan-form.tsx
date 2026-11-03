@@ -43,7 +43,7 @@ import { ProviderSelect } from "@/features/providers/provider-select"
 import { suggestLoanProvider } from "@/lib/domain/proveedor-pagos"
 import { DOC_TIPOS } from "@/features/contacts/contact-form"
 import { EntityDialog } from "@/features/catalogs/entity-dialog"
-import { readLoanDoc } from "@/features/ai/actions"
+import { readLoanDoc } from "@/features/ai/api"
 import { descargarAcuerdo } from "./acuerdo"
 
 export type LoanKind = "cobrar" | "pagar"

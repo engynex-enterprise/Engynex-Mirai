@@ -99,4 +99,43 @@ describe("interruptores de la API (api_rollout)", () => {
     expect(viaApi(null, "me", "x")).toBe(false)
     expect(viaApi({ me: "raro" }, "me", "x")).toBe(false)
   })
+
+  it("un valor inválido no apaga los demás; _off apaga todo", async () => {
+    const { viaApi, resolveRollout } = await import("./rollout")
+    expect(viaApi({ me: "raro", chat: "on" }, "chat", "x")).toBe(true)
+    expect(resolveRollout({ _off: true, chat: "on" }, { userId: "x" })).toEqual({})
+    expect(resolveRollout("basura", { userId: "x" })).toEqual({})
+  })
+
+  it("admins solo para administradores de la plataforma", async () => {
+    const { viaApi } = await import("./rollout")
+    expect(viaApi({ admin: "admins" }, "admin", "x", { isAdmin: true })).toBe(true)
+    expect(viaApi({ admin: "admins" }, "admin", "x")).toBe(false)
+  })
+
+  it("pct:N enciende un porcentaje estable de personas", async () => {
+    const { viaApi, rolloutBucket } = await import("./rollout")
+    const ids = Array.from({ length: 2000 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`)
+    const on = ids.filter((id) => viaApi({ chat: "pct:25" }, "chat", id)).length
+    expect(on / ids.length).toBeGreaterThan(0.2)
+    expect(on / ids.length).toBeLessThan(0.3)
+    expect(ids.every((id) => viaApi({ chat: "pct:25" }, "chat", id) === viaApi({ chat: "pct:25" }, "chat", id))).toBe(true)
+    // Subir el porcentaje nunca saca a quien ya estaba.
+    expect(ids.filter((id) => viaApi({ chat: "pct:25" }, "chat", id)).every((id) => viaApi({ chat: "pct:50" }, "chat", id))).toBe(true)
+    expect(viaApi({ chat: "pct:0" }, "chat", ids[0])).toBe(false)
+    expect(ids.every((id) => viaApi({ chat: "pct:100" }, "chat", id))).toBe(true)
+    expect(viaApi({ chat: "pct:101" }, "chat", ids[0])).toBe(false)
+    expect(viaApi({ chat: "pct:50" }, "chat", null)).toBe(false)
+    expect(rolloutBucket("chat", "a")).toBe(rolloutBucket("chat", "a"))
+  })
+
+  it("la clave de detalle (módulo:tabla) gana sobre la del módulo", async () => {
+    const { viaApi, flagOn } = await import("./rollout")
+    const r = { "book-tables": "on", "book-tables:expenses": "off" }
+    expect(viaApi(r, "book-tables", "x", { detail: "expenses" })).toBe(false)
+    expect(viaApi(r, "book-tables", "x", { detail: "categories" })).toBe(true)
+    expect(flagOn({ "book-tables:loans": true }, "book-tables", "loans")).toBe(true)
+    expect(flagOn({ "book-tables:loans": true }, "book-tables", "goals")).toBe(false)
+    expect(flagOn(null, "me")).toBe(false)
+  })
 })

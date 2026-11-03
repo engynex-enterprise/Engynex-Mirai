@@ -23,13 +23,14 @@ import { EntityLogo } from "@/components/mirai/entity-logo"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
+import { addCardPurchase } from "@/features/cards/commands"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtDate } from "@/lib/format"
 import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { defaultPaySource, parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
 import { classifyBatch } from "@/features/expenses/use-ai-category"
-import { googleDisconnect, scanMail, type MailRow } from "./actions"
+import { connectGoogleViaApi, googleDisconnect, googleViaApi, scanMail, type MailRow } from "./api"
 import { MAILQ_DEFAULT } from "./query"
 
 type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null; manual?: boolean; pago: string }
@@ -93,7 +94,7 @@ export function CorreoView() {
       payment_method_id: parsePaySource(r.pago).id, member_id,
       hormiga: r.hormiga, hormiga_src: r.src === "ia" ? ("ia" as const) : ("regla" as const), origen: "correo" as const, external_id: `gmail:${r.id}`, cat_src: r.src,
     }))) : { error: null }
-    const fallos = (await Promise.all(conTarjeta.map((r) => sb.rpc("add_card_purchase", {
+    const fallos = (await Promise.all(conTarjeta.map((r) => addCardPurchase({
       p_card: parsePaySource(r.pago).id!, p_fecha: r.fecha, p_descripcion: r.comercio, p_valor: r.valor, p_cuotas: 1,
       p_category: r.category_id ?? undefined, p_como_gasto: true, p_external_id: `gmail:${r.id}`, p_member: member_id ?? undefined,
     })))).filter((x) => x.error)
@@ -111,7 +112,7 @@ export function CorreoView() {
         <Card className="items-center gap-4 p-8 text-center shadow-card ring-0">
           <span className="relative"><IsoIcon k="correo" size={64} /><span className="absolute -right-3 -bottom-2"><BrandLogo k="gmail" size={32} /></span></span>
           <div><h2 className="text-lg font-semibold">Conecta tu Gmail</h2><p className="max-w-md text-muted-foreground">Solo pedimos permiso de lectura. Mirai busca los correos de compras de tus bancos; no lee nada más ni envía correos.</p></div>
-          <Button variant="outline" size="lg" onClick={() => { location.href = "/api/google/connect?s=gmail&back=/correo" }}><BrandLogo k="google" size={20} bare /> Conectar con Google</Button>
+          <Button variant="outline" size="lg" onClick={() => { if (googleViaApi()) void connectGoogleViaApi("gmail", "/correo"); else location.href = "/api/google/connect?s=gmail&back=/correo" }}><BrandLogo k="google" size={20} bare /> Conectar con Google</Button>
           <p className="text-xs text-muted-foreground">Puedes desconectarlo cuando quieras.</p>
         </Card>
       ) : (

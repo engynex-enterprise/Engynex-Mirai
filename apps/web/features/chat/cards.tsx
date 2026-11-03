@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import type { ChatMeta, ChatMsg, Propuesta } from "@/lib/chat/types"
 import { puedeProponer } from "@/lib/chat/permisos"
 import { FREC_LABEL, TIPO_INFO, destino, type TipoInfo } from "@/lib/chat/propuestas"
-import { chatCancel, chatConfirm } from "./actions"
+import { chatCancel, chatConfirm } from "./api"
 import { msgsKey } from "./store"
 
 const TONE: Record<TipoInfo["tone"], string> = {

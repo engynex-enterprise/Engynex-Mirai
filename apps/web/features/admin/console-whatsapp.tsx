@@ -27,7 +27,7 @@ import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { autoMap, buildTemplateMessage, caseConfig, esPlantillaDeMeta, isNamed, pickTemplate, sampleValues, templateSlots, WA_CASES, WA_VARS, type MetaTemplate, type ParamPreview, type WaCase, type WaCaseCfg, type WaMap, type WaSettings } from "@/lib/notify/whatsapp"
 import { bodyVarCount, canEdit, draftComponents, emptyDraft, isDynamicUrl, metaToDraft, REJECT_REASON, STATUS_LABEL, validateDraft, WA_CATEGORIES, WA_LANGS, type DraftButton, type TemplateDraft } from "@/lib/notify/wa-templates"
-import { adminTestDefaults } from "./server"
+import { adminTestDefaults } from "./api"
 import { useAsk, useDialogTarget } from "./ui"
 import { adminWaDeleteTemplate, adminWaPreview, adminWaSaveSettings, adminWaSaveTemplate, adminWaSendTest, adminWaState, type WaState } from "./whatsapp"
 

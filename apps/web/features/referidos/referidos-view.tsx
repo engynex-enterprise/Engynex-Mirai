@@ -17,7 +17,7 @@ import { StatusPill, type PillTone } from "@/components/mirai/status-pill"
 import { Tip } from "@/components/mirai/tip"
 import { ToneIcon, toneFor } from "@/components/mirai/tone-icon"
 import { fmtDate } from "@/lib/format"
-import { misReferidos } from "./actions"
+import { misReferidos } from "./api"
 
 type Data = Awaited<ReturnType<typeof misReferidos>>
 type Invitado = Data["invitados"][number]

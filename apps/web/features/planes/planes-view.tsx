@@ -20,7 +20,7 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { FEATURES, FEATURE_LIST, GRATIS_INCLUYE, ahorroAnual, precio, type PremiumFeature } from "@/lib/plans"
 import { cn } from "@/lib/utils"
-import { paymentOptions, previewCoupon, startCheckout } from "./actions"
+import { paymentOptions, previewCoupon, startCheckout } from "./api"
 import { PremiumBadge, usePlans, type PlanRow } from "./premium"
 
 /** Botones de pago: tarjeta con renovación automática (Mercado Pago) o pago único (Wompi). */

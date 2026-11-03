@@ -16,6 +16,7 @@ import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { fundSave, fundUse } from "./commands"
 import { aporteSugerido, fijoProxIso, type PayDays } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -90,14 +91,13 @@ function FundBody({ tipo, onOpenChange, saldo, metaTxt }: { tipo: "guardar" | "u
     if (!valor) return toast.error("Escribe el valor")
     if (tipo === "usar" && !nota.trim()) return toast.error("Cuéntanos qué pasó")
     setBusy(true)
-    const sb = createClient()
     if (tipo === "guardar") {
-      const { data, error } = await sb.rpc("fund_save", { p_book: bookId, p_valor: valor, p_fecha: fecha, p_nota: nota })
+      const { data, error } = await fundSave({ p_book: bookId, p_valor: valor, p_fecha: fecha, p_nota: nota })
       setBusy(false)
       if (error) return toast.error("No se pudo guardar", { description: error.message })
       toast.success("Fondo de emergencia", { description: `Guardaste ${fmtMoney(valor)}. Tu fondo tiene ${fmtMoney(Number(data))}.` })
     } else {
-      const { data, error } = await sb.rpc("fund_use", { p_book: bookId, p_desc: nota, p_valor: valor, p_fecha: fecha, p_medio: medio ?? undefined })
+      const { data, error } = await fundUse({ p_book: bookId, p_desc: nota, p_valor: valor, p_fecha: fecha, p_medio: medio ?? undefined })
       setBusy(false)
       if (error) return toast.error("No se pudo registrar", { description: error.message })
       const r = data as { cubre: number; resto: number; saldo: number }

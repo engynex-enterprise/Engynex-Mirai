@@ -15,7 +15,7 @@ import { IsoIcon } from "@/components/mirai/iso-icon"
 import { groupThreads, matchThread } from "@/lib/chat/history"
 import type { ChatThread, Tono } from "@/lib/chat/types"
 import { cn } from "@/lib/utils"
-import { chatThreadInfo } from "./actions"
+import { chatThreadInfo } from "./api"
 import { useThreadActions, useThreads, useThreadSearch } from "./hooks"
 import { useChat } from "./store"
 

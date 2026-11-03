@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useList } from "@/hooks/use-book-data"
 import { useSettings } from "@/features/catalogs/hooks"
-import { classifyExpenses } from "@/features/ai/actions"
+import { classifyExpenses } from "@/features/ai/api"
 
 type Hit = { category_id: string | null; hormiga: boolean | null; razon: string }
 const keyOf = (desc: string, valor: number) => `${desc.trim().toLowerCase()}|${Math.round(valor / 1000)}`

@@ -4,43 +4,36 @@ import { cookies } from "next/headers"
 import { connection } from "next/server"
 import { redirect } from "next/navigation"
 import { createClient } from "@/utils/supabase/server"
-import { FEATURES, can, toPlanInfo, type PlanInfo, type PremiumFeature } from "@/lib/plans"
-import { atLeast, can as canRole, deniedMsg, toAccess, type AccessRole, type Perm } from "@/lib/household/roles"
+import { FEATURES, can, type PremiumFeature } from "@/lib/plans"
+import { atLeast, can as canRole, deniedMsg, type AccessRole, type LegacyRole, type Perm } from "@/lib/household/roles"
+import { buildAppContext, NoHouseholdError, pickBook, type AppContext as DomainAppContext, type CtxHousehold, type PlanRow, type RawAppContext } from "@mirai/domain/app-context"
+import { API_OFF, type ApiConfig } from "@/lib/api/modules"
+import { getApiConfig } from "@/lib/api/rollout"
+import { serverApi } from "@/lib/api/server"
+import { viaApi } from "@/lib/api/via"
 
 export const BOOK_COOKIE = "mirai-book"
 
 /** Nivel que conoce la versión publicada (columna household_members.role). */
-export type Role = "owner" | "editor" | "viewer"
+export type Role = LegacyRole
 export type { AccessRole }
-export type AppContext = {
-  user: { id: string; email: string; nombre: string; avatar: string | null; apodo: string; nacimiento: string | null }
-  /** `role`: nivel equivalente (owner/editor/viewer) · `access`: rol real (Dueño, Administra, Colabora, Registra sus gastos, Solo mira). */
-  household: { id: string; nombre: string; role: Role; access: AccessRole }
-  households: { id: string; nombre: string; role: Role; access: AccessRole }[]
-  book: { id: string; nombre: string; tipo: string; icon: string }
-  books: { id: string; nombre: string; tipo: string; icon: string; household_id: string }[]
-  /** Administrador de la plataforma (dueño de Mirai): ve el panel /admin. */
-  isAdmin: boolean
-  /** Plan del hogar activo (lo comparten todos sus integrantes): funciones, anuncios y límites. */
-  plan: PlanInfo
-}
+/**
+ * Contexto del shell: el mismo de @mirai/domain/app-context (el que arma GET /v1/me con buildAppContext) más `api`,
+ * la configuración de la API para esta persona (origen e interruptores; API_OFF con todo apagado).
+ */
+export type AppContext = DomainAppContext & { api: ApiConfig }
 
-type PlanRow = Parameters<typeof toPlanInfo>[0]
-type CtxProfile = { id: string; email: string | null; nombre: string | null; avatar_url: string | null; apodo: string | null; nacimiento: string | null; last_book_id: string | null }
-type CtxHousehold = { id: string; nombre: string; role: string; access_role: string | null; plan?: PlanRow }
-type CtxBook = { id: string; nombre: string; tipo: string; icon: string; household_id: string; is_default: boolean | null }
-type RawContext = { profile: CtxProfile | null; admin: boolean; households: CtxHousehold[]; books: CtxBook[] }
 type Sb = ReturnType<typeof createClient>
 
 /** Un solo viaje a la base (función mirai_app_context, RLS con el JWT de la persona). */
-async function loadContextRpc(sb: Sb): Promise<RawContext | null> {
+async function loadContextRpc(sb: Sb): Promise<RawAppContext | null> {
   const { data, error } = await sb.rpc("mirai_app_context")
   if (error || !data) return null
-  return data as unknown as RawContext
+  return data as unknown as RawAppContext
 }
 
 /** Respaldo con las consultas sueltas (si la función aún no existe en la base). */
-async function loadContextQueries(sb: Sb, uid: string): Promise<RawContext> {
+async function loadContextQueries(sb: Sb, uid: string): Promise<RawAppContext> {
   const [{ data: profile }, { data: memberships }, { data: admin }] = await Promise.all([
     sb.from("profiles").select("id,email,nombre,avatar_url,apodo,nacimiento,last_book_id").eq("id", uid).single(),
     sb.from("household_members").select("role, access_role, households(id,nombre)").eq("user_id", uid),
@@ -60,9 +53,44 @@ async function planOf(sb: Sb, h: CtxHousehold): Promise<PlanRow> {
   return data
 }
 
+/** Lo de siempre: la base con el JWT de la persona y la misma regla que la API (buildAppContext). */
+async function contextFromDb(sb: Sb, uid: string, claimsEmail: unknown, wanted: string | undefined): Promise<DomainAppContext> {
+  const raw = (await loadContextRpc(sb)) ?? (await loadContextQueries(sb, uid))
+  const book = pickBook(raw, wanted)
+  const rawHousehold = book ? raw.households.find((h) => h.id === book.household_id) : undefined
+  if (!rawHousehold) redirect("/bienvenida")
+  const planRow = await planOf(sb, rawHousehold)
+  try {
+    return buildAppContext(raw, { uid, claimsEmail: claimsEmail == null ? null : String(claimsEmail), wantedBookId: wanted, planRow })
+  } catch (e) {
+    if (e instanceof NoHouseholdError) redirect("/bienvenida")
+    throw e
+  }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Por la API (interruptor `me`): GET /v1/me con el libro de la cookie. Sin hogar → /bienvenida (como hoy). Si la API
+ * falla (red, 5xx, 401…) devuelve null y se lee de la base: en las lecturas siempre hay respaldo.
+ */
+async function contextFromApi(cfg: ApiConfig, sb: Sb, wanted: string | undefined): Promise<DomainAppContext | null> {
+  let res: Awaited<ReturnType<ReturnType<typeof serverApi>["me"]["get"]>>
+  try {
+    res = await serverApi(cfg, sb).me.get({ query: wanted && UUID.test(wanted) ? { bookId: wanted } : {} })
+  } catch {
+    return null
+  }
+  if (res.status === 200) return res.body
+  const redirectTo = res.status === 404 ? (res.body.details as { redirect?: string } | undefined)?.redirect : undefined
+  if (redirectTo === "/bienvenida") redirect("/bienvenida")
+  return null
+}
+
 /**
  * Lee la sesión, el hogar y el libro activo. Una sola vez por petición (cache de React).
  * Antes eran 4 viajes en serie a la base (perfil/hogares → libros → plan → fila del plan); ahora es uno.
+ * Con el interruptor `me` encendido lo pide a la API (GET /v1/me); con todo apagado (por defecto) es lo de siempre.
  */
 export const getAppContext = cache(async (): Promise<AppContext> => {
   await connection()
@@ -72,25 +100,13 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
   const uid = claims?.claims.sub
   if (!uid) redirect("/login")
 
-  const raw = (await loadContextRpc(sb)) ?? (await loadContextQueries(sb, uid))
-  const { profile, books } = raw
-  const households = raw.households.map((h) => ({ id: h.id, nombre: h.nombre, role: h.role as Role, access: toAccess(h.access_role, h.role) }))
-  if (!households.length || !books.length) redirect("/bienvenida")
-
-  const wanted = store.get(BOOK_COOKIE)?.value ?? profile?.last_book_id
-  const book = books.find((b) => b.id === wanted) ?? books.find((b) => b.is_default) ?? books[0]
-  const household = households.find((h) => h.id === book.household_id)!
-  const planRow = await planOf(sb, raw.households.find((h) => h.id === household.id)!)
-
-  return {
-    user: { id: uid, email: profile?.email ?? String(claims?.claims.email ?? ""), nombre: profile?.nombre || "Tú", avatar: profile?.avatar_url ?? null, apodo: profile?.apodo ?? "", nacimiento: profile?.nacimiento ?? null },
-    household,
-    households,
-    book: { id: book.id, nombre: book.nombre, tipo: book.tipo, icon: book.icon },
-    books: books.map((b) => ({ id: b.id, nombre: b.nombre, tipo: b.tipo, icon: b.icon, household_id: b.household_id })),
-    isAdmin: raw.admin,
-    plan: toPlanInfo(planRow),
-  }
+  const wanted = store.get(BOOK_COOKIE)?.value
+  // Apagado (sin MIRAI_API_URL / MIRAI_API_ROLLOUT) no consulta nada: API_OFF.
+  const pre = await getApiConfig({ userId: uid }, sb)
+  const base = (viaApi(pre, "me") ? await contextFromApi(pre, sb, wanted) : null) ?? (await contextFromDb(sb, uid, claims?.claims.email, wanted))
+  // Con la API configurada, se resuelve otra vez sabiendo si es administrador (modo "admins"; la caché evita otra lectura).
+  const api = pre.url ? await getApiConfig({ userId: uid, isAdmin: base.isAdmin }, sb) : API_OFF
+  return { ...base, api }
 })
 
 /** Exige Premium en el hogar activo para una función (Server Actions de IA, banco, impuestos y familia). */

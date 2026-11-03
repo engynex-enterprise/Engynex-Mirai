@@ -11,7 +11,7 @@ import { Notice } from "@/components/mirai/notice"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { checkNewEmail, googleIdentities, moveSteps, type AccountState } from "@/lib/account/account"
 import { cn } from "@/lib/utils"
-import { requestEmailChange } from "./actions"
+import { requestEmailChange } from "./api"
 
 /**
  * "Mi correo de Google ya no lo uso": pasos guiados para seguir en la MISMA cuenta (los datos no se pierden).

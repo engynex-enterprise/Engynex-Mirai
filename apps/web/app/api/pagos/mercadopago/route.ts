@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { proxyWebhook } from "@/lib/api/webhook-proxy"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { applyPayment } from "@/lib/payments/apply"
 import { getAuthorizedPayment, getPayment, getPreapproval, parseMpRef } from "@/lib/payments/mercadopago"
@@ -12,6 +13,9 @@ const payState = (s?: string) => (s === "approved" ? "aprobado" : s === "rejecte
  * en la API de Mercado Pago: lo que dice la API es la fuente de verdad, no el cuerpo de la notificación.
  */
 export async function POST(req: NextRequest) {
+  // v6: con el interruptor `webhooks` en "on" lo procesa la API (cuerpo crudo y firma tal cual); si no, lo de siempre.
+  const proxied = await proxyWebhook(req, "mercadopago")
+  if (proxied) return proxied
   if (!process.env.MERCADOPAGO_ACCESS_TOKEN) return NextResponse.json({ error: "Mercado Pago no está configurado" }, { status: 503 })
   const body = await req.json().catch(() => ({}))
   const type = String(body.type ?? req.nextUrl.searchParams.get("type") ?? req.nextUrl.searchParams.get("topic") ?? "")

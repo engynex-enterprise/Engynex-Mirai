@@ -17,7 +17,7 @@ import { createClient } from "@/utils/supabase/client"
 import { fmtDate } from "@/lib/format"
 import { isFull, precio } from "@/lib/plans"
 import { SettingRow, SettingSection } from "@/features/settings/ui"
-import { cancelRenewal, paysRenewal } from "./actions"
+import { cancelRenewal, paysRenewal } from "./api"
 import { PremiumBadge } from "./premium"
 
 const PROV = { mercadopago: "Mercado Pago (tarjeta)", wompi: "Wompi (Nequi, PSE, Bancolombia)", manual: "Asignado por Mirai" } as const

@@ -23,7 +23,7 @@ import { fmtMonth, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
 import { useMembers, usePaymentMethods } from "@/features/catalogs/hooks"
-import { generateMonthSummary, type MonthSummary } from "./actions"
+import { generateMonthSummary, type MonthSummary } from "./api"
 import { AdSlot } from "@/features/ads/ad-slot"
 
 function months(today: string) {

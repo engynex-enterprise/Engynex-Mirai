@@ -13,7 +13,7 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { DataTable, DTTwoLine } from "@/components/mirai/data-table"
 import { AI_FEATURES, FUENTE_LABEL, featureLabel } from "@/lib/ai/features"
 import { fmtDate } from "@/lib/format"
-import { myAiUsage, type MyAiUsage } from "./actions"
+import { myAiUsage, type MyAiUsage } from "./api"
 
 const n = (x: number, d = 0) => x.toLocaleString("es-CO", { maximumFractionDigits: d })
 const usd = (x: number) => `US$ ${x.toLocaleString("es-CO", { minimumFractionDigits: x && x < 0.01 ? 4 : 2, maximumFractionDigits: x && x < 0.01 ? 4 : 2 })}`

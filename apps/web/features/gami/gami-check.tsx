@@ -9,7 +9,7 @@ import { createClient } from "@/utils/supabase/client"
 import { qk } from "@/lib/supabase/tables"
 import { gamiPending, todayBogota } from "@/lib/domain"
 import { useGami } from "./use-gami"
-import { logroNotifs } from "@/features/notify/actions"
+import { logroNotifs } from "@/features/notify/api"
 
 export async function confetti(n = 110) {
   if (typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches) return

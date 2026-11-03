@@ -13,7 +13,7 @@ import { createClient } from "@/utils/supabase/client"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtMoney } from "@/lib/format"
 import { parseEntry } from "./parse-entry"
-import { classifyExpenses, parseNL } from "@/features/ai/actions"
+import { classifyExpenses, parseNL } from "@/features/ai/api"
 import { useCategories, useKeywordRules, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { medioEnTexto } from "@/lib/chat/acciones"
 

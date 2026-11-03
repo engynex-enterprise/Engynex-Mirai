@@ -22,7 +22,7 @@ import { ToneIcon, toneFor } from "@/components/mirai/tone-icon"
 import { featureLabel } from "@/lib/ai/features"
 import { fmtDate } from "@/lib/format"
 import { BarList, ToggleRow, useAsk, useDialogTarget } from "./ui"
-import { adminAiUsage, adminClearAiCache, adminSaveAiSettings, adminSetModelPrice, adminSetPlanAiCupo, type AdminAiUsage } from "./ia-server"
+import { adminAiUsage, adminClearAiCache, adminSaveAiSettings, adminSetModelPrice, adminSetPlanAiCupo, type AdminAiUsage } from "./ia-api"
 
 const n = (x: number, d = 0) => x.toLocaleString("es-CO", { maximumFractionDigits: d })
 const usd = (x: number) => `US$ ${x.toLocaleString("es-CO", { minimumFractionDigits: x && x < 1 ? 4 : 2, maximumFractionDigits: x && x < 1 ? 4 : 2 })}`

@@ -25,6 +25,7 @@ import { Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
 import { useBookId } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
+import { linkExpenseFixed, unlinkExpenseFixed, payWithEmergencyFund } from "./commands"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import {
@@ -37,7 +38,7 @@ import { DEDUCIBLES } from "@/lib/domain/renta"
 import { useBookData } from "@/features/book/use-book-data"
 import { useCanEdit } from "@/components/app/app-context"
 import { isHormiga, localCat, localHormiga } from "./logic"
-import { classifyExpenses, readInvoice } from "@/features/ai/actions"
+import { classifyExpenses, readInvoice } from "@/features/ai/api"
 import { useList } from "@/hooks/use-book-data"
 import { takeShared } from "@/features/pwa/shared"
 
@@ -222,7 +223,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
 
     if (isImprevisto && v.usarFondo && fondo?.activo && fondo.saldo > 0 && !expense) {
       // Atómico en la BD: descuenta del fondo y registra el movimiento (y lo devuelve si se borra el gasto)
-      const { data: queda, error: fe } = await sb.rpc("use_emergency_fund", { p_expense: data.id, p_valor: v.valor })
+      const { data: queda, error: fe } = await payWithEmergencyFund({ p_expense: data.id, p_valor: v.valor })
       if (fe) toast.error("El gasto se guardó, pero no se pudo descontar del fondo", { description: fe.message })
       else toast.success("Imprevisto registrado", { description: `Gasto registrado y pagado con tu fondo de emergencia. Te quedan ${fmtMoney(Number(queda))} en el fondo.` })
     } else {
@@ -236,11 +237,11 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
           description: `¿Es el pago de ${cual}? Si lo es, lo marcamos como pagado y no se cuenta dos veces.`,
           duration: 12000,
           action: { label: "Sí, es ese pago", onClick: async () => {
-            const { error: le } = await sb.rpc("link_expense_fixed", { p_expense: data.id, p_fixed: sug.fixed.id, p_periodo: sug.per })
+            const { error: le } = await linkExpenseFixed({ p_expense: data.id, p_fixed: sug.fixed.id, p_periodo: sug.per })
             if (le) return toast.error("No se pudo enlazar", { description: le.message })
             qc.invalidateQueries({ queryKey: ["b", bookId] })
             toast.success(`${sug.fixed.nombre} quedó pagado`, { description: "Usamos este gasto como el pago: no se cuenta dos veces.", action: { label: "Deshacer", onClick: async () => {
-              const { error: ue } = await sb.rpc("unlink_expense_fixed", { p_expense: data.id })
+              const { error: ue } = await unlinkExpenseFixed({ p_expense: data.id })
               if (ue) return toast.error("No se pudo deshacer", { description: ue.message })
               qc.invalidateQueries({ queryKey: ["b", bookId] })
             } } })

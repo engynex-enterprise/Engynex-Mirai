@@ -26,8 +26,8 @@ import { createClient } from "@/utils/supabase/client"
 import { fmtDate, todayISO } from "@/lib/format"
 import { precio, type Coupon } from "@/lib/plans"
 import { cn } from "@/lib/utils"
-import { adminClients, adminOverview, adminRevenue } from "./actions"
-import { adminAssignPlan, adminHouseholds, adminManualPayment, adminSubscriptions, adminUpdatePayment, adminUpdateSubscription } from "./server"
+import { adminClients, adminOverview, adminRevenue } from "./api"
+import { adminAssignPlan, adminHouseholds, adminManualPayment, adminSubscriptions, adminUpdatePayment, adminUpdateSubscription } from "./api"
 import { CheckGroup, Empty, nf, rel, SeeAll, ToggleRow, useAsk, useDialogTarget } from "./ui"
 
 const PROV: Record<string, string> = { mercadopago: "Mercado Pago", wompi: "Wompi", manual: "Mirai (manual)" }

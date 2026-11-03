@@ -10,8 +10,22 @@
 
 type Header = { key: string; value: string }
 
-export function cspDirectives(o: { dev: boolean; supabaseUrl?: string }): string {
-  const sb = (() => { try { return o.supabaseUrl ? new URL(o.supabaseUrl) : null } catch { return null } })()
+type CspOpts = { dev: boolean; supabaseUrl?: string; apiUrl?: string; realtimeUrl?: string }
+
+const urlOf = (u?: string) => { try { return u ? new URL(u) : null } catch { return null } }
+
+/** Origen de la API (v6) y del gateway de tiempo real (http(s) + ws(s) del mismo host). */
+function apiOrigins(o: CspOpts): string[] {
+  const out: string[] = []
+  const api = urlOf(o.apiUrl)
+  if (api) out.push(api.origin)
+  const rt = urlOf(o.realtimeUrl)
+  if (rt) out.push(rt.origin, `${rt.protocol === "http:" ? "ws" : "wss"}://${rt.host}`)
+  return [...new Set(out)]
+}
+
+export function cspDirectives(o: CspOpts): string {
+  const sb = urlOf(o.supabaseUrl)
   const supa = sb ? [sb.origin, `wss://${sb.host}`] : []
   const d: Record<string, string[]> = {
     "default-src": ["'self'"],
@@ -19,7 +33,7 @@ export function cspDirectives(o: { dev: boolean; supabaseUrl?: string }): string
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:", "https:"],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", ...supa, "https:", "wss:", ...(o.dev ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : [])],
+    "connect-src": ["'self'", ...supa, ...apiOrigins(o), "https:", "wss:", ...(o.dev ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : [])],
     "frame-src": ["'self'", "https:"],
     "worker-src": ["'self'", "blob:"],
     "media-src": ["'self'", "data:", "blob:"],
@@ -35,7 +49,7 @@ export function cspDirectives(o: { dev: boolean; supabaseUrl?: string }): string
 /** Lo que siempre se aplica de la CSP (no bloquea scripts, estilos ni conexiones). */
 export const CSP_BASE = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
 
-export function securityHeaders(o: { dev: boolean; supabaseUrl?: string; enforceCsp?: boolean }): Header[] {
+export function securityHeaders(o: CspOpts & { enforceCsp?: boolean }): Header[] {
   const full = cspDirectives(o)
   return [
     o.enforceCsp ? { key: "Content-Security-Policy", value: full } : { key: "Content-Security-Policy", value: CSP_BASE },

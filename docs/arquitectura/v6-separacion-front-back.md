@@ -1058,6 +1058,22 @@ Pendientes: el front sigue usando `/api/chat` y las Server Actions (F2-H-6 cambi
 
 **Terminado cuando:** cada módulo en `on` pasa sus E2E con `api-on`; `apps/web` ya no tiene secretos de negocio en Vercel.
 
+**Estado F2-H (2026-11-02, sin commit):** cliente, interruptores y migración de llamadas hechos en el árbol de trabajo, **todo apagado por defecto** (sin `MIRAI_API_URL` + `MIRAI_API_ROLLOUT` la web no lee nada nuevo ni carga el cliente). `pnpm typecheck`, `pnpm lint` (0 errores; las mismas 11 advertencias de antes), `pnpm test` (web 312, contratos 20, api 394…), `pnpm --filter web build` y `pnpm --filter api build` en verde. E2E preparadas en dos modos y **sin correr** (base saturada). Procedimiento de encendido y apagado: **`docs/arquitectura/v6-f2h-encendido.md`**.
+
+| Ítem | Estado | Dónde / nota |
+|---|---|---|
+| H-1 cliente | ✔ | `apps/web/lib/api/`: `client.ts` (ts-rest sobre `apiContract`, token de la sesión del navegador), `server.ts` (RSC: token de la cookie), `fetcher.ts` (Bearer, `Idempotency-Key` en escrituras, `traceparent`, `X-Mirai-Client`, 401 → renovar una vez; GET: 2 reintentos en red/502/503/504; escrituras: 1 reintento solo sin respuesta o 503, con la misma llave), `errors.ts` (`ApiError` con el `msg` de la API o uno en español por código HTTP), `unwrap.ts`, `query.ts` (`apiRetry` de TanStack: nunca reintenta rol/plan/validación/límite), `rollout.ts`, `session.ts`, `via.ts` (`viaApi`, `viaApiOr`) y `modules.ts` (22 interruptores) |
+| H-1 interruptores | ✔ | `MIRAI_API_ROLLOUT` = `off` (defecto) \| `db` \| `all` \| `{…}` + `platform_settings.api_rollout` (caché 30 s). `packages/contracts/src/rollout.ts` ahora acepta `off`/`qa`/`admins`/`pct:N`/`on`, claves de detalle (`book-tables:expenses`), `_off` de emergencia y valores inválidos sin tumbar los demás (`resolveRollout`, `flagOn`, `rolloutBucket`). Resueltos en el servidor y enviados al navegador en `AppContext.api` |
+| H-2 `getAppContext` | ✔ | Interruptor `me` → `GET /v1/me` (404 con `redirect` → `/bienvenida`; cualquier otra falla → la base). La ruta de la base usa ahora `buildAppContext`/`pickBook` de `@mirai/domain/app-context` (la misma regla que la API) |
+| H-3 CRUD y snapshot | ✔ | `useList`/`useSave`/`useSoftDelete` (`book-tables`, por tabla) y `useBookData` (`snapshot`, partes agrupadas en una petición) sin cambiar firmas, claves, eco local, UUID del navegador ni `inflight`; lecturas con respaldo a Supabase |
+| H-4 comandos | ✔ | Las 15 llamadas RPC del navegador → `features/{expenses,fixed,cards,goals,balance}/commands.ts` (`features/book/command.ts`: misma forma `{ data, error }`; los casos que el comando no da igual siguen por la RPC) |
+| H-5 Server Actions | ◐ | `features/<x>/api.ts` con `viaApiOr` (misma firma y forma; si la acción devolvía `{ ok:false, msg }` se devuelve igual): notify, integrations, correo/Google (incluido conectar), campana, ai, reports, ia-uso, chat (acciones e hilos), household, account, planes, admin (+ Uso de IA), contador (portal en el servidor), referidos y data (exportar/copia). Pendientes sin endpoint: ver `v6-f2h-encendido.md` §7 |
+| H-6 chat | ✔ | `features/chat/store.ts` → `lib/api/chat.ts` (`POST /v1/books/:b/chat/messages`, NDJSON, Bearer; el latido `ping` se ignora; errores de las guardas en español) |
+| H-7 CSP | ✔ | `connect-src` con `MIRAI_API_URL` y `NEXT_PUBLIC_REALTIME_URL` (`https` + `wss`), `lib/security/headers.ts` (+ prueba). Tiempo real: `NEXT_PUBLIC_LIVE_SOURCE` de F2-G, sin cambios |
+| H-8 E2E | ◐ | `E2E_API=on` en `playwright.config.ts` (puerto 3101, API local en :8080 o `E2E_API_URL`, `MIRAI_API_ROLLOUT=all`), capturas `…-api.png` y `f24-api-modo.spec.ts` (confirma la fuente). **Sin correr** |
+| Pagos | ✔ | `/api/pagos/{mercadopago,wompi}` → proxy (`lib/api/webhook-proxy.ts`, cuerpo crudo y encabezados de la firma) con `webhooks` en `on`; si la API no responde, 502 (la pasarela reintenta) |
+| H-9 limpieza | ✘ | Después de 2 semanas en `on` por módulo (§4.1). Lista de lo que falta para apagar el backend de Next: `v6-f2h-encendido.md` §7 |
+
 ### F2-I — Hogar, cuenta, planes y consola admin
 **Dueño de:** `modules/{households, books, account, billing (comandos y webhooks), admin, tax/accountant-portal}`. **Depende de:** F2-B (y F2-E-2 para los correos de invitación y del plan, por inyección).
 1. **F2-I-1** `households` + `books` (bienvenida, invitaciones, roles, familia, pasar el hogar, salir y borrar) con la matriz de roles completa en las pruebas.

@@ -19,7 +19,7 @@ import { ROLE_INFO, type AccessRole } from "@/lib/household/roles"
 import { DEFAULT_FROM_ROLE, FROM_ROLES, nameMatches, transferSummary } from "@/lib/household/transfer"
 import { fmtVence } from "@/lib/household/invites"
 import { Confirm, RolePicker } from "@/features/household/roles-ui"
-import { cancelTransfer, loadTransferCandidates, requestTransfer, respondTransfer } from "./actions"
+import { cancelTransfer, loadTransferCandidates, requestTransfer, respondTransfer } from "./api"
 import { useRefreshAccount } from "./use-account"
 import type { TransferView } from "./types"
 

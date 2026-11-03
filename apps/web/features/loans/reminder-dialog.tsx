@@ -2,7 +2,7 @@
 
 import { Sparkles } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import { improveCobro } from "@/features/ai/actions"
+import { improveCobro } from "@/features/ai/api"
 import { useState } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
@@ -19,7 +19,7 @@ import type { Row } from "@/lib/supabase/tables"
 import { cobroTexto, normalizarCobros } from "@/lib/domain/cobros"
 import { createClient } from "@/utils/supabase/client"
 import { Checkbox } from "@/components/ui/checkbox"
-import { cobroWaStatus, sendCobroWhatsApp } from "@/features/notify/actions"
+import { cobroWaStatus, sendCobroWhatsApp } from "@/features/notify/api"
 
 type Tono = "amable" | "directo" | "firme"
 type Pago = "no" | "principal" | "todas"
