@@ -32,6 +32,18 @@ export async function signInGoogle(next: string): Promise<Done> {
   return error ? fail(error) : { ok: true }
 }
 
+/**
+ * Dirección de Google para la ventana flotante (sin redirigir esta pestaña). Google vuelve a /auth/google, que avisa a
+ * la pestaña de Mirai (BroadcastChannel) y se cierra. Better Auth guarda el `state` en la cookie de este mismo origen.
+ */
+export async function googleAuthUrl(): Promise<{ ok: true; url: string } | { ok: false; msg: string }> {
+  const c = await client()
+  const { data, error } = await c.signIn.social({ provider: "google", callbackURL: "/auth/google?listo=1", errorCallbackURL: "/auth/google?error=google", disableRedirect: true })
+  if (error) return fail(error) as { ok: false; msg: string }
+  const url = (data as { url?: string } | null)?.url
+  return url ? { ok: true, url } : { ok: false, msg: "Google no respondió. Intenta de nuevo." }
+}
+
 export async function signUp(o: { nombre: string; email: string; password: string; ref?: string | null; captcha?: string }): Promise<Done> {
   const c = await client()
   const body = { email: o.email, password: o.password, name: o.nombre, nombre: o.nombre, acepta_version: LEGAL_VERSION, ...(o.ref ? { ref: o.ref } : {}), callbackURL: "/bienvenida" }
