@@ -76,6 +76,8 @@ x-api-env: &api-env
   # Gemini por el AI Gateway de Cloudflare (lo arma infra/servidor/variables.mjs con CLOUDFLARE_ACCOUNT_ID).
   AI_GEMINI_BASE_URL: ${AI_GEMINI_BASE_URL:-}
   AI_GATEWAY_CF_TOKEN: ${AI_GATEWAY_CF_TOKEN:-}
+  # Cuál IA de la plataforma va primero (las demás quedan de respaldo): ai_gemini, gateway (Vercel), vertex…
+  AI_PLATFORM_PROVIDER: ${AI_PLATFORM_PROVIDER:-ai_gemini}
   MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
   MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
   WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-}

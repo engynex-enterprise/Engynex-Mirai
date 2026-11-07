@@ -5,8 +5,9 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { useIsMobile } from "@/hooks/use-mobile"
 
 /**
- * Contenedor de los toasts de Mirai (components/mirai/toast.tsx los dibuja al estilo de Facebook): abajo a la derecha,
- * encima del globo del chat (escritorio) y de la barra inferior + el globo (celular) para no taparlos.
+ * Contenedor de los toasts de Mirai (components/mirai/toast.tsx los dibuja al estilo de Facebook): arriba a la derecha
+ * (lejos del globo del chat y de la barra inferior del celular). En el celular, arriba y a lo ancho, debajo de la
+ * muesca de la pantalla (safe-area).
  */
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
@@ -15,13 +16,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
-      position="bottom-right"
+      position="top-right"
       // Uno debajo del otro (no apilados): un aviso nuevo no tapa el "Deshacer" del anterior, sobre todo en el celular.
       expand
       visibleToasts={mobile ? 2 : 3}
       gap={10}
-      offset={{ bottom: 96, right: 24 }}
-      mobileOffset={{ bottom: 148, left: 12, right: 12 }}
+      offset={{ top: 16, right: 24 }}
+      mobileOffset={{ top: "calc(env(safe-area-inset-top) + 12px)", left: 12, right: 12 }}
       {...props}
     />
   )
