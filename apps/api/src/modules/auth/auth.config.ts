@@ -11,7 +11,7 @@ import { bearer, captcha, magicLink, twoFactor } from "better-auth/plugins"
 import { decodeJwt } from "jose"
 import { sql } from "kysely"
 import { PASSWORD_MAX, PASSWORD_MIN } from "@mirai/contracts/modules/auth"
-import { authDb, type AuthKysely } from "./auth-db"
+import { authDb, type AuthKysely, comoServicio } from "./auth-db"
 import type { AuthEnvValues } from "./auth.env"
 import { EMAIL_CHANGE_ID, miraiGate, type PendingEmailChange } from "./mirai-gate.plugin"
 import { hashPassword, verifyPassword } from "./password"
@@ -203,7 +203,7 @@ export function buildAuthOptions(deps: AuthDeps) {
             const email = typeof claims.email === "string" ? claims.email.toLowerCase() : null
             const pic = typeof claims.picture === "string" ? claims.picture : null
             if (email) await authDb(deps.db).updateTable("accounts").set({ email }).where("id", "=", String(account.id)).execute()
-            if (pic) await sql`update public.profiles set avatar_url = ${pic} where id = ${String(account.userId)}::uuid and coalesce(avatar_url, '') = ''`.execute(deps.db).catch(() => undefined)
+            if (pic) await comoServicio(deps.db, (tx) => sql`update public.profiles set avatar_url = ${pic} where id = ${String(account.userId)}::uuid and coalesce(avatar_url, '') = ''`.execute(tx)).catch(() => undefined)
           },
         },
       },

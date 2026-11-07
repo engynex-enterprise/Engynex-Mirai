@@ -7,7 +7,7 @@ import type { SessionRow } from "@mirai/contracts/modules/account"
 import type { AccountState } from "@mirai/domain/account"
 import type { UserScope } from "../../../core/db/scope"
 import { SupabaseJsFactory } from "../../../core/db/supabase-js.factory"
-import { authDb } from "../../auth/auth-db"
+import { authDb, comoServicio } from "../../auth/auth-db"
 import { clearPending, getPending } from "../../auth/auth.config"
 import { MiraiAuthService } from "../../auth/mirai-auth.service"
 import type { AccountRpc } from "../account.repository"
@@ -29,7 +29,7 @@ export class BetterAuthAccountRepo extends SupabaseJsAccountRepo {
   }
 
   private async event(userId: string, kind: string, detail: Record<string, unknown> = {}) {
-    await sql`select public.log_account_event(${userId}::uuid, ${kind}, ${JSON.stringify(detail)}::jsonb)`.execute(this.auth.db).catch(() => undefined)
+    await comoServicio(this.auth.db, (tx) => sql`select public.log_account_event(${userId}::uuid, ${kind}, ${JSON.stringify(detail)}::jsonb)`.execute(tx)).catch(() => undefined)
   }
 
   override async myAccount(scope: UserScope): Promise<AccountState | null> {

@@ -6,7 +6,7 @@ import type { AdminSession, AuthConfig, Consents, MfaStatus } from "@mirai/contr
 import { PASSWORD_MIN } from "@mirai/contracts/modules/auth"
 import { RequestContextService } from "../../core/context/request-context.service"
 import { DomainError } from "../../core/errors/domain-error"
-import { authDb } from "./auth-db"
+import { authDb, comoServicio } from "./auth-db"
 import { MiraiAuthService } from "./mirai-auth.service"
 
 const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : null)
@@ -28,8 +28,8 @@ export class AuthService {
 
   async consents(): Promise<Consents> {
     const uid = this.ctx.user.id
-    const r = await sql<{ document: string; version: string; accepted_at: Date }>`
-      select document, version, accepted_at from public.consents where user_id = ${uid} order by accepted_at desc limit 50`.execute(this.auth.db)
+    const r = await comoServicio(this.auth.db, (tx) => sql<{ document: string; version: string; accepted_at: Date }>`
+      select document, version, accepted_at from public.consents where user_id = ${uid} order by accepted_at desc limit 50`.execute(tx))
     const items = r.rows.map((x) => ({ document: x.document, version: x.version, accepted_at: new Date(x.accepted_at).toISOString() }))
     const version = items.filter((i) => i.document === "terminos").map((i) => i.version).sort().at(-1) ?? ""
     return { version, items }
@@ -38,9 +38,11 @@ export class AuthService {
   async acceptConsent(version: string): Promise<{ msg: string }> {
     const uid = this.ctx.user.id
     await this.auth.db.transaction().execute(async (tx) => {
-      await sql`insert into public.consents (user_id, document, version) values (${uid}, 'terminos', ${version}), (${uid}, 'privacidad', ${version})`.execute(tx)
       // Compatibilidad: la versión aceptada también queda en los metadatos (los lee la consola y la vuelta atrás).
+      // Primero auth.users (con el rol de la conexión, dueño de `auth`); luego public.consents como service_role.
       await sql`update auth.users set raw_user_meta_data = raw_user_meta_data || jsonb_build_object('acepta_version', ${version}::text, 'acepta_at', now()::text) where id = ${uid}`.execute(tx)
+      await sql`set local role service_role`.execute(tx)
+      await sql`insert into public.consents (user_id, document, version) values (${uid}, 'terminos', ${version}), (${uid}, 'privacidad', ${version})`.execute(tx)
     })
     return { msg: "Gracias. Aceptaste la nueva versión." }
   }

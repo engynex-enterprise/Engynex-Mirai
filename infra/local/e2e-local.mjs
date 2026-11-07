@@ -162,21 +162,25 @@ function realGoogle() {
   return id && secret ? { GOOGLE_CLIENT_ID: id, GOOGLE_CLIENT_SECRET: secret } : {}
 }
 
+/** La API entra como `mirai_app` (NOINHERIT), igual que en el servidor (infra/servidor): un permiso que falte en
+ *  producción falla aquí también. Las pruebas (E2E_DB_URL) siguen con el superusuario para preparar datos. */
+const APP_DB_URL = LOCAL.dbUrl.replace("postgres:mirai-local@", "mirai_app:mirai-local-app@")
+
 function miraiEnv(keys) {
   return {
     AUTH_PROVIDER: "mirai",
     BETTER_AUTH_SECRET: "mirai-local-solo-docker-better-auth-secret-0000000001",
     BETTER_AUTH_URL: LOCAL.webUrl,
-    AUTH_DATABASE_URL: LOCAL.dbUrl,
+    AUTH_DATABASE_URL: APP_DB_URL,
     AUTH_MAIL_DRIVER: "log",
     // Cliente de Google de mentira: Better Auth arma el enlace a accounts.google.com (las pruebas lo interceptan).
     GOOGLE_CLIENT_ID: "mirai-local-e2e.apps.googleusercontent.com",
     GOOGLE_CLIENT_SECRET: "mirai-local-e2e",
     DB_ADAPTER: "postgrest",
-    DATABASE_URL: LOCAL.dbUrl,
+    DATABASE_URL: APP_DB_URL,
     POSTGREST_URL: LOCAL.postgrestUrl,
     POSTGREST_JWT_SECRET: LOCAL.jwtSecret,
-    REALTIME_DATABASE_URL: LOCAL.dbUrl,
+    REALTIME_DATABASE_URL: APP_DB_URL,
     OBJECT_STORE: "s3",
     STORAGE_BUCKET_PRIVATE: LOCAL.s3.buckets[0],
     STORAGE_BUCKET_BACKUPS: LOCAL.s3.buckets[1],

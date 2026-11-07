@@ -1,7 +1,7 @@
 // Conexión del auth propio a Postgres (Kysely sobre pg.Pool). La usa Better Auth (esquema `auth`) y los casos de uso de
 // Mirai que leen auth.* (sesiones de la consola, cuenta, migración). Rol: el dueño de las tablas de `auth` (no pasa por
 // la RLS de `public`); las escrituras en `public` (consentimientos) van con las mismas reglas que handle_new_user().
-import { Kysely, PostgresDialect, type Generated } from "kysely"
+import { Kysely, PostgresDialect, sql, type Generated, type Transaction } from "kysely"
 import pg from "pg"
 
 type Ts = Date | string
@@ -94,4 +94,17 @@ export function createAuthKysely(url: string, o: { max?: number; searchPath?: bo
     ...(o.searchPath ? { options: "-c search_path=auth,public" } : {}),
   })
   return { db: new Kysely<AuthDatabase>({ dialect: new PostgresDialect({ pool }) }), pool }
+}
+
+/**
+ * Consultas a `public` desde la conexión del auth. En la base propia esa conexión es el rol `mirai_app` (NOINHERIT: no
+ * tiene permisos directos en `public` y la RLS no lo deja pasar), así que van en una transacción con
+ * `set local role service_role` (salta la RLS, como el alcance de sistema de la API y la llave secreta de Supabase).
+ * El rol vuelve solo al terminar la transacción. En local la conexión es el superusuario y funciona igual.
+ */
+export async function comoServicio<DB, T>(db: Kysely<DB>, fn: (tx: Transaction<DB>) => Promise<T>): Promise<T> {
+  return db.transaction().execute(async (tx) => {
+    await sql`set local role service_role`.execute(tx)
+    return fn(tx)
+  })
 }
