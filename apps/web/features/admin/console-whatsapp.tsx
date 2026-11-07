@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState } from "react"
 import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import Link from "next/link"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ExternalLink, ImagePlus, Pencil, Phone, Plus, RefreshCw, Reply, Send, Trash2, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ import { autoMap, buildTemplateMessage, caseConfig, esPlantillaDeMeta, isNamed, 
 import { bodyVarCount, canEdit, draftComponents, emptyDraft, isDynamicUrl, metaToDraft, REJECT_REASON, STATUS_LABEL, validateDraft, WA_CATEGORIES, WA_LANGS, type DraftButton, type TemplateDraft } from "@/lib/notify/wa-templates"
 import { adminTestDefaults } from "./api"
 import { useAsk, useDialogTarget } from "./ui"
-import { adminWaDeleteTemplate, adminWaPreview, adminWaSaveSettings, adminWaSaveTemplate, adminWaSendTest, adminWaState, type WaState } from "./whatsapp"
+import { adminWaDeleteTemplate, adminWaPreview, adminWaSaveSettings, adminWaSaveTemplate, adminWaSendTest, adminWaState, type WaState } from "./api"
 
 const QK = ["admin", "wa"] as const
 const CAT_N: Record<string, string> = { UTILITY: "Utilidad", MARKETING: "Marketing", AUTHENTICATION: "Autenticación" }

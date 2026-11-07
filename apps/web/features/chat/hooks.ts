@@ -1,13 +1,12 @@
 "use client"
 
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { toast } from "@/components/mirai/toast"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
-import { MSG_COLS, toMsg, type ChatMsg, type ChatThread } from "@/lib/chat/types"
+import type { ChatMsg, ChatThread } from "@/lib/chat/types"
 import { threadMarkdown, threadPlain } from "@/lib/chat/history"
-import { apiOn } from "@/lib/api/session"
-import { chatDuplicate, chatHints, chatTitle, listMessages, listThreads, updateThreads } from "./api"
+import { chatDuplicate, chatHints, chatTitle, listMessages, listThreads, rateMessage, searchThreads, updateThreads } from "./api"
 import { THREADS_KEY, msgsKey, useChat } from "./store"
 import { saveFile } from "@/lib/pwa/save-file"
 
@@ -41,10 +40,7 @@ export function useThreadSearch(q: string) {
   const t = String(q ?? "").trim()
   return useQuery({
     queryKey: ["chat-search", book.id, t], enabled: t.length >= 3, staleTime: 30_000,
-    queryFn: async () => {
-      const { data } = await createClient().from("chat_messages").select("thread_id").eq("book_id", book.id).is("deleted_at", null).ilike("content", `%${t.replace(/[%_]/g, "")}%`).limit(80)
-      return new Set((data ?? []).map((r) => r.thread_id))
-    },
+    queryFn: () => searchThreads(book.id, t),
   })
 }
 
@@ -52,11 +48,8 @@ const fileName = (t: ChatThread, ext: string) => `mirai-${t.titulo.normalize("NF
 const download = (name: string, text: string, type: string) => {
   void saveFile(new Blob([text], { type }), name)
 }
-async function threadMsgs(id: string) {
-  if (apiOn("chat")) return listMessages(id)
-  const { data } = await createClient().from("chat_messages").select(MSG_COLS).eq("thread_id", id).is("deleted_at", null).order("created_at")
-  return (data ?? []).map(toMsg)
-}
+/** Mensajes para exportar (API con el interruptor `chat`; si no, la consulta de siempre: ./api.ts). */
+const threadMsgs = (id: string) => listMessages(id)
 
 /** Acciones del historial (menú ⋯, clic derecho y encabezado): fijar, renombrar, título, duplicar, archivar, exportar y borrar. */
 export function useThreadActions() {
@@ -130,7 +123,7 @@ export function useThreadActions() {
     feedback: async (threadId: string, m: ChatMsg, v: 1 | -1) => {
       const next = m.feedback === v ? null : v
       qc.setQueryData<ChatMsg[]>(msgsKey(threadId), (old) => old?.map((x) => (x.id === m.id ? { ...x, feedback: next } : x)))
-      const { error } = await createClient().from("chat_messages").update({ feedback: next }).eq("id", m.id)
+      const error = await rateMessage(m.id, next)
       if (error) toast.error("No se pudo guardar tu calificación")
       else if (next) toast.success(next === 1 ? "Gracias, nos ayuda a mejorar" : "Gracias por contarnos. Intenta regenerar la respuesta o pregúntalo de otra forma.")
     },

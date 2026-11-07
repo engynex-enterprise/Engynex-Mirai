@@ -34,10 +34,13 @@ test("centro de ayuda: portada, ayuda de la página, búsqueda, glosario, noveda
   await expect(page.getByRole("button", { name: "Cómo funciona" })).toBeVisible({ timeout: 30_000 })
 
   // Atajo "?" → portada con la ayuda contextual de la página actual
-  await page.locator("body").press("?")
   const centro = centroDe(page)
   const buscar = centro.getByRole("textbox", { name: "Buscar en el Centro de ayuda" })
-  await expect(buscar).toBeVisible()
+  // Recién cargada (compilación de producción) el atajo puede llegar antes de que React lo escuche: se reintenta.
+  await expect(async () => {
+    if (!(await centro.count())) await page.locator("body").press("?")
+    await expect(buscar).toBeVisible({ timeout: 3_000 })
+  }).toPass({ timeout: 20_000 })
   await expect(centro.getByText("Cómo funciona: Gastos y hormiga")).toBeVisible()
   await expect(centro.getByRole("button", { name: /^Preguntas frecuentes/ })).toBeVisible()
   await page.waitForTimeout(300)

@@ -10,9 +10,12 @@ aquí (contraseñas, secreto JWT, llaves anon/service) son solo de Docker local.
 | `pnpm e2e:local` | **La batería E2E de Playwright contra el stack local** (escritorio 1366 px + móvil 400 px). Levanta Docker, compila API y web con variables locales, arranca API, gateway y web, y corre Playwright. |
 | `pnpm e2e:local -- f1-gastos --project=escritorio` | Un archivo / un proyecto (lo que va después de `--` se le pasa a `playwright test`). |
 | `pnpm e2e:local --api` | Modo api-on: la web le habla a la API local (`MIRAI_API_ROLLOUT=all`). |
+| `pnpm e2e:local --auth=mirai -- f0-shell` | **v7 (V7-H4): auth propio de punta a punta, sin Supabase.** Better Auth en la API (cookie httpOnly del mismo origen, `/api/auth` y `/v1` reenviados por la web), datos por el PostgREST interno de la base **destino** (`DB_ADAPTER=postgrest`), archivos en MinIO (`OBJECT_STORE=s3`) y el gateway con la cookie. Implica `--api`. El usuario QA se crea por `/api/auth/sign-up/email` y `admin()` de las pruebas va al PostgREST destino (`tests/e2e/qa.ts`). |
 | `pnpm e2e:local --no-build` | Reusa la última compilación local (`apps/web/.next-local`, `apps/api/dist`). |
 | `pnpm e2e:local --build-only` | Solo compila API y web con variables locales (un `next build` con `.env.local` puede leer la base compartida al prerenderizar). |
 | `pnpm e2e:local --keep` | Deja web (:55300), API (:55080) y gateway (:55081) corriendo al terminar. |
+| `pnpm e2e:local --dev` | Web con `next dev` (sin compilarla): más rápido para depurar una prueba. Los errores de hidratación (#418) solo salen con la compilación. |
+| `pnpm local:serve` | **Mirai completo en este computador, sin Supabase ni Vercel**: base, PostgREST, Redis, archivos (MinIO), API, tiempo real y web con el login propio. No corre pruebas; crea la cuenta `demo@mirai.local` (clave `Mirai-demo-local-2026`, solo Docker) y deja todo encendido hasta Ctrl+C. Agrega `--no-build` para reusar la última compilación o `--dev` para la web con `next dev`. |
 | `pnpm local:up` / `local:down` / `local:reset` | Levanta, apaga o borra y recrea el arnés (con el "Supabase local"). |
 | `pnpm local:test` | Pruebas de la API contra Docker: RLS con los 5 roles, puente PostgREST, tiempo real (`apps/api/test/pg`). |
 | `pnpm migrate:ensayo` | Ensayo completo Supabase → Postgres destino entre dos Postgres locales con datos sintéticos (V7-J). |

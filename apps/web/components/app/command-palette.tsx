@@ -3,7 +3,7 @@
 import { Illustration } from "@/components/mirai/illustration"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { EyeOff, LifeBuoy, Moon, Plus } from "lucide-react"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
 import { Icon } from "@/components/mirai/icon"
@@ -16,6 +16,8 @@ import { loanTipo, tipoDef, tiposDe } from "@/lib/domain/loan-tipos"
 
 /** Palabras extra de cada sección (la descripción de su pestaña: "gastos hormiga", "Netflix"…). */
 const TAB_DESC = new Map(Object.values(PAGE_TABS).flat().map((t) => [t.id, t.desc]))
+import { readWithFallback } from "@/lib/api/book-tables"
+import { apiRows, rowsViaApi } from "@/lib/api/book-rows"
 import { createClient } from "@/utils/supabase/client"
 import { useShell } from "./shell-store"
 import { useBookId } from "./app-context"
@@ -46,26 +48,43 @@ const LOAN_ADDS = [...tiposDe("pagar").map((t) => ({ ...t, href: `/le-debo?nuevo
 const n = (v: unknown) => Number(v ?? 0)
 
 /** Arma los grupos de registros del libro que el buscador muestra (todos los módulos). */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Fetch = (t: string, cols: string, lim?: number, order?: { column: string; ascending: boolean }) => Promise<any[]>
+
+/** Modo heredado (interruptor `book-tables` apagado): Supabase directo con la sesión. */
+const fromDb = (bookId: string): Fetch => (t, cols, lim = 200, order) => {
+  let q = createClient().from(t as never).select(cols).eq("book_id" as never, bookId as never).is("deleted_at" as never, null)
+  if (order) q = q.order(order.column as never, { ascending: order.ascending })
+  return Promise.resolve(q.limit(lim)).then((r) => (r.data ?? []) as any[]).catch(() => [])
+}
+
+/**
+ * V7-H3: por el CRUD genérico de la API (GET /v1/books/:b/t/:tabla, interruptor `book-tables[:tabla]`). Sin relaciones
+ * embebidas: los nombres de los préstamos se completan con contactos, entidades y proveedores (que ya se piden).
+ */
+const fromApi = (bookId: string): Fetch => (t, cols, lim = 200, order) =>
+  readWithFallback(() => apiRows<any>(bookId, t, { select: cols, ...(order ? { order } : {}) }), () => fromDb(bookId)(t, cols, lim, order)).then((r) => r.slice(0, lim)).catch(() => [])
+
 async function searchIndex(bookId: string): Promise<Group[]> {
-  const sb = createClient()
-  const q = <T,>(p: PromiseLike<{ data: T[] | null }>) => Promise.resolve(p).then((r) => r.data ?? []).catch(() => [] as T[])
-  const by = (t: string, cols: string, lim = 200) => sb.from(t as never).select(cols).eq("book_id" as never, bookId as never).is("deleted_at" as never, null).limit(lim)
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const [c, l, f, g, pr, su, tc, me, en, inv, de, ac, ev] = await Promise.all([
-    q<any>(by("contacts", "id,nombre,ciudad")),
-    q<any>(by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,contacts(nombre),entities(nombre),providers(nombre)")),
-    q<any>(by("fixed_expenses", "id,nombre,valor")),
-    q<any>(by("expenses", "id,descripcion,fecha,valor", 150).order("fecha", { ascending: false })),
-    q<any>(by("providers", "id,nombre,tipo,activo")),
-    q<any>(by("subscriptions", "id,nombre,valor,activa")),
-    q<any>(by("credit_cards", "id,nombre")),
-    q<any>(by("goals", "id,nombre,objetivo")),
-    q<any>(by("entities", "id,nombre,tipo")),
-    q<any>(by("investments", "id,nombre,tipo")),
-    q<any>(by("wishlist", "id,nombre,precio")),
-    q<any>(by("assets", "id,nombre,valor")),
-    q<any>(by("calendar_events", "id,titulo,fecha", 100)),
+  const by: Fetch = (t, cols, lim, order) => (rowsViaApi(t) ? fromApi(bookId) : fromDb(bookId))(t, cols, lim, order)
+  const loansViaApi = rowsViaApi("loans")
+  const [c, l0, f, g, pr, su, tc, me, en, inv, de, ac, ev] = await Promise.all([
+    by("contacts", "id,nombre,ciudad"),
+    loansViaApi ? by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,provider_id") : by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,contacts(nombre),entities(nombre),providers(nombre)"),
+    by("fixed_expenses", "id,nombre,valor"),
+    by("expenses", "id,descripcion,fecha,valor", 150, { column: "fecha", ascending: false }),
+    by("providers", "id,nombre,tipo,activo"),
+    by("subscriptions", "id,nombre,valor,activa"),
+    by("credit_cards", "id,nombre"),
+    by("goals", "id,nombre,objetivo"),
+    by("entities", "id,nombre,tipo"),
+    by("investments", "id,nombre,tipo"),
+    by("wishlist", "id,nombre,precio"),
+    by("assets", "id,nombre,valor"),
+    by("calendar_events", "id,titulo,fecha", 100),
   ])
+  const named = (list: any[], id: unknown) => { const x = id ? list.find((y) => y.id === id) : null; return x ? { nombre: x.nombre } : null }
+  const l = loansViaApi ? l0.map((x) => ({ ...x, contacts: named(c, x.contact_id), entities: named(en, x.entity_id), providers: named(pr, x.provider_id) })) : l0
   const money = (v: unknown) => fmtMoney(n(v))
   return [
     { heading: "Contactos", hits: c.map((x: any) => ({ k: x.id, v: `contacto ${x.nombre} ${x.ciudad ?? ""}`, t: x.nombre, sub: x.ciudad, icon: "user", tone: "blue", href: `/contactos?id=${x.id}` })) },
@@ -86,8 +105,8 @@ async function searchIndex(bookId: string): Promise<Group[]> {
     { heading: "Recordatorios y fechas", hits: ev.map((x: any) => ({ k: x.id, v: `recordatorio fecha ${x.titulo}`, t: x.titulo, sub: x.fecha ? fmtDate(x.fecha) : undefined, icon: "calendar", tone: "blue", href: "/calendario" })) },
     { heading: "Gastos recientes", hits: g.map((x: any) => ({ k: x.id, v: `gasto ${x.descripcion} ${x.fecha}`, t: x.descripcion || "Gasto", sub: `${x.fecha ? fmtDate(x.fecha) : ""} · ${money(x.valor)}`, icon: "receipt", tone: "gray", href: `/gastos?mes=${String(x.fecha).slice(0, 7)}` })) },
   ].filter((gr) => gr.hits.length) as Group[]
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** Buscador global (Ctrl/⌘ K): secciones, todos los registros del libro (gastos, deudas, tarjetas, metas…), ayuda y acciones. */
 export function CommandPalette() {

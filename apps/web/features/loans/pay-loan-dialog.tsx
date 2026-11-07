@@ -18,6 +18,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { loansViaApi, payLoanApi } from "./commands"
 import { loanEngine, type LoanIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { Combobox } from "@/components/mirai/combobox"
@@ -85,7 +86,8 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
     const rows: { book_id: string; loan_id: string; fecha: string; tipo: "cuota" | "abono"; valor: number; modo?: "plazo" | "cuota"; payment_method_id: string | null }[] = tipo === "cuota"
       ? e0.plan.slice(0, n).map((p) => ({ book_id: bookId, loan_id: loan.id, fecha, tipo: "cuota" as const, valor: p.valor, payment_method_id: medio }))
       : [{ book_id: bookId, loan_id: loan.id, fecha, tipo: "abono" as const, valor: Math.min(valor, e0.saldo), modo, payment_method_id: medio }]
-    const { error } = await createClient().from("loan_payments").insert(rows)
+    const { error } = !loansViaApi() ? await createClient().from("loan_payments").insert(rows)
+      : await payLoanApi(loan.id, tipo === "cuota" ? { cuotas: n, fecha, payment_method_id: medio } : { abono: Math.min(valor, e0.saldo), modo, fecha, payment_method_id: medio })
     setBusy(false)
     if (error) return toast.error("No se pudo registrar", { description: error.message })
     kickAutomations()

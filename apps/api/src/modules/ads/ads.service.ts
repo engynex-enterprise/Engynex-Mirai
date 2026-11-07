@@ -29,6 +29,8 @@ export class AdsService {
       candidatos: ok.length,
       adsenseTurno: goesToAdsense(adSeed(userId + q.slot, hoy), d.settings?.anuncios_adsense_pct ?? 30),
       settings: d.settings,
+      // V7-H3: la cinta (AdTicker) muestra varios: los elegibles por prioridad, hasta 5.
+      ...(q.slot === "ticker" ? { lista: [...ok].sort((a, b) => b.prioridad - a.prioridad).slice(0, 5) } : {}),
     }
   }
 }

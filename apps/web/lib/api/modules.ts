@@ -12,6 +12,7 @@ export const API_MODULES = {
   cards: "Compras y pagos de tarjeta (RPC → comandos)",
   savings: "Aportes a metas y movimientos del fondo (RPC → comandos)",
   assets: "Cuadrar saldo de una cuenta (RPC → comandos)",
+  loans: "Pagos de deudas y préstamos: N cuotas o un abono (POST /loans/:id/payments) en vez de insertar los pagos",
   importer: "Exportar JSON y crear copias de seguridad del libro",
   bell: "Campana de notificaciones (leer, marcar leídas)",
   notify: "Avisos: reglas, canales, pruebas, resumen ahora, Telegram, cobro por WhatsApp",
@@ -27,6 +28,14 @@ export const API_MODULES = {
   gami: "Logros y referidos",
   webhooks: "Proxy de /api/pagos/* hacia los webhooks de la API (sin persona: solo \"on\")",
   files: "Archivos: subir (URL firmada + PUT directo) y ver/descargar por la API en vez de Supabase Storage (avatar, opiniones, renta, anuncios, WhatsApp)",
+  // V7-H3
+  ads: "Anuncios: elegir el de cada espacio, vistas/clics/cierres y AdSense (la consola de anuncios va con `admin`)",
+  feedback: "Opiniones y soporte: enviar, calificar, mis opiniones y borrar",
+  automations: "Automatizaciones: lista, guardar, borrar/deshacer, probar, plantillas, ejecuciones y el runner (drain)",
+  // V7-H2
+  books: "Ajustes del libro (book_settings), historial de cambios, conteos de la puesta en marcha y resumen del mes guardado",
+  refs: "Datos de referencia de Colombia (UVT, SMMLV, TRM, usura, calendario y regímenes de renta) por /v1/refs/*",
+  tax: "Declaración de renta: datos (GET /renta), años, bienes, dependientes, UVT y documentos",
 } as const
 
 export type ApiModule = keyof typeof API_MODULES

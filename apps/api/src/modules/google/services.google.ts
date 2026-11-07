@@ -23,6 +23,10 @@ export class ServicesGoogle extends GooglePort {
     const info = (await fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { authorization: `Bearer ${t.access_token}` } }).then((x) => x.json()).catch(() => ({}))) as { email?: string }
     await saveTokens(userId, t, info.email)
   }
+  async connection(userId: string) {
+    const { data } = await rt().admin().from("google_connections").select("email,scopes").eq("user_id", userId).maybeSingle()
+    return data ? { email: data.email ?? null, scopes: data.scopes ?? [] } : null
+  }
   async disconnect(userId: string) {
     await rt().admin().from("google_connections").delete().eq("user_id", userId)
   }

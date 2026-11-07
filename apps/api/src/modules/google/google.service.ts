@@ -65,6 +65,11 @@ export class GoogleService {
     }
   }
 
+  async connection() {
+    const c = await service(() => this.port.connection(this.ctx.user.id))
+    return { email: c?.email ?? null, scopes: c?.scopes ?? [] }
+  }
+
   async disconnect() {
     await service(() => this.port.disconnect(this.ctx.user.id))
     return {}

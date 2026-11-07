@@ -8,6 +8,7 @@ import { refreshReferenceData } from "@/features/integrations/refresh"
 import { planReminders } from "@/lib/payments/reminders"
 import { runAutomationsCron } from "@/lib/automations/server"
 import { bearerOk } from "@/lib/security/secrets"
+import { serverAuthProvider } from "@/lib/auth/provider"
 
 export const maxDuration = 60
 
@@ -28,6 +29,8 @@ export async function GET(req: NextRequest) {
   // Comparación en tiempo constante (no revela cuántos caracteres del secreto acertó quien prueba).
   if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET))
     return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  // v7: sin Supabase los trabajos los corre la API (Cloud Scheduler → /v1/jobs/*). Este cron escribiría en la base vieja.
+  if (serverAuthProvider() === "mirai") return NextResponse.json({ error: "Con AUTH_PROVIDER=mirai los avisos los corre la API (/v1/jobs/*)" }, { status: 410 })
   const daily = req.nextUrl.searchParams.get("daily") === "1"
   const now = new Date()
   const h = horaBogota(now)

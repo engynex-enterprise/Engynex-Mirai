@@ -1,11 +1,12 @@
 "use client"
 
-import { loadRentaData, rentaInput } from "@/features/renta/data"
+import { fetchRentaData, rentaInput } from "@/features/renta/data"
 import { calcRenta, titularId } from "@/lib/domain"
 import { qk } from "@/lib/supabase/tables"
 import Link from "next/link"
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { BellPlus, ExternalLink, Plus, Trash2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -33,7 +34,9 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { createClient } from "@/utils/supabase/client"
+import { insertBookRows, saveDigitos, updateBookRow } from "./api"
+import { fetchProfile } from "@/features/profile/api"
+import { fetchRentaCalendar, fetchRentaRegimenes } from "@/lib/ref-data"
 import { smmlvFor } from "@/lib/domain"
 import { fmtDate, fmtMoney, monthName, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -53,10 +56,10 @@ function useRenta(digitos: string) {
   return useQuery({
     queryKey: ["ref", "renta", digitos],
     enabled: /^\d{2}$/.test(digitos),
+    // V7-H2: /v1/refs/renta-calendar y /v1/refs/renta-regimenes con el interruptor `refs` (apagado: Supabase).
     queryFn: async () => {
-      const { data } = await createClient().from("ref_renta_calendar").select("year,regimen,fecha").eq("digitos", digitos).order("year", { ascending: false })
-      const { data: reg } = await createClient().from("ref_renta_regimenes").select("*")
-      return { rows: data ?? [], reg: reg ?? [] }
+      const [rows, reg] = await Promise.all([fetchRentaCalendar(digitos), fetchRentaRegimenes()])
+      return { rows, reg }
     },
   })
 }
@@ -65,8 +68,7 @@ function RentaCard({ events, today }: { events: Row<"calendar_events">[]; today:
   const { user } = useApp()
   const bookId = useBookId()
   const qc = useQueryClient()
-  const sb = createClient()
-  const { data: prof } = useQuery({ queryKey: ["profile", user.id], queryFn: async () => (await sb.from("profiles").select("digitos,ciudad").eq("id", user.id).single()).data })
+  const { data: prof } = useQuery({ queryKey: ["profile", user.id], queryFn: async () => { const p = await fetchProfile(user.id); return p ? { digitos: p.digitos, ciudad: p.ciudad } : null } })
   const [dig, setDig] = useState<string | null>(null)
   const digitos = dig ?? prof?.digitos ?? ""
   const { data } = useRenta(digitos)
@@ -76,7 +78,8 @@ function RentaCard({ events, today }: { events: Row<"calendar_events">[]; today:
   const usar = async (fecha: string) => {
     const ex = events.find((e) => e.template_key === "renta")
     const row = { titulo: "Declaración de renta (DIAN)", fecha, tipo: "egreso", cat: "dian", nota: `Según los dígitos ${digitos}. Calendario DIAN ${fecha.slice(0, 4)}; actualízala cuando salga el del próximo año.`, fuente: "https://www.dian.gov.co", template_key: "renta", anual: false }
-    if (ex) await sb.from("calendar_events").update(row).eq("id", ex.id); else await sb.from("calendar_events").insert({ ...row, book_id: bookId })
+    const { error } = ex ? await updateBookRow(bookId, "calendar_events", ex.id, row) : await insertBookRows(bookId, "calendar_events", [row])
+    if (error) return toast.error("No se pudo guardar", { description: error.message })
     toast.success("Fecha de renta en tu calendario"); invalidateBook(qc, bookId, "calendar_events")
   }
   return (
@@ -85,7 +88,7 @@ function RentaCard({ events, today }: { events: Row<"calendar_events">[]; today:
         <FormField label="Últimos 2 dígitos de tu cédula" htmlFor="rd" tip="Con ellos la DIAN asigna tu fecha límite para declarar renta." className="max-w-56">
           <Input id="rd" className="h-11 text-lg tracking-widest" inputMode="numeric" maxLength={2} value={digitos} onChange={async (e) => {
             const v = e.target.value.replace(/\D/g, "").slice(0, 2); setDig(v)
-            if (v.length === 2) await sb.from("profiles").update({ digitos: v }).eq("id", user.id)
+            if (v.length === 2) await saveDigitos(user.id, v)
           }} />
         </FormField>
         {general && (
@@ -114,10 +117,10 @@ function TemplatesDialog({ open, onOpenChange, events, today }: { open: boolean;
   const [sel, setSel] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const save = async () => {
-    const rows = tpl.filter((t) => sel.includes(t.k)).map((t) => ({ book_id: bookId, template_key: t.k, cat: t.cat, titulo: t.titulo, fecha: t.fecha, tipo: t.tipo, nota: t.nota, fuente: t.fuente ?? null, monto: 0, anual: true }))
+    const rows = tpl.filter((t) => sel.includes(t.k)).map((t) => ({ template_key: t.k, cat: t.cat, titulo: t.titulo, fecha: t.fecha, tipo: t.tipo, nota: t.nota, fuente: t.fuente ?? null, monto: 0, anual: true }))
     if (!rows.length) return onOpenChange(false)
     setBusy(true)
-    const { error } = await createClient().from("calendar_events").insert(rows)
+    const { error } = await insertBookRows(bookId, "calendar_events", rows)
     setBusy(false)
     if (error) return toast.error("No se pudieron agregar", { description: error.message })
     toast.success(`Agregamos ${rows.length} fecha${rows.length > 1 ? "s" : ""} a tu calendario`); invalidateBook(qc, bookId, "calendar_events"); setSel([]); onOpenChange(false)
@@ -154,7 +157,7 @@ function EventDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   const save = async () => {
     if (!valido || busy) return
     setBusy(true)
-    const { error } = await createClient().from("calendar_events").insert({ book_id: bookId, titulo: titulo.trim(), fecha, tipo, monto, anual, cat: fcatOf({ titulo }) })
+    const { error } = await insertBookRows(bookId, "calendar_events", [{ titulo: titulo.trim(), fecha, tipo, monto, anual, cat: fcatOf({ titulo }) }])
     setBusy(false)
     if (error) return toast.error("No se pudo guardar", { description: error.message })
     toast.success("Fecha agregada"); invalidateBook(qc, bookId, "calendar_events"); setTitulo(""); setMonto(0); onOpenChange(false)
@@ -198,7 +201,7 @@ export function FiscalCalendar() {
   const ctl = useListControls(rows, { text: fRowText, filters: filtros, sorts: ORDEN })
   // Renta: estimado con el borrador de la Declaración del año anterior a la fecha (calEst de la v4).
   const isRenta = (e: Row<"calendar_events">) => e.template_key === "renta" || /declaraci[oó]n de renta/i.test(e.titulo)
-  const { data: renta } = useQuery({ queryKey: qk(bookId, "renta"), enabled: events.some(isRenta), queryFn: () => loadRentaData(createClient(), bookId) })
+  const { data: renta } = useQuery({ queryKey: qk(bookId, "renta"), enabled: events.some(isRenta), queryFn: () => fetchRentaData(bookId) })
   const rentaEst = (nx: string) => {
     if (!renta) return null
     const y = +nx.slice(0, 4) - 1, mid = titularId(renta.members)
@@ -213,9 +216,9 @@ export function FiscalCalendar() {
   const vis = ctl.rows
   // Por fecha se agrupa por mes; por nombre, una sola tarjeta.
   const groups = ctl.sort === "nombre" ? ["todas"] : [...new Set(vis.map((r) => r.nx.slice(0, 7)))]
-  const upd = async (id: string, p: Partial<Row<"calendar_events">>) => { await createClient().from("calendar_events").update(p).eq("id", id); invalidateBook(qc, bookId, "calendar_events") }
+  const upd = async (id: string, p: Partial<Row<"calendar_events">>) => { await updateBookRow(bookId, "calendar_events", id, p); invalidateBook(qc, bookId, "calendar_events") }
   const recordar = async (e: Row<"calendar_events">, nx: string) => {
-    await createClient().from("fixed_expenses").insert({ book_id: bookId, nombre: e.titulo, category_id: cats.find((c) => c.nombre === "Otros")?.id ?? null, valor: val(e), frec: "anual", dia: +nx.slice(8), mes: +nx.slice(5, 7), variable: true, desde: today.slice(0, 7), inicio: today })
+    await insertBookRows(bookId, "fixed_expenses", [{ nombre: e.titulo, category_id: cats.find((c) => c.nombre === "Otros")?.id ?? null, valor: val(e), frec: "anual", dia: +nx.slice(8), mes: +nx.slice(5, 7), variable: true, desde: today.slice(0, 7), inicio: today }])
     toast.success("Quedó en tus gastos fijos anuales"); invalidateBook(qc, bookId, "fixed_expenses")
   }
 

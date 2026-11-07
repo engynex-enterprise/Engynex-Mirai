@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Bar, BarChart, XAxis } from "recharts"
 import { toast } from "@/components/mirai/toast"
 import { Trash2 } from "lucide-react"

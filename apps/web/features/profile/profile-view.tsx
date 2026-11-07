@@ -3,7 +3,8 @@
 import { useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ArrowDownToLine, ArrowRight, Cake, Camera, CircleCheck, CircleDashed, Flame, Medal, Palette, Pencil, Sparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -37,6 +38,7 @@ import { useGami } from "@/features/gami/use-gami"
 import type { Row } from "@/lib/supabase/tables"
 import { normalizarCobros } from "@/lib/domain/cobros"
 import { CobroCard } from "./cobro-card"
+import { fetchProfile, fetchProfileCounts, updateProfile } from "./api"
 import { HouseholdPeople } from "@/features/household/people"
 import { ConnectedAccounts } from "@/features/account/connected-accounts"
 
@@ -90,7 +92,7 @@ export function ProfileView() {
   // Los guardados van en fila: dos seguidos (Deshacer y luego otro cambio) no se pisan en la base.
   const cola = useRef<Promise<unknown>>(Promise.resolve())
   const key = ["profile-full", user.id]
-  const { data: p } = useQuery({ queryKey: key, queryFn: async () => (await createClient().from("profiles").select("*").eq("id", user.id).single()).data })
+  const { data: p } = useQuery({ queryKey: key, queryFn: () => fetchProfile(user.id) })
   const { data: identities } = useQuery({
     queryKey: ["identities", user.id],
     // v7: con AUTH_PROVIDER=mirai las formas de entrar salen de Better Auth (listAccounts).
@@ -98,11 +100,7 @@ export function ProfileView() {
   })
   const { data: counts } = useQuery({
     queryKey: ["b", bookId, "profile-counts"],
-    queryFn: async () => {
-      const sb = createClient()
-      const [c, g] = await Promise.all([sb.from("contacts").select("id", { count: "exact", head: true }).eq("book_id", bookId).is("deleted_at", null), sb.from("goals").select("id", { count: "exact", head: true }).eq("book_id", bookId).is("deleted_at", null)])
-      return { contactos: c.count ?? 0, metas: g.count ?? 0 }
-    },
+    queryFn: () => fetchProfileCounts(bookId),
   })
   if (!p || !book) return <PageSkeleton kpis={0} />
 
@@ -110,7 +108,7 @@ export function ProfileView() {
     // Una lectura vieja que llegue tarde no debe deshacer el cambio optimista; y se aplica sobre lo último, no sobre `p`.
     await qc.cancelQueries({ queryKey: key })
     qc.setQueryData(key, (old: typeof p) => ({ ...(old ?? p), ...patch }))
-    const run = cola.current.then(() => createClient().from("profiles").update(patch).eq("id", user.id))
+    const run = cola.current.then(() => updateProfile(user.id, patch))
     cola.current = run.catch(() => null)
     const { error } = await run
     if (error) return toast.error("No se pudo guardar", { description: error.message })

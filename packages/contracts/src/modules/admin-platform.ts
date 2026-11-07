@@ -2,6 +2,7 @@
 // admin_audit). Equivalen a PlanesPanel (features/admin/console-plataforma.tsx), CuponesPanel (console-negocio.tsx),
 // adminGlobalIntegrations / adminSaveGlobalIntegration / adminTestGlobal / adminSendTest (features/admin/server.ts) y
 // adminWaState / adminWaSaveSettings / adminWaPreview / adminWaSendTest (features/admin/whatsapp.ts) de apps/web.
+// V7-H3: historial de comunicados (ComunicadosPanel) y adminWaSaveTemplate / adminWaDeleteTemplate (plantillas en Meta).
 // admin.ts mezcla estas rutas en `adminContract` (así el cliente tipado las ve en `apiContract.admin`).
 //
 // SECRETOS: ninguna respuesta lleva claves. `meta` trae las máscaras (••••1234) que guarda el servidor.
@@ -104,6 +105,44 @@ export const WaPreview = z.object({ preview: z.array(z.object({ key: z.string(),
 export const WaSendTest = WaCaseBody.extend({ to: z.string().trim().min(7, "Escribe el celular").max(30) })
 export const WaSent = Msg.extend({ preview: WaPreview.shape.preview.optional() })
 
+// ── V7-H3: historial de comunicados y plantillas de WhatsApp (crear, editar, eliminar en Meta) ─────────────────────
+
+/** Fila de `broadcasts` (Consola › Comunicados › Enviados). */
+export const BroadcastRow = z.object({
+  id: z.string(), titulo: z.string(), cuerpo: z.string(), href: z.string().nullable(), segmento: z.string(), enviados: z.number(), created_by: z.string().nullable(), created_at: z.string(),
+})
+export type BroadcastRow = z.infer<typeof BroadcastRow>
+
+const Txt = (max: number) => z.string().max(max)
+const DraftButton = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("url"), text: Txt(60), url: Txt(2000), example: Txt(2000).optional() }),
+  z.object({ type: z.literal("quick_reply"), text: Txt(60) }),
+  z.object({ type: z.literal("phone"), text: Txt(60), phone: Txt(30) }),
+])
+/** Borrador de plantilla (TemplateDraft de @mirai/services/notify/wa-templates). Las reglas de Meta las revisa `validateDraft` en la API. */
+export const WaTemplateDraft = z.object({
+  name: z.string().regex(/^[a-z0-9_]{1,512}$/, "El nombre solo lleva minúsculas, números y guion bajo"),
+  language: Lang,
+  category: z.enum(["UTILITY", "MARKETING"], { error: "Categoría inválida" }),
+  header: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("none") }),
+    z.object({ type: z.literal("text"), text: Txt(60), example: Txt(200).optional() }),
+    z.object({ type: z.literal("image"), url: Txt(1000) }),
+  ]),
+  body: Txt(1024),
+  examples: z.array(Txt(500)).max(20),
+  footer: Txt(60),
+  buttons: z.array(DraftButton).max(10),
+})
+export const WaSaveTemplate = z.object({
+  draft: WaTemplateDraft,
+  /** Editar una plantilla que ya está en Meta (su id y su estado: en revisión no se puede editar). */
+  edit: z.object({ id: z.string().regex(/^\d{5,30}$/, "Plantilla inválida"), status: z.string().max(40).optional() }).optional(),
+})
+export const WaTemplateName = z.object({ name: z.string().regex(/^[a-z0-9_]{1,512}$/, "Nombre de plantilla inválido") })
+/** `id` = solo esa traducción (hsm_id); sin él (o si no es un id de Meta), todas las del nombre. */
+export const WaDeleteTemplateQuery = z.object({ id: z.string().max(40).optional() })
+
 const c = initContract()
 export const adminPlatformContract = c.router(
   {
@@ -124,6 +163,11 @@ export const adminPlatformContract = c.router(
     waSaveSettings: { method: "PUT", path: `${A}/whatsapp/templates`, body: WaSettingsIn, responses: { ...ERRORS, 200: ApiOk(Msg) }, summary: "Plantilla por defecto, asignación por caso, imagen y dirección de los enlaces" },
     waPreview: { method: "POST", path: `${A}/whatsapp/preview`, body: WaCaseBody, responses: { ...ERRORS, 200: ApiOk(WaPreview) }, summary: "Valores que se enviarían para un caso (misma lógica que el envío real)" },
     waSendTest: { method: "POST", path: `${A}/whatsapp/test`, body: WaSendTest, responses: { ...ERRORS, 200: ApiOk(WaSent) }, summary: "Envía un caso con valores de ejemplo a un celular (aunque no esté guardado)" },
+
+    // V7-H3
+    broadcasts: { method: "GET", path: `${A}/broadcasts`, responses: { ...ERRORS, 200: z.array(BroadcastRow) }, summary: "Comunicados enviados (los 100 más recientes)" },
+    waSaveTemplate: { method: "POST", path: `${A}/whatsapp/templates/items`, body: WaSaveTemplate, responses: { ...ERRORS, 200: ApiOk(Msg) }, summary: "Crea una plantilla en Meta (queda en revisión) o edita una existente si su estado lo permite" },
+    waDeleteTemplate: { method: "DELETE", path: `${A}/whatsapp/templates/items/:name`, pathParams: WaTemplateName, query: WaDeleteTemplateQuery, body: c.noBody(), responses: { ...ERRORS, 200: ApiOk(Msg) }, summary: "Elimina una plantilla de la cuenta de Meta (la traducción `id` o todas)" },
   },
   { strictStatusCodes: true },
 )

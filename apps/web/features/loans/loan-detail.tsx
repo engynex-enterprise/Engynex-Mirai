@@ -24,6 +24,7 @@ import { initials } from "@/components/app/app-sidebar"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { apiDeleteRow, apiRestoreRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import { FRECS, SISTEMAS, fechaCuota, loanEngine, loanName, loanStatus, loanTipo, loanTitulo, normProv, tipoDef, type LoanIn, type Prenda, type Sistema } from "@/lib/domain"
 import { suggestLoanProvider } from "@/lib/domain/proveedor-pagos"
 import { EntityLogo } from "@/components/mirai/entity-logo"
@@ -76,13 +77,21 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
   const undoLast = async () => {
     const last = [...loan.payments].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
     if (!last) return
-    await createClient().from("loan_payments").update({ deleted_at: new Date().toISOString() }).eq("id", last.id)
+    if (rowsViaApi("loan_payments")) await apiDeleteRow(bookId, "loan_payments", last.id)
+    else await createClient().from("loan_payments").update({ deleted_at: new Date().toISOString() }).eq("id", last.id)
     toast("Pago deshecho"); refresh()
   }
   const del = async () => {
     const now = new Date().toISOString()
-    await createClient().from("loans").update({ deleted_at: now }).eq("id", loan.id)
-    toast(isC ? "Préstamo eliminado" : "Deuda eliminada", { action: { label: "Deshacer", onClick: () => createClient().from("loans").update({ deleted_at: null }).eq("id", loan.id).then(refresh) } })
+    const api = rowsViaApi("loans")
+    if (api) await apiDeleteRow(bookId, "loans", loan.id)
+    else await createClient().from("loans").update({ deleted_at: now }).eq("id", loan.id)
+    const deshacer = async () => {
+      if (api) await apiRestoreRow(bookId, "loans", loan.id)
+      else await createClient().from("loans").update({ deleted_at: null }).eq("id", loan.id)
+      refresh()
+    }
+    toast(isC ? "Préstamo eliminado" : "Deuda eliminada", { action: { label: "Deshacer", onClick: deshacer } })
     refresh(); onDeleted()
   }
   const acuerdo = async () => {
@@ -139,7 +148,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
               <EntityLogo provider={sugerido} size={18} /> ¿Es tu proveedor “{sugerido.nombre}”?
               <button type="button" className="font-semibold text-link hover:underline" onClick={async () => {
-                const { error } = await createClient().from("loans").update({ provider_id: sugerido.id }).eq("id", loan.id)
+                const { error } = rowsViaApi("loans") ? await apiUpdateRow(bookId, "loans", loan.id, { provider_id: sugerido.id }) : await createClient().from("loans").update({ provider_id: sugerido.id }).eq("id", loan.id)
                 if (error) return toast.error("No se pudo enlazar", { description: error.message })
                 toast.success("Quedó enlazado", { description: `Lo ves también en Proveedores › ${sugerido.nombre}.` }); refresh()
               }}>Enlazar</button>

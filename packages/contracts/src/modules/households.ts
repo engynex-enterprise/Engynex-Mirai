@@ -123,6 +123,21 @@ export const FamilyMember = z.object({
   force: z.boolean().optional(),
 })
 export const FamilySaved = Msg.extend({ id: z.string() })
+/**
+ * V7-H2: cambio parcial de un integrante (Planeación › Familia: el cupo; Renta: dependientes). Solo estos campos; el
+ * nombre y el parentesco siguen por updateFamily (que revisa los nombres repetidos).
+ */
+export const FamilyPatch = z.object({
+  cupo: z.number().min(0, "El valor no puede ser negativo").max(1e12),
+  doc: z.string().trim().max(40, "Máximo 40 caracteres"),
+  dep_de: Uuid.nullable(),
+  dep_rel: z.string().trim().max(40, "Máximo 40 caracteres").nullable(),
+  nacimiento: IsoDate.nullable(),
+  estudia: z.boolean(),
+  sin_ingresos: z.boolean(),
+  discapacidad: z.boolean(),
+}).partial().refine((p) => Object.keys(p).length > 0, "No hay nada para guardar")
+export type FamilyPatch = z.infer<typeof FamilyPatch>
 
 // ── Pasar el hogar, salir y borrar ────────────────────────────────────────────────────────────────────────────
 
@@ -176,6 +191,9 @@ export const householdsContract = c.router(
     createFamily: { method: "POST", path: `${H}/family`, pathParams: HouseholdParams, body: FamilyMember, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(FamilySaved) }, summary: "Agrega un integrante sin cuenta (permiso «invitar»)" },
     updateFamily: { method: "PUT", path: `${H}/family/:familyId`, pathParams: FamilyParams, body: FamilyMember, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(FamilySaved) }, summary: "Edita un integrante (permiso «planear»)" },
     deleteFamily: { method: "DELETE", path: `${H}/family/:familyId`, pathParams: FamilyParams, body: c.noBody(), responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(Msg) }, summary: "Saca a un integrante sin cuenta (borrado lógico) y cancela su invitación" },
+    // V7-H2: integrantes del hogar (useMembers de la web) y cambio parcial (cupo, datos de dependiente).
+    family: { method: "GET", path: `${H}/family`, pathParams: HouseholdParams, responses: { ...HOUSEHOLD_ERRORS, 200: z.array(FamilyRow) }, summary: "Integrantes del hogar (sin los borrados), en el orden del hogar" },
+    patchFamily: { method: "PATCH", path: `${H}/family/:familyId`, pathParams: FamilyParams, body: FamilyPatch, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(FamilySaved) }, summary: "Cambia el cupo o los datos de dependiente de un integrante (permiso «planear»)" },
     restoreFamily: { method: "POST", path: `${H}/family/:familyId/restore`, pathParams: FamilyParams, body: c.noBody(), responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(Msg) }, summary: "Deshacer: el integrante vuelve al hogar" },
 
     transferCandidates: { method: "GET", path: `${H}/transfer/candidates`, pathParams: HouseholdParams, responses: { ...HOUSEHOLD_ERRORS, 200: TransferCandidates }, summary: "Quiénes pueden recibir el hogar y si pagas una renovación automática" },

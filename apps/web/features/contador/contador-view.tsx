@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Copy, Link2, MessageCircle, RefreshCw, UserX } from "lucide-react"
 import { z } from "zod"
 import { toast } from "@/components/mirai/toast"
@@ -24,10 +25,9 @@ import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
 import { can } from "@/lib/household/roles"
-import { createClient } from "@/utils/supabase/client"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { createShare, ownerNote, revokeShare, rotateShare } from "./actions"
+import { createShare, fetchOwnerData, ownerNote, revokeShare, rotateShare } from "./owner"
 import { NotesThread, type Note } from "./notes"
 
 const PASOS = [
@@ -66,13 +66,10 @@ export function ContadorView() {
   const key = ["b", book.id, "accountant_shares"]
   const { data, isPending } = useQuery({
     queryKey: key,
+    // V7-H2: GET …/accountant/{shares,notes} con el interruptor `accountant` (apagado: Supabase directo).
     queryFn: async () => {
-      const sb = createClient()
-      const [{ data: shares }, { data: notes }] = await Promise.all([
-        sb.from("accountant_shares").select("id,label,email,perms,expires_at,revoked_at,views,last_access,created_at").eq("book_id", book.id).order("created_at", { ascending: false }),
-        sb.from("accountant_notes").select("id,share_id,autor,texto,created_at").eq("book_id", book.id).is("deleted_at", null).order("created_at"),
-      ])
-      return { shares: shares ?? [], notes: (notes ?? []) as (Note & { share_id: string })[] }
+      const { shares, notes } = await fetchOwnerData(book.id)
+      return { shares, notes: notes as (Note & { share_id: string })[] }
     },
     refetchInterval: 30_000,
   })

@@ -21,6 +21,7 @@ import { ProviderSelect } from "@/features/providers/provider-select"
 import { addPeriod, type Prenda } from "@/lib/domain"
 import type { Row } from "@/lib/supabase/tables"
 import { createClient } from "@/utils/supabase/client"
+import { apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import type { LoanRow } from "./loan-detail"
 
 type Quien = "ct" | "ent" | "prov"
@@ -66,11 +67,11 @@ export function LoanEditDialog({ loan, open, onOpenChange, contacts, entities }:
       // El proveedor puede quedar enlazado aunque la deuda sea con una persona o una entidad.
       provider_id: quien === "prov" ? prov : prov && prov !== loan.provider_id ? prov : loan.provider_id ?? null,
       concepto: concepto.trim(),
-      nota: nota.trim() || null,
+      nota: nota.trim(), // loans.nota es "not null default ''": vacía es "", no null
       ...(loan.frec === "unico" ? { vence } : { primera: primera !== auto ? primera : null }),
       ...(pr0 ? { prenda: { ...pr0, obj: pr.obj?.trim(), valor: pr.valor || 0, limite: pr.limite || null, ref: pr.ref?.trim() || "" } } : {}),
     }
-    const { error } = await createClient().from("loans").update(patch as never).eq("id", loan.id)
+    const { error } = rowsViaApi("loans") ? await apiUpdateRow(bookId, "loans", loan.id, patch) : await createClient().from("loans").update(patch as never).eq("id", loan.id)
     setBusy(false)
     if (error) return toast.error("No se pudo guardar", { description: error.message })
     invalidateBook(qc, bookId, "loans")

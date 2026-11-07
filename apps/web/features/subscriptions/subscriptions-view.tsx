@@ -18,6 +18,7 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { apiDeleteRow, rowsViaApi } from "@/lib/api/book-rows"
 import { paySubscription } from "@/features/fixed/commands"
 import { conv, detectSubs, iso, subMensual, subsMes } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
@@ -53,7 +54,6 @@ export function SubscriptionsView() {
    * avanza el próximo cobro (pay_subscription). "Deshacer" borra ese gasto y la base devuelve el próximo cobro.
    */
   const cobrada = async (s: Row<"subscriptions">) => {
-    const sb = createClient()
     const valor = Math.round(conv(Number(s.valor), s.currency, trm) / Math.max(1, s.comparte))
     const fecha = s.proximo && s.proximo <= today ? s.proximo : today
     const { data, error } = await paySubscription({ p_sub: s.id, p_fecha: fecha, p_valor: valor })
@@ -64,7 +64,7 @@ export function SubscriptionsView() {
     toast.success("Cobro registrado", {
       description: `Quedó en tus gastos. Próximo cobro: ${r.proximo ? fmtDate(r.proximo) : "—"}.`,
       action: r.expense_id ? { label: "Deshacer", onClick: async () => {
-        const { error: e } = await sb.from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", r.expense_id!)
+        const { error: e } = rowsViaApi("expenses") ? await apiDeleteRow(bookId, "expenses", r.expense_id!) : await createClient().from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", r.expense_id!)
         if (e) return toast.error("No se pudo deshacer", { description: e.message })
         refresh(); toast("Cobro deshecho", { description: `El próximo cobro vuelve a ser el ${s.proximo ? fmtDate(s.proximo) : "anterior"}.` })
       } } : undefined,

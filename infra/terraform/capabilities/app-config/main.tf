@@ -79,6 +79,7 @@ locals {
       BETTER_AUTH_URL      = local.web_origin
       AUTH_TRUSTED_ORIGINS = join(",", local.web_origins)
       AUTH_MAIL_DRIVER     = "services"
+      AUTH_PROXY_HOPS      = tostring(var.auth_proxy_hops)
     } : {},
     var.auth_provider == "mirai" ? local.api_passthrough : {},
     local.f.postgrest && var.internal_urls.postgrest != null ? { POSTGREST_URL = var.internal_urls.postgrest } : {},

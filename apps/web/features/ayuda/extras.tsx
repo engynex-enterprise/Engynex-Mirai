@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { CircleCheck, MessageSquareReply, RefreshCw, Send } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -20,7 +21,9 @@ import { FeedbackForm, feedbackContexto, useMyFeedback } from "@/features/opinio
 import { Stars } from "@/features/opiniones/stars"
 import { TIPO_TONE } from "@/features/opiniones/tones"
 import { ToneIcon } from "@/components/mirai/tone-icon"
+import { apiOn } from "@/lib/api/session"
 import { createClient } from "@/utils/supabase/client"
+import { sendFeedback } from "@/features/opiniones/api"
 import { APP_VER, RELEASES } from "@/lib/content/ayuda"
 import { ATAJOS, keyLabel } from "@/lib/content/centro-ayuda"
 import { ESTADOS, SOPORTE_TEMAS, TIPOS, casoNumero, type FeedbackEstado, type FeedbackTipo, type SoporteCtx, type SoporteTema } from "@/lib/content/opiniones"
@@ -65,6 +68,17 @@ function Estado({ ok, label, detail, children }: { ok: boolean | null; label: st
   )
 }
 
+/** Una lectura corta del servidor: la API (GET /v1/platform/notice, lee la base) o, en el modo heredado, Supabase. */
+async function pingServer() {
+  if (apiOn("me")) {
+    const { browserApi, unwrap } = await import("@/lib/api/client")
+    unwrap(await browserApi().me.platformNotice())
+    return
+  }
+  const { error } = await createClient().from("platform_settings").select("aviso_global").limit(1).maybeSingle()
+  if (error) throw new Error(error.message)
+}
+
 export function EstadoModule() {
   const { plan } = useApp()
   const { go } = useHelpNav()
@@ -73,8 +87,7 @@ export function EstadoModule() {
     queryKey: ["ayuda", "ping"], retry: 0, staleTime: 0, gcTime: 0,
     queryFn: async () => {
       const t = performance.now()
-      const { error } = await createClient().from("platform_settings").select("aviso_global").limit(1).maybeSingle()
-      if (error) throw new Error(error.message)
+      await pingServer()
       return Math.round(performance.now() - t)
     },
   })
@@ -186,14 +199,16 @@ export function SoporteModule() {
     if (falta || busy) return
     setBusy(true)
     const soporte: SoporteCtx = { tema, asunto: asunto.trim().slice(0, 120) }
-    const { data, error } = await createClient().from("feedback").insert({
-      tipo: "soporte", mensaje: `${soporte.asunto}\n\n${detalle.trim()}`.slice(0, 4000), household_id: household.id,
-      pagina: conPagina ? pathname : null, contexto: feedbackContexto({ soporte }),
-    }).select("id").single()
+    let id: string
+    try {
+      id = await sendFeedback({
+        tipo: "soporte", mensaje: `${soporte.asunto}\n\n${detalle.trim()}`.slice(0, 4000), household_id: household.id,
+        pagina: conPagina ? pathname : null, contexto: feedbackContexto({ soporte }),
+      })
+    } catch (e) { setBusy(false); return toast.error("No se pudo enviar tu caso", { description: (e as Error).message }) }
     setBusy(false)
-    if (error) return toast.error("No se pudo enviar tu caso", { description: error.message })
     qc.invalidateQueries({ queryKey: ["feedback", user.id] })
-    setEnviado(data.id); setAsunto(""); setDetalle("")
+    setEnviado(id); setAsunto(""); setDetalle("")
   }
 
   if (enviado) {

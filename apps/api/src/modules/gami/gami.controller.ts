@@ -16,6 +16,12 @@ export class GamiController {
     return tsRestHandler(c.get, async ({ query }) => ({ status: 200, body: await this.svc.get(query.hoy) }))
   }
 
+  @TsRestHandler(c.state)
+  @MinRole("viewer")
+  state() {
+    return tsRestHandler(c.state, async () => ({ status: 200, body: (await this.svc.state()) as never }))
+  }
+
   @TsRestHandler(c.visit)
   @MinRole("viewer")
   visit() {

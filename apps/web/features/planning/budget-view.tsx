@@ -20,7 +20,7 @@ import { ToneIcon, type IconTone } from "@/components/mirai/tone-icon"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
+import { saveTope } from "./api"
 import { ingresoMensual } from "@/lib/domain"
 import { fmtMoney, fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -34,6 +34,7 @@ const GRUPOS = [
 const TONO: Record<string, IconTone> = { n: "navy", g: "brand", a: "green" }
 
 function TopeCell({ id, value, onSaved, label }: { id: string; value: number; onSaved: () => void; label: string }) {
+  const bookId = useBookId()
   const [v, setV] = useState(value)
   const [prev, setPrev] = useState(value)
   if (prev !== value) { setPrev(value); setV(value) }
@@ -41,8 +42,7 @@ function TopeCell({ id, value, onSaved, label }: { id: string; value: number; on
     <div className="w-36">
       <MoneyInput aria-label={label} value={v} onChange={setV} onBlur={async () => {
         if (v === value) return
-        const { error } = await createClient().from("categories").update({ tope: v }).eq("id", id)
-        if (error) return toast.error("No se pudo guardar el tope")
+        try { await saveTope(bookId, id, v) } catch { return toast.error("No se pudo guardar el tope") }
         toast.success("Tope actualizado"); onSaved()
       }} />
     </div>

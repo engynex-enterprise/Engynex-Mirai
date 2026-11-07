@@ -141,6 +141,10 @@ export class FakeGoogle extends GooglePort {
     if (code === "malo") throw new Error("invalid_grant")
     this.connected.push({ userId, code, redirectUri })
   }
+  conn: { email: string | null; scopes: string[] } | null = { email: "ana@gmail.com", scopes: ["https://www.googleapis.com/auth/gmail.readonly"] }
+  async connection() {
+    return this.conn
+  }
   async disconnect() {}
   async syncCalendar(): Promise<CalSync> {
     return { creados: 2, actualizados: 0, borrados: 0, total: 2 }

@@ -123,7 +123,16 @@ test("chat: burbuja, sugerencias, respuesta con tus datos, pantalla completa e h
   await confirm.getByRole("button", { name: "Eliminar" }).click()
   await expect(page.getByText("Conversación eliminada").first()).toBeVisible()
   await expect(list.getByRole("button", { name, exact: true })).toHaveCount(0)
-  if (mobile) await page.keyboard.press("Escape")
+  // En el celular el historial (Sheet) tapa el aviso. Primero que se vaya la confirmación (mientras se cierra, el Sheet
+  // queda con aria-hidden: parece cerrado y el Escape se lo come la confirmación); luego se cierra el Sheet de verdad.
+  await expect(confirm).toBeHidden()
+  if (mobile) {
+    const sheet = page.locator('[data-slot="sheet-content"]')
+    await expect(async () => {
+      if (await sheet.count()) await page.keyboard.press("Escape")
+      await expect(sheet).toHaveCount(0, { timeout: 2_000 })
+    }).toPass({ timeout: 15_000 })
+  }
   await page.getByRole("status").filter({ hasText: "Conversación eliminada" }).getByRole("button", { name: "Deshacer" }).click()
   await expect(page.getByText("Listo, la recuperamos").first()).toBeVisible()
   // En celular los avisos salen arriba y tapan el botón Historial: se cierran.

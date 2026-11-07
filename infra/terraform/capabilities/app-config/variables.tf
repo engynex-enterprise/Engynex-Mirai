@@ -151,3 +151,13 @@ variable "web_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "auth_proxy_hops" {
+  description = "Proxies de confianza delante de la API (cuántas IP de la derecha de x-forwarded-for son de la nube). GCP LB, CloudFront y Front Door agregan 1; verificar en el primer despliegue."
+  type        = number
+  default     = 1
+  validation {
+    condition     = var.auth_proxy_hops >= 0 && var.auth_proxy_hops <= 5
+    error_message = "auth_proxy_hops va de 0 a 5."
+  }
+}

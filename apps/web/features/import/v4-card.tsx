@@ -8,7 +8,7 @@ import { toast } from "@/components/mirai/toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { useCanEdit } from "@/components/app/app-context"
-import { importV4Backup } from "./actions"
+import { importV4Backup } from "./api"
 
 /**
  * Traer el respaldo de Mirai 4.0. Va en todos los planes: en Gratis se muestra debajo de la invitación a Premium de

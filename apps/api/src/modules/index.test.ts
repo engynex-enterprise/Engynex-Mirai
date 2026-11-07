@@ -21,6 +21,6 @@ describe("modules/index.ts", () => {
     expect(dirs).toEqual(API_MODULES.map((m) => m.id).sort())
     expect(apiModules()).toHaveLength(API_MODULES.length) // todos menos el gateway, más RealtimePublisherModule (F2-G)
     expect(apiModules().map((m) => m.name)).not.toContain("RealtimeModule")
-    expect(realtimeModules().map((m) => m.name)).toEqual(["HealthModule", "RealtimeModule"])
+    expect(realtimeModules().map((m) => m.name)).toEqual(["HealthModule", "AuthModule", "RealtimeModule"])
   })
 })

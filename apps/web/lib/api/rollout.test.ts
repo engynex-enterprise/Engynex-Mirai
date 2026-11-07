@@ -137,3 +137,20 @@ describe("sesión del navegador (session.ts)", () => {
     expect(s.activeHouseholdId()).toBe("h1")
   })
 })
+
+describe("v7: AUTH_PROVIDER=mirai (sin Supabase)", () => {
+  it("todo por la API sin leer platform_settings: webhooks, portal del contador y precios", async () => {
+    const from = vi.fn()
+    const sb = { from } as unknown as Parameters<typeof getApiConfig>[1]
+    const e = { AUTH_PROVIDER: "mirai", MIRAI_API_URL: "https://api.test/", MIRAI_API_ROLLOUT: "off" } as unknown as NodeJS.ProcessEnv
+    const cfg = await getApiConfig({}, sb, e)
+    expect(cfg.url).toBe("https://api.test")
+    expect(API_MODULE_NAMES.every((m) => cfg.flags[m] === true)).toBe(true)
+    expect((await globalApiOn("webhooks", sb, e))?.url).toBe("https://api.test")
+    expect(from).not.toHaveBeenCalled()
+  })
+  it("sin MIRAI_API_URL no hay cómo atender: error claro", async () => {
+    const sb = { from: vi.fn() } as unknown as Parameters<typeof getApiConfig>[1]
+    await expect(getApiConfig({}, sb, { AUTH_PROVIDER: "mirai" } as unknown as NodeJS.ProcessEnv)).rejects.toThrow(/MIRAI_API_URL/)
+  })
+})

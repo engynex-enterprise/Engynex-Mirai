@@ -1,7 +1,9 @@
 // Abonos a metas y fondo de emergencia (v6 F2-H-4, interruptor `savings`). Ver features/book/command.ts.
 import { unwrapData } from "@/lib/api/unwrap"
 import { command, type RpcArgs } from "@/features/book/command"
-import { apiSession } from "@/lib/api/session"
+import { apiOn, apiSession } from "@/lib/api/session"
+import { asResult } from "@/lib/api/book-rows"
+import { createClient } from "@/utils/supabase/client"
 
 /** goal_contribute → POST /goals/:id/contribute. Responde { id (del movimiento), ahorrado, objetivo } como la RPC. */
 export const goalContribute = (a: RpcArgs<"goal_contribute">) =>
@@ -26,3 +28,17 @@ export const fundUse = (a: RpcArgs<"fund_use">) =>
 
 /** El comando usa el libro activo de la sesión; si la RPC apunta a otro libro, se queda con la RPC. */
 const sameBook = (bookId: string) => apiSession()?.bookId === bookId
+
+/**
+ * Prender el fondo o cambiar su cuenta (emergency_funds del libro). Interruptor `savings`: apagado, el update de
+ * siempre; encendido, PUT /fund. Devuelve `{ error }` como supabase-js.
+ */
+export async function updateFund(bookId: string, patch: { activo?: boolean; asset_id?: string | null }): Promise<{ error: { message: string } | null }> {
+  if (!apiOn("savings")) {
+    const { error } = await createClient().from("emergency_funds").update(patch).eq("book_id", bookId)
+    return { error }
+  }
+  const { browserApi } = await import("@/lib/api/client")
+  const { error } = await asResult(async () => unwrapData(await browserApi().savings.fund({ params: { bookId }, body: patch })))
+  return { error }
+}

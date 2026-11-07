@@ -9,6 +9,8 @@ import type { IntegrationDef } from "@mirai/services/integrations/registry"
 import type { IntegrationValue } from "@mirai/services/integrations/store"
 import { defaultHeaderImage, fallbackNote, fetchTemplateSpec, sendWhatsApp, telegramApi, waMessage, waTemplates, whatsappNumber } from "@mirai/services/notify/channels"
 import { testMsg } from "@mirai/services/notify/digest"
+import { createTemplate, deleteTemplate, editTemplate } from "@mirai/services/notify/wa-meta"
+import type { TemplateDraft } from "@mirai/services/notify/wa-templates"
 import { brandEmail, EMAIL_KINDS, sendEmail } from "@mirai/services/notify/email"
 import { formatCoPhone, sampleValues, type WaCase, type WaCaseCfg } from "@mirai/services/notify/whatsapp"
 import { rt } from "@mirai/services/runtime"
@@ -120,5 +122,18 @@ export class ServicesPlatformIntegrations extends PlatformIntegrationsPort {
     const vals = { ...sampleValues(caso as WaCase, rt().siteUrl()), nombre: nombre.split(" ")[0] || "Alberto" }
     const r = await sendWhatsApp(v, dest, vals, { caso: caso as WaCase, override: override as WaCaseCfg | undefined })
     return { ref: r.id, preview: r.preview, msg: `Enviado a ${formatCoPhone(r.to)}${r.id ? ` (id …${r.id.slice(-12)})` : ""}. Si no llega en un minuto, revisa el registro de envíos.` }
+  }
+
+  async waCreateTemplate(v: IntegrationValue, draft: TemplateDraft) {
+    const r = await createTemplate(v, draft)
+    return { id: r.id, status: r.status }
+  }
+
+  async waEditTemplate(v: IntegrationValue, templateId: string, draft: TemplateDraft) {
+    await editTemplate(v, templateId, draft)
+  }
+
+  async waDeleteTemplate(v: IntegrationValue, name: string, templateId?: string) {
+    await deleteTemplate(v, name, templateId)
   }
 }

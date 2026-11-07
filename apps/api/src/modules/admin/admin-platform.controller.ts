@@ -91,4 +91,22 @@ export class AdminPlatformController {
   waSendTest() {
     return tsRestHandler(c.waSendTest, async ({ body }) => ok(await this.svc.waSendTest(body)))
   }
+
+  // V7-H3
+  @TsRestHandler(c.broadcasts)
+  broadcasts() {
+    return tsRestHandler(c.broadcasts, async () => json(await this.svc.broadcasts()))
+  }
+
+  @TsRestHandler(c.waSaveTemplate)
+  @Idempotent()
+  waSaveTemplate() {
+    return tsRestHandler(c.waSaveTemplate, async ({ body }) => ok(await this.svc.waSaveTemplate(body.draft, body.edit)))
+  }
+
+  @TsRestHandler(c.waDeleteTemplate)
+  @Idempotent()
+  waDeleteTemplate() {
+    return tsRestHandler(c.waDeleteTemplate, async ({ params, query }) => ok(await this.svc.waDeleteTemplate(params.name, query.id)))
+  }
 }

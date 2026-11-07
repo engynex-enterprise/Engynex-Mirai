@@ -4,11 +4,12 @@
 // (hooks/use-realtime.ts): `{ status, online }`, mismas invalidaciones (invalidateBook), mismo filtro de eco local
 // (isLocalEcho) y misma agrupación de ráfagas (300 ms). Solo se usa si el interruptor NEXT_PUBLIC_LIVE_SOURCE=gateway
 // (hooks/use-live.ts); apagado por defecto. socket.io-client se carga con import() solo en ese caso.
-import { useEffect, useRef, useState } from "react"
+import { startTransition, useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { createBurst, LiveGatewayClient } from "@mirai/contracts/realtime-client"
 import { createClient } from "@/utils/supabase/client"
 import { useApp } from "@/components/app/app-context"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import { invalidateBook, isLocalEcho } from "./use-book-data"
 import type { LiveStatus, PresenceUser } from "./use-realtime"
 
@@ -24,6 +25,13 @@ let shared: Promise<LiveGatewayClient> | undefined
 export function getLiveClient(): Promise<LiveGatewayClient> {
   return (shared ??= (async () => {
     const { io } = await import("socket.io-client")
+    if (isMiraiAuth()) {
+      // v7 (V7-H4): la sesión es la cookie httpOnly de Better Auth; el gateway la lee en el handshake (sin token ni
+      // `auth:refresh`: la cookie se renueva sola). Sin NEXT_PUBLIC_REALTIME_URL, el mismo origen (/socket.io).
+      const client = new LiveGatewayClient({ io, url: REALTIME_URL || window.location.origin, getToken: async () => null, socketOptions: { withCredentials: true } })
+      return client.connect()
+    }
+    // Modo heredado: token de Supabase.
     const sb = createClient()
     const client = new LiveGatewayClient({
       io,
@@ -55,11 +63,15 @@ export function useLiveGateway(bookId: string, me: Omit<PresenceUser, "at" | "pa
     const burst = createBurst(BURST_MS, (tables) => {
       for (const t of tables) invalidateBook(qc, bookId, t)
     })
+    // En transición: si la conexión llega antes de que termine la hidratación (con la cookie de AUTH_PROVIDER=mirai es
+    // casi inmediata), React hidrata primero con el estado del servidor ("Conectando…") y luego aplica el cambio, en vez
+    // de romper la hidratación del menú lateral (error #418).
+    const setLive = (s: LiveStatus) => startTransition(() => setStatus(s))
     void getLiveClient().then((c) => {
       if (!alive) return
       client.current = c
       offs.push(
-        c.on("status", setStatus),
+        c.on("status", setLive),
         c.on("change", (ch) => {
           if (ch.householdId) {
             if (ch.householdId !== householdId) return
@@ -72,14 +84,14 @@ export function useLiveGateway(bookId: string, me: Omit<PresenceUser, "at" | "pa
         }),
         c.on("notification", () => void qc.invalidateQueries({ queryKey: ["notifications"] })),
         c.on("presence", (p) => {
-          if (p.bookId === bookId) setOnline(p.users)
+          if (p.bookId === bookId) startTransition(() => setOnline(p.users))
         }),
         // Se reconectó sin recuperar la sesión, o la base avisó que se perdieron cambios: trae lo que cambió.
         c.on("resync", (r) => {
           if (r.bookId === bookId) void qc.invalidateQueries({ queryKey: ["b", bookId] })
         }),
       )
-      setStatus(c.status)
+      setLive(c.status)
       void c.join(bookId)
     })
     return () => {

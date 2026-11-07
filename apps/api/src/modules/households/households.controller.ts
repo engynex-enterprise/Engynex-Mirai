@@ -98,6 +98,16 @@ export class HouseholdsController {
     return tsRestHandler(c.updateFamily, async ({ params, body }) => ok(await this.svc.saveFamily(params.householdId, params.familyId, body)))
   }
 
+  @TsRestHandler(c.family)
+  family() {
+    return tsRestHandler(c.family, async ({ params }) => ({ status: 200, body: await this.svc.family(params.householdId) }))
+  }
+
+  @TsRestHandler(c.patchFamily)
+  patchFamily() {
+    return tsRestHandler(c.patchFamily, async ({ params, body }) => ok(await this.svc.patchFamily(params.householdId, params.familyId, body)))
+  }
+
   @TsRestHandler(c.deleteFamily)
   deleteFamily() {
     return tsRestHandler(c.deleteFamily, async ({ params }) => ok(await this.svc.deleteFamily(params.householdId, params.familyId)))

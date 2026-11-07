@@ -15,8 +15,9 @@ export function ioOptions(cfg: RealtimeConfig, redis: boolean): Partial<ServerOp
     path: cfg.path,
     serveClient: false,
     transports: ["websocket", "polling"],
-    // La API usa Bearer (en `auth`), nunca cookies: sin credenciales en CORS.
-    cors: { origin: (origin, cb) => cb(null, originAllowed(origin, cfg.webOrigins)), credentials: false, methods: ["GET", "POST"] },
+    // Bearer en `auth` (Supabase) o, v7, la cookie de Better Auth: con credenciales solo para los orígenes de la web
+    // (el mismo filtro de allowRequest; un sitio ajeno nunca recibe Access-Control-Allow-Credentials).
+    cors: { origin: (origin, cb) => cb(null, originAllowed(origin, cfg.webOrigins)), credentials: true, methods: ["GET", "POST"] },
     // Cloud Run corta el WS a los 60 min: el cliente vuelve y recupera salas y eventos perdidos. El adaptador de Redis
     // por pub/sub no guarda sesiones (solo el de streams), así que con Redis el cliente recarga el libro al volver.
     ...(cfg.recoveryMs > 0 && !redis ? { connectionStateRecovery: { maxDisconnectionDuration: cfg.recoveryMs, skipMiddlewares: false } } : {}),

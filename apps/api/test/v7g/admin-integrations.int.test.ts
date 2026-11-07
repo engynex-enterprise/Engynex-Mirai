@@ -27,22 +27,22 @@ afterAll(async () => {
 })
 beforeEach(() => {
   t.fx.rows.reset()
-  Object.assign(port, { tests: [], sends: [], waSends: [], testError: null, sendError: null, langError: null, lang: "es_CO" })
+  Object.assign(port, { tests: [], sends: [], waSends: [], testError: null, sendError: null, langError: null, lang: "es_CO", tplCalls: [], tplError: null, tplStatus: "PENDING" })
   port.env.clear()
 })
 
 describe("contrato y guardas", () => {
-  it("adminContract = las 30 rutas de F2-I + las 15 de V7-G, sin repetir rutas", () => {
+  it("adminContract = las 30 rutas de F2-I + las 15 de V7-G + las 3 de V7-H3, sin repetir rutas", () => {
     expect(Object.keys(adminCoreContract)).toHaveLength(30)
-    expect(Object.keys(adminPlatformContract)).toHaveLength(15)
+    expect(Object.keys(adminPlatformContract)).toHaveLength(18)
     const routes = Object.values(adminContract) as AppRoute[]
-    expect(routes).toHaveLength(45)
-    expect(new Set(routes.map((r) => `${r.method} ${r.path}`)).size).toBe(45)
+    expect(routes).toHaveLength(48)
+    expect(new Set(routes.map((r) => `${r.method} ${r.path}`)).size).toBe(48)
   })
 
   it("todas las rutas nuevas: 403 a quien no es administrador y 401 sin sesión", async () => {
     for (const r of Object.values(adminPlatformContract) as AppRoute[]) {
-      const url = r.path.replace(":planId", "familia").replace(":codigo", "HOLA").replace(":kind", "telegram")
+      const url = r.path.replace(":planId", "familia").replace(":codigo", "HOLA").replace(":kind", "telegram").replace(":name", "aviso")
       const res = await t.call(r.method as "GET", url, "admin", r.method === "GET" ? undefined : {})
       expect(res.status, `${r.method} ${r.path}`).toBe(403)
       expect(res.body.msg).toBe("Solo el administrador de Mirai puede ver esto.")
@@ -238,5 +238,68 @@ describe("WhatsApp de la consola", () => {
     expect(f).toMatchObject({ status: 502, body: { code: "UPSTREAM", msg: "(#132001) La plantilla no existe" } })
     expect(t.fx.rows.all("notification_log").map((l) => [l.kind, l.status])).toEqual([["prueba_admin:cobro_tercero", "enviado"], ["prueba_admin:pagos", "fallido"]])
     expect(audits().map((a) => [a.accion, a.objetivo])).toEqual([["whatsapp: probar plantilla", "cobro_tercero"]])
+  })
+})
+
+describe("V7-H3: plantillas en Meta y comunicados", () => {
+  const WA = () => ({ kind: "whatsapp", modo: "opcional", planes: [], config: { phoneId: "1234567", wabaId: "7654321", template: "aviso" }, meta: {}, secrets_enc: crypto().encrypt(JSON.stringify({ token: "EAAG" })) })
+  const DRAFT = {
+    name: "aviso_pago", language: "es_CO", category: "UTILITY", header: { type: "none" },
+    body: "Hola {{1}}, tienes un recordatorio de Mirai: {{2}}. Revisa el detalle en la app.", examples: ["Alberto", "Arriendo vence mañana"],
+    footer: "Mirai", buttons: [{ type: "url", text: "Abrir Mirai", url: "https://mirai.engynex.com/inicio" }],
+  }
+
+  it("crear: valida el borrador, sin WhatsApp lo dice, en Meta queda en revisión y se audita", async () => {
+    const bad = await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: { ...DRAFT, body: "" } })
+    expect(bad).toMatchObject({ status: 400, body: { code: "VALIDATION" } })
+    expect((await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT })).body).toMatchObject({ code: "VALIDATION", msg: "Primero configura WhatsApp en Integraciones globales." })
+    t.fx.rows.seed("platform_integrations", [WA()])
+    const r = await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT })
+    expect(r.body).toEqual({ ok: true, data: { msg: "Plantilla “aviso_pago” enviada a Meta (estado: en revisión). Te avisamos el estado aquí al refrescar." } })
+    port.tplStatus = "APPROVED"
+    expect((await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT })).body.data).toEqual({ msg: "Plantilla “aviso_pago” enviada a Meta (estado: aprobada). Te avisamos el estado aquí al refrescar." })
+    expect(port.tplCalls).toEqual([{ op: "create", name: "aviso_pago", lang: "es_CO" }, { op: "create", name: "aviso_pago", lang: "es_CO" }])
+    expect(audits()).toMatchObject([{ accion: "whatsapp: crear plantilla", objetivo: "aviso_pago", detalle: { lang: "es_CO", category: "UTILITY", status: "PENDING" } }, { detalle: { status: "APPROVED" } }])
+    expect(r.raw).not.toContain("EAAG")
+  })
+
+  it("editar: en revisión no se puede; aprobada sí; Meta falla → 502 con su mensaje", async () => {
+    t.fx.rows.seed("platform_integrations", [WA()])
+    const pend = await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT, edit: { id: "123456", status: "PENDING" } })
+    expect(pend.body).toMatchObject({ code: "VALIDATION", msg: "Meta no deja editar una plantilla mientras está en revisión. Espera el resultado." })
+    const ok = await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT, edit: { id: "123456", status: "APPROVED" } })
+    expect(ok.body.data).toEqual({ msg: "Enviamos los cambios de “aviso_pago” a Meta. Vuelve a revisión y suele tardar de minutos a 24 horas." })
+    expect(port.tplCalls).toEqual([{ op: "edit", name: "aviso_pago", id: "123456", lang: "es_CO" }])
+    expect((await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT, edit: { id: "12a" } })).status).toBe(400)
+    port.tplError = new Error("WhatsApp: (#100) Parámetro inválido")
+    expect(await t.call("POST", `${A}/whatsapp/templates/items`, "owner", { draft: DRAFT, edit: { id: "123456", status: "REJECTED" } })).toMatchObject({ status: 502, body: { code: "UPSTREAM", msg: "WhatsApp: (#100) Parámetro inválido" } })
+    expect(audits().map((a) => a.accion)).toEqual(["whatsapp: editar plantilla"])
+  })
+
+  it("borrar: nombre inválido → 400; un id que no es de Meta se ignora; avisa si estaba en uso", async () => {
+    expect((await t.call("DELETE", `${A}/whatsapp/templates/items/aviso`, "owner")).body).toMatchObject({ msg: "Primero configura WhatsApp en Integraciones globales." })
+    t.fx.rows.seed("platform_integrations", [WA()])
+    expect(JSON.stringify((await t.call("DELETE", `${A}/whatsapp/templates/items/Aviso-X`, "owner")).body)).toContain("Nombre de plantilla inválido")
+    const r = await t.call("DELETE", `${A}/whatsapp/templates/items/aviso?id=987654`, "owner")
+    expect(r.body.data).toEqual({ msg: "Plantilla “aviso” eliminada en Meta. Ojo: estaba asignada a un caso; escoge otra en “Casos de envío”. Meta no deja reutilizar el nombre durante 30 días." })
+    const o = await t.call("DELETE", `${A}/whatsapp/templates/items/otra?id=xyz`, "owner")
+    expect(o.body.data).toEqual({ msg: "Plantilla “otra” eliminada en Meta. Meta no deja reutilizar el nombre durante 30 días." })
+    expect(port.tplCalls).toEqual([{ op: "delete", name: "aviso", id: "987654" }, { op: "delete", name: "otra" }])
+    expect(audits().map((a) => [a.accion, a.objetivo, a.detalle])).toEqual([["whatsapp: eliminar plantilla", "aviso", { id: "987654" }], ["whatsapp: eliminar plantilla", "otra", { id: "xyz" }]])
+    port.tplError = new Error("WhatsApp: no existe")
+    expect(await t.call("DELETE", `${A}/whatsapp/templates/items/otra`, "owner")).toMatchObject({ status: 502, body: { msg: "WhatsApp: no existe" } })
+  })
+
+  it("comunicados enviados: los más recientes primero (hasta 100) con `enviados` numérico, del sistema", async () => {
+    t.fx.rows.seed("broadcasts", [
+      { id: "b1", titulo: "Viejo", cuerpo: "", href: null, segmento: "todos", enviados: "3", created_by: USERS.owner, created_at: "2026-10-01T00:00:00Z" },
+      { id: "b2", titulo: "Nuevo", cuerpo: "Hola", href: "/metas", segmento: "plan:premium", enviados: 12, created_by: null, created_at: "2026-11-01T00:00:00Z" },
+    ])
+    const r = await t.call("GET", `${A}/broadcasts`, "owner")
+    expect(r.body).toEqual([
+      { id: "b2", titulo: "Nuevo", cuerpo: "Hola", href: "/metas", segmento: "plan:premium", enviados: 12, created_by: null, created_at: "2026-11-01T00:00:00Z" },
+      { id: "b1", titulo: "Viejo", cuerpo: "", href: null, segmento: "todos", enviados: 3, created_by: USERS.owner, created_at: "2026-10-01T00:00:00Z" },
+    ])
+    expect(t.fx.rows.scopesOf("broadcasts")).toEqual(["system"])
   })
 })

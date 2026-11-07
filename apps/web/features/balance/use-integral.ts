@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { useBookId } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
@@ -12,6 +12,17 @@ import type { LoadedBook } from "@/lib/book-data"
 import { calEst, nextOcc } from "@/features/agenda/fiscal"
 import { loadRentaData, rentaInput } from "@/features/renta/data"
 import { useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
+import { apiOn } from "@/lib/api/session"
+
+/**
+ * La Declaración para el estimado de la renta. Interruptor `accountant` (el endpoint es del titular del contador,
+ * V7-H2): encendido, GET /v1/books/:b/renta; apagado, loadRentaData con Supabase como siempre.
+ */
+async function loadRenta(bookId: string) {
+  if (!apiOn("accountant")) return loadRentaData(createClient(), bookId)
+  const { browserApi, unwrap } = await import("@/lib/api/client")
+  return unwrap(await browserApi().accountantOwner.renta({ params: { bookId } }))
+}
 
 type Cal = LoadedBook["calendarEvents"][number] & { anual?: boolean | null; template_key?: string | null; cat?: string | null }
 const isRenta = (e: Cal) => e.template_key === "renta" || /declaraci[oó]n de renta/i.test(e.titulo)
@@ -31,7 +42,7 @@ export function useIntegralExtras(book: LoadedBook | undefined, today: string): 
   const { data: members = [] } = useMembers()
   const needRenta = ((book?.calendarEvents ?? []) as Cal[]).some((e) => isRenta(e) && !+e.monto)
   // Misma clave que el Calendario fiscal: la Declaración se carga una sola vez para las dos pantallas.
-  const { data: renta } = useQuery({ queryKey: qk(bookId, "renta"), enabled: needRenta, queryFn: () => loadRentaData(createClient(), bookId) })
+  const { data: renta } = useQuery({ queryKey: qk(bookId, "renta"), enabled: needRenta, queryFn: () => loadRenta(bookId) })
 
   return useMemo(() => {
     const X: ExtrasIntegral = {}

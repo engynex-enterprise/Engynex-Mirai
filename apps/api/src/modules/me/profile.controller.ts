@@ -42,6 +42,17 @@ export class ProfileController {
     return tsRestHandler(c.platformNotice, async () => ({ status: 200, body: await this.svc.platformNotice() }))
   }
 
+  @TsRestHandler(c.platformAdsense)
+  @Public()
+  platformAdsense() {
+    return tsRestHandler(c.platformAdsense, async () => ({ status: 200, body: await this.svc.platformAdsense() }))
+  }
+
+  @TsRestHandler(c.telegram)
+  telegram() {
+    return tsRestHandler(c.telegram, async () => ({ status: 200, body: await this.svc.telegram() }))
+  }
+
   @TsRestHandler(c.platformIntegrations)
   platformIntegrations() {
     return tsRestHandler(c.platformIntegrations, async () => ({ status: 200, body: await this.svc.platformIntegrations() }))

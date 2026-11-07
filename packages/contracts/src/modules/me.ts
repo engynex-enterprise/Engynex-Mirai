@@ -107,7 +107,11 @@ export type PreferencesPatch = z.infer<typeof PreferencesPatch>
 export const ActiveBook = z.object({ bookId: Uuid })
 
 export const PlatformNotice = z.object({ aviso: z.string(), tono: z.enum(["info", "warn", "ok"]) })
+/** V7: cliente de AdSense para /ads.txt (público: el mismo id ya sale en el HTML de los anuncios). null = sin anuncios. */
+export const PlatformAdsense = z.object({ client: z.string().nullable() })
 export const PlatformIntegration = z.object({ kind: z.string(), modo: z.string(), planes: z.array(z.string()) })
+/** V7-H2: ¿tu chat de Telegram está vinculado? (telegram_links propio; sin el id del chat). */
+export const TelegramStatus = z.object({ linked: z.boolean(), linked_at: z.string().nullable() })
 
 
 const c = initContract()
@@ -127,7 +131,9 @@ export const meContract = c.router(
     preferences: { method: "GET", path: "/v1/me/preferences", responses: { ...COMMON_ERRORS, 200: Preferences }, summary: "Tus preferencias (o las de por defecto si aún no hay)" },
     updatePreferences: { method: "PATCH", path: "/v1/me/preferences", body: PreferencesPatch, responses: { ...COMMON_ERRORS, 200: Preferences }, summary: "Guarda preferencias (se sincronizan entre dispositivos); `extraPatch` mezcla llaves en `extra`" },
     platformNotice: { method: "GET", path: "/v1/platform/notice", responses: { ...COMMON_ERRORS, 200: PlatformNotice }, summary: "Aviso para todos de la consola (público; vacío = sin aviso)" },
+    platformAdsense: { method: "GET", path: "/v1/platform/adsense", responses: { ...COMMON_ERRORS, 200: PlatformAdsense }, summary: "Cliente de AdSense de la consola para /ads.txt (público; null si está apagada o vacía)" },
     platformIntegrations: { method: "GET", path: "/v1/platform/integrations", responses: { ...COMMON_ERRORS, 200: z.array(PlatformIntegration) }, summary: "Integraciones de la plataforma que no están apagadas (modo y planes, sin configuración ni secretos)" },
+    telegram: { method: "GET", path: "/v1/me/telegram", responses: { ...COMMON_ERRORS, 200: TelegramStatus }, summary: "Si tu chat de Telegram está vinculado (Ajustes › Alertas)" },
   },
   { strictStatusCodes: true },
 )

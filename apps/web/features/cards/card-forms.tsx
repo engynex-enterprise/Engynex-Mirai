@@ -19,6 +19,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { apiDeleteRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import { addCardPurchase, payCreditCard } from "./commands"
 import { annuity, deudaTarjeta, localCat, tarjetaPagoMes, type CardConPagos } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
@@ -106,11 +107,11 @@ function PurchaseBody({ card, purchase, onOpenChange }: { card: Row<"credit_card
   const submit = async () => {
     if (!valido) return
     setBusy(true)
-    const sb = createClient()
     const category = cat ?? cats.find((c) => c.nombre === "Otros")?.id ?? null
     if (purchase) {
       // La base lleva el cambio al gasto enlazado (valor, fecha, categoría y descripción).
-      const { error } = await sb.from("card_purchases").update({ descripcion: desc.trim(), valor, fecha, cuotas: n, category_id: category }).eq("id", purchase.id)
+      const patch = { descripcion: desc.trim(), valor, fecha, cuotas: n, category_id: category }
+      const { error } = rowsViaApi("card_purchases") ? await apiUpdateRow(bookId, "card_purchases", purchase.id, patch) : await createClient().from("card_purchases").update(patch).eq("id", purchase.id)
       setBusy(false)
       if (error) return toast.error("No se pudo guardar la compra", { description: error.message })
       toast.success("Compra actualizada", { description: purchase.expense_id ? "También quedó así en tus gastos." : undefined })
@@ -189,7 +190,6 @@ function PayCardBody({ card, onOpenChange }: { card: CardPagable; onOpenChange: 
   const submit = async () => {
     if (!valido) return
     setBusy(true)
-    const sb = createClient()
     const { data, error } = await payCreditCard({ p_card: card.id, p_valor: valor, p_fecha: fecha, p_tipo: tipo, p_medio: medio ?? undefined })
     setBusy(false)
     if (error) return toast.error("No se pudo registrar el pago", { description: error.message })
@@ -197,7 +197,11 @@ function PayCardBody({ card, onOpenChange }: { card: CardPagable; onOpenChange: 
     const refresh = () => { invalidateBook(qc, bookId, "credit_cards"); invalidateBook(qc, bookId, "card_purchases"); invalidateBook(qc, bookId, "card_payments") }
     toast.success(tipo === "total" ? "¡Tarjeta al día!" : "Pago registrado", {
       description: `${fmtMoney(valor)} a ${card.nombre}.`,
-      action: id ? { label: "Deshacer", onClick: async () => { await sb.from("card_payments").update({ deleted_at: new Date().toISOString() }).eq("id", id); refresh(); toast("Pago deshecho") } } : undefined,
+      action: id ? { label: "Deshacer", onClick: async () => {
+        if (rowsViaApi("card_payments")) await apiDeleteRow(bookId, "card_payments", id)
+        else await createClient().from("card_payments").update({ deleted_at: new Date().toISOString() }).eq("id", id)
+        refresh(); toast("Pago deshecho")
+      } } : undefined,
     })
     refresh()
     onOpenChange(false)

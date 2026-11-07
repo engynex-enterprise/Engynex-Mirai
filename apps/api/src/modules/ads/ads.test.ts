@@ -30,4 +30,17 @@ describe("AdsService", () => {
     const ctx = { db: USER_SCOPE, user: { id: "u-1" }, book: { plan: { id: "gratis", ads: true } } } as unknown as RequestContextService
     expect(await new AdsService(repo, ctx).eligible({ slot: "lista", hoy: "2026-11-02" })).toEqual({ planAds: true, ad: null, candidatos: 0, adsenseTurno: true, settings: data.settings })
   })
+
+  it("cinta (ticker): además del elegido, la lista por prioridad (hasta 5); los demás espacios no la traen", async () => {
+    const mk = (n: number, prioridad: number, ubicaciones = ["ticker"]) => ({ id: `ad-${n}`, titulo: `T${n}`, texto: "", imagen: null, url: "/planes", cta: "Ver", anunciante: "", ubicaciones, activo: true, desde: null, hasta: null, prioridad, campaign_id: null, formato: "texto", media: {} })
+    const data: AdsData = { ads: [mk(1, 1), mk(2, 9), mk(3, 5), mk(4, 0), mk(5, 7), mk(6, 3), mk(7, 99, ["inicio"])], campaigns: [], vistas: {}, settings: null }
+    const repo = new (class extends AdsRepo { load = async () => data })()
+    const ctx = { db: USER_SCOPE, user: { id: "u-1" }, book: { plan: { id: "gratis", ads: true } } } as unknown as RequestContextService
+    const svc = new AdsService(repo, ctx)
+    const t = await svc.eligible({ slot: "ticker", hoy: "2026-11-02" })
+    expect(t.candidatos).toBe(6)
+    expect(t.lista?.map((a) => a.id)).toEqual(["ad-2", "ad-5", "ad-3", "ad-6", "ad-1"])
+    expect(t.ad).not.toBeNull()
+    expect("lista" in (await svc.eligible({ slot: "inicio", hoy: "2026-11-02" }))).toBe(false)
+  })
 })

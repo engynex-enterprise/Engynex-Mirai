@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto"
 import { expect, test } from "@playwright/test"
-import { login, shot, watchErrors } from "./helpers"
+import { login, shot, watchErrors, waitForAdmin } from "./helpers"
 import { QA, admin, setQaPlan } from "./qa"
 
 // Las demás pruebas usan QA en Premium: al terminar se deja así.
@@ -12,6 +12,14 @@ test.afterAll(async () => {
   const id = data.users.find((u) => u.email === QA.email)?.id
   if (id) await admin().from("platform_admins").delete().eq("user_id", id)
 })
+
+/** household_plan da Premium al hogar de un administrador de la plataforma: las pruebas de la consola (más arriba) dejan
+ *  a QA como administrador hasta el afterAll. Las del plan Gratis que van después lo quitan antes de entrar. */
+async function sinAdmin() {
+  const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
+  const id = data.users.find((u) => u.email === QA.email)?.id
+  if (id) await admin().from("platform_admins").delete().eq("user_id", id)
+}
 
 test("plan gratis: secciones Premium bloqueadas, planes y Mi plan", async ({ page }, info) => {
   test.setTimeout(180_000)
@@ -54,6 +62,7 @@ test("consola: entrar desde el perfil, crear un plan, asignarlo y ver pagos", as
   await login(page, "gratis")
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  await waitForAdmin(page)
   await admin().from("plans").delete().eq("id", "plan-qa")
 
   // Entrada: opción Admin en el menú de perfil
@@ -121,6 +130,7 @@ test("consola: la IA global activa por defecto llega a los hogares", async ({ pa
   await login(page)
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  await waitForAdmin(page)
   const restore = await keepGlobal("ai_gateway")
   try {
     await page.goto("/admin/integraciones")
@@ -147,6 +157,7 @@ test("consola: correo, WhatsApp y datos solo los configura el administrador", as
   await login(page)
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  await waitForAdmin(page)
   const restore = await keepGlobal("festivos")
   try {
     await page.goto("/admin/integraciones")
@@ -170,7 +181,8 @@ test("consola: correo, WhatsApp y datos solo los configura el administrador", as
 
     // Registro de envíos
     await page.goto("/admin/envios")
-    await expect(page.getByText("Registro de envíos").first()).toBeVisible({ timeout: 30_000 })
+    // El título de la página (el primer texto igual puede ser el del menú lateral, oculto en ese momento).
+    await expect(page.getByRole("heading", { name: "Registro de envíos", level: 1 })).toBeVisible({ timeout: 30_000 })
     await shot(page, "consola-envios", info.project.name)
 
     // El hogar ya no ve correo, WhatsApp, Telegram ni datos: solo la IA.
@@ -191,6 +203,7 @@ test("consola: Google AdSense se configura en integraciones globales y publica a
   await login(page)
   const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
   await admin().from("platform_admins").upsert({ user_id: data.users.find((u) => u.email === QA.email)!.id })
+  await waitForAdmin(page)
   const restore = await keepGlobal("adsense")
   try {
     await page.goto("/admin/integraciones")
@@ -231,6 +244,7 @@ test("página pública: qué es Mirai y planes con precio", async ({ page }, inf
 test("contador: con el plan Gratis un enlace que ya existía queda no disponible (también en el servidor)", async ({ page }, info) => {
   test.setTimeout(120_000)
   const errs = watchErrors(page)
+  await sinAdmin()
   await login(page, "gratis")
   const sb = admin()
   const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
@@ -258,6 +272,7 @@ test("contador: con el plan Gratis un enlace que ya existía queda no disponible
 
 test("plan gratis: el respaldo de la versión 4 se puede traer en Importar", async ({ page }) => {
   test.setTimeout(120_000)
+  await sinAdmin()
   await login(page, "gratis")
   await page.goto("/importar")
   await expect(page.getByText("Automatización bancaria es parte de Mirai Premium")).toBeVisible({ timeout: 30_000 })

@@ -71,6 +71,8 @@ export const accountantOwnerContract = c.router(
     notes: { method: "GET", path: "/v1/books/:bookId/accountant/notes", pathParams: OwnerBookParams, responses: { ...OWNER_ERRORS, 200: z.array(OwnerNote) }, summary: "Notas con los contadores del libro, en orden" },
     addNote: { method: "POST", path: "/v1/books/:bookId/accountant/notes", pathParams: OwnerBookParams, body: NewOwnerNote, responses: { ...OWNER_ERRORS, 200: ApiOk(z.object({ saved: z.boolean() })) }, summary: "Nota del titular para un acceso de este libro" },
     files: { method: "GET", path: "/v1/books/:bookId/accountant/files", pathParams: OwnerBookParams, query: FilesQuery, responses: { ...OWNER_ERRORS, 200: z.array(VisibleFile) }, summary: "Documentos que ve el contador (`todos=1`: también los ocultos, para escoger)" },
+    // V7-H2: la Declaración del titular (features/renta/data.ts › loadRentaData): todos los documentos, no solo los visibles.
+    renta: { method: "GET", path: "/v1/books/:bookId/renta", pathParams: OwnerBookParams, responses: { ...OWNER_ERRORS, 200: PortalData }, summary: "Datos de tu Declaración de renta (con tu perfil, tus fechas DIAN y todos los documentos)" },
     setFileVisible: { method: "PATCH", path: "/v1/books/:bookId/accountant/files/:attachmentId", pathParams: AttachmentParams, body: z.object({ visible: z.boolean() }), responses: { ...OWNER_ERRORS, 200: ApiOk(VisibleFile) }, summary: "Muestra u oculta un documento en el portal del contador" },
   },
   { strictStatusCodes: true },

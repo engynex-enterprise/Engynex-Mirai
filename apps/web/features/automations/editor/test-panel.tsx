@@ -11,17 +11,17 @@ import { Notice } from "@/components/mirai/notice"
 import { Spinner } from "@/components/ui/spinner"
 import { formatCOP } from "@/lib/domain/money"
 import type { Graph } from "@/lib/automations/types"
-import { testAutomation, type TestResult } from "../actions"
+import { testAutomation, type TestResult } from "../api"
 import { StepList } from "../shared"
 
 /** "Probar": corre la automatización con datos del libro (o los que escribas) sin cambiar nada y muestra el recorrido. */
-export function TestPanel({ graph, onResult, result }: { graph: Graph; result: TestResult | null; onResult: (r: TestResult | null) => void }) {
+export function TestPanel({ id, graph, onResult, result }: { id: string; graph: Graph; result: TestResult | null; onResult: (r: TestResult | null) => void }) {
   const [monto, setMonto] = useState<number | null>(null)
   const [desc, setDesc] = useState("")
   const [busy, setBusy] = useState(false)
   const run = async () => {
     setBusy(true)
-    try { onResult(await testAutomation({ graph, monto, descripcion: desc.trim() || null })) }
+    try { onResult(await testAutomation({ id, graph, monto, descripcion: desc.trim() || null })) }
     finally { setBusy(false) }
   }
   return (

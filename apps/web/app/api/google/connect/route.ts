@@ -7,9 +7,13 @@ import { getAppContext } from "@/lib/dal"
 import { can } from "@/lib/plans"
 import { getIntegration } from "@/features/integrations/store"
 import { safeNext } from "@/lib/security/safe-next"
+import { serverAuthProvider } from "@/lib/auth/provider"
 
 /** Inicia la conexión con Google: ?s=gmail|calendar&back=/correo */
 export async function GET(req: NextRequest) {
+  // v7: con AUTH_PROVIDER=mirai Google se conecta por la API (connectGoogleViaApi). Un enlace viejo abierto en otra
+  // pestaña vuelve a la pantalla de donde vino, donde el botón ya usa la API.
+  if (serverAuthProvider() === "mirai") return NextResponse.redirect(`${siteUrl()}${safeNext(req.nextUrl.searchParams.get("back"), "/ajustes?tab=alertas")}`)
   const sb = await supabaseServer()
   const { data } = await sb.auth.getClaims()
   if (!data?.claims) return NextResponse.redirect(`${siteUrl()}/login`)

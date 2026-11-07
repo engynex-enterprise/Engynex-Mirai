@@ -134,8 +134,8 @@ test("automatizaciones: pagar una cuota dispara “cuota pagada” (evento nuevo
 
     // 3) La base encola el evento (sin que lo tome la versión publicada) y la app corre la automatización
     await expect.poll(async () => (await sb.from("automation_runs").select("estado").eq("automation_id", autoId)).data?.map((r) => r.estado) ?? [], { timeout: 60_000, intervals: [1000, 2000, 3000] }).toContain("ok")
-    const { data: notifs } = await sb.from("notifications").select("titulo").eq("user_id", uid).eq("kind", "automatizacion").like("titulo", "Cuota registrada:%")
-    expect(notifs?.length).toBeGreaterThan(0)
+    // El aviso de la campana puede quedar un instante después de la fila de la ejecución (con la API, otro proceso).
+    await expect.poll(async () => (await sb.from("notifications").select("titulo").eq("user_id", uid).eq("kind", "automatizacion").like("titulo", "Cuota registrada:%")).data?.length ?? 0, { timeout: 20_000 }).toBeGreaterThan(0)
     await page.goto(`/automatizaciones/${autoId}`)
     await expect(page.getByRole("textbox", { name: "Nombre de la automatización" })).toHaveValue(CUOTA, { timeout: 30_000 })
     await shot(page, "automatizaciones-cuota", info.project.name)

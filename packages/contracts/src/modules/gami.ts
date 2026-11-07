@@ -67,6 +67,22 @@ export const GamiChecked = z.object({
 })
 export type GamiChecked = z.infer<typeof GamiChecked>
 
+/** V7-H2: estado guardado de logros sin calcular (useGamiState de la web; la web calcula con @mirai/domain/gami). */
+export const GamiState = z.object({
+  on: z.boolean(),
+  visitas: z.array(z.string()),
+  unl: z.record(z.string(), z.string()),
+  mis: z.record(z.string(), z.array(z.string())),
+  maxLevel: z.number(),
+  init: z.string().nullable(),
+  chats: z.number(),
+  consejos: z.number(),
+  retos: z.array(z.record(z.string(), z.unknown())),
+  fondo: z.object({ on: z.boolean(), saldo: z.number() }).nullable(),
+  nombre: z.string(),
+})
+export type GamiState = z.infer<typeof GamiState>
+
 const c = initContract()
 export const gamiContract = c.router(
   {
@@ -77,6 +93,13 @@ export const gamiContract = c.router(
       query: GamiQuery,
       responses: { ...COMMON_ERRORS, 200: GamiView },
       summary: "Logros del libro para la persona: puntos, nivel, racha, misiones e insignias",
+    },
+    state: {
+      method: "GET",
+      path: "/v1/books/:bookId/gami/state",
+      pathParams: BookParams,
+      responses: { ...COMMON_ERRORS, 200: GamiState },
+      summary: "Estado guardado de tus logros en el libro (visitas, insignias, misiones, nivel máximo) sin calcular",
     },
     referrals: {
       method: "GET",

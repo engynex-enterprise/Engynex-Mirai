@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -10,7 +10,7 @@ import { MoneyInput } from "@/components/mirai/money-input"
 import { PageHeader } from "@/components/mirai/page-header"
 import { Panel } from "@/components/mirai/panel"
 import { Segmented } from "@/components/mirai/choice-cards"
-import { createClient } from "@/utils/supabase/client"
+import { fetchUvtYear } from "@/lib/ref-data"
 import { ahorro, aporteParaMeta, cdt, credito, gmf, inflacion } from "@/lib/domain/calculadoras"
 
 const $ = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`
@@ -98,7 +98,7 @@ function Ahorro() {
 }
 
 function Gmf() {
-  const { data: uvt } = useQuery({ queryKey: ["uvt", new Date().getFullYear()], queryFn: async () => (await createClient().from("ref_uvt").select("valor,fuente").eq("year", new Date().getFullYear()).maybeSingle()).data, staleTime: Infinity })
+  const { data: uvt } = useQuery({ queryKey: ["uvt", new Date().getFullYear()], queryFn: () => fetchUvtYear(new Date().getFullYear()), staleTime: Infinity })
   const [v, setV] = useState({ monto: 2_000_000, exento: true })
   const r = gmf({ monto: v.monto, exento: v.exento, uvt: Number(uvt?.valor ?? 0) })
   return (

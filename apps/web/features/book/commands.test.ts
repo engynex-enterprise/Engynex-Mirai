@@ -31,6 +31,7 @@ async function session(flags: Record<string, boolean>) {
 
 beforeEach(() => {
   vi.stubGlobal("window", {})
+  vi.stubGlobal("document", { cookie: "" }) // isMiraiAuth() lee la cookie mirai-auth (V7-H4)
   rpc.mockReset().mockResolvedValue({ data: { ajuste: null, aporte: null }, error: null })
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -57,12 +58,21 @@ describe("comandos del libro", () => {
     expect((r.data as { ajuste: string }).ajuste).toBe("max")
   })
 
-  it("encendido pero sin paridad (periodo prev-… del formulario): sigue por la RPC", async () => {
+  it("encendido pero sin paridad (sufijo que la API no arma igual): sigue por la RPC", async () => {
     await session({ fixed: true })
     const { payFixedExpense } = await import("@/features/fixed/commands")
-    await payFixedExpense({ p_fixed: FIXED, p_periodo: "prev-2026-11", p_fecha: "2026-11-05", p_valor: 1, p_desc_suffix: "" })
+    await payFixedExpense({ p_fixed: FIXED, p_periodo: "2026-11", p_fecha: "2026-11-05", p_valor: 1, p_desc_suffix: " (otro)" })
     expect(rpc).toHaveBeenCalledOnce()
     expect(fixedPay).not.toHaveBeenCalled()
+  })
+
+  it("V7-H1: el pago de antes del alta (prev-AAAA-MM de fixed-form) ya va por el comando", async () => {
+    await session({ fixed: true })
+    fixedPay.mockResolvedValue(ok({ ajuste: null, aporte: null, valor: 1, periodo: "prev-2026-11" }))
+    const { payFixedExpense } = await import("@/features/fixed/commands")
+    await payFixedExpense({ p_fixed: FIXED, p_periodo: "prev-2026-11", p_fecha: "2026-11-05", p_valor: 1, p_desc_suffix: "" })
+    expect(rpc).not.toHaveBeenCalled()
+    expect(fixedPay).toHaveBeenCalledWith({ params: { bookId: BOOK, id: FIXED }, body: { periodo: "prev-2026-11", fecha: "2026-11-05", valor: 1 } })
   })
 
   it("encendido: el error de la API llega como error.message en español", async () => {

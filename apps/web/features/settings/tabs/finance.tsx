@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Combobox } from "@/components/mirai/combobox"
 import { MoneyAutosave } from "@/components/mirai/money-autosave"
 import { Notice } from "@/components/mirai/notice"
-import { createClient } from "@/utils/supabase/client"
+import { fetchLatestRefs } from "../api"
 import { categoryOptions, memberOptions, methodOptions, useCategories, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { FRECS, FSP_LEY797, SISTEMAS, smmlvFor, uvtFor, type NominaCfg } from "@/lib/domain"
 import { Plus, RotateCcw } from "lucide-react"
@@ -35,14 +35,7 @@ function useLatestRefs() {
   return useQuery({
     queryKey: ["refs-latest"],
     staleTime: 3_600_000,
-    queryFn: async () => {
-      const sb = createClient()
-      const [trm, usura] = await Promise.all([
-        sb.from("ref_trm").select("fecha,valor").order("fecha", { ascending: false }).limit(1).maybeSingle(),
-        sb.from("ref_usury_rate").select("desde,hasta,tasa_ea").order("desde", { ascending: false }).limit(1).maybeSingle(),
-      ])
-      return { trm: trm.data, usura: usura.data }
-    },
+    queryFn: fetchLatestRefs,
   })
 }
 

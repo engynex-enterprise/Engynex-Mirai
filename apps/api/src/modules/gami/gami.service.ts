@@ -11,7 +11,7 @@ import { systemScope } from "../../core/db/scope"
 import { DomainError } from "../../core/errors/domain-error"
 import { RowStore } from "../../core/store/row-store"
 import { BookTablesService } from "../book-tables/book-tables.service"
-import { GamiRepo } from "./gami.repository"
+import { GamiRepo, type GamiState } from "./gami.repository"
 
 /** Ruta para compartir el código (la web le antepone su dirección pública, siteUrl()). */
 export const rutaReferido = (codigo: string) => `/registro?ref=${codigo}`
@@ -30,6 +30,11 @@ export class GamiService {
     const [book, st] = await Promise.all([this.tables.loadBook(today), this.repo.state(this.ctx.db, { bookId: this.ctx.book.book.id, userId: this.ctx.user.id })])
     const G: GamiInput = { book, perfilNombre: st.nombre, fondo: st.fondo, retos: st.retos, consejos: st.consejos, chats: st.chats, visitas: st.visitas, unl: st.unl, mis: st.mis }
     return { G, st }
+  }
+
+  /** V7-H2: el estado guardado sin calcular (useGamiState de la web; la web calcula en el navegador, decisión D3). */
+  state(): Promise<GamiState> {
+    return this.repo.state(this.ctx.db, { bookId: this.ctx.book.book.id, userId: this.ctx.user.id })
   }
 
   async get(hoy?: string): Promise<GamiView> {

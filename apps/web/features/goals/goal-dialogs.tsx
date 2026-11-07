@@ -16,7 +16,8 @@ import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
-import { fundSave, fundUse } from "./commands"
+import { apiDeleteRow, apiInsertRow, apiRestoreRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { fundSave, fundUse, updateFund } from "./commands"
 import { aporteSugerido, fijoProxIso, type PayDays } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -148,7 +149,6 @@ function AporteBody({ target, existing, payDays, sugerencia, onOpenChange }: { t
   const submit = async () => {
     if (!valor) return toast.error("Escribe cuánto vas a guardar")
     setBusy(true)
-    const sb = createClient()
     const row = {
       nombre: target.t === "fondo" ? "Aporte a fondo de emergencia" : `Aporte a meta: ${target.nombre}`, category_id: cats.find((c) => c.nombre === "Ahorro")?.id ?? null,
       valor, frec, dia: frec === "quincenal" ? Math.min(15, Math.max(1, +d1 || 15)) : Math.min(31, Math.max(1, +dm || 30)),
@@ -156,12 +156,15 @@ function AporteBody({ target, existing, payDays, sugerencia, onOpenChange }: { t
       payment_method_id: methods.find((m) => /transfer/i.test(m.nombre))?.id ?? null, link_type: target.t, link_id: target.t === "meta" ? target.id : null,
     }
     const changed = existing && (existing.frec !== row.frec || existing.dia !== row.dia || existing.dia2 !== row.dia2)
-    const { data, error } = existing
-      ? await sb.from("fixed_expenses").update({ ...row, ...(changed ? { desde: today.slice(0, 7), inicio: today } : {}) }).eq("id", existing.id).select().single()
-      : await sb.from("fixed_expenses").insert({ ...row, book_id: bookId, desde: today.slice(0, 7), inicio: today }).select().single()
-    if (!error && target.t === "fondo") await sb.from("emergency_funds").update({ activo: true }).eq("book_id", bookId)
+    const patch = existing ? { ...row, ...(changed ? { desde: today.slice(0, 7), inicio: today } : {}) } : { ...row, desde: today.slice(0, 7), inicio: today }
+    const { data, error } = rowsViaApi("fixed_expenses")
+      ? existing ? await apiUpdateRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", existing.id, patch) : await apiInsertRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", patch)
+      : existing
+        ? await createClient().from("fixed_expenses").update(patch).eq("id", existing.id).select().single()
+        : await createClient().from("fixed_expenses").insert({ ...patch, book_id: bookId }).select().single()
+    if (!error && target.t === "fondo") await updateFund(bookId, { activo: true })
     setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.message })
+    if (error || !data) return toast.error("No se pudo guardar", { description: error?.message })
     const prox = fijoProxIso({ ...data, valor: Number(data.valor), payments: [] } as never, today)
     toast.success(existing ? "Aporte actualizado" : "Aporte programado", { description: `Guardarás ${fmtMoney(valor)} ${frec === "quincenal" ? "cada quincena" : "cada mes"} en tu ${target.t === "fondo" ? "fondo de emergencia" : `meta “${target.nombre}”`}. Primer recordatorio: ${fmtDate(prox)}. También lo verás en Gastos fijos.` })
     refresh(qc, bookId)
@@ -169,8 +172,15 @@ function AporteBody({ target, existing, payDays, sugerencia, onOpenChange }: { t
   }
   const quitar = async () => {
     if (!existing) return
-    await createClient().from("fixed_expenses").update({ deleted_at: new Date().toISOString() }).eq("id", existing.id)
-    toast("El aporte programado se quitó", { description: "Lo que ya ahorraste se mantiene.", action: { label: "Deshacer", onClick: () => createClient().from("fixed_expenses").update({ deleted_at: null }).eq("id", existing.id).then(() => refresh(qc, bookId)) } })
+    const api = rowsViaApi("fixed_expenses")
+    if (api) await apiDeleteRow(bookId, "fixed_expenses", existing.id)
+    else await createClient().from("fixed_expenses").update({ deleted_at: new Date().toISOString() }).eq("id", existing.id)
+    const deshacer = async () => {
+      if (api) await apiRestoreRow(bookId, "fixed_expenses", existing.id)
+      else await createClient().from("fixed_expenses").update({ deleted_at: null }).eq("id", existing.id)
+      refresh(qc, bookId)
+    }
+    toast("El aporte programado se quitó", { description: "Lo que ya ahorraste se mantiene.", action: { label: "Deshacer", onClick: deshacer } })
     refresh(qc, bookId); onOpenChange(false)
   }
   return (

@@ -8,7 +8,11 @@ async function qaBook() {
   const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
   const uid = data.users.find((u) => u.email === QA.email)!.id
   const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
-  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at").limit(1).single()
+  // El libro que abre la app (regla de buildAppContext: el último libro de la persona y, si no, el predeterminado):
+  // otra prueba puede haber dejado activo el «Ejemplo · familia Navarro» (Ver un ejemplo cambia de libro).
+  const { data: books } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at")
+  const { data: prof } = await sb.from("profiles").select("last_book_id").eq("id", uid).maybeSingle()
+  const bk = books?.find((b) => b.id === prof?.last_book_id) ?? books?.[0]
   return { sb, bookId: bk!.id }
 }
 
@@ -71,7 +75,8 @@ test("renta: pestañas, bien, deducción, informe, Excel y portal del contador c
   const anon = await browser.newContext({ viewport: page.viewportSize() ?? undefined })
   const p2 = await anon.newPage()
   await p2.goto(url.replace(/^https?:\/\/[^/]+/, ""))
-  await expect(p2.getByText("Portal del contador").first()).toBeVisible({ timeout: 30_000 })
+  // Dentro de <main>: la barra de título de la app instalada (features/pwa/title-bar.tsx, oculta en el navegador) también dice "· Portal del contador".
+  await expect(p2.getByRole("main").getByText("Portal del contador").first()).toBeVisible({ timeout: 30_000 })
   await expect(p2.getByText("Hola, ya subí el certificado")).toBeVisible({ timeout: 20_000 })
   await expect(p2.getByRole("button", { name: "Agregar bien" })).toHaveCount(0)
   await p2.getByRole("textbox", { name: /Nota para/ }).fill("Recibido, gracias")

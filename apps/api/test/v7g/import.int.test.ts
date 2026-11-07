@@ -197,11 +197,12 @@ describe("POST /import/v4 (importV4Backup)", () => {
 })
 
 describe("POST /import/sample (loadSampleBook)", () => {
-  it("con el plan Gratis (1 libro) → 402 con el mensaje de createBook", async () => {
+  it("con el plan Gratis también deja ver el ejemplo (como loadSampleBook de la web; el cupo lo exige la base si premium_db está encendido)", async () => {
+    t.fx.rows.rpcImpl.create_book = () => NEW_BOOK
     const r = await t.call("POST", U("/import/sample"), "editor")
-    expect(r.status).toBe(402)
-    expect(r.body).toMatchObject({ code: "PLAN_REQUIRED", msg: "Tu plan incluye 1 libro(s) de cuentas. Cambia de plan para llevar también tu negocio o tus arriendos." })
-    expect(t.fx.rows.rpcs).toEqual([])
+    expect(r.status).toBe(200)
+    expect(r.body.data).toMatchObject({ bookId: NEW_BOOK })
+    expect(t.fx.rows.rpcs.map((x) => x.fn)).toEqual(["create_book"])
   })
 
   it("crea el libro en el hogar de la ruta (create_book con la sesión), lo marca como ejemplo e importa con fechas al día; idempotente", async () => {

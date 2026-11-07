@@ -1,9 +1,9 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import Link from "next/link"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ImagePlus, Plus } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ import { StatusPill, type PillTone } from "@/components/mirai/status-pill"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { IconButton } from "@/components/mirai/tip"
 import { ToneIcon, type IconTone } from "@/components/mirai/tone-icon"
-import { createClient } from "@/utils/supabase/client"
+import { deleteAd, deleteCampaign, duplicateAd, loadAdsManager, loadAdsSettings, saveAd, saveAdsSettings, saveCampaign, setAdActivo, setCampaignEstado, uploadAdImage } from "./ads-api"
 import { AD_FORMATS, AD_SLOTS, campaignCost, ctr, type AdSlotId } from "@/lib/ads"
 import { fmtDate } from "@/lib/format"
 import { precio } from "@/lib/plans"
@@ -47,15 +47,9 @@ function useAdsAdmin(dias: number) {
   return useQuery({
     queryKey: ["admin", "ads-manager", dias],
     queryFn: async () => {
-      const sb = createClient()
       const desde = ago(dias - 1), hasta = hoy()
-      const [{ data: camps }, { data: ads }, { data: ev }, { data: reach }] = await Promise.all([
-        sb.from("ad_campaigns").select("*").order("created_at", { ascending: false }),
-        sb.from("ads").select("*").order("created_at", { ascending: false }),
-        sb.from("ad_events").select("ad_id,dia,slot,vistas,clics,cierres").gte("dia", desde).lte("dia", hasta),
-        sb.rpc("ad_reach", { p_desde: desde, p_hasta: hasta }),
-      ])
-      const e = ev ?? []
+      const { camps, ads, ev, reach } = await loadAdsManager(desde, hasta)
+      const e = ev
       const byAd = (id: string) => { const l = e.filter((x) => x.ad_id === id); const r = (reach ?? []).find((x) => x.ad_id === id); return { vistas: l.reduce((t, x) => t + x.vistas, 0), clics: l.reduce((t, x) => t + x.clics, 0), cierres: l.reduce((t, x) => t + x.cierres, 0), alcance: Number(r?.alcance ?? 0) } }
       const adsM = ((ads ?? []) as unknown as (Ad & { created_at: string })[]).map((a) => ({ ...a, m: byAd(a.id) }))
       const campsM = ((camps ?? []) as unknown as Campaign[]).map((c) => {
@@ -86,11 +80,10 @@ function CampaignDialog({ c, open, onOpenChange }: { c: Campaign | Omit<Campaign
   const valid = v.nombre.trim().length >= 2 && v.dispositivos.length > 0 && fechasOk
   const save = async () => {
     setBusy(true)
-    const sb = createClient()
     const row = { nombre: v.nombre.trim(), anunciante: v.anunciante.trim(), objetivo: v.objetivo, estado: v.estado, desde: v.desde, hasta: v.hasta, modelo_cobro: v.modelo_cobro, tarifa: v.tarifa, presupuesto: v.presupuesto, planes: v.planes, dispositivos: v.dispositivos, frecuencia_max: v.frecuencia_max, prioridad: v.prioridad }
-    const { error } = "id" in v ? await sb.from("ad_campaigns").update(row).eq("id", v.id) : await sb.from("ad_campaigns").insert(row)
+    try { await saveCampaign("id" in v ? v.id : undefined, row) }
+    catch (e) { setBusy(false); return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.message })
     toast.success("Campaña guardada"); qc.invalidateQueries({ queryKey: ["admin", "ads-manager"] }); qc.invalidateQueries({ queryKey: ["ad-campaigns"] }); onOpenChange(false)
   }
   return (
@@ -143,19 +136,10 @@ function AdEditor({ ad, campaigns, open, onOpenChange }: { ad: Ad | Omit<Ad, "id
   const upload = async (f?: File, cb?: (url: string) => void) => {
     if (!f) return
     if (!f.type.startsWith("image/") || f.size > 2 * 1024 * 1024) return toast.error("Usa una imagen de máximo 2 MB")
-    if (filesViaApi()) {
-      // v7 (interruptor `files`): bucket público `ads` por la API.
-      try {
-        const r = await uploadFile({ bucket: "ads", body: f, name: f.name })
-        if (r.publicUrl) { if (cb) cb(r.publicUrl); else set("imagen", r.publicUrl) }
-      } catch (e) { toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
-      return
-    }
-    const sb = createClient()
-    const path = `${crypto.randomUUID()}.${(f.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")}`
-    const { error } = await sb.storage.from("ads").upload(path, f, { contentType: f.type })
-    if (error) return toast.error("No se pudo subir la imagen", { description: error.message })
-    const url = sb.storage.from("ads").getPublicUrl(path).data.publicUrl
+    // Bucket público `ads` (por la API con el interruptor `files`).
+    let url: string
+    try { url = await uploadAdImage(f) }
+    catch (e) { return toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
     if (cb) cb(url); else set("imagen", url)
   }
   const urlOk = URL_RE.test(v.url.trim())
@@ -163,11 +147,10 @@ function AdEditor({ ad, campaigns, open, onOpenChange }: { ad: Ad | Omit<Ad, "id
   const valid = v.titulo.trim().length >= 2 && urlOk && v.ubicaciones.length > 0 && fechasOk
   const save = async () => {
     setBusy(true)
-    const sb = createClient()
-    const row = { titulo: v.titulo.trim(), texto: v.texto.trim(), imagen: v.imagen, url: v.url.trim(), cta: v.cta.trim() || "Conocer más", anunciante: v.anunciante.trim(), ubicaciones: v.ubicaciones, desde: v.desde, hasta: v.hasta, prioridad: v.prioridad, activo: v.activo, campaign_id: v.campaign_id, formato: v.formato, media: v.media as never }
-    const { error } = "id" in v ? await sb.from("ads").update(row).eq("id", v.id) : await sb.from("ads").insert(row)
+    const row = { titulo: v.titulo.trim(), texto: v.texto.trim(), imagen: v.imagen, url: v.url.trim(), cta: v.cta.trim() || "Conocer más", anunciante: v.anunciante.trim(), ubicaciones: v.ubicaciones, desde: v.desde, hasta: v.hasta, prioridad: v.prioridad, activo: v.activo, campaign_id: v.campaign_id, formato: v.formato, media: v.media }
+    try { await saveAd("id" in v ? v.id : undefined, row) }
+    catch (e) { setBusy(false); return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.message })
     toast.success("Anuncio guardado"); qc.invalidateQueries({ queryKey: ["admin", "ads-manager"] }); qc.invalidateQueries({ queryKey: ["ads"] }); onOpenChange(false)
   }
   const items = v.media.items ?? []
@@ -261,10 +244,11 @@ export function AnunciosAdmin() {
   const preview = useAdsPreview()
   const camps = useMemo(() => data?.camps ?? [], [data])
   const campName = useMemo(() => new Map(camps.map((c) => [c.id, c.nombre])), [camps])
-  const sb = createClient()
   const refresh = () => { qc.invalidateQueries({ queryKey: ["admin", "ads-manager"] }); qc.invalidateQueries({ queryKey: ["ads"] }); qc.invalidateQueries({ queryKey: ["ad-campaigns"] }) }
-  const { data: cfg } = useQuery({ queryKey: ["platform-settings-ads"], queryFn: async () => (await sb.from("platform_settings").select("anuncios_adsense_pct,anuncios_accion_cada,anuncios_modal_horas,anuncios_ticker").maybeSingle()).data })
-  const saveCfg = async (p: { anuncios_adsense_pct?: number; anuncios_accion_cada?: number; anuncios_modal_horas?: number; anuncios_ticker?: boolean }) => { const { error } = await sb.from("platform_settings").update(p).eq("id", true); if (error) toast.error(error.message); else { toast.success("Guardado"); qc.invalidateQueries({ queryKey: ["platform-settings-ads"] }) } }
+  const { data: cfg } = useQuery({ queryKey: ["platform-settings-ads"], queryFn: loadAdsSettings })
+  const saveCfg = async (p: { anuncios_adsense_pct?: number; anuncios_accion_cada?: number; anuncios_modal_horas?: number; anuncios_ticker?: boolean }) => { try { await saveAdsSettings(p) } catch (e) { return toast.error((e as Error).message) } toast.success("Guardado"); qc.invalidateQueries({ queryKey: ["platform-settings-ads"] }) }
+  /** Acción de la tabla: el mensaje si sale bien; si no, el error de la API o de la base. */
+  const act = async (fn: () => Promise<void>, ok: () => void) => { try { await fn(); ok(); refresh() } catch (e) { toast.error("No se pudo completar", { description: (e as Error).message }) } }
   type C = (typeof camps)[number]
   type A = NonNullable<typeof data>["ads"][number]
   const [pct, setPct] = useState<number | null>(null)
@@ -289,10 +273,10 @@ export function AnunciosAdmin() {
           create={{ label: "Nueva campaña", onClick: () => editCamp.show({ ...NEW_CAMP }) }} exportName="mirai-campanas" initialSort={{ id: "vistas", dir: "desc" }}
           actions={[
             { label: "Editar", onSelect: (c) => editCamp.show(c) },
-            { label: "Activar", hidden: (c) => c.estado === "activa", onSelect: async (c) => { await sb.from("ad_campaigns").update({ estado: "activa" }).eq("id", c.id); toast.success("Campaña activa"); refresh() } },
-            { label: "Pausar", hidden: (c) => c.estado !== "activa", onSelect: async (c) => { await sb.from("ad_campaigns").update({ estado: "pausada" }).eq("id", c.id); toast("Campaña pausada"); refresh() } },
+            { label: "Activar", hidden: (c) => c.estado === "activa", onSelect: (c) => act(() => setCampaignEstado(c.id, "activa"), () => toast.success("Campaña activa")) },
+            { label: "Pausar", hidden: (c) => c.estado !== "activa", onSelect: (c) => act(() => setCampaignEstado(c.id, "pausada"), () => toast("Campaña pausada")) },
             { label: "Nuevo anuncio en esta campaña", onSelect: (c) => editAd.show({ ...EMPTY, campaign_id: c.id, anunciante: c.anunciante }) },
-            { label: "Borrar", destructive: true, onSelect: async (c) => { if (!(await ask.confirm({ title: `¿Borrar la campaña ${c.nombre}?`, description: "También se borran sus anuncios. No se puede deshacer.", confirmLabel: "Borrar", destructive: true }))) return; await sb.from("ad_campaigns").delete().eq("id", c.id); toast("Campaña borrada"); refresh() } },
+            { label: "Borrar", destructive: true, onSelect: async (c) => { if (!(await ask.confirm({ title: `¿Borrar la campaña ${c.nombre}?`, description: "También se borran sus anuncios. No se puede deshacer.", confirmLabel: "Borrar", destructive: true }))) return; await act(() => deleteCampaign(c.id), () => toast("Campaña borrada")) } },
           ]}
           columns={[
             { id: "nombre", header: "Campaña", sort: (c) => c.nombre.toLowerCase(), csv: (c) => c.nombre, cell: (c) => <DTPrimary media={<ToneIcon icon="megaphone" tone={ESTADO[c.estado]?.[2] ?? "gray"} />} title={c.nombre} sub={`${c.anunciante || "Sin anunciante"} · ${OBJ[c.objetivo as keyof typeof OBJ] ?? c.objetivo}`} /> },
@@ -313,10 +297,10 @@ export function AnunciosAdmin() {
           create={{ label: "Nuevo anuncio", onClick: () => editAd.show({ ...EMPTY }) }} exportName="mirai-anuncios" initialSort={{ id: "vistas", dir: "desc" }}
           actions={[
             { label: "Editar", onSelect: (a) => editAd.show(a) },
-            { label: "Duplicar", onSelect: async (a) => { const { id: _id, m: _m, created_at: _c, ...rest } = a; void _id; void _m; void _c; await sb.from("ads").insert({ ...rest, titulo: `${a.titulo} (copia)`, media: rest.media as never }); toast.success("Anuncio duplicado"); refresh() } },
-            { label: "Pausar", hidden: (a) => !a.activo, onSelect: async (a) => { await sb.from("ads").update({ activo: false }).eq("id", a.id); toast("Anuncio pausado"); refresh() } },
-            { label: "Activar", hidden: (a) => a.activo, onSelect: async (a) => { await sb.from("ads").update({ activo: true }).eq("id", a.id); toast.success("Anuncio activo"); refresh() } },
-            { label: "Borrar", destructive: true, onSelect: async (a) => { if (!(await ask.confirm({ title: `¿Borrar el anuncio “${a.titulo}”?`, description: "También se borran sus métricas. Si solo quieres que no se vea, páusalo.", confirmLabel: "Borrar", destructive: true }))) return; await sb.from("ads").delete().eq("id", a.id); toast("Anuncio borrado"); refresh() } },
+            { label: "Duplicar", onSelect: (a) => act(() => duplicateAd(a), () => toast.success("Anuncio duplicado")) },
+            { label: "Pausar", hidden: (a) => !a.activo, onSelect: (a) => act(() => setAdActivo(a.id, false), () => toast("Anuncio pausado")) },
+            { label: "Activar", hidden: (a) => a.activo, onSelect: (a) => act(() => setAdActivo(a.id, true), () => toast.success("Anuncio activo")) },
+            { label: "Borrar", destructive: true, onSelect: async (a) => { if (!(await ask.confirm({ title: `¿Borrar el anuncio “${a.titulo}”?`, description: "También se borran sus métricas. Si solo quieres que no se vea, páusalo.", confirmLabel: "Borrar", destructive: true }))) return; await act(() => deleteAd(a.id), () => toast("Anuncio borrado")) } },
           ]}
           columns={[
             // eslint-disable-next-line @next/next/no-img-element

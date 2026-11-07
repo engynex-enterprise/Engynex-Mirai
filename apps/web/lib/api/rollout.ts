@@ -16,6 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveRollout, type RolloutWho } from "@mirai/contracts/rollout"
 import { API_MODULE_NAMES, API_OFF, type ApiConfig, type ApiModule } from "./modules"
 import { viaApi } from "./via"
+import { serverAuthProvider } from "@/lib/auth/provider"
 
 const TTL_MS = 30_000
 let cache: { at: number; value: unknown } | null = null
@@ -82,6 +83,12 @@ export function resetRolloutCache() {
  */
 export async function getApiConfig(who: RolloutWho, sb: SbSource, env: NodeJS.ProcessEnv = process.env): Promise<ApiConfig> {
   const url = apiUrl(env)
+  // v7: con AUTH_PROVIDER=mirai no hay Supabase: todo por la API, sin leer platform_settings (igual que miraiApiConfig
+  // de lib/dal.ts). Cubre las rutas sin persona: webhooks de pagos, portal del contador y precios.
+  if (serverAuthProvider(env) === "mirai") {
+    if (!url) throw new Error("AUTH_PROVIDER=mirai necesita MIRAI_API_URL (la API de Mirai).")
+    return { url, flags: Object.fromEntries(API_MODULE_NAMES.map((m) => [m, true])) as ApiConfig["flags"] }
+  }
   const mode = rolloutMode(env)
   if (!url || mode.kind === "off") return API_OFF
   const rollout = mode.kind === "db" ? await readRollout(sb) : mode.value

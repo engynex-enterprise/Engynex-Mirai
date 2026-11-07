@@ -1,13 +1,13 @@
 "use client"
 
 import { useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { createClient } from "@/utils/supabase/client"
+import { useQuery } from "@/lib/query"
 import { useApp, useBookId } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
 import { useMembers } from "@/features/catalogs/hooks"
 import { qk, type Row } from "@/lib/supabase/tables"
 import { activeLimit, runnable } from "@/lib/automations/limits"
+import { loadRuns } from "./api"
 import type { Refs } from "@/lib/automations/types"
 
 export type Automation = Row<"automations">
@@ -20,13 +20,7 @@ export function useRuns(automationId?: string, limit = 30) {
   const bookId = useBookId()
   return useQuery({
     queryKey: qk(bookId, "automation_runs", automationId ?? "todas", limit),
-    queryFn: async () => {
-      let q = createClient().from("automation_runs").select("*").eq("book_id", bookId).is("deleted_at", null).order("created_at", { ascending: false }).limit(limit)
-      if (automationId) q = q.eq("automation_id", automationId)
-      const { data, error } = await q
-      if (error) throw new Error(error.message)
-      return data
-    },
+    queryFn: () => loadRuns(bookId, automationId, limit),
   })
 }
 

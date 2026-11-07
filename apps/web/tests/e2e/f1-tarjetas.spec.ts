@@ -3,9 +3,14 @@ import { login, shot, watchErrors } from "./helpers"
 
 /** Con varias tarjetas en el libro (las de la otra ventana de prueba), deja escogida la de esta prueba. */
 async function elegir(page: Page, nombre: string) {
-  const r = page.getByRole("radio", { name: nombre })
-  if (await r.count()) await r.first().click()
+  // Primero que cargue (con el esqueleto no hay selector y contar daría 0: quedaba elegida la primera tarjeta, la de
+  // otro proyecto, y la compra y el pago iban a esa).
   await expect(page.locator("#main").getByText(nombre).first()).toBeVisible()
+  const r = page.getByRole("radio", { name: nombre })
+  if (await r.count()) {
+    await r.first().click()
+    await expect(r.first()).toBeChecked()
+  }
 }
 
 test("tarjetas: agregar, compra a cuotas, simulador y pagar la tarjeta", async ({ page }, info) => {

@@ -20,12 +20,11 @@ import { Tip } from "@/components/mirai/tip"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useCanEdit } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
 import { pagosMes } from "@/lib/domain"
 import { fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
-import { useMembers } from "@/features/catalogs/hooks"
+import { patchMember, useMembers } from "@/features/catalogs/hooks"
 
 function CupoEditor({ id, value }: { id: string; value: number }) {
   const { household } = useApp()
@@ -35,8 +34,7 @@ function CupoEditor({ id, value }: { id: string; value: number }) {
     <FormField label="Presupuesto al mes" tip="Cuánto puede gastar esta persona al mes. Te avisamos cuando se acerque.">
       <MoneyInput value={v} onChange={setV} onBlur={async () => {
         if (v === value) return
-        const { error } = await createClient().from("family_members").update({ cupo: v }).eq("id", id)
-        if (error) return toast.error("No se pudo guardar el presupuesto", { description: error.message })
+        try { await patchMember(household.id, id, { cupo: v }) } catch (e) { return toast.error("No se pudo guardar el presupuesto", { description: (e as Error).message }) }
         qc.invalidateQueries({ queryKey: ["h", household.id, "family_members"] })
         toast.success("Presupuesto actualizado")
       }} />

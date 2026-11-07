@@ -3,7 +3,8 @@
 import { useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
 import { ArchiveRestore, Download, FileUp, Save, ShieldAlert, UserX } from "lucide-react"
@@ -23,6 +24,8 @@ import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/comp
 import { useApp } from "@/components/app/app-context"
 import { can } from "@/lib/household/roles"
 import { createClient } from "@/utils/supabase/client"
+import { isMiraiAuth } from "@/lib/auth/provider"
+import { fetchAudit, fetchBackups } from "../api"
 import { SampleButton } from "@/features/setup/sample-button"
 import { backupUrl, createBackup, deleteAccount, deleteBackup, exportBookJson, exportMyData, formatBlocks, restoreBackup, restoreFromJson } from "@/features/data/api"
 import { SettingRow, SettingSection, SettingStack } from "../ui"
@@ -55,7 +58,7 @@ function Backups() {
   const file = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [restore, setRestore] = useState<string | null>(null)
-  const { data, isPending } = useQuery({ queryKey: ["backups", book.id], queryFn: async () => (await createClient().from("backups").select("*").eq("book_id", book.id).order("created_at", { ascending: false }).limit(30)).data ?? [] })
+  const { data, isPending } = useQuery({ queryKey: ["backups", book.id], queryFn: () => fetchBackups(book.id) })
   const refresh = () => qc.invalidateQueries({ queryKey: ["backups", book.id] })
   const act = async (k: string, f: () => Promise<unknown>, ok: string, reload?: boolean) => {
     setBusy(k)
@@ -107,14 +110,7 @@ function AuditLog() {
   const [n, setN] = useState(25)
   const { data, isPending } = useQuery({
     queryKey: ["audit", book.id, n],
-    queryFn: async (): Promise<AuditRow[]> => {
-      const sb = createClient()
-      const { data } = await sb.from("audit_log").select("id,tabla,accion,actor,resumen,created_at").eq("book_id", book.id).order("created_at", { ascending: false }).limit(n)
-      const ids = [...new Set((data ?? []).map((r) => r.actor).filter(Boolean))] as string[]
-      const { data: ps } = ids.length ? await sb.from("profiles").select("id,nombre,email").in("id", ids) : { data: [] }
-      const pm = new Map((ps ?? []).map((p) => [p.id, p.nombre || p.email]))
-      return (data ?? []).map((r) => ({ ...r, id: String(r.id), quien: (r.actor && pm.get(r.actor)) || "Sistema" }))
-    },
+    queryFn: (): Promise<AuditRow[]> => fetchAudit(book.id, n),
   })
   const c = useListControls(data, { text: auditText, filters: AUDIT_FILTERS })
   return (
@@ -199,7 +195,9 @@ function Cuenta() {
               setBusy("del")
               const r = await deleteAccount({ confirm: conf }).catch(() => ({ ok: false, msg: "No pudimos eliminar tu cuenta. Intenta de nuevo." }))
               if (!r.ok) { toast.error(r.msg); setBusy(null); return }
-              await createClient().auth.signOut(); router.replace("/login?eliminada=1")
+              // v7: con AUTH_PROVIDER=mirai la sesión es de Better Auth; con supabase, la de siempre (rama heredada).
+              if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut(); else await createClient().auth.signOut()
+              router.replace("/login?eliminada=1")
             }}>{busy === "del" && <Spinner />} Eliminar para siempre</Button>
           </AlertDialogFooter>
         </AlertDialogContent>

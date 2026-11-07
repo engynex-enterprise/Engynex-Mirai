@@ -13,8 +13,11 @@ export abstract class AccountantRepo {
   /** Plan del hogar dueño del libro (null si el libro no existe). */
   abstract bookPlan(scope: DbScope, bookId: string): Promise<{ plan: PlanRow } | null>
   abstract countView(scope: DbScope, share: Pick<ShareRow, "id" | "views">): Promise<void>
-  /** Datos de la Declaración del libro, solo con los documentos marcados como visibles para el contador. */
-  abstract renta(scope: DbScope, bookId: string, ownerId: string | null): Promise<RentaData>
+  /**
+   * Datos de la Declaración del libro, solo con los documentos marcados como visibles para el contador. V7-H2: con
+   * `todos` (el titular, con su sesión) van todos los documentos, como loadRentaData de la web sin `contador`.
+   */
+  abstract renta(scope: DbScope, bookId: string, ownerId: string | null, opts?: { todos?: boolean }): Promise<RentaData>
   abstract notes(scope: DbScope, shareId: string): Promise<{ id: string; autor: string; texto: string; created_at: string }[]>
   abstract addNote(scope: DbScope, n: { book_id: string; share_id: string; texto: string }): Promise<void>
   abstract visibleAttachment(scope: DbScope, bookId: string, path: string): Promise<boolean>

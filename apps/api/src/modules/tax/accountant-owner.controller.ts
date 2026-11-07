@@ -62,6 +62,13 @@ export class AccountantOwnerController {
     return tsRestHandler(c.files, async ({ query }) => ({ status: 200, body: await this.svc.files(query.todos === "1") }))
   }
 
+  /** V7-H2: datos de la Declaración (cualquier integrante; sin exigir el plan: el Calendario fiscal la usa para estimar). */
+  @TsRestHandler(c.renta)
+  @MinRole("viewer")
+  renta() {
+    return tsRestHandler(c.renta, async () => ({ status: 200, body: await this.svc.renta() }))
+  }
+
   @TsRestHandler(c.setFileVisible)
   @MinRole("admin")
   @Premium("impuestos")

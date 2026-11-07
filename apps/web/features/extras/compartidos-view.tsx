@@ -31,6 +31,7 @@ import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { apiDeleteRow, apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import { balancesGrupo } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -59,9 +60,10 @@ function GroupForm({ open, onOpenChange, onCreated }: { open: boolean; onOpenCha
   const submit = async () => {
     if (!valido || busy) return
     setBusy(true)
-    const { data, error } = await createClient().from("shared_groups").insert({ book_id: bookId, nombre: nombre.trim(), personas: list }).select("id").single()
+    const grupo = { nombre: nombre.trim(), personas: list }
+    const { data, error } = rowsViaApi("shared_groups") ? await apiInsertRow<{ id: string }>(bookId, "shared_groups", grupo) : await createClient().from("shared_groups").insert({ book_id: bookId, ...grupo }).select("id").single()
     setBusy(false)
-    if (error) return toast.error("No se pudo crear", { description: error.message })
+    if (error || !data) return toast.error("No se pudo crear", { description: error?.message })
     toast.success("Grupo creado"); invalidateBook(qc, bookId, "shared_groups"); onCreated(data.id); onOpenChange(false)
   }
   return (
@@ -106,17 +108,22 @@ function SharedForm({ open, group, onOpenChange }: { open: boolean; group: Group
   const submit = async () => {
     if (!valido || busy) return
     setBusy(true)
-    const sb = createClient()
+    const api = rowsViaApi("shared_group_expenses") && rowsViaApi("expenses")
     let expense_id: string | null = null
     if (miGasto) {
-      const { data } = await sb.from("expenses").insert({ book_id: bookId, fecha, descripcion: `${desc || "Gasto compartido"} (${group.nombre})`, valor: valor / entre.length, category_id: cats.find((c) => c.nombre === "Otros")?.id ?? null, origen: "compartido", hormiga: false }).select("id").single()
+      const gasto = { fecha, descripcion: `${desc || "Gasto compartido"} (${group.nombre})`, valor: valor / entre.length, category_id: cats.find((c) => c.nombre === "Otros")?.id ?? null, origen: "compartido" as const, hormiga: false }
+      const { data } = api ? await apiInsertRow<{ id: string }>(bookId, "expenses", gasto) : await createClient().from("expenses").insert({ book_id: bookId, ...gasto }).select("id").single()
       expense_id = data?.id ?? null
     }
-    const { error } = await sb.from("shared_group_expenses").insert({ book_id: bookId, group_id: group.id, descripcion: desc.trim(), valor, paga, entre, fecha, expense_id })
+    const fila = { group_id: group.id, descripcion: desc.trim(), valor, paga, entre, fecha, expense_id }
+    const { error } = api ? await apiInsertRow(bookId, "shared_group_expenses", fila) : await createClient().from("shared_group_expenses").insert({ book_id: bookId, ...fila })
     setBusy(false)
     if (error) {
       // Sin el gasto del grupo, tu parte no debe quedar suelta en tus gastos.
-      if (expense_id) await sb.from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", expense_id)
+      if (expense_id) {
+        if (api) await apiDeleteRow(bookId, "expenses", expense_id)
+        else await createClient().from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", expense_id)
+      }
       return toast.error("No se pudo guardar", { description: error.message })
     }
     toast.success("Gasto anotado"); invalidateBook(qc, bookId, "shared_group_expenses"); invalidateBook(qc, bookId, "expenses"); onOpenChange(false)
@@ -172,7 +179,8 @@ export function CompartidosView() {
   const puedeAgregar = !!g && !!nueva && !g.personas.some((p) => p.toLowerCase() === nueva.toLowerCase())
   const addPersona = async () => {
     if (!g || !puedeAgregar) return
-    const { error } = await createClient().from("shared_groups").update({ personas: [...g.personas, nueva] }).eq("id", g.id)
+    const personas = [...g.personas, nueva]
+    const { error } = rowsViaApi("shared_groups") ? await apiUpdateRow(bookId, "shared_groups", g.id, { personas }) : await createClient().from("shared_groups").update({ personas }).eq("id", g.id)
     if (error) return toast.error("No se pudo agregar", { description: error.message })
     setPersona(""); invalidateBook(qc, bookId, "shared_groups"); toast.success(`${nueva} se unió al grupo`)
   }

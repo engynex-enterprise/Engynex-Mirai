@@ -38,6 +38,8 @@ export const AuthEnvSchema = z
     AUTH_SUPPORT_URL: z.string().default("https://mirai.engynex.com/ayuda"),
     /** Minutos de "entraste hace poco" (quitar métodos, cambiar correo). */
     AUTH_FRESH_MIN: z.coerce.number().int().min(1).default(60),
+    /** Proxies de confianza delante de la API (balanceador): cuántas IP de la derecha de x-forwarded-for son suyas. */
+    AUTH_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   })
   .transform((e, ctx) => {
     const on = e.AUTH_PROVIDER === "mirai"
@@ -69,6 +71,7 @@ export const AuthEnvSchema = z
       mailFrom: e.AUTH_MAIL_FROM,
       supportUrl: e.AUTH_SUPPORT_URL,
       freshMin: e.AUTH_FRESH_MIN,
+      proxyHops: e.AUTH_PROXY_HOPS,
     }
   })
 

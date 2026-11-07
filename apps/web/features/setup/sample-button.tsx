@@ -7,7 +7,7 @@ import { Sparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { loadSampleBook } from "@/features/import/actions"
+import { loadSampleBook } from "@/features/import/api"
 
 /** Carga los datos de ejemplo de la v4 en un libro aparte y cambia a él. */
 export function SampleButton() {

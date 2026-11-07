@@ -13,6 +13,7 @@ import "server-only"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { globalApiOn } from "@/lib/api/rollout"
 import { publicServerApi } from "@/lib/api/server"
+import { serverAuthProvider } from "@/lib/auth/provider"
 import * as actions from "./actions"
 
 /** Abre el portal: misma forma que contadorOpen (`{ share, data }`, `{ bloqueado: "plan" }` o null). */
@@ -23,10 +24,11 @@ export async function contadorOpen(token: string): Promise<actions.PortalResult>
     const res = await publicServerApi(cfg).accountantPortal.open({ params: { token } })
     if (res.status === 200) return res.body as actions.PortalResult
     // La API no pudo responder: es una lectura, así que se abre con lo de siempre.
-    if (res.status >= 500) return actions.contadorOpen(token)
+    // Con AUTH_PROVIDER=mirai no hay Supabase: sin respaldo (el portal muestra "no disponible").
+    if (res.status >= 500) return serverAuthProvider() === "mirai" ? null : actions.contadorOpen(token)
     // 404 (no existe, venció o se revocó), 400 (token mal formado) o 429 (límite): igual que la acción, null.
     return null
   } catch {
-    return actions.contadorOpen(token)
+    return serverAuthProvider() === "mirai" ? null : actions.contadorOpen(token)
   }
 }

@@ -2,12 +2,14 @@
 // argumentos que la RPC que llamaba el navegador y devuelve la misma forma `{ data, error }` de `sb.rpc(...)`:
 //   · interruptor apagado (o un caso que el comando de la API no cubre igual) → `createClient().rpc(nombre, args)`,
 //     exactamente lo de siempre;
+//   · v7 (V7-H4): con AUTH_PROVIDER=mirai siempre el comando (también cuando `parity` es false: no hay RPC posible);
 //   · encendido → el comando de F2-D (`/v1/books/:b/...`) con Idempotency-Key, y `error.message` en español.
 // Las invalidaciones de TanStack las sigue haciendo el componente (los comandos también disparan Realtime).
 import { createClient } from "@/utils/supabase/client"
 import type { Database } from "@/lib/supabase/database.types"
 import type { ApiModule } from "@/lib/api/modules"
 import { activeBookId, apiOn } from "@/lib/api/session"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import type { MiraiApi } from "@/lib/api/client"
 
 type Fns = Database["public"]["Functions"]
@@ -30,7 +32,8 @@ export async function command<F extends RpcName>(
   api: (c: MiraiApi, bookId: string) => Promise<unknown>,
   parity: boolean = true,
 ): Promise<CmdResult> {
-  if (!parity || !apiOn(module)) {
+  // v7: con AUTH_PROVIDER=mirai no hay RPC posible (sin sesión de Supabase): siempre el comando de la API.
+  if (!apiOn(module) || (!parity && !isMiraiAuth())) {
     const { data, error } = await createClient().rpc(fn, args as never)
     return { data, error }
   }

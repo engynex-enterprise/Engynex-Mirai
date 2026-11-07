@@ -1,6 +1,7 @@
 "use client"
 
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { useApp } from "@/components/app/app-context"
 import { loadAccount } from "./api"
 

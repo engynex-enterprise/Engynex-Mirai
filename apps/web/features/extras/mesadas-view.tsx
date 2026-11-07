@@ -26,6 +26,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
+import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { useMembers } from "@/features/catalogs/hooks"
@@ -36,7 +37,6 @@ const FRECS = [{ value: "semanal", label: "Semanal" }, { value: "quincenal", lab
 function KidCard({ m, a, movs, canEdit }: { m: Row<"family_members">; a: Row<"allowances"> | undefined; movs: Row<"allowance_movements">[]; canEdit: boolean }) {
   const bookId = useBookId()
   const qc = useQueryClient()
-  const sb = createClient()
   const [desc, setDesc] = useState("")
   const [valor, setValor] = useState(0)
   const [busy, setBusy] = useState<"dar" | "gasto" | null>(null)
@@ -45,14 +45,14 @@ function KidCard({ m, a, movs, canEdit }: { m: Row<"family_members">; a: Row<"al
   const refresh = () => { invalidateBook(qc, bookId, "allowances"); invalidateBook(qc, bookId, "allowance_movements") }
   const ensure = async () => {
     if (a) return a.id
-    const { data, error } = await sb.from("allowances").insert({ book_id: bookId, member_id: m.id }).select("id").single()
-    if (error) throw new Error(error.message)
+    const { data, error } = rowsViaApi("allowances") ? await apiInsertRow<{ id: string }>(bookId, "allowances", { member_id: m.id }) : await createClient().from("allowances").insert({ book_id: bookId, member_id: m.id }).select("id").single()
+    if (error || !data) throw new Error(error?.message)
     return data.id
   }
   const upd = async (p: Partial<Row<"allowances">>) => {
     try {
       const id = await ensure()
-      const { error } = await sb.from("allowances").update(p).eq("id", id)
+      const { error } = rowsViaApi("allowances") ? await apiUpdateRow(bookId, "allowances", id, p) : await createClient().from("allowances").update(p).eq("id", id)
       if (error) throw new Error(error.message)
       refresh()
     } catch (e) { toast.error("No se pudo guardar", { description: (e as Error).message }) }
@@ -62,7 +62,8 @@ function KidCard({ m, a, movs, canEdit }: { m: Row<"family_members">; a: Row<"al
     setBusy(signo > 0 ? "dar" : "gasto")
     try {
       const id = await ensure()
-      const { error } = await sb.from("allowance_movements").insert({ book_id: bookId, allowance_id: id, fecha: todayISO(), descripcion: d || (signo > 0 ? "Mesada" : "Gasto"), valor: signo * Math.abs(v) })
+      const movimiento = { allowance_id: id, fecha: todayISO(), descripcion: d || (signo > 0 ? "Mesada" : "Gasto"), valor: signo * Math.abs(v) }
+      const { error } = rowsViaApi("allowance_movements") ? await apiInsertRow(bookId, "allowance_movements", movimiento) : await createClient().from("allowance_movements").insert({ book_id: bookId, ...movimiento })
       if (error) throw new Error(error.message)
       toast.success(signo > 0 ? "Mesada entregada" : "Gasto anotado")
       if (signo < 0) { setDesc(""); setValor(0) }

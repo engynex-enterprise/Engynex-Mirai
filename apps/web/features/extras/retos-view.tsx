@@ -22,6 +22,7 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import { RETOS_T, retoEstado, type RetoEstado } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -112,11 +113,11 @@ export function RetosView() {
   const c = useListControls(filas, { text: (x) => `${x.t?.n ?? x.r.k} ${x.t?.d ?? ""}`, filters: FILTERS, sorts: SORTS })
   if (isPending || !book) return <PageSkeleton kpis={3} />
   const refresh = () => invalidateBook(qc, bookId, "savings_challenges")
-  const sb = createClient()
   const crear = async (k: string) => {
     const t = RETOS_T.find((x) => x.k === k)!
     setCreando(k)
-    const { error } = await sb.from("savings_challenges").insert({ book_id: bookId, k, tipo: t.tipo, category_id: t.cat ? book.categories.find((c) => c.nombre === t.cat)?.id ?? null : null, dias: t.dias, base: t.base ?? 0, n: t.tipo === "semanas" ? 52 : t.dias, inicio: today, marcas: [] })
+    const reto = { k, tipo: t.tipo, category_id: t.cat ? book.categories.find((c) => c.nombre === t.cat)?.id ?? null : null, dias: t.dias, base: t.base ?? 0, n: t.tipo === "semanas" ? 52 : t.dias, inicio: today, marcas: [] }
+    const { error } = rowsViaApi("savings_challenges") ? await apiInsertRow(bookId, "savings_challenges", reto) : await createClient().from("savings_challenges").insert({ book_id: bookId, ...reto })
     setCreando(null)
     if (error) return toast.error("No se pudo crear el reto", { description: error.message })
     toast.success("¡Reto iniciado!", { description: t.n }); setNuevo(false); refresh()
@@ -124,12 +125,12 @@ export function RetosView() {
   const marcar = async (r: Reto, m: number) => {
     const marcas = (r.marcas as number[]) ?? []
     const next = marcas.includes(m) ? marcas.filter((x) => x !== m) : [...marcas, m]
-    const { error } = await sb.from("savings_challenges").update({ marcas: next }).eq("id", r.id)
+    const { error } = rowsViaApi("savings_challenges") ? await apiUpdateRow(bookId, "savings_challenges", r.id, { marcas: next }) : await createClient().from("savings_challenges").update({ marcas: next }).eq("id", r.id)
     if (error) return toast.error("No se pudo guardar", { description: error.message })
     refresh()
   }
   const reiniciar = async (id: string) => {
-    const { error } = await sb.from("savings_challenges").update({ inicio: today, marcas: [] }).eq("id", id)
+    const { error } = rowsViaApi("savings_challenges") ? await apiUpdateRow(bookId, "savings_challenges", id, { inicio: today, marcas: [] }) : await createClient().from("savings_challenges").update({ inicio: today, marcas: [] }).eq("id", id)
     if (error) return toast.error("No se pudo reiniciar", { description: error.message })
     toast("Volviste a empezar desde hoy"); refresh()
   }

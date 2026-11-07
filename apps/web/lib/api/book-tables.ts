@@ -6,6 +6,7 @@
 import { isGenericTable } from "@mirai/contracts/book-tables"
 import type { BookPart, PartRows } from "@mirai/domain/book-data"
 import { isApiError } from "./errors"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 /** Columnas que la API pone sola (el esquema de escritura las rechaza: z.strictObject). */
 export const SYSTEM_COLUMNS = ["id", "book_id", "created_by", "created_at", "updated_at", "deleted_at"] as const
@@ -41,8 +42,11 @@ export function writeBody(values: Record<string, unknown>): Record<string, unkno
   return out
 }
 
-/** ¿El error permite leer de Supabase como respaldo? (la API no respondió o falló de su lado; no los 4xx). */
-export const canFallback = (e: unknown) => isApiError(e) && (e.code === "NETWORK" || e.status >= 500)
+/**
+ * ¿El error permite leer de Supabase como respaldo? (la API no respondió o falló de su lado; no los 4xx). v7: con
+ * AUTH_PROVIDER=mirai nunca (no hay sesión de Supabase: el respaldo fallaría con un error que confunde más).
+ */
+export const canFallback = (e: unknown) => isApiError(e) && (e.code === "NETWORK" || e.status >= 500) && !isMiraiAuth()
 
 /** Lectura con respaldo: la API y, si no responde, lo de siempre. */
 export async function readWithFallback<T>(viaApi: () => Promise<T>, local: () => Promise<T>): Promise<T> {

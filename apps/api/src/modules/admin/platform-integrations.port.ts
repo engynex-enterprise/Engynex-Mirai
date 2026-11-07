@@ -4,6 +4,7 @@
 // @mirai/ai (el mismo código que la web). En las pruebas, un doble sin red.
 import type { IntegrationDef } from "@mirai/services/integrations/registry"
 import type { IntegrationValue } from "@mirai/services/integrations/store"
+import type { TemplateDraft } from "@mirai/services/notify/wa-templates"
 
 export type ParamPreview = { key: string; label: string; value: string; src: string }
 export type WaCaseOverride = { template?: string; lang?: string; map?: Record<string, unknown>; headerImage?: string }
@@ -30,4 +31,8 @@ export abstract class PlatformIntegrationsPort {
   abstract waNumber(v: IntegrationValue): Promise<string | undefined>
   abstract waPreview(v: IntegrationValue, caso: string, override?: WaCaseOverride): Promise<{ preview: ParamPreview[]; template: string }>
   abstract waSend(v: IntegrationValue, dest: string, caso: string, override: WaCaseOverride | undefined, nombre: string): Promise<{ msg: string; ref: string | null; preview: ParamPreview[] }>
+  /** V7-H3: plantillas en la cuenta de Meta (crear queda en revisión; editar solo componentes y categoría; borrar el nombre o una traducción). */
+  abstract waCreateTemplate(v: IntegrationValue, draft: TemplateDraft): Promise<{ id: string; status?: string }>
+  abstract waEditTemplate(v: IntegrationValue, templateId: string, draft: TemplateDraft): Promise<void>
+  abstract waDeleteTemplate(v: IntegrationValue, name: string, templateId?: string): Promise<void>
 }

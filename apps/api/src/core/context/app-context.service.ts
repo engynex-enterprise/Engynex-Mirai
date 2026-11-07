@@ -12,7 +12,14 @@ import type { BookAccess } from "./request-context"
 
 type Entry = { at: number; raw: Promise<RawAppContext> }
 
-export const CONTEXT_TTL_MS = 30_000
+/**
+ * 30 s por defecto. `MIRAI_CONTEXT_TTL_MS` lo cambia (V7-H3: la E2E local usa 0, porque las pruebas cambian el plan o
+ * el permiso de administrador directo en la base y luego navegan; en producción no se define).
+ */
+export const CONTEXT_TTL_MS = (() => {
+  const v = Number(process.env.MIRAI_CONTEXT_TTL_MS)
+  return process.env.MIRAI_CONTEXT_TTL_MS !== undefined && Number.isFinite(v) && v >= 0 ? v : 30_000
+})()
 const MAX_ENTRIES = 5_000
 
 @Injectable()

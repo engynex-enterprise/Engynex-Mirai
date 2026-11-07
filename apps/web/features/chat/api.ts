@@ -142,3 +142,33 @@ export async function updateThreads(ids: string[], v: Record<string, unknown>): 
     return failure(e).msg
   }
 }
+
+// ── V7-H3: buscar en las conversaciones y calificar una respuesta ──────────────────────────────────────────────
+
+/** Ids de conversaciones propias cuyo texto contiene `t` (hasta 80 mensajes), como el `ilike` de siempre. */
+export async function searchThreads(bookId: string, t: string): Promise<Set<string>> {
+  const legacy = async () => {
+    const { data } = await createClient().from("chat_messages").select("thread_id").eq("book_id", bookId).is("deleted_at", null).ilike("content", `%${t.replace(/[%_]/g, "")}%`).limit(80)
+    return new Set((data ?? []).map((r) => r.thread_id))
+  }
+  if (!on()) return legacy()
+  return readWithFallback(async () => {
+    const { browserApi, unwrap } = await client()
+    return new Set(unwrap(await browserApi().chat.search({ params: { bookId }, query: { q: t.slice(0, 100) } })).threadIds)
+  }, legacy)
+}
+
+/** 👍 (1), 👎 (-1) o quitar (null) la calificación de una respuesta. Devuelve el mensaje de error o null. */
+export async function rateMessage(messageId: string, feedback: 1 | -1 | null): Promise<string | null> {
+  if (!on()) {
+    const { error } = await createClient().from("chat_messages").update({ feedback }).eq("id", messageId)
+    return error ? error.message : null
+  }
+  try {
+    const { browserApi, unwrapData } = await client()
+    unwrapData(await browserApi().chat.rateMessage({ params: { ...book(), messageId }, body: { feedback } }))
+    return null
+  } catch (e) {
+    return failure(e).msg
+  }
+}

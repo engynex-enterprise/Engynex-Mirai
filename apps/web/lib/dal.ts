@@ -7,10 +7,12 @@ import { createClient } from "@/utils/supabase/server"
 import { FEATURES, can, type PremiumFeature } from "@/lib/plans"
 import { atLeast, can as canRole, deniedMsg, type AccessRole, type LegacyRole, type Perm } from "@/lib/household/roles"
 import { buildAppContext, NoHouseholdError, pickBook, type AppContext as DomainAppContext, type CtxHousehold, type PlanRow, type RawAppContext } from "@mirai/domain/app-context"
-import { API_OFF, type ApiConfig } from "@/lib/api/modules"
-import { getApiConfig } from "@/lib/api/rollout"
+import { API_MODULE_NAMES, API_OFF, type ApiConfig } from "@/lib/api/modules"
+import { apiUrl, getApiConfig } from "@/lib/api/rollout"
 import { serverApi } from "@/lib/api/server"
 import { viaApi } from "@/lib/api/via"
+import { ApiError } from "@/lib/api/errors"
+import { serverAuthProvider } from "@/lib/auth/provider"
 
 export const BOOK_COOKIE = "mirai-book"
 
@@ -88,6 +90,36 @@ async function contextFromApi(cfg: ApiConfig, sb: Sb, wanted: string | undefined
 }
 
 /**
+ * v7 (V7-H4): con AUTH_PROVIDER=mirai no hay sesión de Supabase. La web va 100 % por la API: todos los interruptores
+ * encendidos (no se lee platform_settings: no hay con qué) y la API en MIRAI_API_URL (el navegador usa /v1 del mismo
+ * origen). Sin MIRAI_API_URL no hay cómo atender: error claro.
+ */
+export function miraiApiConfig(): ApiConfig {
+  const url = apiUrl()
+  if (!url) throw new Error("AUTH_PROVIDER=mirai necesita MIRAI_API_URL (la API de Mirai).")
+  return { url, flags: Object.fromEntries(API_MODULE_NAMES.map((m) => [m, true])) }
+}
+
+/** Sesión vencida o inválida con la cookie todavía puesta: /login la borra (lib/auth/proxy.ts) y no hay bucle. */
+export const SESSION_EXPIRED_URL = "/login?sesion=vencida"
+
+/**
+ * Contexto con el auth propio: GET /v1/me con la cookie de Better Auth (reenviada como Bearer de sesión, lib/api/server.ts).
+ * 401 → /login (sesión vencida); 404 con `redirect` → /bienvenida (sin hogar). Sin respaldo en la base: no hay otra fuente.
+ */
+async function contextFromMirai(wanted: string | undefined): Promise<AppContext> {
+  const { miraiSessionToken } = await import("@/lib/auth/server")
+  if (!(await miraiSessionToken())) redirect("/login")
+  const cfg = miraiApiConfig()
+  const res = await serverApi(cfg).me.get({ query: wanted && UUID.test(wanted) ? { bookId: wanted } : {} })
+  if (res.status === 200) return { ...res.body, api: cfg }
+  if ((res.status as number) === 401) redirect(SESSION_EXPIRED_URL)
+  const redirectTo = res.status === 404 ? (res.body.details as { redirect?: string } | undefined)?.redirect : undefined
+  if (redirectTo === "/bienvenida") redirect("/bienvenida")
+  throw ApiError.from(res.status, res.body, res.headers)
+}
+
+/**
  * Lee la sesión, el hogar y el libro activo. Una sola vez por petición (cache de React).
  * Antes eran 4 viajes en serie a la base (perfil/hogares → libros → plan → fila del plan); ahora es uno.
  * Con el interruptor `me` encendido lo pide a la API (GET /v1/me); con todo apagado (por defecto) es lo de siempre.
@@ -95,6 +127,7 @@ async function contextFromApi(cfg: ApiConfig, sb: Sb, wanted: string | undefined
 export const getAppContext = cache(async (): Promise<AppContext> => {
   await connection()
   const store = await cookies()
+  if (serverAuthProvider() === "mirai") return contextFromMirai(store.get(BOOK_COOKIE)?.value)
   const sb = createClient(store)
   const { data: claims } = await sb.auth.getClaims()
   const uid = claims?.claims.sub

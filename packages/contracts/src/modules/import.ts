@@ -28,8 +28,11 @@ export const Preview = z.object({ rows: z.array(StatementRow), skipped: z.number
 
 export const CommitInput = z.object({
   csv: Csv,
-  /** De dónde salió la plata: un medio de pago o una tarjeta de crédito del libro. */
-  fuente: z.object({ tipo: z.enum(["medio", "tarjeta"]), id: Uuid }),
+  /**
+   * De dónde salió la plata: un medio de pago o una tarjeta de crédito del libro. V7-H4: con `medio`, `id` puede ser
+   * null (sin medio de pago, como la importación de siempre en la web).
+   */
+  fuente: z.union([z.object({ tipo: z.literal("medio"), id: Uuid.nullable() }), z.object({ tipo: z.literal("tarjeta"), id: Uuid })]),
   member_id: Uuid.nullable().optional(),
   /** Filas escogidas del preview (por `i`) con lo que la persona cambió a mano. */
   filas: z.array(z.object({ i: z.number().int().min(0), category_id: Uuid.nullable().optional(), hormiga: z.boolean().optional() })).min(1, "Selecciona al menos un movimiento").max(5000),

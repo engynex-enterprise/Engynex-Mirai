@@ -1,14 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Check, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Icon } from "@/components/mirai/icon"
 import { PageHeader } from "@/components/mirai/page-header"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { loadPublicPlans } from "./api"
 import { FEATURES, ahorroAnual, can, precio, type PremiumFeature } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 
@@ -19,8 +19,7 @@ export function usePlans() {
   return useQuery({
     queryKey: ["plans"],
     queryFn: async () => {
-      const { data } = await createClient().from("plans").select("*").order("orden").order("precio_mes")
-      const list = ((data ?? []) as unknown as PlanRow[]).filter((p) => p.publico && p.activo)
+      const list = await loadPublicPlans()
       const premium = list.find((p) => p.id === "premium")
       return { list, mes: premium?.precio_mes ?? 14900, anio: premium?.precio_anio ?? 149000 }
     },

@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { useBookId } from "@/components/app/app-context"
-import { runPendingAutomations } from "./actions"
+import { runPendingAutomations } from "./api"
 import { LIVE_SOURCE } from "@/hooks/use-live"
 import { onGatewayAutomation } from "@/hooks/use-live-gateway"
 
@@ -19,7 +19,8 @@ export const kickAutomations = () => { if (typeof window !== "undefined") window
 export function AutomationRunner() {
   const bookId = useBookId()
   useEffect(() => {
-    const sb = createClient()
+    // Modo heredado (sin el gateway de la API): Supabase Realtime en el canal auto:{libro}.
+    const sb = LIVE_SOURCE === "gateway" ? null : createClient()
     let t: ReturnType<typeof setTimeout> | undefined
     const kick = () => {
       clearTimeout(t)
@@ -31,7 +32,7 @@ export function AutomationRunner() {
       if (Date.now() - last > 600_000) { sessionStorage.setItem(`${KEY}:${bookId}`, String(Date.now())); kick() }
     } catch { /* sin almacenamiento: el cron lo procesa */ }
     // Fuente del aviso: Supabase Realtime (por defecto) o el gateway de la API (interruptor de hooks/use-live.ts).
-    const ch = LIVE_SOURCE === "gateway" ? null : sb
+    const ch = !sb ? null : sb
       .channel(`auto:${bookId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "automation_events", filter: `book_id=eq.${bookId}` }, kick)
       .subscribe()
@@ -41,7 +42,7 @@ export function AutomationRunner() {
     addEventListener("mirai:auto-kick", kick)
     return () => {
       clearTimeout(t)
-      if (ch) sb.removeChannel(ch)
+      if (ch) sb?.removeChannel(ch)
       offGateway?.()
       removeEventListener("mirai:accion", kick)
       removeEventListener("mirai:auto-kick", kick)

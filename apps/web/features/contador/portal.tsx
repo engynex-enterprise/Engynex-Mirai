@@ -1,11 +1,12 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Panel } from "@/components/mirai/panel"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { RentaView } from "@/features/renta/renta-view"
 import type { RentaData } from "@/features/renta/data"
-import { contadorFileUrl, contadorNote, contadorNotes, type Share } from "./actions"
+import type { Share } from "./actions"
+import { contadorFileUrl, contadorNote, contadorNotes } from "./portal-actions"
 import { NotesThread } from "./notes"
 
 /** Portal del contador: la renta en solo lectura con datos en vivo y notas con el titular. */

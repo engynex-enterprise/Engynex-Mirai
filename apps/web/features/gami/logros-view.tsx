@@ -16,7 +16,7 @@ import { Tip } from "@/components/mirai/tip"
 import { Button } from "@/components/ui/button"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { saveBookSettings } from "@/features/settings/prefs"
 import { qk } from "@/lib/supabase/tables"
 import { GBADGES, GLV, GTIER, days, parseDate } from "@/lib/domain"
 import { fmtDate } from "@/lib/format"
@@ -64,7 +64,8 @@ export function LogrosView() {
   if (!g) return <PageSkeleton kpis={3} />
   const { X, L, st } = g
   const toggle = async (v: boolean) => {
-    await createClient().from("book_settings").update({ gami: v }).eq("book_id", bookId)
+    // V7-H2: PATCH /v1/books/:b/settings con el interruptor `books` (apagado: Supabase, rama heredada).
+    try { await saveBookSettings(bookId, { gami: v }) } catch (e) { return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     qc.invalidateQueries({ queryKey: qk(bookId, "gami") })
     toast(v ? "Logros activados" : "Logros ocultos")
   }

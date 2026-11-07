@@ -3,16 +3,19 @@
 // lector ignora). Los errores de las guardas (rol, plan, límite `chat`) llegan como JSON antes del streaming y se
 // convierten en ApiError con el mensaje en español de la API.
 import { ApiError } from "./errors"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import { apiSession } from "./session"
 
 export type ChatSendBody = { threadId: string | null; text: string; tono: string; editId?: string; regenerate?: string }
 
 export async function apiChatSend(body: ChatSendBody, signal: AbortSignal): Promise<Response & { body: ReadableStream<Uint8Array> }> {
   const s = apiSession()
-  if (!s?.cfg.url) throw new Error("La API de Mirai no está configurada")
+  // V7-H3: con AUTH_PROVIDER=mirai la sesión es la cookie del mismo origen (como browserApi): /v1 va por la web.
+  const base = isMiraiAuth() ? window.location.origin : s?.cfg.url
+  if (!s || !base) throw new Error("La API de Mirai no está configurada")
   const { browserRawFetch } = await import("./client")
   const res = await browserRawFetch()({
-    url: `${s.cfg.url}/v1/books/${s.bookId}/chat/messages`,
+    url: `${base}/v1/books/${s.bookId}/chat/messages`,
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/x-ndjson" },
     body: JSON.stringify(body),

@@ -6,7 +6,7 @@ import { TrendingDown, TrendingUp } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Money } from "@/components/mirai/money"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { guardarPatrimonio } from "@/features/balance/commands"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { monthName } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -28,7 +28,8 @@ export function PatrimonioCard({ activos, deudas }: { activos: number; deudas: n
   useEffect(() => {
     if (!can || !data) return
     if (actual && Math.abs(+actual.patrimonio - pat) < 1 && Math.abs(+actual.activos - activos) < 1) return
-    void createClient().from("net_worth_snapshots").upsert({ book_id: bookId, mes, activos, deudas, patrimonio: pat }, { onConflict: "book_id,mes" }).then(() => invalidateBook(qc, bookId, "net_worth_snapshots"))
+    // Si no se pudo guardar (p. ej. la API rechaza el valor) no se recarga: recargar volvería a intentarlo sin parar.
+    void guardarPatrimonio(bookId, mes, activos, deudas).then((r) => { if (!r.error) invalidateBook(qc, bookId, "net_worth_snapshots") })
   }, [can, data, actual, pat, activos, deudas, bookId, mes, qc])
   const serie = [...(data ?? []).filter((s) => s.mes !== mes), { mes, patrimonio: pat }].sort((a, b) => a.mes.localeCompare(b.mes)).slice(-12).map((s) => ({ mes: s.mes, v: +s.patrimonio }))
   if (serie.length < 1) return null

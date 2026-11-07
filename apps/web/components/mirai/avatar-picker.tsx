@@ -97,12 +97,13 @@ export function AvatarPicker({ open, onOpenChange, value, name, onPick, googlePh
     setBusy(true)
     try {
       const blob = await shrink(f)
-      // v7 (interruptor `files`): sube por la API (la ruta {tu id}/… la arma el servidor).
+      // v7 (interruptor `files`; siempre con AUTH_PROVIDER=mirai): sube por la API (la ruta {tu id}/… la arma el servidor).
       if (filesViaApi()) {
         const r = await uploadFile({ bucket: "avatars", body: blob, name: "avatar.webp", type: "image/webp" })
         if (r.publicUrl) pick(r.publicUrl)
         return
       }
+      // Modo heredado (interruptor apagado): Supabase Storage directo.
       const sb = createClient()
       const path = `${uploadFor}/${crypto.randomUUID()}.webp`
       const { error } = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/webp", upsert: false })

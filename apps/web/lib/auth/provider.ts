@@ -13,7 +13,7 @@ export function serverAuthProvider(env: Record<string, string | undefined> = pro
 
 /** Proveedor en cualquier lado: en el navegador lo dice la cookie que pone proxy.ts. */
 export function authProvider(): AuthProvider {
-  if (typeof window === "undefined") return serverAuthProvider()
+  if (typeof window === "undefined" || typeof document === "undefined") return serverAuthProvider()
   return new RegExp(`(?:^|;\\s*)${AUTH_FLAG_COOKIE}=mirai(?:;|$)`).test(document.cookie) ? "mirai" : "supabase"
 }
 

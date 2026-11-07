@@ -19,8 +19,15 @@ export function withAuthFlag(res: NextResponse, request: NextRequest, provider: 
 }
 
 export function updateMiraiSession(request: NextRequest) {
-  const has = MIRAI_SESSION_COOKIES.some((n) => !!request.cookies.get(n)?.value)
   const path = request.nextUrl.pathname
+  // V7-H4: getAppContext manda aquí cuando la API dice 401 con la cookie puesta (venció o la cerraron en otro
+  // dispositivo). Se borra la cookie y se muestra /login; sin esto, /login → /inicio → /login sería un bucle.
+  if (path === "/login" && request.nextUrl.searchParams.get("sesion") === "vencida") {
+    const res = withAuthFlag(NextResponse.next({ request: { headers: request.headers } }), request, "mirai")
+    for (const n of [...MIRAI_SESSION_COOKIES, "__Secure-mirai.session_data", "mirai.session_data"]) if (request.cookies.get(n)) res.cookies.set(n, "", { path: "/", maxAge: 0, secure: n.startsWith("__Secure-") })
+    return res
+  }
+  const has = MIRAI_SESSION_COOKIES.some((n) => !!request.cookies.get(n)?.value)
   const isPublic = isPublicPath(path, MIRAI_PUBLIC)
   if (!has && !isPublic) {
     const url = request.nextUrl.clone()

@@ -7,7 +7,11 @@ async function qaBook() {
   const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
   const uid = data.users.find((u) => u.email === QA.email)!.id
   const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
-  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at").limit(1).single()
+  // El libro que abre la app (regla de buildAppContext: el último libro de la persona y, si no, el predeterminado):
+  // otra prueba puede haber dejado activo el «Ejemplo · familia Navarro» (Ver un ejemplo cambia de libro).
+  const { data: books } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at")
+  const { data: prof } = await sb.from("profiles").select("last_book_id").eq("id", uid).maybeSingle()
+  const bk = books?.find((b) => b.id === prof?.last_book_id) ?? books?.[0]
   return { sb, uid, bookId: bk!.id }
 }
 
@@ -82,8 +86,11 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
   await expect(page.getByText("(tú)")).toBeVisible()
 
   await tab("respaldo")
-  await page.getByRole("button", { name: "Crear respaldo ahora" }).click()
-  await expect(page.getByText("Respaldo guardado")).toBeVisible({ timeout: 30_000 })
+  // Recién cargada (compilación de producción), el botón puede verse antes de que React lo active: se reintenta.
+  await expect(async () => {
+    await page.getByRole("button", { name: "Crear respaldo ahora" }).click()
+    await expect(page.getByText("Respaldo guardado")).toBeVisible({ timeout: 8_000 })
+  }).toPass({ timeout: 45_000 })
   await expect(page.getByText("Manual ·").first()).toBeVisible()
   await expect(page.getByText("Historial de cambios")).toBeVisible()
   await shot(page, "ajustes-datos", info.project.name)
@@ -92,6 +99,13 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
   await expect(page.getByText(/dos pasos/i).first()).toBeVisible()
   expect(errs, errs.join("\n")).toEqual([])
 })
+
+/** La campana: en escritorio está en el menú lateral; en celular, dentro de «Menú» (barra inferior). */
+async function abrirCampana(page: import("@playwright/test").Page) {
+  const bell = page.getByRole("button", { name: "Notificaciones" }).first()
+  if (!(await bell.isVisible())) await page.getByRole("button", { name: "Menú" }).first().click()
+  await bell.click()
+}
 
 test("alertas: el aviso que la persona apaga no llega a la campana (y al encenderlo sí)", async ({ page }, info) => {
   test.setTimeout(150_000)
@@ -113,10 +127,11 @@ test("alertas: el aviso que la persona apaga no llega a la campana (y al encende
     await page.goto("/inicio")
     await page.waitForTimeout(7000) // los avisos de la app se actualizan ~2,5 s después de abrir
     expect(await enCampana()).toBe(0)
-    await page.getByRole("button", { name: "Notificaciones" }).first().click()
+    await abrirCampana(page)
     // Solo dentro de la campana (el nombre sí sale en Inicio, en Próximos pagos).
-    await expect(page.getByRole("dialog")).toBeVisible()
-    await expect(page.getByRole("dialog").getByText(nombre)).toHaveCount(0)
+    const campana = page.getByRole("dialog", { name: "Notificaciones" })
+    await expect(campana).toBeVisible()
+    await expect(campana.getByText(nombre)).toHaveCount(0)
     await shot(page, "alertas-apagado-campana", info.project.name)
 
     // 2) Encendido → el aviso aparece en la campana
@@ -126,7 +141,7 @@ test("alertas: el aviso que la persona apaga no llega a la campana (y al encende
     await page.goto("/inicio")
     await expect.poll(enCampana, { timeout: 30_000 }).toBeGreaterThan(0)
     await page.reload()
-    await page.getByRole("button", { name: "Notificaciones" }).first().click()
+    await abrirCampana(page)
     await expect(page.locator('[data-kind="pago"]').filter({ hasText: nombre }).first()).toBeVisible({ timeout: 20_000 })
   } finally {
     await sb.from("fixed_expenses").delete().eq("book_id", bookId).eq("nombre", nombre)

@@ -130,9 +130,12 @@ test("pasar el hogar: la otra persona rechaza y luego acepta", async ({ page, br
 
     const pedir = async () => {
       await page.goto("/ajustes?tab=hogar")
-      await page.getByRole("button", { name: "Pasar el hogar" }).click()
       const d = page.getByRole("dialog", { name: "Pasar el hogar a otra persona" })
-      await expect(d).toBeVisible({ timeout: 30_000 })
+      // Un clic antes de que React tome la página (con la API en el mismo origen carga muy rápido) se pierde: se reintenta.
+      await expect(async () => {
+        if (!(await d.isVisible())) await page.getByRole("button", { name: "Pasar el hogar" }).click()
+        await expect(d).toBeVisible({ timeout: 2_000 })
+      }).toPass({ timeout: 30_000 })
       await d.getByRole("radio", { name: new RegExp(nombre) }).click()
       await expect(d.getByRole("radio", { name: /Administra/ })).toBeChecked()
       await expect(d.getByText(/Tú quedas como Administra/)).toBeVisible()

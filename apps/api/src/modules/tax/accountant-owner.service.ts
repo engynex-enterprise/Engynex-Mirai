@@ -6,6 +6,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { Inject, Injectable } from "@nestjs/common"
 import type { Logger } from "pino"
 import type { OwnerShare } from "@mirai/contracts/modules/tax"
+import type { RentaData } from "@mirai/domain/integral-extras"
 import { RequestContextService } from "../../core/context/request-context.service"
 import { DomainError } from "../../core/errors/domain-error"
 import { LOGGER } from "../../core/logging/logger"
@@ -13,6 +14,7 @@ import { RowStore } from "../../core/store/row-store"
 import { HouseholdAccess } from "../households/household-access"
 import { SiteUrl } from "../households/site-url"
 import { AccountantMailer } from "./accountant-mailer"
+import { AccountantRepo } from "./accountant.repository"
 
 export const hashToken = (t: string) => createHash("sha256").update(t).digest("hex")
 const SHARE_COLS = ["id", "label", "email", "perms", "expires_at", "revoked_at", "views", "last_access", "created_at"] as const
@@ -41,7 +43,16 @@ export class AccountantOwnerService {
     private readonly site: SiteUrl,
     private readonly ctx: RequestContextService,
     @Inject(LOGGER) private readonly log: Logger,
+    private readonly repo: AccountantRepo,
   ) {}
+
+  /**
+   * V7-H2: la Declaración del titular (RentaOwner y el estimado del Calendario fiscal de la web): con la sesión de la
+   * persona (la RLS de cada tabla decide), su propio perfil y todos los documentos del libro.
+   */
+  renta(): Promise<RentaData> {
+    return this.repo.renta(this.ctx.db, this.bookId, this.ctx.user.id, { todos: true })
+  }
 
   private get bookId() {
     return this.ctx.book.book.id

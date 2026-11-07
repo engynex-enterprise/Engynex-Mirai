@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { login, shot, watchErrors } from "./helpers"
+import { login, shot, watchErrors, waitForAdmin } from "./helpers"
 import { QA, admin } from "./qa"
 
 // Campaña de prueba con un anuncio en cada ubicación; se borra al final y se restauran los ajustes.
@@ -63,6 +63,7 @@ test("anuncios: barra, historia, consejero, ventana al entrar, después de una a
 
   // Métricas en la consola
   await admin().from("platform_admins").upsert({ user_id: await qaId() })
+  await waitForAdmin(page)
   await page.goto("/admin/anuncios")
   await expect(page.getByRole("heading", { name: "Anuncios", level: 1 })).toBeVisible({ timeout: 30_000 })
   const row = page.getByTestId("data-table").locator("tr, li", { hasText: "Campaña QA" }).first()

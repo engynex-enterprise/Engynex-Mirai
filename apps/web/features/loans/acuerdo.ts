@@ -1,5 +1,6 @@
 // Genera y descarga el acuerdo de pago en PDF (lo usan el detalle de la deuda y el formulario al guardar).
 import { createClient } from "@/utils/supabase/client"
+import { apiMyProfile, profileViaApi } from "./commands"
 import type { LoanEngine } from "@/lib/domain"
 import type { Row } from "@/lib/supabase/tables"
 import { DOC_TIPOS, toAddress } from "@/features/contacts/contact-form"
@@ -12,7 +13,8 @@ export type AcuerdoInput = {
 }
 
 export async function descargarAcuerdo(d: AcuerdoInput) {
-  const { data: me } = await createClient().from("profiles").select("nombre,doc_tipo,doc,ciudad").eq("id", d.user.id).single()
+  type Yo = { nombre: string; doc_tipo: string | null; doc: string | null; ciudad: string | null }
+  const me: Yo | null = profileViaApi() ? await apiMyProfile().catch(() => null) : (await createClient().from("profiles").select("nombre,doc_tipo,doc,ciudad").eq("id", d.user.id).single()).data
   const { downloadAgreement } = await import("./agreement-pdf")
   const docOf = (t?: string | null, n?: string | null) => (n ? `${DOC_TIPOS.find((x) => x.value === t)?.value ?? "C.C."} ${n}` : "")
   const ad = toAddress(d.contact)

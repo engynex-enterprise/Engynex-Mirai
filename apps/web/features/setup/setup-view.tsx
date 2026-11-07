@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/mirai/page-header"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { ToneIcon } from "@/components/mirai/tone-icon"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { saveBookSettings } from "@/features/settings/prefs"
 import { cn } from "@/lib/utils"
 import { useSetupProgress, type SetupState } from "./use-setup"
 import { SampleButton } from "./sample-button"
@@ -27,7 +27,7 @@ export function SetupView() {
   const first = user.nombre.split(" ")[0]
 
   const saveSetup = async (next: SetupState, msg?: string) => {
-    await createClient().from("book_settings").update({ setup: next }).eq("book_id", book.id)
+    await saveBookSettings(book.id, { setup: next }).catch(() => undefined)
     qc.invalidateQueries({ queryKey: ["b", book.id] })
     if (msg) toast(msg)
   }

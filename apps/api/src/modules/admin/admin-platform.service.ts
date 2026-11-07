@@ -4,11 +4,12 @@
 // (SystemScope con motivo) y la red (proveedores, Meta) por PlatformIntegrationsPort. Nunca devuelve secretos.
 import { Injectable } from "@nestjs/common"
 import { mask } from "@mirai/crypto"
-import type { AdminCoupon, AdminPlan, CouponInput, GlobalIntegration, PlanInput } from "@mirai/contracts/modules/admin-platform"
+import type { AdminCoupon, AdminPlan, BroadcastRow, CouponInput, GlobalIntegration, PlanInput } from "@mirai/contracts/modules/admin-platform"
 import { INTEGRATIONS, integrationByKind, isAdminOnly, type IntegrationDef } from "@mirai/services/integrations/registry"
 import type { IntegrationValue } from "@mirai/services/integrations/store"
 import { EMAIL_KINDS } from "@mirai/services/notify/email-kinds"
 import { maskDest } from "@mirai/services/notify/rules"
+import { canEdit, validateDraft, type TemplateDraft } from "@mirai/services/notify/wa-templates"
 import { normalizeCoPhone, WA_CASE_KEYS, WA_VARS, waSettings } from "@mirai/services/notify/whatsapp"
 import { z } from "zod"
 import { RequestContextService } from "../../core/context/request-context.service"
@@ -354,5 +355,50 @@ export class AdminPlatformService {
       await this.logSend({ ...base, status: "fallido", error: msg })
       throw DomainError.upstream(msg, e)
     }
+  }
+
+  // ── V7-H3: plantillas en Meta (adminWaSaveTemplate / adminWaDeleteTemplate de la web) ──────────────────────────
+
+  async waSaveTemplate(draft: TemplateDraft, edit?: { id: string; status?: string }): Promise<Msg> {
+    const check = validateDraft(draft, { editing: !!edit })
+    if (check.errors.length) throw DomainError.validation(check.errors.join(" "))
+    const v = await this.wa()
+    if (!v) throw DomainError.validation(NO_WA)
+    if (edit && !canEdit(edit.status)) throw DomainError.validation("Meta no deja editar una plantilla mientras está en revisión. Espera el resultado.")
+    try {
+      if (edit) {
+        await this.port.waEditTemplate(v, edit.id, draft)
+        await this.audit("whatsapp: editar plantilla", draft.name, { lang: draft.language, category: draft.category })
+        return { msg: `Enviamos los cambios de “${draft.name}” a Meta. Vuelve a revisión y suele tardar de minutos a 24 horas.` }
+      }
+      const r = await this.port.waCreateTemplate(v, draft)
+      await this.audit("whatsapp: crear plantilla", draft.name, { lang: draft.language, category: draft.category, status: r.status })
+      return { msg: `Plantilla “${draft.name}” enviada a Meta (estado: ${r.status === "APPROVED" ? "aprobada" : r.status === "REJECTED" ? "rechazada" : "en revisión"}). Te avisamos el estado aquí al refrescar.` }
+    } catch (e) {
+      if (e instanceof DomainError) throw e
+      throw DomainError.upstream((e as Error).message || "Error desconocido", e)
+    }
+  }
+
+  async waDeleteTemplate(name: string, id?: string): Promise<Msg> {
+    const v = await this.wa()
+    if (!v) throw DomainError.validation(NO_WA)
+    const hsm = id && /^\d{5,30}$/.test(id) ? id : undefined
+    try {
+      await this.port.waDeleteTemplate(v, name, hsm)
+    } catch (e) {
+      throw DomainError.upstream((e as Error).message || "Error desconocido", e)
+    }
+    await this.audit("whatsapp: eliminar plantilla", name, { id })
+    const s = waSettings(v.config)
+    const enUso = s.template === name || Object.values(s.casos).some((c) => c?.template === name)
+    return { msg: `Plantilla “${name}” eliminada en Meta.${enUso ? " Ojo: estaba asignada a un caso; escoge otra en “Casos de envío”." : ""} Meta no deja reutilizar el nombre durante 30 días.` }
+  }
+
+  // ── V7-H3: historial de comunicados (ComunicadosPanel) ──────────────────────────────────────────────────────
+
+  async broadcasts(): Promise<BroadcastRow[]> {
+    const rows = await this.store.select<BroadcastRow>(SYS, "broadcasts", { order: [{ column: "created_at", ascending: false }], limit: 100 })
+    return rows.map((b) => ({ ...b, href: b.href ?? null, created_by: b.created_by ?? null, enviados: num(b.enviados) }))
   }
 }

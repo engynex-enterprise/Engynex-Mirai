@@ -1,6 +1,6 @@
 // Avisos por la API (v6 F2-H-5, interruptor `notify`): /v1/books/:b/notifications/*, telegram/* y cobro-whatsapp.
 // Misma firma y misma forma que las Server Actions de ./actions.ts; con el interruptor apagado son exactamente esas.
-// Pendiente: logroNotifs (no hay endpoint en la API; sigue siendo la Server Action).
+// logroNotifs va con el interruptor `gami` (POST /v1/books/:b/gami/logros, V7-H3).
 import type { Canal } from "@/lib/notify/digest"
 import { failure } from "@/lib/api/errors"
 import { activeBookId, apiOn } from "@/lib/api/session"
@@ -60,8 +60,14 @@ export const openAppNotifs = viaApiOr(on, actions.openAppNotifs, async () => {
   } catch { return [] }
 })
 
-/** Sin endpoint en la API: siempre la Server Action. */
-export const logroNotifs = actions.logroNotifs
+/** V7-H3: insignias y nivel → campana por POST /v1/books/:b/gami/logros (interruptor `gami`). Como la acción, nunca lanza. */
+export const logroNotifs = viaApiOr(() => apiOn("gami"), actions.logroNotifs, async (input) => {
+  try {
+    const { api: a, unwrapData } = await api()
+    unwrapData(await a.gami.logros({ params: { bookId: input.bookId }, body: { badges: input.badges, nivel: input.nivel } }))
+    return { ok: true }
+  } catch { return { ok: false } }
+})
 
 export const cobroWaStatus = viaApiOr(on, actions.cobroWaStatus, async () => {
   try {

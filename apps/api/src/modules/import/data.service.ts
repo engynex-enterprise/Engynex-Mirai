@@ -10,7 +10,7 @@ import { LIVE_TABLES, type LiveTable } from "@mirai/contracts/live"
 import type { BookDump } from "@mirai/contracts/modules/import"
 import type { TableName } from "@mirai/db/tables"
 import { todayBogota } from "@mirai/domain/dates"
-import { can, limitOf } from "@mirai/domain/plans"
+import { can } from "@mirai/domain/plans"
 import { daysBetween, shiftDates } from "@mirai/domain/shift-dates"
 import { AppContextService } from "../../core/context/app-context.service"
 import { RequestContextService } from "../../core/context/request-context.service"
@@ -216,13 +216,9 @@ export class DataService {
 
   /** loadSampleBook: libro aparte con la familia Navarro (fechas al día). La web luego cambia a ese libro (cookie). */
   async sample(): Promise<{ bookId: string; report: ImportReport }> {
-    const { household, plan } = this.ctx.book
-    const max = limitOf(plan, "libros")
-    if (max !== undefined) {
-      const raw = await this.contexts.raw(this.ctx.user)
-      if (raw.books.filter((b) => b.household_id === household.id).length >= max)
-        throw DomainError.plan(`Tu plan incluye ${max} libro(s) de cuentas. Cambia de plan para llevar también tu negocio o tus arriendos.`)
-    }
+    // Igual que loadSampleBook de la web: el ejemplo no revisa el cupo de libros del plan aquí (con el plan Gratis nunca
+    // se podría ver). Si platform_settings.premium_db está encendido, el trigger enforce_free_limits de la base lo exige.
+    const { household } = this.ctx.book
     const bookId = String(await this.rows.rpc(this.ctx.db, "create_book", { p_household: household.id, p_nombre: SAMPLE_NAME, p_tipo: "otro", p_icon: "sparkles" }))
     this.contexts.invalidate(this.ctx.user.id)
     await this.rows.update(this.ctx.db, "books", { eq: { id: bookId } }, { sample: true })

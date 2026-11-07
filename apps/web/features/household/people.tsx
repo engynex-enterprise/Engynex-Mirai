@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ChevronDown, Copy, Crown, Link2, LogOut, MailPlus, MessageCircle, MoreHorizontal, Pencil, Plus, RotateCw, Share2, ShieldCheck, Trash2, UserMinus, UserPlus, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"

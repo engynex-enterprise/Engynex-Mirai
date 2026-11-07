@@ -9,7 +9,7 @@ import { SupabaseJsFactory } from "../../../core/db/supabase-js.factory"
 import { DomainError } from "../../../core/errors/domain-error"
 import {
   HouseholdsRepo, INV_COLS,
-  type FamilyInput, type FamilyRow, type HouseholdRpc, type InvitationInfoRaw, type InvitationPatch, type InvRow, type MemberRow, type NewInvitation, type ProfileLite, type RespondResult, type SendLog,
+  type FamilyInput, type FamilyPatchRow, type FamilyRow, type HouseholdRpc, type InvitationInfoRaw, type InvitationPatch, type InvRow, type MemberRow, type NewInvitation, type ProfileLite, type RespondResult, type SendLog,
 } from "../households.repository"
 
 type PgErr = { code?: string; message?: string } | null
@@ -126,6 +126,9 @@ export class SupabaseJsHouseholdsRepo extends HouseholdsRepo {
   }
   async familyMember(scope: UserScope, householdId: string, id: string) {
     return must(await this.db(scope).from("family_members").select("id,nombre,user_id,es_titular").eq("id", id).eq("household_id", householdId).maybeSingle())
+  }
+  async patchFamily(scope: UserScope, householdId: string, id: string, patch: FamilyPatchRow) {
+    return must(await this.db(scope).from("family_members").update(patch).eq("id", id).eq("household_id", householdId).is("deleted_at", null).select("id").maybeSingle())?.id ?? null
   }
   async setFamilyDeleted(scope: UserScope, id: string, deleted: boolean) {
     must(await this.db(scope).from("family_members").update({ deleted_at: deleted ? new Date().toISOString() : null }).eq("id", id))

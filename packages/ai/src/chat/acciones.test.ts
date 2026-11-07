@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { detectActions, detectDecision, original, plazoDe } from "./intent"
-import { elegir, medioEnTexto, palabras } from "./acciones"
+import { elegir, elegirPersona, medioEnTexto, palabras } from "./acciones"
 import { resolverAcciones } from "./resolver"
 import { contextoChat } from "./contexto"
 import { integralExtras } from "./extras"
@@ -62,6 +62,14 @@ describe("encontrar el registro", () => {
     const b = libroPrueba()
     expect(elegir("viaje", b.goals.map((g) => ({ item: g.id, textos: [g.nombre] }))).item).toBe("g-viaje")
     expect(elegir("", b.goals.map((g) => ({ item: g.id, textos: [g.nombre] }))).empate).toHaveLength(2)
+  })
+  it("una persona se encuentra por su nombre de pila, no solo por el apellido", () => {
+    const cs = [{ nombre: "Laura Gómez" }, { nombre: "Juan Pérez" }, { nombre: "Juan Rojas" }]
+    expect(elegirPersona("Juan Móvil Gómez", cs)).toBeUndefined()
+    expect(elegirPersona("Juan Pérez", cs)?.nombre).toBe("Juan Pérez")
+    expect(elegirPersona("laura", cs)?.nombre).toBe("Laura Gómez")
+    expect(elegirPersona("Juan", cs)).toBeUndefined() // dos Juan: no adivina
+    expect(elegirPersona("", cs)).toBeUndefined()
   })
 })
 

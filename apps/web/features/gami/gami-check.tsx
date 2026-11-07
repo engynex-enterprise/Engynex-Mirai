@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { apiOn } from "@/lib/api/session"
+import { gamiCheckLegacy, gamiVisitLegacy } from "./legacy"
 import { qk } from "@/lib/supabase/tables"
 import { gamiPending, todayBogota } from "@/lib/domain"
 import { useGami } from "./use-gami"
@@ -33,7 +34,11 @@ export function GamiCheck() {
     if (visited.current === key) return
     visited.current = key
     const t = setTimeout(async () => {
-      await createClient().from("gami_visits").upsert({ book_id: bookId, user_id: user.id, dia: todayBogota() }, { onConflict: "book_id,user_id,dia", ignoreDuplicates: true })
+      // V7-H2: POST /v1/books/:b/gami/visit con el interruptor `gami` (apagado: Supabase, rama heredada).
+      if (apiOn("gami")) {
+        const { browserApi } = await import("@/lib/api/client")
+        await browserApi().gami.visit({ params: { bookId }, query: {} }).catch(() => undefined)
+      } else await gamiVisitLegacy(bookId, user.id, todayBogota())
       qc.invalidateQueries({ queryKey: qk(bookId, "gami") })
     }, 1200)
     return () => clearTimeout(t)
@@ -48,18 +53,30 @@ export function GamiCheck() {
     if (!badges.length && !missions.length && !subio && !first) return
     running.current = true
     const t = setTimeout(async () => {
-      const sb = createClient()
-      if (badges.length) await sb.from("gami_badges").upsert(badges.map((b) => ({ book_id: bookId, badge: b.id, unlocked_at: g.today })), { onConflict: "book_id,badge", ignoreDuplicates: true })
-      // Insignias y nivel también quedan en la campana (kind "logro", sin duplicados).
-      if (!first && (badges.length || subio)) void logroNotifs({ bookId, badges: badges.map((b) => ({ id: b.id, n: b.n, d: b.d })), nivel: subio ? { n: g.L.n, name: g.L.name } : null }).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))
-      if (missions.length) await sb.from("gami_missions").upsert(missions.map((m) => ({ book_id: bookId, semana: m.wk, mision: m.k })), { onConflict: "book_id,semana,mision", ignoreDuplicates: true })
-      if (canEdit && (first || subio)) await sb.from("gami_state").upsert({ book_id: bookId, max_level: Math.max(g.st.maxLevel, g.L.n), init_date: g.st.init ?? g.today })
+      // V7-H2: con `gami` encendido la API evalúa y guarda (POST …/gami/check: insignias, misiones, nivel y campana) y
+      // dice qué celebrar; apagado, lo de siempre desde el navegador (rama heredada).
+      let cel = { first, badges: badges as { id: string; n: string; d: string }[], missions: missions as { k: string; t: string; xp: number }[], nivel: subio ? { n: g.L.n, name: g.L.name } : null }
+      if (apiOn("gami")) {
+        try {
+          const { browserApi, unwrapData } = await import("@/lib/api/client")
+          const r = unwrapData(await browserApi().gami.check({ params: { bookId }, query: {} }))
+          cel = { first: r.first, badges: r.badges, missions: r.missions, nivel: r.nivel }
+          if (!r.first && (r.badges.length || r.nivel)) qc.invalidateQueries({ queryKey: ["notifications"] })
+        } catch {
+          cel = { first: true, badges: [], missions: [], nivel: null }
+        }
+      } else {
+        await gamiCheckLegacy({ bookId, today: g.today, badges, missions, first, subio, canEdit, maxLevel: Math.max(g.st.maxLevel, g.L.n), init: g.st.init ?? g.today })
+        // Insignias y nivel también quedan en la campana (kind "logro", sin duplicados).
+        if (!first && (badges.length || subio)) void logroNotifs({ bookId, badges: badges.map((b) => ({ id: b.id, n: b.n, d: b.d })), nivel: subio ? { n: g.L.n, name: g.L.name } : null }).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))
+      }
       qc.invalidateQueries({ queryKey: qk(bookId, "gami") })
       running.current = false
-      if (first) return // la primera evaluación no celebra lo que ya estaba cumplido
-      missions.forEach((m) => toast.success("Misión cumplida", { description: `+${m.xp} puntos · ${m.t}` }))
-      badges.slice(0, 3).forEach((b, i) => setTimeout(() => { toast.success(`Insignia: ${b.n}`, { description: b.d, action: { label: "Ver logros", onClick: () => router.push("/logros") } }); confetti() }, i * 900))
-      if (subio) setTimeout(() => { toast.success("¡Subiste de nivel!", { description: `Ahora eres nivel ${g.L.n}: ${g.L.name}. ¡Sigue así!` }); confetti(160) }, Math.min(badges.length, 3) * 900)
+      if (cel.first) return // la primera evaluación no celebra lo que ya estaba cumplido
+      cel.missions.forEach((m) => toast.success("Misión cumplida", { description: `+${m.xp} puntos · ${m.t}` }))
+      cel.badges.slice(0, 3).forEach((b, i) => setTimeout(() => { toast.success(`Insignia: ${b.n}`, { description: b.d, action: { label: "Ver logros", onClick: () => router.push("/logros") } }); confetti() }, i * 900))
+      const nv = cel.nivel
+      if (nv) setTimeout(() => { toast.success("¡Subiste de nivel!", { description: `Ahora eres nivel ${nv.n}: ${nv.name}. ¡Sigue así!` }); confetti(160) }, Math.min(cel.badges.length, 3) * 900)
     }, 500)
     return () => { clearTimeout(t); running.current = false }
   }, [sig]) // eslint-disable-line react-hooks/exhaustive-deps

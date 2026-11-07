@@ -7,6 +7,7 @@ import { qk } from "@/lib/supabase/tables"
 import { assembleBook, BOOK_PART_NAMES, loadBookPart, type BookPart, type BookParts, type LoadedBook, type PartRows } from "@/lib/book-data"
 import { apiSnapshotPart, readWithFallback } from "@/lib/api/book-tables"
 import { apiOn } from "@/lib/api/session"
+import { useHydrated } from "@/hooks/use-hydrated"
 
 /** Clave de una parte del libro: ["b", bookId, "summary", tabla]. Invalidar qk(bookId, "summary") recarga todas. */
 export const bookPartKey = (bookId: string, part: BookPart) => qk(bookId, "summary", part)
@@ -55,8 +56,14 @@ const combine = (results: UseQueryResult<PartRows>[]): BookResult => {
  */
 export function useBookData(): BookResult {
   const bookId = useBookId()
-  return useQueries({ queries: BOOK_PART_NAMES.map((p) => partQuery(bookId, p)), combine })
+  const r = useQueries({ queries: BOOK_PART_NAMES.map((p) => partQuery(bookId, p)), combine })
+  // Mientras hidrata, lo mismo que vio el servidor (sin libro): la precarga del shell suele llenar la caché antes y el
+  // primer render con datos rompería la hidratación (#418). Ver lib/query.ts.
+  const hydrated = useHydrated()
+  return hydrated || (r.data === undefined && !r.error) ? r : BOOK_SERVER
 }
+
+const BOOK_SERVER: BookResult = { data: undefined, isPending: true, isLoading: true, isFetching: true, error: null }
 
 /** Precarga el libro (al pasar por el menú o cuando el navegador está libre). No hace nada si ya está fresco. */
 export function prefetchBookData(qc: QueryClient, bookId: string) {

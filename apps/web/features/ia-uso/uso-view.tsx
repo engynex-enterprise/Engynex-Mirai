@@ -1,6 +1,6 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Bar, BarChart, XAxis } from "recharts"
 import { Panel, SectionTitle } from "@/components/mirai/panel"
 import { ToneIcon } from "@/components/mirai/tone-icon"

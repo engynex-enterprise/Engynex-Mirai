@@ -123,6 +123,14 @@ describe("gastos fijos y suscripciones", () => {
     expect(t.changes.map((c) => c.table)).toEqual(expect.arrayContaining(["fixed_expenses", "fixed_expense_payments", "expenses"]))
   })
 
+  it("pay: el pago de antes del alta (prev-AAAA-MM de fixed-form) pasa igual a la RPC; otros textos → 400", async () => {
+    t.fx.store.rpcImpl.pay_fixed_expense = () => ({ ajuste: null, aporte: null })
+    const r = await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "prev-2026-11", fecha: "2026-11-03", valor: 1200000 })
+    expect(r.status).toBe(200)
+    expect(t.fx.store.rpcs.map((x) => x.args)).toEqual([{ p_fixed: ID.arriendo, p_periodo: "prev-2026-11", p_fecha: "2026-11-03", p_valor: 1200000, p_desc_suffix: "" }])
+    expect((await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "prev-noviembre", fecha: "2026-11-03", valor: 1 })).status).toBe(400)
+  })
+
   it("periodo ya pagado → 409 con el texto de la base; «Registra» y «Solo mira» → 403", async () => {
     t.fx.store.rpcImpl.pay_fixed_expense = () => { throw pgErr("P0001", "Ese periodo ya está pagado") }
     expect(await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "2026-11", fecha: "2026-11-05" })).toMatchObject({ status: 409, body: { msg: "Ese periodo ya está pagado" } })

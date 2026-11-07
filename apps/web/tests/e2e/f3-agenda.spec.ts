@@ -8,7 +8,11 @@ async function qaBook() {
   const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
   const uid = data.users.find((u) => u.email === QA.email)!.id
   const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", uid).limit(1).single()
-  const { data: bk } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at").limit(1).single()
+  // El libro que abre la app (regla de buildAppContext: el último libro de la persona y, si no, el predeterminado):
+  // otra prueba puede haber dejado activo el «Ejemplo · familia Navarro» (Ver un ejemplo cambia de libro).
+  const { data: books } = await sb.from("books").select("id").eq("household_id", hh!.household_id).is("deleted_at", null).order("is_default", { ascending: false }).order("created_at")
+  const { data: prof } = await sb.from("profiles").select("last_book_id").eq("id", uid).maybeSingle()
+  const bk = books?.find((b) => b.id === prof?.last_book_id) ?? books?.[0]
   return { sb, uid, bookId: bk!.id }
 }
 const isoDias = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(d) }

@@ -1,6 +1,7 @@
 import "@/lib/services"
 import { getAppContext } from "@/lib/dal"
 import { supabaseServer } from "@/utils/supabase/server"
+import { serverAuthProvider } from "@/lib/auth/provider"
 import { ChatTurnBody, runChatTurn } from "@mirai/ai/server/chat-turn"
 import type { ChatEvent } from "@/lib/chat/types"
 import { limitError } from "@/lib/security/rate-limit"
@@ -20,6 +21,8 @@ function sameOrigin(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // v7: con AUTH_PROVIDER=mirai el chat va por la API (/v1/books/:bookId/chat/messages); esta ruta usa Supabase.
+  if (serverAuthProvider() === "mirai") return Response.json({ error: "No disponible" }, { status: 404 })
   if (!sameOrigin(req)) return Response.json({ msg: "Origen no permitido" }, { status: 403 })
   if (!(req.headers.get("content-type") ?? "").includes("application/json")) return Response.json({ msg: "Solicitud inválida" }, { status: 415 })
   const ctx = await getAppContext()

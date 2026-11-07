@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { formatDistanceToNowStrict } from "date-fns"
 import { es } from "date-fns/locale"
 import { CheckCheck } from "lucide-react"

@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { CircleCheck, CircleX, FlaskConical, MessageCircle, Pencil, Plus, Send, Trash2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -31,7 +32,7 @@ import { IconButton, Tip } from "@/components/mirai/tip"
 import { ToneIcon, toneFor, type IconTone } from "@/components/mirai/tone-icon"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { deletePlan, loadAdminPlans, loadBroadcasts, savePlan } from "./platform-api"
 import { CATS, INTEGRATIONS, type IntegrationDef } from "@/lib/integrations/registry"
 import { ADMIN_MODES, MODES, type GlobalMode } from "@/lib/integrations/resolve"
 import { integrationBrand } from "@/lib/brands"
@@ -62,10 +63,9 @@ function PlanDialog({ p, isNew, open, onOpenChange }: { p: Plan; isNew: boolean;
   const save = async () => {
     setBusy(true)
     const row = { ...v, id, nombre: v.nombre.trim(), descripcion: v.descripcion.trim(), precio_mes: gratis ? 0 : v.precio_mes, precio_anio: gratis ? 0 : v.precio_anio, limites: Object.fromEntries(Object.entries(v.limites).filter(([, x]) => x)) }
-    const sb = createClient()
-    const { error } = isNew ? await sb.from("plans").insert(row) : await sb.from("plans").update(row).eq("id", p.id)
+    try { await savePlan(isNew ? id : p.id, isNew, row) }
+    catch (e) { setBusy(false); return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.code === "23505" ? "Ya existe un plan con ese nombre." : error.message })
     toast.success("Plan guardado"); qc.invalidateQueries({ queryKey: ["admin"] }); qc.invalidateQueries({ queryKey: ["plans"] }); onOpenChange(false)
   }
   const ahorro = ahorroAnual(v.precio_mes, v.precio_anio)
@@ -111,13 +111,12 @@ function PlanDialog({ p, isNew, open, onOpenChange }: { p: Plan; isNew: boolean;
 export function PlanesPanel() {
   const qc = useQueryClient()
   const ask = useAsk()
-  const { data, isPending } = useQuery({ queryKey: ["admin", "plans-full"], queryFn: async () => ((await createClient().from("plans").select("*").order("orden").order("precio_mes")).data ?? []) as unknown as Plan[] })
+  const { data, isPending } = useQuery({ queryKey: ["admin", "plans-full"], queryFn: async () => (await loadAdminPlans()) as Plan[] })
   const edit = useDialogTarget<{ p: Plan; isNew: boolean }>()
   const borrar = async (p: Plan) => {
     if (!(await ask.confirm({ title: `¿Borrar el plan ${p.nombre}?`, description: "Si hay hogares con este plan, mejor ocúltalo y deja de venderlo.", confirmLabel: "Borrar", destructive: true }))) return
-    const { error } = await createClient().from("plans").delete().eq("id", p.id)
-    if (error) toast.error("No se pudo borrar", { description: error.code === "23503" ? "Hay suscripciones o pagos con este plan: ocúltalo y deja de venderlo." : error.message })
-    else { toast("Plan borrado"); qc.invalidateQueries({ queryKey: ["admin"] }) }
+    try { await deletePlan(p.id) } catch (e) { return toast.error("No se pudo borrar", { description: (e as Error).message }) }
+    toast("Plan borrado"); qc.invalidateQueries({ queryKey: ["admin"] })
   }
   return (
     <div className="grid gap-6">
@@ -380,7 +379,7 @@ export function ComunicadosPanel() {
   const qc = useQueryClient()
   const ask = useAsk()
   const { data: plans = [] } = usePlanOptions()
-  const { data: hist, isPending } = useQuery({ queryKey: ["admin", "broadcasts"], queryFn: async () => (await createClient().from("broadcasts").select("*").order("created_at", { ascending: false }).limit(100)).data ?? [] })
+  const { data: hist, isPending } = useQuery({ queryKey: ["admin", "broadcasts"], queryFn: loadBroadcasts })
   const [v, setV] = useState({ titulo: "", cuerpo: "", href: "", segmento: "todos", correo: false })
   const [busy, setBusy] = useState(false)
   const hrefOk = !v.href.trim() || v.href.trim().startsWith("/")

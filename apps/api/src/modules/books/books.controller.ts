@@ -41,6 +41,25 @@ export class BooksController {
     return tsRestHandler(c.settings, async () => ({ status: 200, body: await this.svc.settings() }))
   }
 
+  // V7-H2: lecturas (cualquier integrante; la RLS de cada tabla vuelve a revisar).
+  @TsRestHandler(c.audit)
+  @MinRole("viewer")
+  audit() {
+    return tsRestHandler(c.audit, async ({ query }) => ({ status: 200, body: await this.svc.audit(query.limit) }))
+  }
+
+  @TsRestHandler(c.setupCounts)
+  @MinRole("viewer")
+  setupCounts() {
+    return tsRestHandler(c.setupCounts, async () => ({ status: 200, body: await this.svc.setupCounts() }))
+  }
+
+  @TsRestHandler(c.monthSummary)
+  @MinRole("viewer")
+  monthSummary() {
+    return tsRestHandler(c.monthSummary, async ({ params }) => ({ status: 200, body: await this.svc.monthSummary(params.mes) }))
+  }
+
   @TsRestHandler(c.updateSettings)
   @MinRole("editor")
   updateSettings() {

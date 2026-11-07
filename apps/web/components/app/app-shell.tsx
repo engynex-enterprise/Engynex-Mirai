@@ -86,6 +86,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 }
 
 
+/** ¿Hay una ventana abierta? (no cuenta la que se está cerrando: Radix la deja en el DOM con data-state="closed"). */
+const openDialog = () => !!document.querySelector('[role=dialog]:not([data-state="closed"])')
+
 /** Atajos: Ctrl/⌘ K buscar · N agregar · ? Centro de ayuda (Ctrl/⌘ B lo maneja el sidebar). Lista en lib/content/centro-ayuda.ts (ATAJOS). */
 function useShortcuts() {
   const { setSearch, setAdd, setHelp } = useShell.getState()
@@ -96,10 +99,10 @@ function useShortcuts() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
         setSearch(true)
-      } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "n" && !document.querySelector("[role=dialog]")) {
+      } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "n" && !openDialog()) {
         e.preventDefault()
         setAdd(true)
-      } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === "?" && !document.querySelector("[role=dialog]")) {
+      } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === "?" && !openDialog()) {
         e.preventDefault()
         setHelp("@")
       }

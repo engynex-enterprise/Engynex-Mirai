@@ -16,7 +16,7 @@ import { Tip } from "@/components/mirai/tip"
 import { ToneIcon } from "@/components/mirai/tone-icon"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
-import { createClient } from "@/utils/supabase/client"
+import { deleteFeedback } from "./api"
 import { ESTADOS, TIPOS, casoNumero, type FeedbackEstado, type FeedbackTipo, type SoporteCtx } from "@/lib/content/opiniones"
 import { fmtDate } from "@/lib/format"
 import { useMyFeedback } from "./feedback-dialog"
@@ -96,8 +96,7 @@ export function OpinionesView() {
   const { data, isPending } = useMyFeedback()
   const c = useListControls(data, { text: texto, filters: FILTROS, sorts: ORDEN })
   const quitar = async (id: string) => {
-    const { error } = await createClient().from("feedback").delete().eq("id", id)
-    if (error) return toast.error("No se pudo borrar", { description: error.message })
+    try { await deleteFeedback(id) } catch (e) { return toast.error("No se pudo borrar", { description: (e as Error).message }) }
     toast("Opinión borrada"); qc.invalidateQueries({ queryKey: ["feedback", user.id] })
   }
   return (

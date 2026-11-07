@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
@@ -22,7 +23,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { Tip } from "@/components/mirai/tip"
 import { ToneIcon, toneFor, type IconTone } from "@/components/mirai/tone-icon"
 import { UserAvatar } from "@/components/mirai/user-avatar"
-import { createClient } from "@/utils/supabase/client"
+import { deleteCoupon, loadCoupons, loadPlanOptions, saveCoupon, toggleCoupon } from "./platform-api"
 import { fmtDate, todayISO } from "@/lib/format"
 import { precio, type Coupon } from "@/lib/plans"
 import { cn } from "@/lib/utils"
@@ -53,7 +54,7 @@ function StatePill({ map, k }: { map: Record<string, [PillTone, string, string]>
 export function usePlanOptions() {
   return useQuery({
     queryKey: ["admin", "plan-options"],
-    queryFn: async () => ((await createClient().from("plans").select("id,nombre,precio_mes,precio_anio").order("orden")).data ?? []).map((p) => ({ value: p.id, label: p.nombre, mes: p.precio_mes, anio: p.precio_anio })),
+    queryFn: loadPlanOptions,
   })
 }
 
@@ -333,10 +334,9 @@ function CouponDialog({ c, isNew, open, onOpenChange }: { c: CouponRow; isNew: b
   const save = async () => {
     setBusy(true)
     const row = { ...v, codigo, descripcion: v.descripcion.trim() }
-    const sb = createClient()
-    const { error } = isNew ? await sb.from("coupons").insert(row) : await sb.from("coupons").update(row).eq("codigo", c.codigo)
+    try { await saveCoupon(isNew, isNew ? codigo : c.codigo, row) }
+    catch (e) { setBusy(false); return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     setBusy(false)
-    if (error) return toast.error("No se pudo guardar", { description: error.code === "23505" ? "Ya existe un cupón con ese código." : error.message })
     toast.success("Cupón guardado"); qc.invalidateQueries({ queryKey: ["admin", "coupons"] }); onOpenChange(false)
   }
   return (
@@ -372,17 +372,17 @@ export function CuponesPanel() {
   const qc = useQueryClient()
   const ask = useAsk()
   const { data: plans = [] } = usePlanOptions()
-  const { data, isPending } = useQuery({ queryKey: ["admin", "coupons"], queryFn: async () => ((await createClient().from("coupons").select("*").order("created_at", { ascending: false })).data ?? []) as CouponRow[] })
+  const { data, isPending } = useQuery({ queryKey: ["admin", "coupons"], queryFn: async () => (await loadCoupons()) as CouponRow[] })
   const edit = useDialogTarget<{ c: CouponRow; isNew: boolean }>()
   const pn = (id: string) => plans.find((p) => p.value === id)?.label ?? id
   const borrar = async (c: CouponRow) => {
     if (!(await ask.confirm({ title: `¿Borrar el cupón ${c.codigo}?`, description: c.usos ? `Ya se usó ${c.usos} ${c.usos === 1 ? "vez" : "veces"}. Si solo quieres que no se use más, mejor páusalo.` : "No se puede deshacer.", confirmLabel: "Borrar", destructive: true }))) return
-    const { error } = await createClient().from("coupons").delete().eq("codigo", c.codigo)
-    if (error) toast.error("No se pudo borrar", { description: error.message }); else { toast("Cupón borrado"); qc.invalidateQueries({ queryKey: ["admin", "coupons"] }) }
+    try { await deleteCoupon(c.codigo) } catch (e) { return toast.error("No se pudo borrar", { description: (e as Error).message }) }
+    toast("Cupón borrado"); qc.invalidateQueries({ queryKey: ["admin", "coupons"] })
   }
   const toggle = async (c: CouponRow) => {
-    const { error } = await createClient().from("coupons").update({ activo: !c.activo }).eq("codigo", c.codigo)
-    if (error) toast.error("No se pudo guardar", { description: error.message }); else { toast.success(c.activo ? "Cupón pausado" : "Cupón activo"); qc.invalidateQueries({ queryKey: ["admin", "coupons"] }) }
+    try { await toggleCoupon(c) } catch (e) { return toast.error("No se pudo guardar", { description: (e as Error).message }) }
+    toast.success(c.activo ? "Cupón pausado" : "Cupón activo"); qc.invalidateQueries({ queryKey: ["admin", "coupons"] })
   }
   return (
     <>

@@ -3,6 +3,7 @@
 // peticiones). La usan las funciones que no son hooks (features/<x>/api.ts, el chat, los queryFn).
 import { API_OFF, type ApiConfig, type ApiModule } from "./modules"
 import { viaApi } from "./via"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 export type ApiSession = { cfg: ApiConfig; userId: string; householdId: string; bookId: string }
 
@@ -16,9 +17,14 @@ export function setApiSession(s: ApiSession) {
 
 export const apiSession = () => current
 
-/** ¿Este módulo va por la API ahora? (siempre false en el servidor de Next o sin sesión). */
+/**
+ * ¿Este módulo va por la API ahora? (siempre false en el servidor de Next o sin sesión). v7 (V7-H4): con
+ * AUTH_PROVIDER=mirai no hay sesión de Supabase en el navegador, así que TODO va por la API (también fuera del shell:
+ * invitación, bienvenida), sin importar los interruptores.
+ */
 export function apiOn(module: ApiModule, detail?: string): boolean {
-  return typeof window !== "undefined" && viaApi(current?.cfg ?? API_OFF, module, detail)
+  if (typeof window === "undefined") return false
+  return isMiraiAuth() || viaApi(current?.cfg ?? API_OFF, module, detail)
 }
 
 /** Libro activo (la API lo lleva en la ruta; la cookie mirai-book queda solo para el front). */

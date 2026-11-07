@@ -25,26 +25,34 @@ Hay **dos llaves** y las dos tienen que estar encendidas para que algo vaya por 
 | Interruptor | Qué pasa a la API | Dónde (web) | Queda directo o en Next |
 |---|---|---|---|
 | `me` | `getAppContext()` → `GET /v1/me` (con el libro de la cookie). Sin hogar → `/bienvenida`. Si falla, la base | `lib/dal.ts` (la ruta de la base ahora usa `buildAppContext` de `@mirai/domain`, la misma regla de la API) | El modo `admins` no aplica a `me` (se decide antes de saber si es admin) |
-| `book-tables` (`book-tables:<tabla>`) | `useList` / `useSave` / `useSoftDelete` → `GET/PUT/DELETE /v1/books/:b/t/:tabla[/:id]` y `POST …/restore` | `hooks/use-book-data.ts`, `lib/api/book-tables.ts` | Tablas fuera del CRUD genérico (`chat_*`, `automation_runs`, `monthly_summaries`) y `select` con relaciones embebidas siguen con Supabase |
+| `book-tables` (`book-tables:<tabla>`) | `useList` / `useSave` / `useSoftDelete` → `GET/PUT/DELETE /v1/books/:b/t/:tabla[/:id]` y `POST …/restore`. V7-H1: también las escrituras sueltas de las vistas (editar un campo, crear y usar el id, papelera y «Deshacer» de un aviso) con `lib/api/book-rows.ts` | `hooks/use-book-data.ts`, `lib/api/book-tables.ts`, `lib/api/book-rows.ts` | Tablas fuera del CRUD genérico (`chat_*`, `automation_runs`, `monthly_summaries`) y `select` con relaciones embebidas siguen con Supabase |
 | `snapshot` | `useBookData` / `prefetchBookData` (Inicio, Balance, Dashboard, Flujo, Agenda…) → `GET /v1/books/:b/snapshot?parts=` (las partes que se piden juntas van en **una** petición) | `features/book/use-book-data.ts` | Los cálculos de las vistas **se quedan en el cliente** (decisión D3): los endpoints `views/*` de F2-C son para el chat, los avisos, el contador y clientes nativos |
 | `expenses` | `use_emergency_fund`, `link_expense_fixed`, `unlink_expense_fixed` → comandos | `features/expenses/commands.ts` | — |
-| `fixed` | `pay_fixed_expense` ×2, `unpay_fixed_expense`, `pay_subscription` → comandos | `features/fixed/commands.ts` | Pagos con periodo `prev-…` o valor ≤ 0 siguen por la RPC (el comando no da lo mismo) |
+| `fixed` | `pay_fixed_expense` ×2, `unpay_fixed_expense`, `pay_subscription` → comandos | `features/fixed/commands.ts` | Pagos con valor ≤ 0 o un sufijo distinto siguen por la RPC (V7-H1: el periodo `prev-…` del formulario ya va por el comando) |
 | `cards` | `add_card_purchase` ×3, `pay_credit_card` ×2 → comandos | `features/cards/commands.ts` | Compras con `p_medio`, > 48 cuotas o descripción vacía/larga siguen por la RPC |
-| `savings` | `goal_contribute`, `fund_save`, `fund_use` → comandos | `features/goals/commands.ts` | — |
-| `assets` | `asset_cuadrar` → `assets.reconcile` | `features/balance/commands.ts` | — |
+| `savings` | `goal_contribute`, `fund_save`, `fund_use` → comandos; V7-H1: prender el fondo o cambiar su cuenta (`PUT /fund`, `updateFund`) | `features/goals/commands.ts` | — |
+| `assets` | `asset_cuadrar` → `assets.reconcile`; V7-H1: dejar de cuadrar (`assets.unreconcile`) y la foto del patrimonio del mes (`assets.snapshot`, `PUT /net-worth/:mes`) | `features/balance/commands.ts`, `features/patrimonio/patrimonio-card.tsx` | — |
+| `loans` (V7-H1) | Pagar N cuotas o un abono → `POST /loans/:id/payments` | `features/loans/{commands,pay-loan-dialog}.ts(x)` | — |
 | `importer` | Exportar JSON y crear copia de seguridad | `features/data/api.ts` | Restaurar, URL y borrado de copias, `formatBlocks`, `exportMyData`, `deleteAccount`, importar v4 y libro de ejemplo |
 | `bell` | Campana: listar, marcar uno y marcar todo | `features/notify/bell.ts` | — |
-| `notify` | 9 de 10 acciones de avisos + suscripciones push | `features/notify/api.ts`, `push-client.ts` | `logroNotifs` (sin endpoint); reglas de aviso (`notification_rules`, directo desde Ajustes › Alertas) |
+| `notify` | 9 de 10 acciones de avisos + suscripciones push; V7-H2: reglas de aviso de Ajustes › Alertas y Privacidad (`GET/PUT /v1/books/:b/notification-rules/me`) y si Telegram está vinculado (`GET /v1/me/telegram`) | `features/notify/api.ts`, `push-client.ts`, `features/settings/api.ts` | V7-H3: `logroNotifs` va con `gami` (`POST …/gami/logros`) |
 | `integrations` | Guardar, prender, borrar, probar y listar modelos | `features/integrations/api.ts` | — |
-| `google` | Leer correos, desconectar, sincronizar Calendar, estado y **conectar** (`connect-url` de la API en vez de `/api/google/connect`) | `features/correo/api.ts` | Hay que registrar `<API>/v1/google/callback` en Google Cloud antes de encenderlo |
+| `google` | Leer correos, desconectar, sincronizar Calendar, estado y **conectar** (`connect-url` de la API en vez de `/api/google/connect`) ; V7-H3: tu conexión (`GET /v1/google/connection`) | `features/correo/api.ts` (V7-H3: los gastos que se confirman desde el correo van por `book-tables:expenses`) | Hay que registrar `<API>/v1/google/callback` en Google Cloud antes de encenderlo |
 | `ai` | Las 10 de `features/ai/actions.ts`, resumen del mes y uso de IA | `features/{ai,reports,ia-uso}/api.ts` | — |
-| `chat` | Streaming NDJSON (`POST /v1/books/:b/chat/messages`), hilos (leer, renombrar, fijar, archivar, borrar, deshacer), mensajes, sugerencias, propuestas, adjuntos, título, duplicar, detalles | `features/chat/{store,hooks,api}.ts`, `lib/api/chat.ts` | Calificar un mensaje, buscar en las conversaciones y el conteo de hilos de logros |
+| `chat` | Streaming NDJSON (`POST /v1/books/:b/chat/messages`), hilos (leer, renombrar, fijar, archivar, borrar, deshacer), mensajes, sugerencias, propuestas, adjuntos, título, duplicar, detalles | `features/chat/{store,hooks,api}.ts`, `lib/api/chat.ts` | V7-H3: calificar (`…/messages/:m/rating`) y buscar (`…/chat/search`) ya van por la API; el conteo de hilos de logros es de H2 |
 | `households` | Personas, invitaciones, roles, familia, pasar el hogar, renombrar | `features/household/api.ts` | `createHousehold` (bienvenida: cookies `mirai-book` y `mirai_ref`) y aceptar invitación (página sin shell) siguen en Next |
 | `account` | Cuenta, cambio de correo, métodos, sesiones, transferencias, salir y borrar hogar | `features/account/api.ts` | La cookie `mirai-book` puede quedar vieja al salir/borrar el hogar activo (el servidor cae al libro predeterminado) |
-| `billing` | Opciones de pago, cupón, checkout y renovación | `features/planes/api.ts` | RPC `household_subscription` (sin endpoint) |
-| `admin` | 30 de las acciones de la consola + Uso de IA | `features/admin/{api,ia-api}.ts` | Integraciones globales y envío de prueba (sin endpoint), WhatsApp de la consola |
-| `accountant` | Abrir el portal del contador (en el servidor, solo `on`) | `features/contador/api.ts` | Notas y archivos del portal; accesos del titular (sin endpoint) |
-| `gami` | Referidos | `features/referidos/api.ts` | Logros (lectura/escritura directa) |
+| `billing` | Opciones de pago, cupón, checkout y renovación ; V7-H3: planes públicos (`GET /v1/plans`: `usePlans` y la portada, esta en el servidor solo con `on`) y Mi plan (`GET /v1/households/:h/subscription`) | `features/planes/api.ts`, `features/landing/precios.tsx` | — |
+| `admin` | 30 de las acciones de la consola + Uso de IA | `features/admin/{api,ia-api}.ts` ; V7-H3: integraciones globales y envío de prueba, WhatsApp (estado, ajustes, vista previa, prueba y **crear/editar/borrar plantillas** `POST/DELETE /v1/admin/whatsapp/templates/items`), Planes, Cupones, historial de Comunicados (`GET /v1/admin/broadcasts`) y Anuncios (`/v1/admin/ads/**`) | — |
+| `accountant` | Abrir el portal del contador (en el servidor, solo `on`); V7-H2: notas y documentos del portal (`features/contador/portal-actions.ts`, en el servidor, solo `on`) y el lado del titular: accesos y notas (`GET …/accountant/{shares,notes}`), crear, enlace nuevo, quitar y nota (`features/contador/owner.ts`) | `features/contador/{api,portal-actions,owner}.ts` | — |
+| `gami` | Referidos; V7-H2: logros — estado guardado (`GET …/gami/state`, la web sigue calculando), visita del día (`POST …/gami/visit`) y evaluación con celebración (`POST …/gami/check`, que también avisa en la campana) | `features/referidos/api.ts`, `features/gami/{use-gami.ts,gami-check.tsx}` | Mostrar u ocultar logros va con `books` (`PATCH …/settings`) |
+| `ads` (V7-H3) | Anuncio de cada espacio (`GET /v1/books/:b/ads/eligible`; la cinta usa `lista`), vistas/clics/cierres (`POST /v1/ads/events`) y AdSense (`GET /v1/public/adsense`) | `features/ads/ad-slot.tsx` | La frecuencia del día se refresca con la consulta (60 s), no al instante tras cada vista |
+| `feedback` (V7-H3) | Enviar una opinión o un caso de soporte, mis opiniones y borrar (`/v1/feedback`, `/v1/me/feedback`) | `features/opiniones/api.ts` (opiniones, tarjeta de Inicio, Centro de ayuda › Soporte) | La captura va con `files`; «desde cuándo tienes cuenta» de la tarjeta con `me` (`GET /v1/me/profile`) |
+| `automations` (V7-H3) | Plantillas por defecto, probar, ejecuciones y el runner (`POST …/automations/drain`) | `features/automations/api.ts` | Lista, guardar, borrar y deshacer siguen con `useList`/`useSave`/`useSoftDelete` (`book-tables:automations`, mismas reglas de la base); el aviso al runner sigue siendo Supabase Realtime salvo con el gateway (V7-I) |
+| `books` (V7-H2) | Ajustes del libro (`useSettings`, `useBookSettingsSave`, Puesta en marcha, Logros: `GET/PATCH /v1/books/:b/settings`), historial de cambios (`GET …/audit`), conteos de la Puesta en marcha y del Perfil (`GET …/setup-counts`) | `features/settings/{prefs,api}.ts`, `features/catalogs/hooks.ts`, `features/setup/*`, `features/profile/api.ts`, `features/gami/logros-view.tsx` | — |
+| `refs` (V7-H2) | Datos de referencia de Colombia (`/v1/refs/{uvt,smmlv,trm,usura,renta-calendar,renta-regimenes}`): Ajustes › Finanzas, Calculadoras (GMF), Calendario fiscal y fechas DIAN de la Agenda | `lib/ref-data.ts`, `features/settings/api.ts` | `loadRefData(sb)` (servidor y rama heredada de la renta) sigue con el cliente que se le pase |
+| `tax` (V7-H2) | Declaración de renta: datos (`GET /v1/books/:b/renta`, también el estimado del Calendario fiscal), años, bienes y documentos (CRUD genérico), UVT del libro (`PATCH …/settings`) y dependientes (`PATCH /v1/households/:h/family/:id`) | `features/renta/{data,api}.ts`, `features/renta/renta-owner.tsx` | Los archivos van con `files` |
+| `me` / `households` / `ai` / `book-tables` (V7-H2) | `me`: perfil (`GET/PATCH /v1/me/profile`: Perfil, dígitos DIAN, nombre de la Puesta en marcha) y preferencias (`GET/PATCH /v1/me/preferences`). `households`: integrantes (`GET /v1/households/:h/family`, `useMembers`) y cupo (`PATCH …/family/:id`). `ai`: resumen del mes guardado (`GET /v1/books/:b/month-summaries/:mes`). `book-tables:categories`: tope del presupuesto (`PATCH …/categories/:id/tope`); `book-tables:calendar_events` / `:fixed_expenses`: fechas del Calendario fiscal y «Recordar como gasto fijo» | `features/{profile,settings,setup,agenda,catalogs,planning,reports}/*` | — |
 | `webhooks` | `/api/pagos/{mercadopago,wompi}` reenvían el cuerpo crudo, la consulta y los encabezados de la firma a `/v1/webhooks/*` (solo `on`). Si la API no responde: 502 y la pasarela reintenta (no se procesa también en Next) | `lib/api/webhook-proxy.ts` | — |
 | *(tiempo real)* | Gateway socket.io de F2-G | `hooks/use-live.ts` | Es de compilación: `NEXT_PUBLIC_LIVE_SOURCE=gateway` + `NEXT_PUBLIC_REALTIME_URL`. Solo con Cloud SQL (fase 4) |
 
@@ -125,3 +133,45 @@ E2E_BASE_URL=https://engynex-mirai-pruebas.vercel.app E2E_API=on pnpm --filter w
 5. **Pagos**: cambiar la URL de los webhooks en Mercado Pago y Wompi a la API y retirar el proxy.
 6. **Limpieza (F2-H-9)**: borrar las Server Actions migradas después de 2 semanas en `on`, quitar `lib/supabase/admin.ts`, `lib/crypto.ts` y las librerías de servidor, regla de ESLint que prohíba `server-only`, `supabaseAdmin` y `.from(` en `apps/web`, y quitar de Vercel `SUPABASE_SECRET_KEY`, `ENCRYPTION_KEY` y los demás secretos de negocio.
 7. **Fase 4**: Cloud SQL + gateway de tiempo real (`NEXT_PUBLIC_LIVE_SOURCE=gateway`) + Storage en GCS; `supabase.auth.*` queda en el navegador hasta Identity Platform.
+
+## 8. V7-H3: lo que queda directo en mis carpetas (solo el modo heredado)
+
+`features/{admin,ads,planes,landing,opiniones,ayuda,correo,automations,chat,notify}` y `components/app/{platform-notice,command-palette}.tsx`
+ya no tienen ninguna llamada a Supabase **fuera** de la rama del interruptor apagado (o de `AUTH_PROVIDER=supabase`). Con
+`grep -E '\.from\(|\.rpc\(|\.storage|utils/supabase|supabaseAdmin'` solo quedan:
+
+| Archivo | Qué es (rama heredada) | Interruptor que la apaga |
+|---|---|---|
+| `features/{admin,chat,correo,notify,planes,automations}/actions.ts`, `features/admin/{server,whatsapp}.ts` | Server Actions de siempre (clave secreta o sesión de Supabase). Solo las llaman los `api.ts` con el interruptor apagado | `admin`, `chat`, `google`, `notify`/`gami`, `billing`, `automations` |
+| `features/admin/{ads-api,platform-api}.ts` | Consola › Anuncios, Planes, Cupones y Comunicados directo con la sesión del administrador | `admin` |
+| `features/admin/console-whatsapp.tsx` | Subir la imagen del encabezado a Storage (`public-assets`) | `files` |
+| `features/ads/ad-slot.tsx` | `ads`, `ad_campaigns`, `ad_user_daily`, `platform_settings`, `platform_integrations_public` y la RPC `ad_track` | `ads` |
+| `features/automations/api.ts`, `runner.tsx` | `automation_runs` directo; el canal `auto:{libro}` de Supabase Realtime | `automations`; `NEXT_PUBLIC_LIVE_SOURCE=gateway` (V7-I) |
+| `features/ayuda/extras.tsx` | El «ping» del Estado del servicio a `platform_settings` | `me` |
+| `features/chat/api.ts` | `chat_threads` / `chat_messages` (hilos, mensajes, buscar, calificar) | `chat` |
+| `features/correo/api.ts` | `google_connections_public` y los gastos del correo en `expenses` | `google`, `book-tables:expenses` |
+| `features/landing/precios.tsx` | `plans` con `supabaseServer()` (y leer `api_rollout` en modo `db`) | `billing` en `on` o `AUTH_PROVIDER=mirai` |
+| `features/notify/{bell,push-client}.ts` | `notifications` y `push_subscriptions` | `bell`, `notify` |
+| `features/opiniones/api.ts` | `feedback`, Storage `feedback` y `profiles.created_at` | `feedback`, `files`, `me` |
+| `features/planes/api.ts` | `plans`, RPC `household_subscription` y `plan_payments` | `billing` |
+| `components/app/platform-notice.tsx` | `platform_settings.aviso_global` | `me` |
+| `components/app/command-palette.tsx` | Los registros del buscador (13 tablas; préstamos con relaciones) | `book-tables[:tabla]` |
+
+Endpoints que agregó V7-H3 (con pruebas en `apps/api`): `GET /v1/admin/broadcasts`, `POST /v1/admin/whatsapp/templates/items`,
+`DELETE /v1/admin/whatsapp/templates/items/:name` (`@mirai/services/notify/wa-meta`, antes `apps/web/lib/notify/wa-meta.ts`),
+`GET /v1/google/connection` y el campo `lista` de `GET /v1/books/:b/ads/eligible` (la cinta). Con `AUTH_PROVIDER=mirai`
+`apiOn()` es siempre verdadero (V7-H4), así que todo lo anterior va por la API.
+
+Arreglos que salieron de la E2E local con todo por la API (`pnpm e2e:local --auth=mirai`):
+- **Paquete de la API** (`apps/api/scripts/build.mjs`): unplugin-swc metía en su propio espacio («swc:») los archivos
+  importados con rutas relativas, y el mismo archivo importado por el nombre del paquete quedaba otra vez. Había dos
+  copias de `@mirai/services/runtime`: `configureServices` configuraba una y `rt()` leía la otra, así que los
+  avisos al abrir la app, «Probar» y el runner de automatizaciones respondían 500/502 («@mirai/services sin
+  configurar»). El plugin `mirai-one-copy` deja una sola copia por archivo (swc la sigue transformando).
+- **Chat con `AUTH_PROVIDER=mirai`**: el streaming (`lib/api/chat.ts`) iba al origen de la API sin cookie (401); ahora
+  usa el mismo origen, como `browserApi()`.
+- **E2E local** (`infra/local/e2e-local.mjs`): `RATE_LIMIT_DEFAULT_PER_MIN=5000` (la batería pasaba las 300/min por
+  persona y daba 429) y `MIRAI_CONTEXT_TTL_MS=0` (nuevo, `apps/api/src/core/context/app-context.service.ts`: las
+  pruebas cambian el plan o el permiso de administrador en la base y la caché de 30 s del contexto los escondía).
+- Anuncios: el espacio solo pide `eligible` si se muestran anuncios (plan con anuncios o vista previa del admin).
+

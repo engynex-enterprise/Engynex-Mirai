@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { login, shot, watchErrors } from "./helpers"
+import { login, shot, watchErrors, waitForAdmin } from "./helpers"
 import { QA, admin } from "./qa"
 
 // Las opiniones de QA avisan a los administradores reales: al final se borran esos avisos y la marca de admin de QA.
@@ -22,15 +22,17 @@ test("medios de pago: cambiar solo el ícono guarda sin error", async ({ page })
   await page.goto("/ajustes?tab=medios")
   const row = page.locator("li", { has: page.getByRole("textbox", { name: "Nombre de Efectivo" }) })
   await expect(row).toBeVisible({ timeout: 30_000 })
-  const target = /Billetera/.test(await row.getByRole("combobox").innerText()) ? "Efectivo" : "Billetera"
-  await row.getByRole("combobox").click()
+  // La fila tiene dos selectores (ícono y «Sale de la cuenta»): el del ícono es el primero.
+  const icono = row.getByRole("combobox").first()
+  const target = /Billetera/.test(await icono.innerText()) ? "Efectivo" : "Billetera"
+  await icono.click()
   await page.getByPlaceholder("Buscar…").fill(target)
   await page.getByRole("option", { name: new RegExp(target) }).click()
-  await expect(row.getByRole("combobox")).toHaveText(new RegExp(target))
+  await expect(icono).toHaveText(new RegExp(target))
   await page.waitForTimeout(1200)
   await expect(page.getByText("No se pudo guardar")).toHaveCount(0)
   await page.reload()
-  await expect(page.locator("li", { has: page.getByRole("textbox", { name: "Nombre de Efectivo" }) }).getByRole("combobox")).toHaveText(new RegExp(target), { timeout: 30_000 })
+  await expect(page.locator("li", { has: page.getByRole("textbox", { name: "Nombre de Efectivo" }) }).getByRole("combobox").first()).toHaveText(new RegExp(target), { timeout: 30_000 })
   expect(errs).toEqual([])
 })
 
@@ -55,7 +57,9 @@ test("opiniones: calificar, reportar un error y recibir respuesta del administra
   await shot(page, "opiniones-calificar", info.project.name)
   await dlg.getByRole("button", { name: "Enviar" }).click()
   await expect(page.getByText("¡Gracias! Recibimos tu opinión")).toBeVisible()
-  await expect(page.getByText(`Me encanta la quincena (${tag})`)).toBeVisible()
+  // La lista «Lo que nos has enviado» (la ventana puede seguir cerrándose con el mismo texto en la caja).
+  const enviados = page.getByLabel("Lo que nos has enviado")
+  await expect(enviados.getByText(`Me encanta la quincena (${tag})`)).toBeVisible()
   await expect(page.locator("#main").getByText("Recibido").first()).toBeVisible()
 
   // Reportar un error desde el atajo
@@ -66,11 +70,12 @@ test("opiniones: calificar, reportar un error y recibir respuesta del administra
   await expect(page.getByRole("dialog").getByText("Cuéntanos un poco más")).toBeVisible()
   await page.getByRole("dialog").getByRole("textbox").fill(`El botón de guardar no responde (${tag})`)
   await page.getByRole("dialog").getByRole("button", { name: "Enviar" }).click()
-  await expect(page.getByText(`El botón de guardar no responde (${tag})`)).toBeVisible()
+  await expect(enviados.getByText(`El botón de guardar no responde (${tag})`)).toBeVisible()
   await shot(page, "opiniones-lista", info.project.name)
 
   // Como administrador: ve el panel, la opinión y responde.
   await admin().from("platform_admins").upsert({ user_id: await qaId() })
+  await waitForAdmin(page)
   await page.goto("/admin/usuarios")
   await expect(page.getByRole("heading", { name: "Usuarios", level: 1 })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(QA.email).first()).toBeVisible({ timeout: 20_000 })
@@ -83,7 +88,7 @@ test("opiniones: calificar, reportar un error y recibir respuesta del administra
   await shot(page, "admin-opiniones", info.project.name)
 
   await page.goto("/opiniones")
-  await expect(page.getByText(`Gracias, ya lo estamos revisando (${tag})`)).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByLabel("Lo que nos has enviado").getByText(`Gracias, ya lo estamos revisando (${tag})`)).toBeVisible({ timeout: 30_000 })
   await expect(page.locator("#main").getByText("En revisión").first()).toBeVisible()
   expect(errs).toEqual([])
 })

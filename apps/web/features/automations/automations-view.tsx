@@ -28,7 +28,7 @@ import { canUseAi } from "@/lib/automations/limits"
 import { CATALOG, KINDS_BY_GROUP, summarize } from "@/lib/automations/catalog"
 import { parseGraph, triggerOf, validateGraph } from "@/lib/automations/schema"
 import { TEMPLATES, type Template } from "@/lib/automations/templates"
-import { ensureDefaultAutomations } from "./actions"
+import { ensureDefaultAutomations } from "./api"
 import { ESTADOS, fechaHora, useActiveLimit, useAutomations, useRefs, useRuns, type Automation } from "./hooks"
 import { FlowChips, RunsList, StepIcon, TemplateCard, useCreateAutomation } from "./shared"
 

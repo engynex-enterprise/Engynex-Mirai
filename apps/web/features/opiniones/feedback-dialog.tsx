@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { filesViaApi, uploadFile } from "@/lib/files/upload"
 import { usePathname, useRouter } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ImagePlus, Send } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,7 @@ import { FormField } from "@/components/mirai/field"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { useApp } from "@/components/app/app-context"
 import { useShell, type FeedbackDraft } from "@/components/app/shell-store"
-import { createClient } from "@/utils/supabase/client"
+import { loadMyFeedback, sendFeedback, uploadCaptura } from "./api"
 import { APP_VER } from "@/lib/content/ayuda"
 import { TIPOS, TIPO_FORM, type FeedbackTipo } from "@/lib/content/opiniones"
 import { StarRating } from "./stars"
@@ -29,11 +29,7 @@ export function useMyFeedback() {
   const { user } = useApp()
   return useQuery({
     queryKey: ["feedback", user.id],
-    queryFn: async () => {
-      const { data, error } = await createClient().from("feedback").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      if (error) throw new Error(error.message)
-      return data
-    },
+    queryFn: () => loadMyFeedback(user.id),
   })
 }
 
@@ -75,26 +71,20 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
   const send = async () => {
     if (falta || busy) return
     setBusy(true)
-    const sb = createClient()
     let captura: string | null = null
-    if (file && filesViaApi()) {
-      // v7 (interruptor `files`): la captura sube por la API a tu carpeta del bucket `feedback`.
-      try {
-        captura = (await uploadFile({ bucket: "feedback", body: file, name: file.name })).key
-      } catch (e) { setBusy(false); return toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
-    } else if (file) {
-      const path = `${user.id}/${crypto.randomUUID()}.${(file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "")}`
-      const up = await sb.storage.from("feedback").upload(path, file, { contentType: file.type, upsert: false })
-      if (up.error) { setBusy(false); return toast.error("No se pudo subir la imagen", { description: up.error.message }) }
-      captura = path
+    if (file) {
+      // La captura sube a tu carpeta del bucket `feedback` (por la API con el interruptor `files`).
+      try { captura = await uploadCaptura(user.id, file) }
+      catch (e) { setBusy(false); return toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
     }
-    const { error } = await sb.from("feedback").insert({
-      tipo, rating: tipo === "calificacion" ? rating : null, mensaje: mensaje.trim(), captura, household_id: household.id,
-      pagina: conPagina ? pathname : null,
-      contexto: feedbackContexto(),
-    })
+    try {
+      await sendFeedback({
+        tipo, rating: tipo === "calificacion" ? rating : null, mensaje: mensaje.trim(), captura, household_id: household.id,
+        pagina: conPagina ? pathname : null,
+        contexto: feedbackContexto(),
+      })
+    } catch (e) { setBusy(false); return toast.error("No se pudo enviar", { description: (e as Error).message }) }
     setBusy(false)
-    if (error) return toast.error("No se pudo enviar", { description: error.message })
     qc.invalidateQueries({ queryKey: ["feedback", user.id] })
     toast.success("¡Gracias! Recibimos tu opinión", { description: "Te avisamos aquí cuando la revisemos.", action: { label: "Ver", onClick: () => router.push("/opiniones") } })
     onDone()

@@ -6,6 +6,7 @@ import { can, canEditRow, type Perm } from "@/lib/household/roles"
 import { API_OFF, type ApiModule } from "@/lib/api/modules"
 import { setApiSession } from "@/lib/api/session"
 import { viaApi } from "@/lib/api/via"
+import { isMiraiAuth } from "@/lib/auth/provider"
 
 const Ctx = createContext<AppContext | null>(null)
 
@@ -23,8 +24,11 @@ export function useApp() {
 }
 
 export const useBookId = () => useApp().book.id
-/** ¿Este módulo va por la API para esta persona? (interruptores de lib/api/modules.ts; apagado = lo de siempre). */
-export const useViaApi = (module: ApiModule, detail?: string) => viaApi(use(Ctx)?.api ?? API_OFF, module, detail)
+/**
+ * ¿Este módulo va por la API para esta persona? (interruptores de lib/api/modules.ts; apagado = lo de siempre).
+ * v7: con AUTH_PROVIDER=mirai el servidor ya manda todos encendidos (lib/dal.ts); isMiraiAuth() cubre lo de fuera del shell.
+ */
+export const useViaApi = (module: ApiModule, detail?: string) => viaApi(use(Ctx)?.api ?? API_OFF, module, detail) || isMiraiAuth()
 /** ¿Puede registrar y editar todos los movimientos? (Dueño, Administra y Colabora). */
 export const useCanEdit = () => can(useApp().household.access, "editarTodo")
 /** Rol real en el hogar activo. */

@@ -65,6 +65,17 @@ export function elegir<T>(q: string, items: { item: T; textos: (string | null | 
   return top.length === 1 ? { item: top[0].x.item, empate: [] } : { empate: top.map((x) => x.x.item) }
 }
 
+/**
+ * El contacto de una persona por su nombre. Como `elegir`, pero el nombre de pila de la frase tiene que estar en el del
+ * contacto: "Juan" o "Juan Pérez" encuentran a "Juan Pérez"; "Juan Gómez" NO es "Laura Gómez" (antes bastaba el apellido).
+ */
+export function elegirPersona<T extends { nombre: string }>(q: string, contactos: T[]): T | undefined {
+  const [pila] = palabras(q)
+  if (!pila) return undefined
+  const conPila = contactos.filter((c) => palabras(c.nombre).some((w) => casa(pila, w)))
+  return elegir(q, conPila.map((c) => ({ item: c, textos: [c.nombre] }))).item
+}
+
 /** Nombre de una deuda para mostrar: quién + concepto ("Bancolombia · Crédito de vehículo"). */
 export const deudaLabel = (b: Pick<BookData, "contacts" | "entities">, L: Loan) =>
   [loanName(L as never, b.contacts, b.entities), L.concepto].filter((x) => x && x.trim()).join(" · ")
@@ -95,7 +106,7 @@ export function armarPrestamo(b: BookData, today: string, i: PrestamoIn): Armado
   if (!(valor > 0)) return { ok: false, msg: i.kind === "cobrar" ? "¿Cuánto prestaste?" : "¿Cuánto te prestaron o cuánto debes?" }
   const persona = (i.persona ?? "").trim().replace(/^(a |al |a la |de |del |con )/i, "").slice(0, 80)
   if (!persona) return { ok: false, msg: i.kind === "cobrar" ? "¿A quién le prestaste? Dime su nombre para anotarlo en **Me deben**." : "¿Quién te prestó (una persona, un banco o una tienda)?" }
-  const ct = findContact(b.contacts, { nombre: persona }) ?? (palabras(persona).length ? elegir(persona, b.contacts.map((c) => ({ item: c, textos: [c.nombre] }))).item : undefined)
+  const ct = findContact(b.contacts, { nombre: persona }) ?? elegirPersona(persona, b.contacts)
   const en = ct ? undefined : findEntity(b.entities, { nombre: persona })
   const esEntidad = !!en || (!ct && i.kind === "pagar" && PARECE_ENTIDAD.test(norm(persona)))
   const tipo: LoanTipo = esTipo(i.tipo, i.kind) ? i.tipo : i.kind === "cobrar" ? "presto" : esEntidad ? "banco" : "persona"

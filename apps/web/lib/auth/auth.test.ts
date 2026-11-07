@@ -25,6 +25,13 @@ describe("proxy con AUTH_PROVIDER=mirai", () => {
     expect(updateMiraiSession(req("/gastos", "__Secure-mirai.session_token=t.f")).headers.get("location")).toBeNull()
     expect(updateMiraiSession(req("/login", "mirai.session_token=t.f")).headers.get("location")).toBe("https://mirai.engynex.com/inicio")
   })
+  it("sesión vencida (/login?sesion=vencida, lo manda getAppContext): borra la cookie y NO rebota a /inicio", () => {
+    const r = updateMiraiSession(req("/login?sesion=vencida", "mirai.session_token=t.f; mirai.session_data=x"))
+    expect(r.headers.get("location")).toBeNull()
+    expect(r.cookies.get("mirai.session_token")?.value).toBe("")
+    expect(r.cookies.get("mirai.session_data")?.value).toBe("")
+    expect(r.cookies.get(AUTH_FLAG_COOKIE)?.value).toBe("mirai")
+  })
   it("el reto de dos factores, la clave nueva, /api/auth y /v1 no piden sesión", () => {
     for (const p of ["/verificacion", "/actualizar-clave", "/api/auth/sign-in/email", "/v1/me", "/auth/callback", "/registro"]) expect(updateMiraiSession(req(p)).headers.get("location"), p).toBeNull()
     expect(isPublicPath("/verificacion")).toBe(false) // con Supabase sí pide sesión (aal1), como siempre

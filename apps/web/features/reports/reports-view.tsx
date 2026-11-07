@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ChartColumn, Download, FileSpreadsheet, Lightbulb, ThumbsUp, TriangleAlert, WandSparkles } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -17,13 +18,12 @@ import { PageHeader } from "@/components/mirai/page-header"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useCanEdit } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
 import { conv, indicadores, loanEngine, loanName, reportData } from "@/lib/domain"
 import { fmtMonth, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
 import { useMembers, usePaymentMethods } from "@/features/catalogs/hooks"
-import { generateMonthSummary, type MonthSummary } from "./api"
+import { fetchMonthSummary, generateMonthSummary } from "./api"
 import { AdSlot } from "@/features/ads/ad-slot"
 
 function months(today: string) {
@@ -42,7 +42,7 @@ function SummaryCard({ k }: { k: string }) {
   const [busy, setBusy] = useState(false)
   const { data: r } = useQuery({
     queryKey: ["b", book.id, "monthly_summaries", k],
-    queryFn: async () => ((await createClient().from("monthly_summaries").select("contenido").eq("book_id", book.id).eq("mes", k).is("deleted_at", null).maybeSingle()).data?.contenido ?? null) as MonthSummary | null,
+    queryFn: () => fetchMonthSummary(book.id, k),
   })
   const cols: [string, typeof ChartColumn, string[] | undefined][] = r ? [["En qué gastaste más", ChartColumn, r.gastaste_mas], ["Lo que mejoró", ThumbsUp, r.mejoro], ["Ojo con esto", TriangleAlert, r.alertas]] : []
   return (

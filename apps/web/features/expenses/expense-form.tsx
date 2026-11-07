@@ -25,6 +25,7 @@ import { Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
 import { useBookId } from "@/components/app/app-context"
 import { createClient } from "@/utils/supabase/client"
+import { apiFund, apiInsertRow, apiUpdateRow, fundViaApi, rowsViaApi } from "@/lib/api/book-rows"
 import { linkExpenseFixed, unlinkExpenseFixed, payWithEmergencyFund } from "./commands"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -121,7 +122,9 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
 
   useEffect(() => {
     if (!open || expense) return
-    createClient().from("emergency_funds").select("activo,saldo").eq("book_id", bookId).maybeSingle().then(({ data }) => setFondo(data ? { activo: data.activo, saldo: Number(data.saldo) } : null))
+    const set = (data: { activo: boolean; saldo: number | string } | null) => setFondo(data ? { activo: data.activo, saldo: Number(data.saldo) } : null)
+    if (fundViaApi()) apiFund<{ activo: boolean; saldo: number }>(bookId).then(set, () => set(null))
+    else createClient().from("emergency_funds").select("activo,saldo").eq("book_id", bookId).maybeSingle().then(({ data }) => set(data))
   }, [open, expense, bookId])
 
   // Categoría automática mientras escribe: regla → historial → palabras clave (si no la eligió a mano)
@@ -206,7 +209,6 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
   const autoH = w.hormigaMode === "auto" && w.valor > 0 && localHormiga({ descripcion: w.descripcion, valor: w.valor, category_id: w.category_id }, cats, umbral)
 
   async function onSubmit(v: Values) {
-    const sb = createClient()
     const row = {
       ...(expense ? { id: expense.id } : {}),
       book_id: bookId, descripcion: v.descripcion.trim(), valor: v.valor, category_id: v.category_id, fecha: v.fecha || todayISO(),
@@ -218,8 +220,9 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       provider_id: v.provider_id,
       deducible: v.deducible || null,
     }
-    const { data, error } = await sb.from("expenses").upsert(row).select().single()
-    if (error) return toast.error("No se pudo guardar el gasto", { description: error.message })
+    const { data, error } = !rowsViaApi("expenses") ? await createClient().from("expenses").upsert(row).select().single()
+      : expense ? await apiUpdateRow<Row<"expenses">>(bookId, "expenses", expense.id, row) : await apiInsertRow<Row<"expenses">>(bookId, "expenses", row)
+    if (error || !data) return toast.error("No se pudo guardar el gasto", { description: error?.message })
 
     if (isImprevisto && v.usarFondo && fondo?.activo && fondo.saldo > 0 && !expense) {
       // Atómico en la BD: descuenta del fondo y registra el movimiento (y lo devuelve si se borra el gasto)

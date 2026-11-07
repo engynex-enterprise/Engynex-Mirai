@@ -4,12 +4,17 @@ import { login, shot, watchErrors } from "./helpers"
 // Fila de la tabla de proveedores: <tr> en escritorio y tarjeta <li> en el celular (DataTable dibuja una sola versión).
 const fila = (page: Page, nombre: string) => page.getByTestId("data-table").locator("tr, li").filter({ hasText: nombre })
 
-// Cierra el detalle: el primer Escape puede cerrar solo un tooltip abierto.
+// Cierra el detalle. El primer Escape puede cerrar solo un tooltip abierto; en el celular el Drawer (sin botón Cerrar)
+// sigue en el DOM mientras termina su animación: se espera a que se vaya antes de insistir.
 async function cerrar(page: Page) {
   await page.keyboard.press("Escape")
   const dlg = page.getByRole("dialog")
-  if (await dlg.count()) await dlg.getByRole("button", { name: "Cerrar" }).last().click()
-  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(dlg).toHaveCount(0, { timeout: 3_000 }).catch(async () => {
+    const x = dlg.getByRole("button", { name: "Cerrar" })
+    if (await x.count()) await x.last().click()
+    else await page.keyboard.press("Escape")
+  })
+  await expect(dlg).toHaveCount(0)
 }
 
 async function accion(page: Page, nombre: string, item: string) {

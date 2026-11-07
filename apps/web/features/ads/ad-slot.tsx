@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import Script from "next/script"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Crown, ExternalLink, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
-import { useApp } from "@/components/app/app-context"
+import { useApp, useBookId, useViaApi } from "@/components/app/app-context"
+import { readWithFallback } from "@/lib/api/book-tables"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { createClient } from "@/utils/supabase/client"
 import { adSeed, eligibleAds, goesToAdsense, pickAd, type AdSlotId, type CampaignLike } from "@/lib/ads"
@@ -32,11 +34,27 @@ export function useAdsConsent() { return useSyncExternalStore(sub, () => ls.get(
 export function setAdsPreview(on: boolean) { ls.set(PREVIEW_KEY, on ? "1" : "0"); notify() }
 export function useAdsPreview() { return useSyncExternalStore(sub, () => ls.get(PREVIEW_KEY) === "1", () => false) }
 
+// V7-H3 (interruptor `ads`): el anuncio de cada espacio lo elige la API (GET /v1/books/:b/ads/eligible, misma
+// segmentación, frecuencia y sorteo de @mirai/domain/ads), las vistas/clics/cierres van a POST /v1/ads/events y AdSense
+// sale de GET /v1/public/adsense. Apagado: las consultas de siempre a Supabase (modo heredado de este archivo).
+type AdsenseRow = { modo: string; planes: string[] | null; config: unknown } | null
+
+const legacyAdsense = async (): Promise<AdsenseRow> => (await createClient().from("platform_integrations_public").select("modo,planes,config").eq("kind", "adsense").maybeSingle()).data
+async function loadAdsense(via: boolean): Promise<AdsenseRow> {
+  if (!via) return legacyAdsense()
+  return readWithFallback(async () => {
+    const { browserApi, unwrap } = await import("@/lib/api/client")
+    const a = unwrap(await browserApi().ads.adsense())
+    return { modo: a.activo ? "opcional" : "apagada", planes: a.planes, config: { client: a.client ?? undefined, slot: a.slot ?? undefined } }
+  }, legacyAdsense)
+}
+
 /** AdSense de la consola (Integraciones globales › Google AdSense) o, como respaldo, de las variables de entorno. */
 export function useAdsense(planId?: string) {
+  const via = useViaApi("ads")
   const { data } = useQuery({
-    queryKey: ["adsense-config"],
-    queryFn: async () => (await createClient().from("platform_integrations_public").select("modo,planes,config").eq("kind", "adsense").maybeSingle()).data,
+    queryKey: ["adsense-config", via],
+    queryFn: () => loadAdsense(via),
     staleTime: 10 * 60_000,
   })
   const cfg = (data?.config ?? {}) as { client?: string; slot?: string }
@@ -47,16 +65,36 @@ export function useAdsense(planId?: string) {
 
 export type Ad = { id: string; titulo: string; texto: string; imagen: string | null; url: string; cta: string; anunciante: string; ubicaciones: string[]; activo: boolean; desde: string | null; hasta: string | null; prioridad: number; campaign_id: string | null; formato: string; media: { video?: string; poster?: string; color?: string; items?: { imagen?: string; titulo: string; url?: string }[] } }
 type Settings = { anuncios_adsense_pct: number; anuncios_accion_cada: number; anuncios_modal_horas: number; anuncios_ticker: boolean }
+type AdsData = { ads?: Ad[]; campaigns?: CampaignLike[]; vistas?: Record<string, number>; settings?: Settings | null; ready: boolean }
 
-/** Todo lo que necesita el motor de anuncios: anuncios, campañas activas, mis vistas de hoy y los ajustes. */
-function useAdsData() {
+/** Modo heredado: todo lo que necesita el motor de anuncios (anuncios, campañas activas, mis vistas de hoy y los ajustes). */
+function useAdsData(): AdsData {
   const { user } = useApp()
+  const enabled = !useViaApi("ads")
   const hoy = hoyCo()
-  const ads = useQuery({ queryKey: ["ads"], queryFn: async () => ((await createClient().from("ads").select("id,titulo,texto,imagen,url,cta,anunciante,ubicaciones,activo,desde,hasta,prioridad,campaign_id,formato,media")).data ?? []) as unknown as Ad[], staleTime: 5 * 60_000 })
-  const camps = useQuery({ queryKey: ["ad-campaigns"], queryFn: async () => ((await createClient().from("ad_campaigns").select("id,estado,desde,hasta,planes,dispositivos,frecuencia_max,prioridad").eq("estado", "activa")).data ?? []) as CampaignLike[], staleTime: 5 * 60_000 })
-  const mine = useQuery({ queryKey: ["ad-mine", user.id, hoy], queryFn: async () => Object.fromEntries(((await createClient().from("ad_user_daily").select("ad_id,vistas").eq("user_id", user.id).eq("dia", hoy)).data ?? []).map((r) => [r.ad_id, r.vistas])) as Record<string, number>, staleTime: 60_000 })
-  const cfg = useQuery({ queryKey: ["platform-settings-ads"], queryFn: async () => (await createClient().from("platform_settings").select("anuncios_adsense_pct,anuncios_accion_cada,anuncios_modal_horas,anuncios_ticker").maybeSingle()).data as Settings | null, staleTime: 10 * 60_000 })
+  const ads = useQuery({ queryKey: ["ads"], enabled, queryFn: async () => ((await createClient().from("ads").select("id,titulo,texto,imagen,url,cta,anunciante,ubicaciones,activo,desde,hasta,prioridad,campaign_id,formato,media")).data ?? []) as unknown as Ad[], staleTime: 5 * 60_000 })
+  const camps = useQuery({ queryKey: ["ad-campaigns"], enabled, queryFn: async () => ((await createClient().from("ad_campaigns").select("id,estado,desde,hasta,planes,dispositivos,frecuencia_max,prioridad").eq("estado", "activa")).data ?? []) as CampaignLike[], staleTime: 5 * 60_000 })
+  const mine = useQuery({ queryKey: ["ad-mine", user.id, hoy], enabled, queryFn: async () => Object.fromEntries(((await createClient().from("ad_user_daily").select("ad_id,vistas").eq("user_id", user.id).eq("dia", hoy)).data ?? []).map((r) => [r.ad_id, r.vistas])) as Record<string, number>, staleTime: 60_000 })
+  const cfg = useQuery({ queryKey: ["platform-settings-ads"], enabled, queryFn: async () => (await createClient().from("platform_settings").select("anuncios_adsense_pct,anuncios_accion_cada,anuncios_modal_horas,anuncios_ticker").maybeSingle()).data as Settings | null, staleTime: 10 * 60_000 })
   return { ads: ads.data, campaigns: camps.data, vistas: mine.data, settings: cfg.data, ready: !!(ads.data && camps.data && mine.data) }
+}
+
+/** Por la API: el anuncio elegido para el espacio (y, en la cinta, la lista), con los ajustes de anuncios. */
+function useEligible(slot: AdSlotId, salt = "") {
+  // Solo se pide si se muestran anuncios (plan con anuncios o vista previa de un administrador).
+  const api = useViaApi("ads")
+  const show = useShowAds()
+  const via = api && show
+  const bookId = useBookId()
+  const mobile = useIsMobile()
+  const [hoy] = useState(hoyCo)
+  return useQuery({
+    queryKey: ["ads-eligible", bookId, slot, salt, mobile, hoy], enabled: via, staleTime: 60_000,
+    queryFn: async () => {
+      const { browserApi, unwrap } = await import("@/lib/api/client")
+      return unwrap(await browserApi().ads.eligible({ params: { bookId }, query: { slot, device: mobile ? "movil" : "escritorio", hoy, ...(salt ? { salt } : {}) } }))
+    },
+  })
 }
 
 /** ¿Se muestran anuncios? Solo en planes con anuncios (o en vista previa de un administrador). */
@@ -67,23 +105,32 @@ function useShowAds() {
 }
 
 /** Elegir el anuncio de un espacio para esta persona (segmentación, frecuencia y prioridad). */
-function usePick(slot: AdSlotId, salt = "") {
+function usePick(slot: AdSlotId, salt = ""): { ad: Ad | null; data: AdsData } {
   const { user, plan } = useApp()
+  const via = useViaApi("ads")
   const mobile = useIsMobile()
   const d = useAdsData()
+  const e = useEligible(slot, salt)
   const [hoy] = useState(hoyCo)
   const ad = useMemo(() => {
-    if (!d.ready) return null
+    if (via || !d.ready) return null
     const ok = eligibleAds(d.ads!, d.campaigns!, { slot, hoy, plan: plan.id, device: mobile ? "movil" : "escritorio", vistasHoy: d.vistas! })
     return pickAd(ok, slot, hoy, adSeed(user.id + slot + salt, hoy))
-  }, [d.ready, d.ads, d.campaigns, d.vistas, slot, hoy, plan.id, mobile, user.id, salt])
+  }, [via, d.ready, d.ads, d.campaigns, d.vistas, slot, hoy, plan.id, mobile, user.id, salt])
+  if (via) return { ad: (e.data?.ad as Ad | null | undefined) ?? null, data: { settings: e.data?.settings ?? null, ready: !!e.data } }
   return { ad, data: d }
 }
 
 export function useTrack() {
   const qc = useQueryClient()
   const { user } = useApp()
+  const via = useViaApi("ads")
   return (ad: string, slot: AdSlotId, kind: "vista" | "clic" | "cierre") => {
+    if (via) {
+      // Como la RPC: si falla, no interrumpe nada (es solo una métrica).
+      void import("@/lib/api/client").then(({ browserApi }) => browserApi().ads.track({ body: { ad, slot, kind } })).catch(() => {})
+      return
+    }
     // Las consultas de Supabase son perezosas: sin .then() no se envían.
     createClient().rpc("ad_track", { p_ad: ad, p_slot: slot, p_kind: kind }).then(() => {}, () => {})
     if (kind === "vista") qc.setQueryData<Record<string, number>>(["ad-mine", user.id, hoyCo()], (o) => ({ ...(o ?? {}), [ad]: (o?.[ad] ?? 0) + 1 }))
@@ -233,11 +280,15 @@ export function AdTicker() {
   const { user, plan } = useApp()
   const show = useShowAds()
   const mobile = useIsMobile()
-  const d = useAdsData()
+  const via = useViaApi("ads")
+  const d0 = useAdsData()
+  const e = useEligible("ticker")
+  const d = via ? { ...d0, settings: e.data?.settings ?? null } : d0
   const track = useTrack()
   const [closed, setClosed] = useState(() => ss.get("mirai-ticker-off") === "1")
   const [hoy] = useState(hoyCo)
-  const list = useMemo(() => (d.ready ? eligibleAds(d.ads!, d.campaigns!, { slot: "ticker", hoy, plan: plan.id, device: mobile ? "movil" : "escritorio", vistasHoy: d.vistas! }).sort((a, b) => b.prioridad - a.prioridad).slice(0, 5) : []), [d.ready, d.ads, d.campaigns, d.vistas, hoy, plan.id, mobile])
+  const apiList = e.data?.lista as Ad[] | undefined
+  const list = useMemo(() => (via ? (apiList ?? []) : d0.ready ? eligibleAds(d0.ads!, d0.campaigns!, { slot: "ticker", hoy, plan: plan.id, device: mobile ? "movil" : "escritorio", vistasHoy: d0.vistas! }).sort((a, b) => b.prioridad - a.prioridad).slice(0, 5) : []), [via, apiList, d0.ready, d0.ads, d0.campaigns, d0.vistas, hoy, plan.id, mobile])
   const sent = useRef(false)
   useEffect(() => { if (!show || closed || !list.length || sent.current) return; sent.current = true; list.forEach((a) => track(a.id, "ticker", "vista")) }, [show, closed, list]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!show || closed || !list.length || d.settings?.anuncios_ticker === false) return null

@@ -32,6 +32,7 @@ import { switchBook } from "./actions"
 import { ModeSwitch } from "./mode-switch"
 import { togglePrivacy } from "./privacy"
 import { useGami } from "@/features/gami/use-gami"
+import { useHydrated } from "@/hooks/use-hydrated"
 import { useInstall } from "@/features/pwa/install"
 
 /** Abre el Centro de ayuda desde el menú: en celular primero cierra el menú (dos paneles a la vez bloquean los clics). */
@@ -41,7 +42,18 @@ function openHelpFromMenu(isMobile: boolean, setOpenMobile: (v: boolean) => void
 
 export const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "?"
 
-export function AppSidebar({ live, online, badges, hidden = [], unread }: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; hidden?: string[]; unread: number }) {
+const NO_ONLINE: PresenceUser[] = []
+const NO_BADGES: Record<string, number | string> = {}
+
+export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; hidden?: string[]; unread: number }) {
+  // Hasta terminar de hidratar, lo mismo que pintó el servidor (sin datos): evita el error #418 cuando la API o el tiempo
+  // real responden antes de que React hidrate el menú (V7-H4, AUTH_PROVIDER=mirai).
+  const hydrated = useHydrated()
+  const { hidden = [] } = props
+  const live: LiveStatus = hydrated ? props.live : "conectando"
+  const online = hydrated ? props.online : NO_ONLINE
+  const badges = hydrated ? props.badges : NO_BADGES
+  const unread = hydrated ? props.unread : 0
   const path = usePathname()
   const current = navIdOf(path.split("/")[1] || "inicio")
   const { plan } = useApp()
@@ -290,7 +302,8 @@ function UserMenu() {
   const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
   const g = useGami()
-  const lvl = g?.st.on ? g.L : null
+  const hydrated = useHydrated()
+  const lvl = hydrated && g?.st.on ? g.L : null
   const inst = useInstall()
   return (
     <SidebarMenu>

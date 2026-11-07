@@ -11,8 +11,14 @@ import { IdParams, Periodo, Positive, WRITE_ERRORS } from "./write-common"
 
 export const meta = { id: "fixed", owner: "F2-D" } as const
 
+/**
+ * Periodo del pago: el de fijoPeriods o `prev-AAAA-MM` (y `-Q1`/`-Q2`), el pago de antes del alta que registra el
+ * formulario del gasto fijo cuando dices que ya lo pagaste este mes (features/fixed/fixed-form.tsx).
+ */
+export const PayPeriodo = z.union([Periodo, z.string().regex(/^prev-\d{4}-(0[1-9]|1[0-2])(-Q[12])?$/)], { error: "Periodo inválido (usa AAAA-MM, AAAA-MM-Q1, AAAA o U)" })
+
 export const PayFixed = z.object({
-  periodo: Periodo,
+  periodo: PayPeriodo,
   fecha: IsoDate,
   /** Lo que pagaste; sin valor, el del periodo (fijoValor: reparto por quincena incluido). */
   valor: Positive.optional(),

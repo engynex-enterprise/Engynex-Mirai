@@ -31,6 +31,11 @@ export class GoogleController {
     return reply.header("cache-control", "no-store").redirect(to, 302)
   }
 
+  @TsRestHandler(c.connection)
+  connection() {
+    return tsRestHandler(c.connection, async () => ({ status: 200, body: await this.svc.connection() }))
+  }
+
   @TsRestHandler(c.disconnect)
   disconnect() {
     return tsRestHandler(c.disconnect, async () => ({ status: 200, body: { ok: true as const, data: await this.svc.disconnect() } }))

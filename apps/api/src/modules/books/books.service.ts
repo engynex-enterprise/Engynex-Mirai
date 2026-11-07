@@ -2,7 +2,7 @@
 // `book_settings` vuelve a revisar lo que aquí se revisa con el rol (crear: "editor" del hogar; editar: "editor";
 // borrar: "owner"). No conoce Supabase: usa RowStore.
 import { Injectable } from "@nestjs/common"
-import type { Book, BookPatch, BookSettings, BookSettingsPatch } from "@mirai/contracts/modules/books"
+import type { AuditRow, Book, BookPatch, BookSettings, BookSettingsPatch, SetupCounts } from "@mirai/contracts/modules/books"
 import { atLeast } from "@mirai/domain/household/roles"
 import { limitOf, type PlanInfo } from "@mirai/domain/plans"
 import { AppContextService } from "../../core/context/app-context.service"
@@ -107,6 +107,40 @@ export class BooksService {
     if (!s) throw DomainError.notFound("No encontramos los ajustes de este libro.")
     this.events.changed(bookId, ["book_settings"], bookId)
     return s
+  }
+
+  // ── V7-H2: lecturas de Ajustes › Datos, Puesta en marcha, Perfil y Reportes (con la sesión: la RLS decide) ─────
+
+  /** Historial de cambios (audit_log) con el nombre de quien lo hizo, como AuditLog de la web. */
+  async audit(limit = 25): Promise<AuditRow[]> {
+    const rows = await this.rows.select<Omit<AuditRow, "quien"> & { id: string | number }>(this.scope, "audit_log", {
+      columns: ["id", "tabla", "accion", "actor", "resumen", "created_at"], eq: { book_id: this.ctx.book.book.id }, order: [{ column: "created_at", ascending: false }], limit,
+    })
+    const ids = [...new Set(rows.map((r) => r.actor).filter((x): x is string => !!x))]
+    const ps = ids.length ? await this.rows.select<{ id: string; nombre: string | null; email: string | null }>(this.scope, "profiles", { columns: ["id", "nombre", "email"], in: { id: ids } }) : []
+    const pm = new Map(ps.map((p) => [p.id, p.nombre || p.email]))
+    return rows.map((r) => ({ ...r, id: String(r.id), resumen: r.resumen ?? null, quien: (r.actor && pm.get(r.actor)) || "Sistema" }))
+  }
+
+  /** Cuántos registros vivos hay de cada paso de la puesta en marcha (las mismas consultas de useSetupProgress). */
+  async setupCounts(): Promise<SetupCounts> {
+    const book_id = this.ctx.book.book.id
+    const n = (t: Parameters<RowStore["count"]>[1], w: Parameters<RowStore["count"]>[2] = {}) => this.rows.count(this.scope, t, { ...w, eq: { book_id, deleted_at: null, ...w?.eq } })
+    const [ingresos, fijos, gastos, metas, cuentas, deudas, prestamos, topes, contactos] = await Promise.all([
+      n("incomes"), n("fixed_expenses"), n("expenses"), n("goals"),
+      // cod like '11%' (cuentas y efectivo) sin LIKE: todo código que empieza por "11" queda entre "11" y "12".
+      n("assets", { gte: { cod: "11" }, lt: { cod: "12" } }),
+      n("loans", { eq: { kind: "pagar" } }), n("loans", { eq: { kind: "cobrar" } }),
+      n("categories", { gt: { tope: 0 } }),
+      n("contacts"),
+    ])
+    return { ingresos, fijos, gastos, metas, cuentas, deudas, prestamos, topes, contactos }
+  }
+
+  /** Resumen del mes ya guardado (monthly_summaries), o null. */
+  async monthSummary(mes: string): Promise<{ contenido: Record<string, unknown> | null }> {
+    const r = await this.rows.first<{ contenido: Record<string, unknown> | null }>(this.scope, "monthly_summaries", { columns: ["contenido"], eq: { book_id: this.ctx.book.book.id, mes, deleted_at: null } })
+    return { contenido: r?.contenido ?? null }
   }
 }
 

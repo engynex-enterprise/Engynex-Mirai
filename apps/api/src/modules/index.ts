@@ -81,5 +81,8 @@ export const API_MODULES: readonly ApiModuleEntry[] = [
  */
 export const apiModules = (): Type[] => [...API_MODULES.filter((m) => m.id !== "realtime").map((m) => m.module), RealtimePublisherModule]
 
-/** MODE=realtime: solo salud y el gateway (F2-G). */
-export const realtimeModules = (): Type[] => [HealthModule, RealtimeModule]
+/**
+ * MODE=realtime: salud y el gateway (F2-G). v7 (V7-H4): + AuthModule, para validar en el handshake la cookie de
+ * Better Auth (SessionResolver); con AUTH_PROVIDER=supabase no abre conexiones y en realtime no monta /api/auth.
+ */
+export const realtimeModules = (): Type[] => [HealthModule, AuthModule, RealtimeModule]

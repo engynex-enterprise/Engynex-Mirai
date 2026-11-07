@@ -1,10 +1,17 @@
 // Gmail y Google Calendar por la API (v6 F2-H-5, interruptor `google`): POST /v1/books/:b/mail/scan,
 // DELETE /v1/google, POST …/calendar/sync, GET …/calendar/status y GET …/google/connect-url.
 // Misma firma y misma forma que las Server Actions de ./actions.ts; con el interruptor apagado son exactamente esas.
+// V7-H3: la conexión de Google (GET /v1/google/connection, interruptor `google`) y los gastos que se registran desde el
+// correo (CRUD del libro, interruptor `book-tables:expenses`). Apagados: google_connections_public y expenses directo
+// con la sesión de Supabase (modo heredado: las únicas ramas con `.from` de esta carpeta, además de ./actions.ts).
 import type { MailScan } from "@mirai/ai/server/mail"
+import type { Insert } from "@mirai/db/tables"
+import { readWithFallback } from "@/lib/api/book-tables"
+import { apiInsertRow, rowsViaApi } from "@/lib/api/book-rows"
 import { failure } from "@/lib/api/errors"
 import { activeBookId, apiOn } from "@/lib/api/session"
 import { viaApiOr } from "@/lib/api/via"
+import { createClient } from "@/utils/supabase/client"
 import * as actions from "./actions"
 
 export type { MailRow } from "./actions"
@@ -55,4 +62,31 @@ export async function connectGoogleViaApi(s: "gmail" | "calendar", back: string)
     const { api: a, unwrap, params } = await api()
     location.href = unwrap(await a.google.connectUrl({ params, query: { s, back } })).url
   } catch (e) { toast.error("No pudimos conectar con Google", { description: failure(e).msg }) }
+}
+
+// ── V7-H3 ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export type GoogleConn = { email: string | null; scopes: string[] | null } | null
+
+/** Tu conexión de Google (correo y permisos; nunca los tokens). */
+export async function googleConnection(): Promise<GoogleConn> {
+  const legacy = async (): Promise<GoogleConn> => (await createClient().from("google_connections_public").select("email,scopes").maybeSingle()).data
+  if (!on()) return legacy()
+  return readWithFallback(async () => {
+    const { api: a, unwrap } = await api()
+    const c = unwrap(await a.google.connection())
+    return c.scopes.length || c.email ? c : null
+  }, legacy)
+}
+
+type NewExpense = Omit<Insert<"expenses">, "book_id">
+
+/** Gastos que la persona confirmó desde el correo (uno por movimiento). `error` con el mensaje para la persona. */
+export async function insertExpenses(bookId: string, rows: NewExpense[]): Promise<{ error: { message: string } | null }> {
+  if (rowsViaApi("expenses")) {
+    const results = await Promise.all(rows.map((r) => apiInsertRow(bookId, "expenses", r as Record<string, unknown>)))
+    return { error: results.find((r) => r.error)?.error ?? null }
+  }
+  const { error } = await createClient().from("expenses").insert(rows.map((r) => ({ ...r, book_id: bookId })))
+  return { error }
 }

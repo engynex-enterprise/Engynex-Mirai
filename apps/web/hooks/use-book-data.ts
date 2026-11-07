@@ -1,6 +1,7 @@
 "use client"
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { toast } from "@/components/mirai/toast"
 import { createClient } from "@/utils/supabase/client"
 import { useBookId, useViaApi } from "@/components/app/app-context"
@@ -105,6 +106,7 @@ export function useList<T extends BookTable>(table: T, opts: ListOpts<T> = {}) {
   })
 }
 
+/** Modo heredado (interruptor apagado, o tablas fuera del CRUD genérico): Supabase directo. */
 async function listFromDb<T extends BookTable>(table: T, bookId: string, opts: ListOpts<T>, signal: AbortSignal) {
   let q = createClient().from(table).select(opts.select ?? "*").eq("book_id" as never, bookId as never).is("deleted_at" as never, null).abortSignal(signal)
   for (const [k, v] of Object.entries(opts.eq ?? {})) q = v === null ? q.is(k as never, null) : q.eq(k as never, v as never)
@@ -147,6 +149,7 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
           if (!isNew) await waitSaved(id)
           return (await apiUpsert(bookId, table, id, values as Record<string, unknown>)) as unknown as Row<T>
         }
+        // Modo heredado (interruptor apagado): Supabase directo.
         const sb = createClient()
         if (!isNew) {
           await waitSaved(id)
@@ -198,7 +201,6 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
 export function useSoftDelete<T extends BookTable>(table: T, label = "Registro eliminado", opts: { also?: BookTable[] } = {}) {
   const bookId = useBookId()
   const qc = useQueryClient()
-  const sb = createClient()
   const via = useViaApi("book-tables", table) && writableViaApi(table)
   const setDeleted = async (id: string, value: string | null) => {
     await waitSaved(id) // si el registro se acaba de crear, primero termina de guardarse
@@ -208,7 +210,8 @@ export function useSoftDelete<T extends BookTable>(table: T, label = "Registro e
       try { await apiSetDeleted(bookId, table, id, value) } finally { markLocalWrite(table, id) }
       return
     }
-    const { error } = await sb.from(table).update({ deleted_at: value } as never).eq("id" as never, id as never)
+    // Modo heredado (interruptor apagado): Supabase directo.
+    const { error } = await createClient().from(table).update({ deleted_at: value } as never).eq("id" as never, id as never)
     markLocalWrite(table, id)
     if (error) throw new Error(error.message)
   }

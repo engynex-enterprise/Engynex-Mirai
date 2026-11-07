@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { supabaseServer } from "@/utils/supabase/server"
+import { serverAuthProvider } from "@/lib/auth/provider"
 import { Landing } from "@/features/landing/landing"
 import { SITE_URL } from "@/features/landing/content"
 
@@ -28,6 +29,14 @@ export const metadata: Metadata = {
 
 /** Con sesión va a la app; sin sesión, la página pública. */
 async function Gate() {
+  // v7 (V7-H4): con AUTH_PROVIDER=mirai basta con la cookie de Better Auth (getAppContext la valida en /inicio).
+  if (serverAuthProvider() === "mirai") {
+    const { connection } = await import("next/server")
+    await connection()
+    if (await (await import("@/lib/auth/server")).miraiSessionToken()) redirect("/inicio")
+    return <Landing />
+  }
+  // Modo heredado: sesión de Supabase.
   const { data } = await (await supabaseServer()).auth.getClaims()
   if (data?.claims) redirect("/inicio")
   return <Landing />

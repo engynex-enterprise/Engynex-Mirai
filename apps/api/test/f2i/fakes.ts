@@ -102,6 +102,13 @@ export class FakeHouseholdsRepo extends HouseholdsRepo {
     return f.id
   }
   async familyMember(_s: UserScope, h: string, id: string) { return this.family_.find((f) => f.id === id && f.household_id === h) ?? null }
+  async patchFamily(scope: UserScope, h: string, id: string, patch: Record<string, unknown>) {
+    this.log("patchFamily", scope, h, id, patch)
+    const f = this.family_.find((x) => x.id === id && x.household_id === h && !x.deleted_at)
+    if (!f) return null
+    Object.assign(f, patch)
+    return f.id
+  }
   async setFamilyDeleted(scope: UserScope, id: string, deleted: boolean) {
     this.log("setFamilyDeleted", scope, id, deleted)
     const f = this.family_.find((x) => x.id === id)

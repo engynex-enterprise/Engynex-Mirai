@@ -1,9 +1,10 @@
 "use client"
 
 import { useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { fetchProfile } from "@/features/profile/api"
+import { fetchRentaCalendar, fetchRentaRegimenes } from "@/lib/ref-data"
 import { fechasDian, type CalendarEventIn, type RentaRegimen } from "@/lib/domain"
 
 const NONE: CalendarEventIn[] = []
@@ -17,15 +18,12 @@ export function useFechasDian(eventos: Pick<CalendarEventIn, "template_key">[] |
   const { data } = useQuery({
     queryKey: ["ref", "dian-auto", user.id],
     staleTime: 30 * 60_000,
+    // V7-H2: perfil por /v1/me/profile (`me`) y calendario DIAN por /v1/refs/* (`refs`); apagado, Supabase.
     queryFn: async () => {
-      const sb = createClient()
-      const { data: p } = await sb.from("profiles").select("digitos,ciudad").eq("id", user.id).maybeSingle()
+      const p = await fetchProfile(user.id).catch(() => null)
       if (!/^\d{2}$/.test(p?.digitos ?? "")) return null
-      const [{ data: filas }, { data: regs }] = await Promise.all([
-        sb.from("ref_renta_calendar").select("year,digitos,regimen,fecha").eq("digitos", p!.digitos),
-        sb.from("ref_renta_regimenes").select("key,nombre,seccionales"),
-      ])
-      return { digitos: p!.digitos, ciudad: p?.ciudad ?? null, filas: (filas ?? []).map((f) => ({ ...f, year: +f.year, fecha: String(f.fecha).slice(0, 10) })), regimenes: (regs ?? []) as RentaRegimen[] }
+      const [filas, regs] = await Promise.all([fetchRentaCalendar(p!.digitos), fetchRentaRegimenes()])
+      return { digitos: p!.digitos, ciudad: p?.ciudad ?? null, filas, regimenes: regs.map(({ key, nombre, seccionales }) => ({ key, nombre, seccionales })) as RentaRegimen[] }
     },
   })
   return useMemo(() => (data && eventos ? fechasDian({ ...data, eventos }) : NONE), [data, eventos])

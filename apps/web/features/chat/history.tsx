@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Archive, ArchiveRestore, ArrowLeft, CheckSquare, Copy, Download, FileText, Info, Link2, ListChecks, MessageSquarePlus, MoreHorizontal, Pencil, Pin, PinOff, Search, Share2, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"

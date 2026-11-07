@@ -1,13 +1,13 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { IconButton } from "@/components/mirai/tip"
 import { Card } from "@/components/ui/card"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
-import { createClient } from "@/utils/supabase/client"
 import { shouldPromptRating } from "@/lib/content/opiniones"
 import { usePrefs } from "@/features/settings/prefs"
+import { profileSince } from "./api"
 import { useMyFeedback } from "./feedback-dialog"
 import { StarRating } from "./stars"
 
@@ -19,7 +19,7 @@ export function RatingPrompt() {
   const { data: mine } = useMyFeedback()
   const { data: since } = useQuery({
     queryKey: ["profile-since", user.id],
-    queryFn: async () => (await createClient().from("profiles").select("created_at").eq("id", user.id).single()).data?.created_at ?? null,
+    queryFn: () => profileSince(user.id),
     staleTime: Infinity,
   })
   const extra = (prefs?.extra ?? {}) as { fb_prompt_at?: string }

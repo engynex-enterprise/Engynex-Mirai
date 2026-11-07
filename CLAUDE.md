@@ -157,6 +157,9 @@ Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, fes
 - Las consultas de Supabase son perezosas: `void sb.rpc(...)` **no se envía**; usa `await` o `.then()`.
 - Ventanas que se abren solas (anuncios): esperan a que no haya otra ventana abierta (`whenFree`), dos Radix cruzados bloquean los clics.
 - Los textos del portal del contador y Ajustes › Integraciones nunca reciben secretos: solo `integrations_public` (máscaras).
+- **Error React #418 (hidratación):** en la web usa `useQuery` de `@/lib/query`, no el de `@tanstack/react-query` (ESLint lo exige). Mientras un componente hidrata devuelve "pendiente" como el servidor aunque la caché ya tenga los datos (precarga del shell, API en el mismo origen); `useBookData` aplica la misma regla. Solo pasa con `next build` (en `next dev` no se ve).
+- **Libro activo:** con la API se recuerda en `profiles.last_book_id` (no solo en la cookie). "Ver un ejemplo" deja el libro de ejemplo activo: `login()` de las E2E vuelve al libro principal con `setQaDefaultBook()`.
+- **Login propio (`AUTH_PROVIDER=mirai`):** `getApiConfig` enciende todos los módulos y exige `MIRAI_API_URL`; las rutas viejas que leían Supabase directo (cron, chat, Google, portal del contador) ya no caen a Supabase. `pnpm e2e:local --dev` usa `next dev` sin compilar (rápido para depurar; el #418 no se reproduce así).
 
 ## 8. Documentación
 `AGENTS.md` (resumen para otros agentes) · `docs/DEPLOY-VERCEL.md` (variables, cron, Google, Telegram, monorepo en Vercel) · `docs/arquitectura/v6-separacion-front-back.md` (v6: front Next + API NestJS) · `.agents/rules/` · `.claude/agents/` (finanzas-colombia, qa-playwright, ux-simple) · `docs/BACKLOG.md` · `docs/HISTORIAL.md` · `docs/migracion/` · `docs/superpowers/specs/`.

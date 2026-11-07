@@ -87,7 +87,9 @@ export class StatementService {
   async commit(b: Commit) {
     const { w, store } = this
     w.requireRole("editor", "editarTodo")
-    const fuente = await w.rowOf(b.fuente.tipo === "tarjeta" ? "credit_cards" : "payment_methods", b.fuente.id, { alive: true, msg: b.fuente.tipo === "tarjeta" ? "No encontramos esa tarjeta." : "No encontramos ese medio de pago." })
+    // Sin medio de pago (solo con `medio`): los movimientos quedan sin payment_method_id, como en la web de siempre.
+    const fuente = b.fuente.id === null ? { id: null } : await w.rowOf(b.fuente.tipo === "tarjeta" ? "credit_cards" : "payment_methods", b.fuente.id, { alive: true, msg: b.fuente.tipo === "tarjeta" ? "No encontramos esa tarjeta." : "No encontramos ese medio de pago." })
+    const medioId = fuente.id === null ? null : String(fuente.id)
     const c = await this.ctx()
     const { rows } = this.read(b.csv, c)
     const okCats = await aliveIds(store, w.scope, "categories", w.bookId, b.filas.map((f) => f.category_id).filter((x): x is string => !!x))
@@ -118,9 +120,9 @@ export class StatementService {
       const hsrc = (r: (typeof pick)[number]) => (r.hManual ? "manual" : r.src === "ia" ? "ia" : "regla")
       if (gastos.length) await store.insert(w.scope, "expenses", gastos.map((r) => ({
         book_id: w.bookId, created_by: w.userId, fecha: r.fecha, descripcion: r.descripcion, valor: r.valor, category_id: r.category_id ?? otros, member_id,
-        payment_method_id: String(fuente.id), hormiga: r.hormiga, hormiga_src: hsrc(r), origen: "importar", external_id: r.ext,
+        payment_method_id: medioId, hormiga: r.hormiga, hormiga_src: hsrc(r), origen: "importar", external_id: r.ext,
       }))).catch(err)
-      if (entradas.length) await store.insert(w.scope, "extra_incomes", entradas.map((r) => ({ book_id: w.bookId, created_by: w.userId, fecha: r.fecha, descripcion: r.descripcion, valor: r.valor, member_id, payment_method_id: String(fuente.id), external_id: r.ext }))).catch(err)
+      if (entradas.length) await store.insert(w.scope, "extra_incomes", entradas.map((r) => ({ book_id: w.bookId, created_by: w.userId, fecha: r.fecha, descripcion: r.descripcion, valor: r.valor, member_id, payment_method_id: medioId, external_id: r.ext }))).catch(err)
       w.changed("expenses", undefined, "INSERT", ["extra_incomes"])
     }
     return { gastos: gastos.length, entradas: entradas.length, repetidos, errores }

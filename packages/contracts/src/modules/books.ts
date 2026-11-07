@@ -11,9 +11,11 @@
 //   GET    /v1/books/:bookId/settings     → book_settings (lo que hoy lee useSettings)
 //   PATCH  /v1/books/:bookId/settings     → useBookSettingsSave (features/settings/prefs.ts), setup-view, renta-owner
 //                                            (uvt), logros-view (gami)… con cada campo validado.
+// V7-H2: GET …/audit (Ajustes › Datos › Historial), …/setup-counts (Puesta en marcha y Perfil) y
+//        …/month-summaries/:mes (Reportes: el resumen del mes ya guardado).
 import { initContract } from "@ts-rest/core"
 import { z } from "zod"
-import { ApiError, ApiOk, COMMON_ERRORS, Money, Uuid } from "../common"
+import { ApiError, ApiOk, COMMON_ERRORS, IsoMonth, Money, Uuid } from "../common"
 
 export const meta = { id: "books", owner: "F2-I" } as const
 
@@ -76,6 +78,28 @@ export type BookSettingsPatch = z.infer<typeof BookSettingsPatch>
 
 const ERR = { ...COMMON_ERRORS, 402: ApiError, 409: ApiError } as const
 
+// ── V7-H2: lecturas que la web hacía directo a la base (Ajustes › Datos, Puesta en marcha y Reportes) ─────────────
+/** Una fila del historial de cambios (audit_log) con el nombre de quien la hizo («Sistema» si no hubo persona). */
+export const AuditRow = z.object({ id: z.string(), tabla: z.string(), accion: z.string(), actor: z.string().nullable(), resumen: z.string().nullable(), created_at: z.string(), quien: z.string() })
+export type AuditRow = z.infer<typeof AuditRow>
+export const AuditQuery = z.object({ limit: z.coerce.number({ error: "Número inválido" }).int().min(1, "Mínimo 1").max(500, "Máximo 500").optional() })
+/** Cuántos registros vivos hay de cada paso de la puesta en marcha (useSetupProgress de la web). */
+export const SetupCounts = z.object({
+  ingresos: z.number(), fijos: z.number(), gastos: z.number(), metas: z.number(),
+  /** Cuentas y efectivo: activos con código 11… */
+  cuentas: z.number(),
+  /** Préstamos que debes (`kind = pagar`) y que te deben (`kind = cobrar`). */
+  deudas: z.number(), prestamos: z.number(),
+  /** Categorías con tope mayor que 0. */
+  topes: z.number(),
+  /** Registros que no son movimientos (Perfil: contactos; metas también arriba). */
+  contactos: z.number(),
+})
+export type SetupCounts = z.infer<typeof SetupCounts>
+export const SummaryParams = z.object({ bookId: Uuid, mes: IsoMonth })
+/** Resumen del mes guardado (monthly_summaries.contenido; null si aún no se ha hecho). */
+export const SavedSummary = z.object({ contenido: z.record(z.string(), z.unknown()).nullable() })
+
 const c = initContract()
 export const booksContract = c.router(
   {
@@ -85,6 +109,10 @@ export const booksContract = c.router(
     restore: { method: "POST", path: "/v1/trash/books/:id/restore", pathParams: TrashParams, body: c.noBody(), responses: { ...ERR, 200: ApiOk(Book) }, summary: "Deshacer: el libro vuelve de la papelera (solo el dueño; límite de libros del plan)" },
     settings: { method: "GET", path: "/v1/books/:bookId/settings", pathParams: BookParams, responses: { ...ERR, 200: BookSettings }, summary: "Ajustes del libro" },
     updateSettings: { method: "PATCH", path: "/v1/books/:bookId/settings", pathParams: BookParams, body: BookSettingsPatch, responses: { ...ERR, 200: BookSettings }, summary: "Cambia ajustes del libro («Edita» o más; cada campo validado)" },
+    // V7-H2
+    audit: { method: "GET", path: "/v1/books/:bookId/audit", pathParams: BookParams, query: AuditQuery, responses: { ...ERR, 200: z.array(AuditRow) }, summary: "Historial de cambios del libro, del más reciente (25 por defecto)" },
+    setupCounts: { method: "GET", path: "/v1/books/:bookId/setup-counts", pathParams: BookParams, responses: { ...ERR, 200: SetupCounts }, summary: "Cuántos registros hay de cada paso de la puesta en marcha" },
+    monthSummary: { method: "GET", path: "/v1/books/:bookId/month-summaries/:mes", pathParams: SummaryParams, responses: { ...ERR, 200: SavedSummary }, summary: "Resumen del mes con IA ya guardado (null si no se ha hecho)" },
   },
   { strictStatusCodes: true },
 )

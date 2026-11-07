@@ -9,8 +9,9 @@ import { Switch } from "@/components/ui/switch"
 import { Combobox } from "@/components/mirai/combobox"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { PAGES } from "@/lib/nav"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { createClient } from "@/utils/supabase/client"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
+import { fetchMyRule, saveMyRule } from "../api"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
 import { togglePrivacy } from "@/components/app/privacy"
@@ -76,7 +77,7 @@ export function PrivacidadTab() {
   const { prefs, save } = usePrefs()
   const { user, book } = useApp()
   const qc = useQueryClient()
-  const { data: rule } = useQuery({ queryKey: ["nrule", user.id, book.id], queryFn: async () => (await createClient().from("notification_rules").select("ocultar_montos").eq("user_id", user.id).eq("book_id", book.id).maybeSingle()).data })
+  const { data: rule } = useQuery({ queryKey: ["nrule", user.id, book.id], queryFn: async () => (await fetchMyRule(user.id, book.id)) as { ocultar_montos?: boolean } | null })
   if (!prefs) return <SettingSkeleton />
   return (
     <SettingStack>
@@ -86,8 +87,7 @@ export function PrivacidadTab() {
         <SettingRow title="Ocultar al cambiar de ventana" desc="Difumina la pantalla cuando sales de Mirai."><Switch checked={prefs.privacy_blur_on_leave} onCheckedChange={(v) => save({ privacy_blur_on_leave: v })} aria-label="Ocultar al cambiar de ventana" /></SettingRow>
         <SettingRow title="No incluir valores en correos, Telegram y WhatsApp" desc="Los avisos dicen qué pago se acerca, pero no cuánto.">
           <Switch checked={!!rule?.ocultar_montos} aria-label="No incluir valores en avisos" onCheckedChange={async (v) => {
-            const { error } = await createClient().from("notification_rules").upsert({ user_id: user.id, book_id: book.id, ocultar_montos: v })
-            if (error) return toast.error("No se pudo guardar", { description: error.message })
+            try { await saveMyRule(user.id, book.id, { ocultar_montos: v }) } catch (e) { return toast.error("No se pudo guardar", { description: (e as Error).message }) }
             qc.invalidateQueries({ queryKey: ["nrule"] }); toast("Guardado")
           }} />
         </SettingRow>

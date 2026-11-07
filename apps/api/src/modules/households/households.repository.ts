@@ -24,6 +24,8 @@ export type NewInvitation = {
 }
 export type InvitationPatch = Partial<Pick<InvRow, "expires_at" | "token_enc" | "last_sent_at" | "sends_day" | "sends_today" | "sent_count">> & { token_hash?: string; last_result?: LastResult; canceled_at?: string; canceled_by?: string }
 export type FamilyInput = { nombre: string; rol: string; avatar: string; nacimiento: string | null; cupo: number }
+/** V7-H2: campos que se cambian sin pasar por el formulario del integrante (Planeación › Familia y Renta). */
+export type FamilyPatchRow = Partial<Pick<FamilyRow, "cupo" | "doc" | "dep_de" | "dep_rel" | "nacimiento" | "estudia" | "sin_ingresos" | "discapacidad">>
 export type HouseholdRpc = "set_member_access" | "remove_household_member" | "transfer_household" | "link_family_member"
 export type InvitationInfoRaw = { estado: string; hogar?: string; invita?: string; rol?: string; nombre?: string | null; vence?: string; ya_miembro?: boolean }
 export type RespondResult = { estado: string; household_id: string; from_user?: string; plan_action?: string }
@@ -66,6 +68,8 @@ export abstract class HouseholdsRepo {
   abstract saveFamily(scope: UserScope, householdId: string, id: string | null, row: FamilyInput): Promise<string | null>
   abstract familyMember(scope: UserScope, householdId: string, id: string): Promise<Pick<FamilyRow, "id" | "nombre" | "user_id" | "es_titular"> | null>
   abstract setFamilyDeleted(scope: UserScope, id: string, deleted: boolean): Promise<void>
+  /** V7-H2: cambia solo estos campos (cupo o datos de dependiente); null si no hay un integrante vivo con ese id. */
+  abstract patchFamily(scope: UserScope, householdId: string, id: string, patch: FamilyPatchRow): Promise<string | null>
 
   // ── Pasar el hogar, salir y borrar ──
   abstract requestTransfer(scope: UserScope, a: { householdId: string; userId: string; fromRole: string; planAction: string; confirm: string }): Promise<string>

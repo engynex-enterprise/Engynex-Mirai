@@ -51,7 +51,7 @@ export class SupabaseJsAccountantRepo extends AccountantRepo {
     return (data ?? []) as PartRows
   }
 
-  async renta(scope: DbScope, bookId: string, ownerId: string | null): Promise<RentaData> {
+  async renta(scope: DbScope, bookId: string, ownerId: string | null, opts: { todos?: boolean } = {}): Promise<RentaData> {
     const db = this.sb.for(scope)
     const [book, { data: bk }, ref] = await Promise.all([
       loadBookDataWith((p) => this.part(scope, bookId, p)),
@@ -62,13 +62,14 @@ export class SupabaseJsAccountantRepo extends AccountantRepo {
     ])
     if (!bk) throw DomainError.notFound("No encontramos ese libro.")
     const owner = ownerId ?? bk.created_by
-    const [mem, cats, bienes, years, prof, atts, liab] = await Promise.all([
+    const atts = db.from("attachments").select("id,doc_key,year,nombre,size,mime,path,created_at").eq("book_id", bookId).is("deleted_at", null).not("doc_key", "is", null)
+    const [mem, cats, bienes, years, prof, adj, liab] = await Promise.all([
       db.from("family_members").select("*").eq("household_id", bk.household_id).is("deleted_at", null).order("sort").order("created_at"),
       db.from("income_categories").select("id,nombre").eq("book_id", bookId),
       db.from("tax_assets").select("*").eq("book_id", bookId).is("deleted_at", null).order("created_at"),
       db.from("tax_years").select("*").eq("book_id", bookId).is("deleted_at", null),
       owner ? db.from("profiles").select("nombre,digitos,doc").eq("id", owner).maybeSingle() : Promise.resolve({ data: null }),
-      db.from("attachments").select("id,doc_key,year,nombre,size,mime,path,created_at").eq("book_id", bookId).is("deleted_at", null).not("doc_key", "is", null).eq("visible_contador", true).order("created_at"),
+      (opts.todos ? atts : atts.eq("visible_contador", true)).order("created_at"),
       db.from("liabilities").select("nombre,cod,valor,currency").eq("book_id", bookId).is("deleted_at", null),
     ])
     const perfil = prof.data as { nombre?: string | null; digitos?: string | null; doc?: string | null } | null
@@ -76,7 +77,7 @@ export class SupabaseJsAccountantRepo extends AccountantRepo {
     const { data: fechas } = /^\d{2}$/.test(digitos) ? await db.from("ref_renta_calendar").select("year,regimen,fecha").eq("digitos", digitos) : { data: [] }
     return rentaDataFrom(book, {
       members: mem.data ?? [], incomeCategories: cats.data ?? [], bienes: bienes.data ?? [], years: years.data ?? [], perfil,
-      fechas: (fechas ?? []) as RentaData["fechas"], attachments: (atts.data ?? []) as AttachmentRow[], liabilities: liab.data ?? [], ref,
+      fechas: (fechas ?? []) as RentaData["fechas"], attachments: (adj.data ?? []) as AttachmentRow[], liabilities: liab.data ?? [], ref,
     })
   }
 

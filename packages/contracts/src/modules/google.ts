@@ -20,6 +20,9 @@ export const ConnectQuery = z.object({
 })
 export const ConnectUrl = z.object({ url: z.url() })
 export const CalendarStatus = z.object({ conectado: z.boolean(), plan: z.boolean(), eventos: z.number().int().min(0) })
+/** V7-H3: tu conexión de Google (google_connections_public: correo y permisos, sin tokens). Sin conexión: `scopes` vacío. */
+export const GoogleConnection = z.object({ email: z.string().nullable(), scopes: z.array(z.string()) })
+export type GoogleConnection = z.infer<typeof GoogleConnection>
 export const CalendarSyncResult = z.object({ msg: z.string(), creados: z.number().int(), actualizados: z.number().int(), borrados: z.number().int(), total: z.number().int() })
 
 const ERR = { ...COMMON_ERRORS, 402: ApiError, 502: ApiError } as const
@@ -42,6 +45,12 @@ export const googleContract = c.router(
       query: z.object({ code: z.string().optional(), state: z.string().optional(), error: z.string().optional() }),
       responses: { 302: c.noBody() },
       summary: "Callback de OAuth (público): guarda los tokens y redirige a la web",
+    },
+    connection: {
+      method: "GET",
+      path: "/v1/google/connection",
+      responses: { ...ERR, 200: GoogleConnection },
+      summary: "Tu conexión de Google: correo y permisos (Gastos desde el correo). Sin tokens",
     },
     disconnect: {
       method: "DELETE",

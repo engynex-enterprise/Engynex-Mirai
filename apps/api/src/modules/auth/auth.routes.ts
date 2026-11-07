@@ -9,21 +9,38 @@ import { LOGGER } from "../../core/logging/logger"
 import { MiraiAuthService } from "./mirai-auth.service"
 
 // Tipos mínimos de Fastify (la API no depende de `fastify` directamente: lo trae @nestjs/platform-fastify).
-type FastifyRequest = { url: string; method: string; headers: Record<string, string | string[] | undefined>; body?: unknown; rawBody?: Buffer | string }
+type FastifyRequest = { url: string; method: string; headers: Record<string, string | string[] | undefined>; body?: unknown; rawBody?: Buffer | string; raw?: { socket?: { remoteAddress?: string } } }
 type FastifyReply = { status(code: number): FastifyReply; header(k: string, v: unknown): FastifyReply; send(b?: unknown): FastifyReply }
 type FastifyInstance = { route(o: { method: string[]; url: string; handler: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown> }): unknown }
 
 const HOP = new Set(["connection", "keep-alive", "transfer-encoding", "content-length", "host"])
 
+/** Encabezado con la IP real del cliente que lee Better Auth (`advanced.ipAddress.ipAddressHeaders`). */
+export const CLIENT_IP_HEADER = "x-mirai-client-ip"
+
+/**
+ * IP real del cliente: el balanceador agrega a la derecha de x-forwarded-for la IP que vio y luego la suya, así que se
+ * cuentan `hops` proxies de confianza desde la derecha. La parte izquierda la puede escribir el cliente: nunca se usa.
+ * Sin x-forwarded-for (local, sin balanceador) se usa la del socket.
+ */
+export function clientIp(xff: string | string[] | undefined, hops: number, socketIp?: string): string | null {
+  const list = (Array.isArray(xff) ? xff.join(",") : xff ?? "").split(",").map((x) => x.trim()).filter(Boolean)
+  if (list.length > hops) return list[list.length - 1 - hops] ?? null
+  return socketIp ?? null
+}
+
 /** Petición de Fastify → Request web (lo que entiende Better Auth). */
-export function toWebRequest(req: FastifyRequest, baseURL: string): Request {
+export function toWebRequest(req: FastifyRequest, baseURL: string, proxyHops = 1): Request {
   const url = new URL(req.url, baseURL)
   const headers = new Headers()
   for (const [k, v] of Object.entries(req.headers)) {
-    if (v === undefined || HOP.has(k)) continue
+    // El encabezado de la IP lo pone solo la API: si llega del cliente, se descarta.
+    if (v === undefined || HOP.has(k) || k === CLIENT_IP_HEADER) continue
     if (Array.isArray(v)) v.forEach((x) => headers.append(k, x))
     else headers.set(k, String(v))
   }
+  const ip = clientIp(req.headers["x-forwarded-for"], proxyHops, req.raw?.socket?.remoteAddress)
+  if (ip) headers.set(CLIENT_IP_HEADER, ip)
   const method = req.method.toUpperCase()
   let body: string | Buffer | undefined
   if (method !== "GET" && method !== "HEAD") {
@@ -56,12 +73,13 @@ export class AuthRoutes implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    if (!this.auth.enabled) return
+    // El gateway (MODE=realtime) solo usa la sesión para el handshake: /api/auth vive en la API.
+    if (!this.auth.enabled || process.env.MODE === "realtime") return
     const fastify = this.host.httpAdapter?.getInstance<FastifyInstance>()
     if (!fastify) return
     const handler = async (req: FastifyRequest, reply: FastifyReply) => {
       try {
-        return await sendWebResponse(await this.auth.instance.handler(toWebRequest(req, this.auth.values.baseURL)), reply)
+        return await sendWebResponse(await this.auth.instance.handler(toWebRequest(req, this.auth.values.baseURL, this.auth.values.proxyHops)), reply)
       } catch (e) {
         this.log.error({ err: { message: (e as Error).message, stack_trace: (e as Error).stack } }, "Error en /api/auth")
         return reply.status(500).send({ ok: false, code: "INTERNAL", msg: "Algo salió mal al iniciar sesión. Intenta de nuevo en un momento." })

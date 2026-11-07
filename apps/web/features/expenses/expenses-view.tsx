@@ -24,6 +24,7 @@ import { useBookId, useCanEdit, useCanEditRow, useCanRecord } from "@/components
 import { useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
+import { apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
 import { fmtMoney, fmtMonth, todayISO } from "@/lib/format"
 import { dayHeading, lastMonths } from "@/lib/list-helpers"
 import type { Row } from "@/lib/supabase/tables"
@@ -62,7 +63,8 @@ export function ExpensesView() {
   const toggleH = useMutation({
     mutationFn: async (g: G) => {
       const next = !isHormiga(g, cats, umbral)
-      const { error } = await createClient().from("expenses").update({ hormiga: next, hormiga_src: "manual", hormiga_razon: null }).eq("id", g.id)
+      const patch = { hormiga: next, hormiga_src: "manual" as const, hormiga_razon: null }
+      const { error } = rowsViaApi("expenses") ? await apiUpdateRow(bookId, "expenses", g.id, patch) : await createClient().from("expenses").update(patch).eq("id", g.id)
       if (error) throw new Error(error.message)
       return next
     },

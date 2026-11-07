@@ -4,6 +4,7 @@ import { IsoIcon } from "@/components/mirai/iso-icon"
 import { Illustration } from "@/components/mirai/illustration"
 import { AuthSkeleton } from "@/components/auth/auth-skeleton"
 import { supabaseServer } from "@/utils/supabase/server"
+import { serverAuthProvider } from "@/lib/auth/provider"
 import { WelcomeForm } from "./welcome-form"
 
 export const metadata = { title: "Bienvenida" }
@@ -30,7 +31,25 @@ export default function BienvenidaPage() {
   )
 }
 
+/**
+ * v7 (V7-H4), AUTH_PROVIDER=mirai: GET /v1/me (200 = ya tiene hogar → /inicio; 404 = bienvenida) y el nombre de
+ * GET /v1/me/profile, con la cookie de Better Auth.
+ */
+async function WelcomeMirai() {
+  const { connection } = await import("next/server")
+  await connection()
+  const [{ miraiSessionToken }, { miraiApiConfig, SESSION_EXPIRED_URL }, { serverApi }] = await Promise.all([import("@/lib/auth/server"), import("@/lib/dal"), import("@/lib/api/server")])
+  if (!(await miraiSessionToken())) redirect("/login")
+  const api = serverApi(miraiApiConfig())
+  const [me, profile] = await Promise.all([api.me.get({ query: {} }), api.me.profile()])
+  if ((me.status as number) === 401 || (profile.status as number) === 401) redirect(SESSION_EXPIRED_URL)
+  if (me.status === 200) redirect("/inicio")
+  return <WelcomeForm nombre={profile.status === 200 ? profile.body.nombre : ""} />
+}
+
 async function Welcome() {
+  if (serverAuthProvider() === "mirai") return <WelcomeMirai />
+  // Modo heredado: sesión y datos de Supabase.
   const sb = await supabaseServer()
   const { data: claims } = await sb.auth.getClaims()
   const uid = claims?.claims.sub

@@ -399,7 +399,7 @@ function Editor({ a, list }: { a: Automation; list: Automation[] | undefined }) 
           {props}
         </ResponsiveDialog>
         <ResponsiveDialog open={mDialog === "probar"} onOpenChange={(o) => setMDialog(o ? "probar" : null)} title="Probar la automatización">
-          <TestPanel graph={graph} result={test} onResult={onTestResult} />
+          <TestPanel id={a.id} graph={graph} result={test} onResult={onTestResult} />
         </ResponsiveDialog>
         <ResponsiveDialog open={mDialog === "historial"} onOpenChange={(o) => setMDialog(o ? "historial" : null)} title="Historial de ejecuciones">
           <RunsList runs={runs.data} loading={runs.isPending} />
@@ -428,7 +428,7 @@ function Editor({ a, list }: { a: Automation; list: Automation[] | undefined }) 
             <div className="grid gap-4">
               <Segmented value={panel} onChange={(v) => setPanel(v as SidePanel)} items={[{ value: "revision", label: "Revisión", icon: "list-checks" }, { value: "probar", label: "Probar", icon: "play" }, { value: "historial", label: "Historial", icon: "history" }]} />
               {panel === "revision" && review}
-              {panel === "probar" && <TestPanel graph={graph} result={test} onResult={onTestResult} />}
+              {panel === "probar" && <TestPanel id={a.id} graph={graph} result={test} onResult={onTestResult} />}
               {panel === "historial" && (
                 <div className="grid gap-2">
                   <p className="text-sm text-muted-foreground">Corrió {a.ejecuciones} {a.ejecuciones === 1 ? "vez" : "veces"}.{a.ultimo_estado && <> Última: <StatusPill tone={a.ultimo_estado === "error" ? "bad" : "ok"}>{a.ultimo_estado === "error" ? "Con error" : "Bien"}</StatusPill></>}</p>

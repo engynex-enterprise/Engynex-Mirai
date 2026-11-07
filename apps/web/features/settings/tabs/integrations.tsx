@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState, useTransition } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { CircleCheck, CircleX, ExternalLink, FlaskConical, Lock, Settings2, Trash2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,7 @@ import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/comp
 import { Notice } from "@/components/mirai/notice"
 import { useApp } from "@/components/app/app-context"
 import { can } from "@/lib/household/roles"
-import { createClient } from "@/utils/supabase/client"
+import { fetchHouseholdIntegrations, fetchPlatformIntegrations } from "../api"
 import { CATS, CLIENT_INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
 import { deleteIntegration, listModels, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/api"
 import { MODEL_LIST } from "@/lib/ai/models"
@@ -43,19 +44,16 @@ const FREE_TIP = {
 function useGlobalIntegrations() {
   return useQuery({
     queryKey: ["platform-integrations"],
-    queryFn: async () => Object.fromEntries(((await createClient().from("platform_integrations_public").select("kind,modo,planes")).data ?? []).map((r) => [r.kind!, r])) as Record<string, { modo: string; planes: string[] }>,
+    queryFn: fetchPlatformIntegrations,
     staleTime: 5 * 60_000,
   })
 }
 
 export function useIntegrations() {
-  const { household } = useApp()
+  const { household, book } = useApp()
   return useQuery({
     queryKey: ["h", household.id, "integrations"],
-    queryFn: async () => {
-      const { data } = await createClient().from("integrations_public").select("kind,enabled,config,meta").eq("household_id", household.id)
-      return Object.fromEntries((data ?? []).map((r) => [r.kind!, r as unknown as Pub])) as Record<string, Pub>
-    },
+    queryFn: async () => (await fetchHouseholdIntegrations(household.id, book.id)) as unknown as Record<string, Pub>,
   })
 }
 

@@ -98,9 +98,22 @@ export class ProfileService {
     return { aviso: s?.aviso_global?.trim() ?? "", tono }
   }
 
+  /** /ads.txt: el cliente de AdSense de Integraciones globales (solo `client`; nada más de la configuración). */
+  async platformAdsense(): Promise<{ client: string | null }> {
+    const r = await this.rows.first<{ modo: string | null; config: { client?: unknown } | null }>(systemScope("ads.txt (público)"), "platform_integrations", { columns: ["modo", "config"], eq: { kind: "adsense" } })
+    const client = r && r.modo !== "apagada" && typeof r.config?.client === "string" ? r.config.client.trim() : ""
+    return { client: client || null }
+  }
+
   async platformIntegrations(): Promise<{ kind: string; modo: string; planes: string[] }[]> {
     // La vista ya deja fuera las apagadas y los secretos; aquí además solo salen modo y planes.
     const rows = await this.rows.select<{ kind: string | null; modo: string | null; planes: string[] | null }>(this.scope, "platform_integrations_public", { columns: ["kind", "modo", "planes"] })
     return rows.filter((r) => r.kind).map((r) => ({ kind: r.kind!, modo: r.modo ?? "opcional", planes: r.planes ?? [] }))
+  }
+
+  /** V7-H2: ¿tu chat de Telegram está vinculado? (TelegramLink de Ajustes › Alertas). Sin el id del chat. */
+  async telegram(): Promise<{ linked: boolean; linked_at: string | null }> {
+    const r = await this.rows.first<{ chat_id: string | number | null; linked_at: string | null }>(this.scope, "telegram_links", { columns: ["chat_id", "linked_at"], eq: { user_id: this.uid } })
+    return { linked: !!r?.chat_id, linked_at: r?.chat_id ? (r.linked_at ?? null) : null }
   }
 }

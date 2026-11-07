@@ -115,8 +115,15 @@ test("⌘K encuentra un proveedor y una meta; Agregar → Suscripción abre el f
     await page.screenshot({ path: `tests/.out/buscar-proveedor-${info.project.name}.png` })
     await opt.click()
     await expect(page).toHaveURL(new RegExp(`/proveedores\\?id=${p!.id}`))
-
-    await page.keyboard.press("Escape")
+    // La ficha del proveedor abre cuando cargan sus datos: se espera antes de cerrarla (si no, abre encima de ⌘K).
+    const ficha = page.getByRole("dialog", { name: prov })
+    await expect(ficha).toBeVisible({ timeout: 15_000 })
+    // Con su botón: un Escape justo después del clic le llega al buscador, que todavía se está cerrando.
+    // En el celular la ficha es un Drawer sin botón Cerrar: ahí sí se cierra con Escape.
+    const x = ficha.getByRole("button", { name: "Cerrar" })
+    if (await x.count()) await x.first().click()
+    else await page.keyboard.press("Escape")
+    await expect(ficha).toBeHidden()
     await page.keyboard.press("Control+k")
     await input.fill(meta)
     await page.getByRole("option", { name: new RegExp(meta) }).click()

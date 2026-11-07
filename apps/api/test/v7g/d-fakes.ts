@@ -3,6 +3,7 @@
 import type { RawAppContext } from "@mirai/domain/app-context"
 import type { IntegrationDef } from "@mirai/services/integrations/registry"
 import type { IntegrationValue } from "@mirai/services/integrations/store"
+import type { TemplateDraft } from "@mirai/services/notify/wa-templates"
 import { PlatformIntegrationsPort, type WaCaseOverride } from "../../src/modules/admin/platform-integrations.port"
 import { SiteUrl } from "../../src/modules/households/site-url"
 import { AccountantMailer } from "../../src/modules/tax/accountant-mailer"
@@ -51,6 +52,9 @@ export class FakePlatformIntegrations extends PlatformIntegrationsPort {
   sendError: Error | null = null
   templates: Record<string, unknown>[] = [{ name: "resumen", language: "es_CO", status: "APPROVED" }, { name: "aviso", language: "es_CO", status: "APPROVED" }, { name: "aviso", language: "en_US", status: "PAUSED" }]
   waSends: { dest: string; caso: string; override?: WaCaseOverride; nombre: string }[] = []
+  tplCalls: { op: "create" | "edit" | "delete"; name: string; id?: string; lang?: string }[] = []
+  tplError: Error | null = null
+  tplStatus = "PENDING"
 
   hasEnv(name: string) {
     return this.env.has(name)
@@ -91,5 +95,18 @@ export class FakePlatformIntegrations extends PlatformIntegrationsPort {
     if (this.sendError) throw this.sendError
     this.waSends.push({ dest, caso, override, nombre })
     return { msg: `Enviado a ${dest}.`, ref: "wamid.1", preview: [{ key: "1", label: "Nombre", value: nombre, src: "nombre" }] }
+  }
+  async waCreateTemplate(_v: IntegrationValue, d: TemplateDraft) {
+    if (this.tplError) throw this.tplError
+    this.tplCalls.push({ op: "create", name: d.name, lang: d.language })
+    return { id: "9876543210", status: this.tplStatus }
+  }
+  async waEditTemplate(_v: IntegrationValue, id: string, d: TemplateDraft) {
+    if (this.tplError) throw this.tplError
+    this.tplCalls.push({ op: "edit", name: d.name, id, lang: d.language })
+  }
+  async waDeleteTemplate(_v: IntegrationValue, name: string, id?: string) {
+    if (this.tplError) throw this.tplError
+    this.tplCalls.push({ op: "delete", name, ...(id ? { id } : {}) })
   }
 }

@@ -180,6 +180,17 @@ describe("Google: conectar con state firmado, callback y Calendar", () => {
     expect((await req("GET", `/v1/google/callback?code=malo&state=${bueno}`)).headers.location).toBe(`${SITE}/correo?google=error`)
   })
 
+  it("tu conexión de Google: correo y permisos (sin tokens); sin conexión, permisos vacíos", async () => {
+    const r = await req("GET", "/v1/google/connection", await auth("viewer"))
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toEqual({ email: "ana@gmail.com", scopes: ["https://www.googleapis.com/auth/gmail.readonly"] })
+    const before = t.google.conn
+    t.google.conn = null
+    expect((await req("GET", "/v1/google/connection", await auth("viewer"))).json()).toEqual({ email: null, scopes: [] })
+    t.google.conn = before
+    expect((await req("GET", "/v1/google/connection")).statusCode).toBe(401)
+  })
+
   it("sincronizar Calendar (Premium) y su estado", async () => {
     const s = await req("POST", `/v1/books/${B_PREMIUM}/calendar/sync`, await auth("owner"))
     expect(s.statusCode).toBe(200)

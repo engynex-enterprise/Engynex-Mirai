@@ -46,6 +46,8 @@ export const Eligible = z.object({
   /** ¿Este espacio le toca a AdSense hoy? (porcentaje de ajustes; la web además exige consentimiento y AdSense configurado). */
   adsenseTurno: z.boolean(),
   settings: AdsSettings.nullable(),
+  /** V7-H3: solo en `ticker` (la cinta muestra varios): los elegibles por prioridad, hasta 5. */
+  lista: z.array(Ad).optional(),
 })
 export type Eligible = z.infer<typeof Eligible>
 

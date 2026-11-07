@@ -9,18 +9,20 @@ const actions = {
   openAppNotifs: vi.fn(), logroNotifs: vi.fn(), cobroWaStatus: vi.fn(), sendCobroWhatsApp: vi.fn(async () => ({ ok: true, msg: "acción" })),
 }
 const notify = { digestNow: vi.fn(), channels: vi.fn(), cobroWaSend: vi.fn() }
+const gami = { logros: vi.fn() }
+const gamiOn = { v: false }
 const status = (s: number, body: unknown) => ({ status: s, body, headers: new Headers() })
 
 vi.mock("./actions", () => actions)
-vi.mock("@/lib/api/session", () => ({ apiOn: (m: string) => m === "notify" && on.v, activeBookId: () => "book-1" }))
+vi.mock("@/lib/api/session", () => ({ apiOn: (m: string) => (m === "notify" && on.v) || (m === "gami" && gamiOn.v), activeBookId: () => "book-1" }))
 vi.mock("@/lib/api/client", async () => {
   const u = await import("@/lib/api/unwrap")
-  return { ...u, browserApi: () => ({ notify }) }
+  return { ...u, browserApi: () => ({ notify, gami }) }
 })
 
 const api = await import("./api")
 
-beforeEach(() => { vi.clearAllMocks(); on.v = false })
+beforeEach(() => { vi.clearAllMocks(); on.v = false; gamiOn.v = false })
 
 describe("features/notify/api", () => {
   it("apagado: llama a la Server Action de siempre y no a la API", async () => {
@@ -51,7 +53,16 @@ describe("features/notify/api", () => {
     expect(await api.notifyChannels()).toEqual({ email: false, telegram: false, whatsapp: false, push: false })
   })
 
-  it("logroNotifs no tiene endpoint: siempre la acción", () => {
-    expect(api.logroNotifs).toBe(actions.logroNotifs)
+  it("logroNotifs: apagado la acción; con `gami` encendido POST …/gami/logros y nunca lanza", async () => {
+    const input = { bookId: "book-9", badges: [{ id: "b1", n: "Primera meta", d: "Creaste tu primera meta" }], nivel: null }
+    await api.logroNotifs(input)
+    expect(actions.logroNotifs).toHaveBeenCalledWith(input)
+    gamiOn.v = true
+    gami.logros.mockResolvedValue(status(200, { ok: true, data: { saved: 1 } }))
+    expect(await api.logroNotifs(input)).toEqual({ ok: true })
+    expect(gami.logros).toHaveBeenCalledWith({ params: { bookId: "book-9" }, body: { badges: input.badges, nivel: null } })
+    gami.logros.mockResolvedValue(status(500, null))
+    expect(await api.logroNotifs(input)).toEqual({ ok: false })
+    expect(actions.logroNotifs).toHaveBeenCalledTimes(1)
   })
 })

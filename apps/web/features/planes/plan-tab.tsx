@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { Crown, Receipt } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -13,11 +14,10 @@ import { Tip } from "@/components/mirai/tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
 import { fmtDate } from "@/lib/format"
 import { isFull, precio } from "@/lib/plans"
 import { SettingRow, SettingSection } from "@/features/settings/ui"
-import { cancelRenewal, paysRenewal } from "./api"
+import { cancelRenewal, loadHouseholdPayments, loadHouseholdSub, paysRenewal } from "./api"
 import { PremiumBadge } from "./premium"
 
 const PROV = { mercadopago: "Mercado Pago (tarjeta)", wompi: "Wompi (Nequi, PSE, Bancolombia)", manual: "Asignado por Mirai" } as const
@@ -28,16 +28,15 @@ export function PlanTab() {
   const { household, plan, isAdmin } = useApp()
   const qc = useQueryClient()
   const params = useSearchParams()
-  const sb = createClient()
   const { data: sub, isPending } = useQuery({
     queryKey: ["plan-sub", household.id],
-    queryFn: async () => (await sb.rpc("household_subscription", { h: household.id })).data?.[0] ?? null,
+    queryFn: () => loadHouseholdSub(household.id),
   })
   const { data: mine } = useQuery({ queryKey: ["plan-mine", household.id], enabled: household.role !== "owner", queryFn: () => paysRenewal() })
   const { data: pays } = useQuery({
     queryKey: ["plan-pays", household.id],
     enabled: household.role === "owner",
-    queryFn: async () => (await sb.from("plan_payments").select("id,proveedor,referencia,periodo,monto,estado,metodo,paid_at,created_at,factura_ref,plan").eq("household_id", household.id).neq("estado", "pendiente").order("created_at", { ascending: false }).limit(50)).data ?? [],
+    queryFn: () => loadHouseholdPayments(household.id),
   })
   useEffect(() => {
     if (params.get("pago")) toast("Estamos confirmando tu pago", { description: "Puede tardar unos minutos. Te avisamos cuando quede listo." })

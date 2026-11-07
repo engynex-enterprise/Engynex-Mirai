@@ -21,7 +21,8 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { createClient } from "@/utils/supabase/client"
-import { goalContribute } from "./commands"
+import { apiDeleteRow, rowsViaApi } from "@/lib/api/book-rows"
+import { goalContribute, updateFund } from "./commands"
 import { aporteFondoSugerido, fijoStatus, imprevistos, liquidez, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
 import { fondoEstado } from "@/lib/domain/savings"
 import { Combobox } from "@/components/mirai/combobox"
@@ -110,7 +111,6 @@ export function GoalsView() {
     const v = abono[g.id]
     if (!v) return toast.error("Escribe cuánto guardaste")
     setAbonando(g.id)
-    const sb = createClient()
     const { data, error } = await goalContribute({ p_goal: g.id, p_valor: v, p_fecha: today, p_medio: medio[g.id] || undefined })
     setAbonando(null)
     if (error) return toast.error("No se pudo abonar", { description: error.message })
@@ -118,7 +118,7 @@ export function GoalsView() {
     toast.success("¡Bien! Abono registrado", {
       description: `Llevas ${fmtMoney(Number(r.ahorrado))} de ${fmtMoney(Number(r.objetivo))}.`,
       action: { label: "Deshacer", onClick: async () => {
-        const { error: e2 } = await sb.from("goal_movements").update({ deleted_at: new Date().toISOString() }).eq("id", r.id)
+        const { error: e2 } = rowsViaApi("goal_movements") ? await apiDeleteRow(bookId, "goal_movements", r.id) : await createClient().from("goal_movements").update({ deleted_at: new Date().toISOString() }).eq("id", r.id)
         if (e2) return toast.error("No se pudo deshacer", { description: e2.message })
         refrescar()
         toast.success("Listo, quitamos el abono")
@@ -128,7 +128,7 @@ export function GoalsView() {
     refrescar()
   }
   const fondoEn = async (asset: string) => {
-    const { error } = await createClient().from("emergency_funds").update({ asset_id: asset || null }).eq("book_id", bookId)
+    const { error } = await updateFund(bookId, { asset_id: asset || null })
     if (error) return toast.error("No se pudo guardar", { description: error.message })
     invalidateBook(qc, bookId, "emergency_funds")
     toast.success(asset ? "Listo: tu fondo está en esa cuenta" : "Listo: tu fondo es ahorro aparte", { description: asset ? "Ya suma en el saldo de la cuenta, así que no se cuenta dos veces en tu patrimonio." : "Suma como ahorro apartado en lo que tienes." })

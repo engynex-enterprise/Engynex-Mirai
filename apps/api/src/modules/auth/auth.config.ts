@@ -67,6 +67,9 @@ export function buildAuthOptions(deps: AuthDeps) {
     appName: "Mirai",
     baseURL: env.baseURL,
     basePath: "/api/auth",
+    // Errores del regreso de Google (estado vencido, regreso repetido por un doble clic…): a la pantalla de Mirai en
+    // español (web: app/auth/error), no a la página en inglés de Better Auth. Llega con ?error=<código>.
+    onAPIError: { errorURL: `${env.baseURL}/auth/error` },
     secret: env.secret,
     trustedOrigins: env.trustedOrigins,
     database: { db: deps.db, type: "postgres", schemaName: "auth" },
@@ -75,8 +78,10 @@ export function buildAuthOptions(deps: AuthDeps) {
       cookiePrefix: "mirai",
       useSecureCookies: env.secureCookies,
       database: { generateId: () => randomUUID() },
-      // Cloud Run / ALB / Front Door ponen la IP real en x-forwarded-for (y Fastify tiene trustProxy).
-      ipAddress: { ipAddressHeaders: ["x-forwarded-for", "x-real-ip"] },
+      // La IP real la calcula la API (auth.routes.ts: x-forwarded-for contando AUTH_PROXY_HOPS desde la derecha) y la
+      // pone en un encabezado propio. Con x-forwarded-for directo, detrás del balanceador hay varias IP y Better Auth
+      // usaba una sola llave para todos: 5 inicios de sesión por minuto en total.
+      ipAddress: { ipAddressHeaders: ["x-mirai-client-ip"] },
     },
     user: {
       modelName: "users",

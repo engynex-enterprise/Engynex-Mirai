@@ -3,9 +3,9 @@
 // Las reglas puras (roles, invitaciones, titularidad, referidos) vienen de @mirai/domain; la base vuelve a revisar
 // (RLS y RPC con sus RAISE en español).
 import { createHash, randomBytes } from "node:crypto"
-import { Inject, Injectable } from "@nestjs/common"
+import { Inject, Injectable, Optional } from "@nestjs/common"
 import type { Logger } from "pino"
-import type { HouseholdPeople, InvitationInfo, Person, Share } from "@mirai/contracts/modules/households"
+import type { FamilyPatch, HouseholdPeople, InvitationInfo, Person, Share } from "@mirai/contracts/modules/households"
 import { afterSend, checkDuplicate, inviteEstado, inviteText, isTestEmail, normalizeDest, resendGate, sameName, waMeLink, type LastResult } from "@mirai/domain/household/invites"
 import { ACCESS_ROLES, assignableRoles, can, deniedMsg, ROLE_INFO, ROLE_RANK, toAccess, type AccessRole } from "@mirai/domain/household/roles"
 import { canReceive, nameMatches, TRANSFER_DAYS } from "@mirai/domain/household/transfer"
@@ -17,9 +17,11 @@ import { CryptoService } from "../../core/crypto/crypto.service"
 import { systemScope } from "../../core/db/scope"
 import { DomainError } from "../../core/errors/domain-error"
 import { LOGGER } from "../../core/logging/logger"
+import { BetterAuthIdentityAdmin } from "../auth/better-auth.identity-admin"
+import { MiraiAuthService } from "../auth/mirai-auth.service"
 import { BillingService } from "../billing/billing.service"
 import { HouseholdAccess, type HouseholdCtx } from "./household-access"
-import { HouseholdsRepo, type InvRow } from "./households.repository"
+import { HouseholdsRepo, type FamilyRow, type InvRow } from "./households.repository"
 import { Limiter, RequestMeta } from "./limiter"
 import { HouseholdMessenger, StoragePurge, type InviteMsg } from "./ports"
 import { SiteUrl } from "./site-url"
@@ -46,7 +48,17 @@ export class HouseholdsService {
     private readonly site: SiteUrl,
     private readonly meta: RequestMeta,
     @Inject(LOGGER) private readonly log: Logger,
+    // V7: con AUTH_PROVIDER=mirai los datos del registro (user_metadata) no viajan en los claims: se leen de auth.users.
+    @Optional() private readonly miraiAuth?: MiraiAuthService,
+    @Optional() private readonly identity?: BetterAuthIdentityAdmin,
   ) {}
+
+  /** Código de referido guardado al registrarse (auth.users.raw_user_meta_data.ref) con el auth propio. */
+  private async registeredRef(userId: string): Promise<string | undefined> {
+    if (!this.miraiAuth?.enabled || !this.identity) return undefined
+    const ref = (await this.identity.getUser(userId))?.user_metadata?.ref
+    return typeof ref === "string" ? ref : undefined
+  }
 
   private get scope() {
     return this.ctx.db
@@ -61,7 +73,8 @@ export class HouseholdsService {
     const bookId = await this.repo.createHousehold(scope, b.hogar, b.libro)
     // Referidos: el código llega en los datos del registro (user_metadata.ref) o en la cookie que deja /registro?ref=…
     const meta = (this.ctx.user.claims as { user_metadata?: { ref?: string } }).user_metadata
-    await this.claimReferral(scope.userId, meta?.ref ?? b.ref).catch((e) => this.log.warn({ error: e }, "no se pudo reclamar el referido"))
+    const ref = meta?.ref ?? b.ref ?? (await this.registeredRef(scope.userId).catch(() => undefined))
+    await this.claimReferral(scope.userId, ref).catch((e) => this.log.warn({ error: e }, "no se pudo reclamar el referido"))
     this.access.invalidate()
     return { bookId, msg: "¡Listo! Tu hogar quedó creado." }
   }
@@ -362,6 +375,20 @@ export class HouseholdsService {
     const saved = await this.repo.saveFamily(this.scope, h.household.id, id, row)
     if (!saved) throw DomainError.role("No se pudo guardar: sin permiso")
     return { id: saved, msg: id ? `Se actualizaron los datos de ${row.nombre}.` : `${row.nombre} ya hace parte de tu hogar.` }
+  }
+
+  /** V7-H2: integrantes vivos del hogar (useMembers de la web). Cualquier integrante; con su sesión (la RLS decide). */
+  async family(householdId: string): Promise<FamilyRow[]> {
+    const h = await this.access.of(householdId)
+    return this.repo.family(this.scope, h.household.id)
+  }
+
+  /** V7-H2: cupo o datos de dependiente de un integrante (permiso «planear», como updateFamily). */
+  async patchFamily(householdId: string, id: string, patch: FamilyPatch): Promise<{ id: string; msg: string }> {
+    const h = await this.access.can(householdId, "planear")
+    const saved = await this.repo.patchFamily(this.scope, h.household.id, id, patch)
+    if (!saved) throw DomainError.notFound("Ese integrante ya no está en el hogar.")
+    return { id: saved, msg: "Guardado" }
   }
 
   /** Saca del hogar a un integrante sin cuenta (borrado lógico, con Deshacer). Cancela su invitación pendiente. */

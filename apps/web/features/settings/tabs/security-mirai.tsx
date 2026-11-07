@@ -3,7 +3,7 @@
 // Ajustes › Seguridad con AUTH_PROVIDER=mirai (v7, V7-B): verificación en dos pasos de Better Auth (QR, códigos de
 // respaldo, desactivar con la contraseña) y cerrar sesión en los otros dispositivos. Mismo diseño que con Supabase.
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { QRCodeSVG } from "qrcode.react"
 import Link from "next/link"
 import { KeyRound, LogOut, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react"

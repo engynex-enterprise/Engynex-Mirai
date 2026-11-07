@@ -9,6 +9,7 @@ import { Icon } from "@/components/mirai/icon"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { Notice } from "@/components/mirai/notice"
 import { createClient } from "@/utils/supabase/client"
+import { isMiraiAuth } from "@/lib/auth/provider"
 import { ROLE_INFO } from "@/lib/household/roles"
 import { fmtVence } from "@/lib/household/invites"
 import { acceptInvitation } from "./api"
@@ -28,7 +29,12 @@ export function AcceptInvitation({ token, info }: { token: string; info: Invitat
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const next = encodeURIComponent(`/invitacion/${token}`)
-  useEffect(() => { createClient().auth.getClaims().then(({ data }) => setSession(!!data?.claims)) }, [])
+  useEffect(() => {
+    // v7 (V7-H4): con AUTH_PROVIDER=mirai la sesión es la cookie httpOnly de Better Auth (se pregunta a /api/auth).
+    if (isMiraiAuth()) { void import("@/lib/auth/mirai").then((m) => m.currentUser()).then((u) => setSession(!!u), () => setSession(false)); return }
+    // Modo heredado: sesión de Supabase.
+    createClient().auth.getClaims().then(({ data }) => setSession(!!data?.claims))
+  }, [])
   const rol = info.rol ? ROLE_INFO[info.rol] : null
   const usable = info.estado === "pendiente" || info.ya_miembro
 

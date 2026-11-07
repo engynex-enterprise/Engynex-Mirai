@@ -84,6 +84,22 @@ export async function loadRentaData(sb: SupabaseClient<Database>, bookId: string
   }
 }
 
+/**
+ * La Declaración en el navegador (titular, Calendario fiscal y el flujo integral). V7-H2: con el interruptor `tax`,
+ * GET /v1/books/:b/renta (la API la arma con la sesión de la persona, su perfil y todos los documentos); apagado,
+ * loadRentaData con el cliente de Supabase del navegador (rama heredada). Si la API no responde, lo de siempre.
+ */
+export async function fetchRentaData(bookId: string, ownerId?: string | null): Promise<RentaData> {
+  const legacy = async () => loadRentaData((await import("@/utils/supabase/client")).createClient(), bookId, ownerId)
+  const { apiOn } = await import("@/lib/api/session")
+  if (!apiOn("tax")) return legacy()
+  const { readWithFallback } = await import("@/lib/api/book-tables")
+  return readWithFallback(async () => {
+    const { browserApi, unwrap } = await import("@/lib/api/client")
+    return unwrap(await browserApi().accountantOwner.renta({ params: { bookId } })) as unknown as RentaData
+  }, legacy)
+}
+
 /** Entrada para los cálculos de lib/domain/renta. */
 export function rentaInput(d: RentaData, y: number, mid: string): RentaInput {
   const t = d.years.find((x) => x.year === y && x.member_id === mid) ?? null

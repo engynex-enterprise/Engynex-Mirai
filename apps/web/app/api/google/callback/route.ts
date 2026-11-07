@@ -4,8 +4,11 @@ import { supabaseServer } from "@/utils/supabase/server"
 import { exchangeCode, saveTokens, siteUrl } from "@/lib/google"
 import { safeEqual } from "@/lib/security/secrets"
 import { safeNext } from "@/lib/security/safe-next"
+import { serverAuthProvider } from "@/lib/auth/provider"
 
 export async function GET(req: NextRequest) {
+  // v7: con AUTH_PROVIDER=mirai el regreso de Google lo atiende la API (/v1/google/callback).
+  if (serverAuthProvider() === "mirai") return NextResponse.redirect(`${siteUrl()}/ajustes?tab=alertas`)
   const store = await cookies()
   let saved: { state?: string; back?: string } = {}
   try { saved = JSON.parse(store.get("g_oauth")?.value ?? "{}") } catch { saved = {} }

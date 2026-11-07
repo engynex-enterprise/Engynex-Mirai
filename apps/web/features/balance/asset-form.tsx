@@ -18,7 +18,8 @@ import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
-import { assetCuadrar } from "./commands"
+import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { assetCuadrar, assetDescuadrar } from "./commands"
 import { esCuentaDinero, type SaldoCuenta } from "@/lib/domain/cuentas"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -75,18 +76,22 @@ function Body({ onOpenChange, initialSide, edit }: { onOpenChange: (o: boolean) 
       const id = edit?.row.id ?? crypto.randomUUID()
       await (side === "activos" ? saveA : saveP).mutateAsync({ id, cod, nombre: nombre.trim(), valor, currency } as never)
       if (side === "activos") {
-        const sb = createClient()
         if (dinero && auto) {
           const { error } = await assetCuadrar({ p_asset: id, p_saldo: valor })
           if (error) throw new Error(error.message)
         } else if (edit?.row.saldo_base != null) {
-          await sb.from("assets").update({ saldo_base: null, saldo_fecha: null, saldo_at: null }).eq("id", id)
+          await assetDescuadrar(id)
         }
         const quiere = (mid: string) => dinero && auto && elegidos.has(mid)
         const cambios = methods.filter((m) => quiere(m.id) !== (m.asset_id === id))
-        await Promise.all(cambios.map((m) => sb.from("payment_methods").update({ asset_id: quiere(m.id) ? id : null }).eq("id", m.id)))
-        if (dinero && auto && crearMedio && nombreLibre)
-          await sb.from("payment_methods").insert({ book_id: bookId, nombre: nombre.trim(), icon: "wallet", sort: methods.length + 1, asset_id: id })
+        const medio = { nombre: nombre.trim(), icon: "wallet", sort: methods.length + 1, asset_id: id }
+        if (rowsViaApi("payment_methods")) {
+          await Promise.all(cambios.map((m) => apiUpdateRow(bookId, "payment_methods", m.id, { asset_id: quiere(m.id) ? id : null })))
+          if (dinero && auto && crearMedio && nombreLibre) await apiInsertRow(bookId, "payment_methods", medio)
+        } else {
+          await Promise.all(cambios.map((m) => createClient().from("payment_methods").update({ asset_id: quiere(m.id) ? id : null }).eq("id", m.id)))
+          if (dinero && auto && crearMedio && nombreLibre) await createClient().from("payment_methods").insert({ book_id: bookId, ...medio })
+        }
         for (const t of ["assets", "payment_methods"]) invalidateBook(qc, bookId, t)
       }
       const txtAuto = dinero && auto ? "Desde ahora el saldo sube y baja solo con tus gastos e ingresos." : undefined

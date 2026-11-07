@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { RefreshCw, Search, Unplug } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -22,7 +23,6 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { EntityLogo } from "@/components/mirai/entity-logo"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
 import { addCardPurchase } from "@/features/cards/commands"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
 import { localCat, localHormiga } from "@/lib/domain"
@@ -30,7 +30,7 @@ import { fmtDate } from "@/lib/format"
 import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { defaultPaySource, parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
 import { classifyBatch } from "@/features/expenses/use-ai-category"
-import { connectGoogleViaApi, googleDisconnect, googleViaApi, scanMail, type MailRow } from "./api"
+import { connectGoogleViaApi, googleConnection, googleDisconnect, googleViaApi, insertExpenses, scanMail, type MailRow } from "./api"
 import { MAILQ_DEFAULT } from "./query"
 
 type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null; manual?: boolean; pago: string }
@@ -54,7 +54,7 @@ export function CorreoView() {
   const [rows, setRows] = useState<Row[]>([])
   const [saving, setSaving] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
-  const { data: conn, isPending } = useQuery({ queryKey: ["google-conn"], queryFn: async () => (await createClient().from("google_connections_public").select("email,scopes").maybeSingle()).data })
+  const { data: conn, isPending } = useQuery({ queryKey: ["google-conn"], queryFn: googleConnection })
   const gmail = !!conn?.scopes?.some((s) => s.includes("gmail"))
 
   useEffect(() => {
@@ -84,13 +84,12 @@ export function CorreoView() {
     const sel = rows.filter((r) => r.incl)
     if (!sel.length) return toast("Elige al menos un movimiento")
     setSaving(true)
-    const sb = createClient()
     const member_id = quien === "familia" ? null : quien
     const conTarjeta = sel.filter((r) => parsePaySource(r.pago).kind === "tarjeta")
     const sueltos = sel.filter((r) => parsePaySource(r.pago).kind === "medio")
     // Pagados con medio de pago: gastos normales. Con tarjeta de crédito: compra de la tarjeta + su gasto (una transacción cada una).
-    const { error } = sueltos.length ? await sb.from("expenses").insert(sueltos.map((r) => ({
-      book_id: bookId, fecha: r.fecha, descripcion: r.comercio, valor: r.valor, category_id: r.category_id, currency: "COP",
+    const { error } = sueltos.length ? await insertExpenses(bookId, sueltos.map((r) => ({
+      fecha: r.fecha, descripcion: r.comercio, valor: r.valor, category_id: r.category_id, currency: "COP",
       payment_method_id: parsePaySource(r.pago).id, member_id,
       hormiga: r.hormiga, hormiga_src: r.src === "ia" ? ("ia" as const) : ("regla" as const), origen: "correo" as const, external_id: `gmail:${r.id}`, cat_src: r.src,
     }))) : { error: null }

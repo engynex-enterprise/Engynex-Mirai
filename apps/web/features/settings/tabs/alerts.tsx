@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@/lib/query"
 import { ExternalLink, FlaskConical, Send } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -16,7 +17,7 @@ import { MoneyAutosave } from "@/components/mirai/money-autosave"
 import { Notice } from "@/components/mirai/notice"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { useApp } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
+import { fetchMyRule, fetchTelegramLinked, saveMyRule } from "../api"
 import { useSettings } from "@/features/catalogs/hooks"
 import { notifyChannels, sendDigestNow, sendTestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/api"
 import { calendarStatus, connectGoogleViaApi, googleViaApi, syncCalendar } from "@/features/correo/api"
@@ -39,14 +40,13 @@ function useRule() {
   const q = useQuery({
     queryKey: key,
     queryFn: async () => {
-      const { data } = await createClient().from("notification_rules").select("*").eq("user_id", user.id).eq("book_id", book.id).maybeSingle()
+      const data = await fetchMyRule(user.id, book.id)
       return (data ?? { matriz: {}, canales: { app: true, popup: true }, hora: 7, frecuencia: "diario", silencio: { on: false, desde: 22, hasta: 7 }, ocultar_montos: false, email_to: null, whatsapp_to: null, last_sent: {}, notif: null }) as unknown as RuleRow
     },
   })
   const save = async (p: Partial<RuleRow>, quiet?: boolean) => {
     qc.setQueryData(key, (o: RuleRow) => ({ ...o, ...p }))
-    const { error } = await createClient().from("notification_rules").upsert({ user_id: user.id, book_id: book.id, ...(p as object) })
-    if (error) return toast.error("No se pudo guardar", { description: error.message })
+    try { await saveMyRule(user.id, book.id, p as Record<string, unknown>) } catch (e) { return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     if (!quiet) toast("Guardado")
     qc.invalidateQueries({ queryKey: ["nrule"] })
   }
@@ -75,10 +75,10 @@ const NoDisponible = ({ que }: { que: string }) => <p className="pt-3 text-sm te
 function TelegramLink() {
   const { user } = useApp()
   const qc = useQueryClient()
-  const { data: link } = useQuery({ queryKey: ["tg-link", user.id], queryFn: async () => (await createClient().from("telegram_links").select("chat_id,linked_at").eq("user_id", user.id).maybeSingle()).data })
+  const { data: linked } = useQuery({ queryKey: ["tg-link", user.id], queryFn: () => fetchTelegramLinked(user.id) })
   const [url, setUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  if (link?.chat_id) return (
+  if (linked) return (
     <div className="flex flex-wrap items-center gap-2"><StatusPill tone="pagado" check>Chat vinculado</StatusPill>
       <Button size="sm" variant="ghost" onClick={async () => { await telegramUnlink(); qc.invalidateQueries({ queryKey: ["tg-link"] }); toast("Telegram desvinculado") }}>Desvincular</Button>
     </div>

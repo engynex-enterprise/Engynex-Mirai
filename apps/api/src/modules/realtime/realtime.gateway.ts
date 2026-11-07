@@ -1,5 +1,7 @@
 // Gateway socket.io (F2-G-1/G-3), servicio `mirai-realtime` (MODE=realtime).
 // - Autenticación en el handshake con el MISMO TokenVerifier de la API (`auth: { token }` o `Authorization: Bearer`).
+//   v7 (V7-H4): sin token, la cookie httpOnly de Better Auth (AUTH_PROVIDER=mirai, mismo origen o el mismo sitio en
+//   local). Esas conexiones se revisan en cada barrido: cerrar la sesión en otro dispositivo las desconecta.
 // - `join:book` comprueba la membresía con AppContextService.bookAccess (la misma consulta de BookGuard, con su caché
 //   de 30 s) y une a las salas del libro, del libro por rol y del hogar. La sala de la persona va desde la conexión.
 // - Revisión periódica: token vencido → `auth:expired` + desconexión; ya no es miembro → `book:left`.
@@ -17,6 +19,7 @@ import {
   type Ack, type ClientToServerEvents, type JoinBookAck, type PresenceUser, type ServerToClientEvents,
 } from "@mirai/contracts/modules/realtime"
 import { bearer } from "../../core/auth/auth.guard"
+import { sessionCookieToken } from "../../core/auth/better-auth.verifier"
 import { TokenVerifier, type AuthUser } from "../../core/auth/token-verifier"
 import { AppContextService } from "../../core/context/app-context.service"
 import { DomainError, INTERNAL_MSG } from "../../core/errors/domain-error"
@@ -33,6 +36,8 @@ export type SocketData = {
   exp: number
   books: Record<string, BookJoin>
   bucket: { at: number; n: number }
+  /** v7: encabezado Cookie con el que entró (sesión de Better Auth); se vuelve a validar en cada barrido. */
+  cookie?: string
 }
 export interface InterServerEvents {
   revalidate: (householdId: string) => void
@@ -98,9 +103,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   private async authenticate(socket: RtSocket): Promise<Error | undefined> {
     const h = socket.handshake
     const raw = typeof h.auth?.token === "string" && h.auth.token ? h.auth.token : bearer(h.headers.authorization)
-    if (!raw) return wsError("UNAUTHENTICATED", RT_MSG.login)
+    // v7: sin token, la cookie de sesión de Better Auth (el navegador nunca ve un token con AUTH_PROVIDER=mirai).
+    const cookie = raw ? undefined : (Array.isArray(h.headers.cookie) ? h.headers.cookie.join("; ") : h.headers.cookie) || undefined
+    const fromCookie = cookie ? sessionCookieToken(cookie) : null
+    if (!raw && !fromCookie) return wsError("UNAUTHENTICATED", RT_MSG.login)
     try {
-      const user = await this.verifier.verify(raw)
+      const user = raw ? await this.verifier.verify(raw) : await this.verifier.verify(fromCookie!, { fromCookie: true, cookie })
+      socket.data.cookie = raw ? undefined : cookie
       const prev = socket.data?.user?.id
       socket.data.user = user
       socket.data.exp = Number(user.claims.exp) * 1000
@@ -219,6 +228,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     const seen = new Set<string>()
     for (const s of this.localSockets()) {
       if (!s.data?.user) continue
+      if (s.data.cookie && !(await this.recheckCookie(s))) continue
       if (s.data.exp <= now) {
         s.emit("auth:expired", { msg: RT_MSG.expired })
         s.disconnect(true)
@@ -229,6 +239,23 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
         this.contexts.invalidate(s.data.user.id)
       }
       for (const bookId of Object.keys(s.data.books)) await this.recheck(s, bookId)
+    }
+  }
+
+  /** v7: la sesión de la cookie sigue viva (si la cerraron, `auth:expired` + desconexión). Falla transitoria = sigue. */
+  private async recheckCookie(s: RtSocket): Promise<boolean> {
+    const cookie = s.data.cookie!
+    try {
+      const user = await this.verifier.verify(sessionCookieToken(cookie) ?? "", { fromCookie: true, cookie })
+      if (user.id !== s.data.user.id) throw DomainError.unauthenticated(RT_MSG.login)
+      s.data.user = user
+      s.data.exp = Number(user.claims.exp) * 1000
+      return true
+    } catch (e) {
+      if (!(e instanceof DomainError && e.code === "UNAUTHENTICATED")) return true
+      s.emit("auth:expired", { msg: RT_MSG.expired })
+      s.disconnect(true)
+      return false
     }
   }
 
