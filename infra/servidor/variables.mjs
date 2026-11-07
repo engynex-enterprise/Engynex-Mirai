@@ -28,7 +28,8 @@ mkdirSync(dir, { recursive: true, mode: 0o700 })
 const secretosFile = join(dir, `servidor-${dominio}.secretos`)
 const salida = join(dir, `servidor-${dominio}.env`)
 
-const parse = (text) => Object.fromEntries([...text.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']?([^"'\r\n]*)["']?\s*$/gm)].map((m) => [m[1], m[2].trim()]))
+// [ \t] y no \s: con \s una variable vacía (`X=`) se tragaba la línea siguiente como su valor.
+const parse = (text) => Object.fromEntries([...text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*["']?([^"'\r\n]*)["']?[ \t]*$/gm)].map((m) => [m[1], m[2].trim()]))
 // Solo letras y números: van dentro de URLs postgres:// sin escapar.
 const clave = (n = 32) => randomBytes(n * 2).toString("base64").replace(/[^A-Za-z0-9]/g, "").slice(0, n)
 
