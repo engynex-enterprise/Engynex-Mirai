@@ -46,7 +46,7 @@ writeFileSync(secretosFile, Object.entries(nuevos).map(([k, v]) => `${k}=${v}`).
 chmodSync(secretosFile, 0o600)
 
 const local = existsSync(join(ROOT, ".env.local")) ? parse(readFileSync(join(ROOT, ".env.local"), "utf8")) : {}
-const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"]
+const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "TURNSTILE_SECRET_KEY"]
 const desdeLocal = Object.fromEntries(copiar.filter((k) => local[k]).map((k) => [k, local[k]]))
 if (local.NEXT_PUBLIC_VAPID_PUBLIC_KEY) desdeLocal.VAPID_PUBLIC_KEY = local.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const faltan = ["ENCRYPTION_KEY", "CRON_SECRET"].filter((k) => !desdeLocal[k])
@@ -81,4 +81,4 @@ console.log(`  Desde .env.local: ${Object.keys(desdeLocal).join(", ") || "ningun
 console.log(`  Archivos: ${Object.keys(r2).length ? "Cloudflare R2 (" + new URL(r2.S3_ENDPOINT).host + ")" : "SeaweedFS del servidor"}`)
 console.log(`  Navegador (WEB_BUILD_ENV_B64): ${Object.keys(publicos).join(", ")}`)
 if (faltan.length) console.log(`! Faltan en .env.local: ${faltan.join(", ")} (cópialas de producción antes de desplegar)`)
-console.log("  A mano en el panel: AI_GATEWAY_API_KEY, TURNSTILE_SECRET_KEY y las de Mercado Pago y Wompi (si las usas).")
+console.log("  A mano en el panel: AI_GATEWAY_API_KEY y las de Mercado Pago y Wompi (si las usas).")
