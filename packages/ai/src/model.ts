@@ -28,7 +28,12 @@ export function modelFrom(v: IntegrationValue, override?: string): LanguageModel
       // propio Gateway debe traer su clave: sin esto, usaría la de Mirai sin descontar créditos.
       if (!key && v.source === "hogar") throw new Error("Pega la clave de tu Vercel AI Gateway en Ajustes › Inteligencia artificial.")
       return createGateway({ apiKey: key || rt().env("AI_GATEWAY_API_KEY") })(m)
-    case "ai_gemini": return createGoogleGenerativeAI({ apiKey: key })(m)
+    case "ai_gemini": {
+      // AI_GEMINI_BASE_URL: Gemini por el AI Gateway de Cloudflare (uso y costos, límite de peticiones; sin guardar los
+      // mensajes). Ej.: https://gateway.ai.cloudflare.com/v1/<cuenta>/mirai/google-ai-studio/v1beta. Vacía = directo.
+      const baseURL = rt().env("AI_GEMINI_BASE_URL") || undefined
+      return createGoogleGenerativeAI({ apiKey: key, ...(baseURL ? { baseURL } : {}) })(m)
+    }
     case "ai_groq": return createGroq({ apiKey: key })(m)
     case "ai_openrouter": return createOpenRouter({ apiKey: key }).chat(m)
     case "ai_anthropic": return createAnthropic({ apiKey: key })(m)

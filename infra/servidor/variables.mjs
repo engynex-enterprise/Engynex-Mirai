@@ -71,7 +71,9 @@ for (const [k, v] of Object.entries(local))
   if (k.startsWith("NEXT_PUBLIC_") && !(k in publicos) && !/SUPABASE|SITE_URL|API_URL|REALTIME|LIVE_SOURCE/.test(k) && v) publicos[k] = v
 const buildB64 = Buffer.from(Object.entries(publicos).map(([k, v]) => `${k}=${v}`).join("\n") + "\n").toString("base64")
 
-const todo = { MIRAI_DOMINIO: dominio, ...nuevos, ...desdeLocal, ...r2, WEB_BUILD_ENV_B64: buildB64 }
+// Gemini por el AI Gateway "mirai" de Cloudflare (sin guardar mensajes ni caché; solo uso, costos y límite).
+const ia = local.CLOUDFLARE_ACCOUNT_ID ? { AI_GEMINI_BASE_URL: `https://gateway.ai.cloudflare.com/v1/${local.CLOUDFLARE_ACCOUNT_ID}/mirai/google-ai-studio/v1beta` } : {}
+const todo = { MIRAI_DOMINIO: dominio, ...nuevos, ...desdeLocal, ...r2, ...ia, WEB_BUILD_ENV_B64: buildB64 }
 writeFileSync(salida, Object.entries(todo).map(([k, v]) => `${k}=${v}`).join("\n") + "\n", { mode: 0o600 })
 chmodSync(salida, 0o600)
 
