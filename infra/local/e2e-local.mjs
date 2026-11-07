@@ -291,7 +291,7 @@ async function main() {
   const RUN = join(ROOT, "infra/local/.run/api")
   mkdirSync(RUN, { recursive: true })
   for (const port of [WEB_PORT, API_PORT, RT_PORT]) if (portBusy(port)) throw new Error(`El puerto ${port} está ocupado (¿otra corrida con --keep?). Ciérrala: lsof -ti tcp:${port} | xargs kill`)
-  console.log("▶ Docker: Supabase local + Postgres 17 + Redis + MinIO")
+  console.log(SIN_SUPA ? "▶ Docker: Postgres 17 + Redis + MinIO (Supabase local APAGADO)" : "▶ Docker: Supabase local + Postgres 17 + Redis + MinIO")
   if (SIN_SUPA) {
     // Apaga el "Supabase local" si quedó encendido de otra corrida (los datos se conservan en sus volúmenes).
     const supa = spawnSync("docker", ["ps", "-q", "--filter", "name=^mirai-local-supa-"], { encoding: "utf8" }).stdout.trim().split(/\s+/).filter(Boolean)

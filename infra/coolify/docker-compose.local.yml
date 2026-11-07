@@ -1,0 +1,26 @@
+# Prueba del despliegue de Coolify EN ESTE COMPUTADOR (mismas imágenes y MIRAI_ENV=produccion, sin dominios ni HTTPS).
+#   node infra/coolify/prueba-local.mjs        (arma variables, compila, prepara la base y revisa que todo responda)
+# Solo cambia lo que en el VPS hace Coolify: puertos en 127.0.0.1 y URLs http://localhost en vez de https://<dominio>.
+x-urls: &urls
+  BETTER_AUTH_URL: http://localhost:56300
+  WEB_ORIGINS: http://localhost:56300
+  SITE_URL: http://localhost:56300
+  API_PUBLIC_URL: http://localhost:56300
+  S3_PUBLIC_ENDPOINT: http://localhost:56900
+  PUBLIC_FILES_URL: http://localhost:56900/mirai-public
+  AUTH_MAIL_DRIVER: log
+
+services:
+  db:
+    ports: !override ["127.0.0.1:56432:5432"]
+  api:
+    environment: *urls
+  realtime:
+    environment: *urls
+    ports: ["127.0.0.1:56081:8080"]
+  web:
+    environment:
+      NEXT_PUBLIC_SITE_URL: http://localhost:56300
+    ports: ["127.0.0.1:56300:8080"]
+  minio:
+    ports: ["127.0.0.1:56900:9000"]

@@ -1,0 +1,262 @@
+# Mirai completo en UN servidor con Coolify (v7, sin Vercel ni Supabase). Guía: infra/coolify/README.md.
+#
+# En Coolify: + New › Docker Compose (repositorio de GitHub, rama v6 o main) › "Docker Compose Location":
+# /infra/coolify/docker-compose.yml. Las variables ${…} aparecen en la pestaña Environment Variables de Coolify
+# (pégalas con el archivo que arma infra/coolify/variables.mjs). Las marcadas ${VAR:?} son obligatorias.
+#
+# Dominios (Coolify › cada servicio › Domains, con https):
+#   web       https://${MIRAI_DOMINIO}            puerto 8080   (la web reenvía /api/auth y /v1 a la API: mismo origen)
+#   realtime  https://rt.${MIRAI_DOMINIO}         puerto 8080   (WebSocket del "Sincronizado en vivo")
+#   minio     https://files.${MIRAI_DOMINIO}      puerto 9000   (archivos: avatares públicos y enlaces firmados)
+# La base, PostgREST, Redis y la API NO tienen dominio: solo se ven dentro de la red de Docker.
+
+x-restart: &restart
+  restart: unless-stopped
+
+# Lo que la API y el gateway comparten (misma imagen; MODE decide qué arranca).
+x-api-env: &api-env
+  MIRAI_ENV: produccion
+  PORT: "8080"
+  LOG_LEVEL: info
+  TZ: America/Bogota
+  # Auth propio (Better Auth) en la base propia.
+  AUTH_PROVIDER: mirai
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
+  BETTER_AUTH_URL: https://${MIRAI_DOMINIO:?}
+  AUTH_DATABASE_URL: postgres://mirai_app:${MIRAI_APP_PASSWORD:?}@db:5432/mirai
+  AUTH_PROXY_HOPS: "1"
+  AUTH_MAIL_DRIVER: services
+  AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-no-responder@engynex.com}
+  TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+  # Datos por el PostgREST interno (RLS igual que en Supabase) y conexión directa para auth y LISTEN.
+  DB_ADAPTER: postgrest
+  POSTGREST_URL: http://postgrest:3000
+  POSTGREST_JWT_SECRET: ${POSTGREST_JWT_SECRET:?}
+  DATABASE_URL: postgres://mirai_app:${MIRAI_APP_PASSWORD:?}@db:5432/mirai
+  REALTIME_DATABASE_URL: postgres://mirai_app:${MIRAI_APP_PASSWORD:?}@db:5432/mirai
+  REDIS_URL: redis://redis:6379
+  # Sin Supabase: la API todavía pide estas variables al arrancar (V7-R las quita). Puerto muerto a propósito:
+  # si algo intentara hablarle a Supabase, falla en vez de ir a la base vieja.
+  SUPABASE_URL: http://127.0.0.1:9
+  SUPABASE_PUBLISHABLE_KEY: sin-supabase-no-se-usa
+  SUPABASE_SECRET_KEY: sin-supabase-no-se-usa
+  AUTH_ISSUER: http://127.0.0.1:9/auth/v1
+  AUTH_JWKS_URL: http://127.0.0.1:9/auth/v1/.well-known/jwks.json
+  # Con una llave de Supabase la API guardaría límites e idempotencia allá: aquí, en memoria (un solo servidor).
+  RATE_LIMIT_STORE: memory
+  IDEMPOTENCY_STORE: memory
+  QUEUE_DRIVER: inline
+  # Archivos en MinIO (S3) del mismo servidor.
+  OBJECT_STORE: s3
+  S3_ENDPOINT: http://minio:9000
+  S3_PUBLIC_ENDPOINT: https://files.${MIRAI_DOMINIO:?}
+  S3_FORCE_PATH_STYLE: "1"
+  S3_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: mirai
+  AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:?}
+  STORAGE_BUCKET_PRIVATE: mirai-private
+  STORAGE_BUCKET_BACKUPS: mirai-backups
+  STORAGE_BUCKET_PUBLIC: mirai-public
+  PUBLIC_FILES_URL: https://files.${MIRAI_DOMINIO:?}/mirai-public
+  # Web, cron, Google, push y pagos.
+  WEB_ORIGINS: https://${MIRAI_DOMINIO:?}
+  SITE_URL: https://${MIRAI_DOMINIO:?}
+  API_PUBLIC_URL: https://${MIRAI_DOMINIO:?}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
+  CRON_SECRET: ${CRON_SECRET:?}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_OAUTH_STATE_KEY: ${GOOGLE_OAUTH_STATE_KEY:?}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:soporte@engynex.com}
+  AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:-}
+  MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+  MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+  WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-}
+  WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET:-}
+  WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:-}
+  TICK_DAILY_TASKS: "1"
+  AUTOMATIONS_OUTBOX: "1"
+
+services:
+  # ── Base de datos (Postgres 17). Sin puerto público: se entra por un túnel SSH (README › Migrar los datos). ──
+  db:
+    <<: *restart
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: mirai
+      TZ: America/Bogota
+    command: ["postgres", "-c", "max_connections=100", "-c", "shared_buffers=256MB"]
+    volumes: ["db-data:/var/lib/postgresql/data"]
+    # Solo para el túnel SSH desde el computador del dueño (127.0.0.1 del servidor, nunca a internet).
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mirai"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # ── PostgREST interno: la API lee y escribe con la RLS de siempre (rol authenticator). ──
+  postgrest:
+    <<: *restart
+    image: postgrest/postgrest:v12.2.12
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${MIRAI_AUTHENTICATOR_PASSWORD:?}@db:5432/mirai
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${POSTGREST_JWT_SECRET:?}
+      PGRST_DB_POOL: "10"
+      PGRST_DB_CHANNEL_ENABLED: "true"
+      PGRST_DB_MAX_ROWS: "10000"
+      PGRST_SERVER_PORT: "3000"
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  # ── Archivos (S3 compatible). Dominio files.<dominio>, puerto 9000. ──
+  minio:
+    <<: *restart
+    image: quay.io/minio/minio:latest
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: mirai
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:?}
+      MINIO_BROWSER: "off"
+    volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 30
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    restart: "no"
+    depends_on: { minio: { condition: service_healthy } }
+    environment:
+      MINIO_PASSWORD: ${MINIO_PASSWORD:?}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mc alias set m http://minio:9000 mirai "$$MINIO_PASSWORD" &&
+        mc mb -p m/mirai-private m/mirai-backups m/mirai-public &&
+        mc anonymous set download m/mirai-public
+
+  # ── API (NestJS + Better Auth). Sin dominio: la web le reenvía /api/auth y /v1 (cookie del mismo origen). ──
+  api:
+    <<: *restart
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    depends_on:
+      db: { condition: service_healthy }
+      postgrest: { condition: service_started }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    environment:
+      <<: *api-env
+      MODE: api
+      REALTIME_API_EMIT: "1"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 40s
+      retries: 5
+
+  # ── Tiempo real (socket.io). Dominio rt.<dominio>, puerto 8080. Escucha los cambios de la base (pg_notify). ──
+  realtime:
+    <<: *restart
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      <<: *api-env
+      MODE: realtime
+      REALTIME_PG_LISTEN: "1"
+
+  # ── Web (Next.js standalone). Dominio principal, puerto 8080. ──
+  web:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        # NEXT_PUBLIC_* del navegador (se incrustan al compilar). Lo arma infra/coolify/variables.mjs.
+        WEB_BUILD_ENV_B64: ${WEB_BUILD_ENV_B64:?}
+        GIT_SHA: ${SOURCE_COMMIT:-coolify}
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      MIRAI_ENV: produccion
+      TZ: America/Bogota
+      AUTH_PROVIDER: mirai
+      MIRAI_API_URL: http://api:8080
+      MIRAI_API_ROLLOUT: all
+      NEXT_PUBLIC_SITE_URL: https://${MIRAI_DOMINIO:?}
+      # lib/env.ts todavía las exige (V7-R): puerto muerto, nada le habla a Supabase.
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sin-supabase-no-se-usa
+      SUPABASE_SECRET_KEY: sin-supabase-no-se-usa
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
+      CRON_SECRET: ${CRON_SECRET:?}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+
+  # ── Reloj: los mismos trabajos que Cloud Scheduler (infra/terraform/clouds/gcp/stack/jobs.tf) por HTTP a la API. ──
+  cron:
+    <<: *restart
+    image: alpine:3.20
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:?}
+      TZ: America/Bogota
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache tzdata >/dev/null
+        job() { echo "wget -qO- -T 600 --header='Authorization: Bearer $$CRON_SECRET' --header='Content-Type: application/json' --post-data='{\"dry\":false}' http://api:8080$$1 >/dev/null 2>&1 || echo \"fallo $$1\""; }
+        {
+          echo "5 * * * * $$(job /v1/jobs/notify/tick)"
+          echo "*/5 * * * * $$(job /v1/jobs/automations/drain)"
+        } > /etc/crontabs/root
+        chmod 600 /etc/crontabs/root
+        echo "cron listo: avisos cada hora (:05) y automatizaciones cada 5 min"
+        exec crond -f -l 8
+
+  # ── Copias diarias de la base (3:30 a. m.), se guardan 14 días en el volumen db-backups. ──
+  db-backup:
+    <<: *restart
+    image: postgres:17-alpine
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      TZ: America/Bogota
+    volumes: ["db-backups:/backups"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /usr/local/bin/copia <<'EOF'
+        #!/bin/sh
+        f=/backups/mirai-$$(date +%Y%m%d-%H%M).dump
+        pg_dump -h db -U postgres -d mirai -Fc -f "$$f.tmp" && mv "$$f.tmp" "$$f" && echo "copia $$f" || echo "fallo la copia"
+        find /backups -name 'mirai-*.dump' -mtime +14 -delete
+        EOF
+        chmod +x /usr/local/bin/copia
+        echo "30 3 * * * /usr/local/bin/copia" > /etc/crontabs/root
+        exec crond -f -l 8
+
+volumes:
+  db-data:
+  db-backups:
+  minio-data:

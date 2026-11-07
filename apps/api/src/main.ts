@@ -8,6 +8,7 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify"
 import { enableZodEs } from "@mirai/contracts/zod-es"
 import { AppModule } from "./app.module"
 import { configureApp, fastifyAdapter } from "./app.setup"
+import { dropBlankEnv } from "./core/config/blank-env"
 import { ConfigError, loadConfig } from "./core/config/config.schema"
 import { resolveSecretRefs, SecretsError } from "./core/secrets/secrets"
 import { createLogger, NestPinoLogger } from "./core/logging/logger"
@@ -30,6 +31,7 @@ function loadLocalEnv() {
 
 async function bootstrap() {
   loadLocalEnv()
+  dropBlankEnv() // "" de Compose/Coolify/Terraform = sin definir (antes de cualquier esquema)
   enableZodEs()
   let config
   try {
