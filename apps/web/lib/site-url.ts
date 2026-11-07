@@ -17,3 +17,12 @@ export function publicSiteUrl() {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
   return vercel ? `https://${vercel}` : "https://mirai.engynex.com"
 }
+
+/**
+ * Origen público para las redirecciones de las rutas del servidor (route.ts). Detrás de un proxy (Docker con Traefik,
+ * Dokploy, Coolify) `request.nextUrl.origin` es la dirección interna del contenedor (https://0.0.0.0:8080): con
+ * NEXT_PUBLIC_SITE_URL definida se usa esa; si no (Vercel, `next dev`), la de la petición.
+ */
+export function publicOrigin(req: { nextUrl: { origin: string } }) {
+  return process.env.NEXT_PUBLIC_SITE_URL ? siteUrl() : req.nextUrl.origin
+}

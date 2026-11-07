@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { publicOrigin } from "@/lib/site-url"
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { supabaseServer } from "@/utils/supabase/server"
 import { safeNext } from "@/lib/security/safe-next"
@@ -10,7 +11,8 @@ import { serverAuthProvider } from "@/lib/auth/provider"
  * termina (?correo=listo). profiles.email se actualiza solo (trigger on_auth_user_change).
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
+  const { searchParams } = request.nextUrl
+  const origin = publicOrigin(request)
   // AUTH_PROVIDER=mirai: los enlaces de Better Auth van a /api/auth/*; uno viejo de Supabase ya no sirve.
   if (serverAuthProvider() === "mirai") return NextResponse.redirect(`${origin}/login?error=enlace`)
   const token_hash = searchParams.get("token_hash")

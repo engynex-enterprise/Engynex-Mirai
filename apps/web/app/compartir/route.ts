@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { publicOrigin } from "@/lib/site-url"
 import { SHARE_FILE_FIELD } from "@/lib/pwa/config"
 import { parseSharedText, shareRedirectUrl } from "@/lib/pwa/links"
 
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     text = parseSharedText({ title: str("title"), text: str("text"), url: str("url") })
     file = fd.getAll(SHARE_FILE_FIELD).some((f) => typeof f === "object" && f !== null && "size" in f && f.size > 0)
   } catch { /* sin datos: igual abre el formulario */ }
-  const to = new URL(shareRedirectUrl({ text }), request.nextUrl.origin)
+  const to = new URL(shareRedirectUrl({ text }), publicOrigin(request))
   if (file) to.searchParams.set("compartido", "sin-archivo")
   return NextResponse.redirect(to, 303)
 }
@@ -25,5 +26,5 @@ export async function POST(request: NextRequest) {
 export function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams
   const text = parseSharedText({ title: q.get("title"), text: q.get("text"), url: q.get("url") })
-  return NextResponse.redirect(new URL(shareRedirectUrl({ text }), request.nextUrl.origin), 303)
+  return NextResponse.redirect(new URL(shareRedirectUrl({ text }), publicOrigin(request)), 303)
 }

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { publicOrigin } from "@/lib/site-url"
 import type { User } from "@supabase/supabase-js"
 import { supabaseServer } from "@/utils/supabase/server"
 import { safeNext } from "@/lib/security/safe-next"
@@ -20,7 +21,8 @@ function withParams(path: string, params: Record<string, string>) {
  */
 export async function GET(request: NextRequest) {
   if (serverAuthProvider() === "mirai") return miraiCallback(request)
-  const { searchParams, origin } = request.nextUrl
+  const { searchParams } = request.nextUrl
+  const origin = publicOrigin(request)
   const code = searchParams.get("code")
   const next = safeNext(searchParams.get("next"))
   const errCode = searchParams.get("error_code") ?? ""
@@ -65,7 +67,8 @@ async function googlePhoto(supabase: Awaited<ReturnType<typeof supabaseServer>>,
  * aquí solo como `callbackURL`. Se respeta `next` y se traducen sus errores a los mismos motivos de siempre.
  */
 function miraiCallback(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
+  const { searchParams } = request.nextUrl
+  const origin = publicOrigin(request)
   const next = safeNext(searchParams.get("next"))
   const err = searchParams.get("error") ?? ""
   if (!err) return NextResponse.redirect(`${origin}${next}`)
