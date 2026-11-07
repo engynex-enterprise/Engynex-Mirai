@@ -46,7 +46,7 @@ writeFileSync(secretosFile, Object.entries(nuevos).map(([k, v]) => `${k}=${v}`).
 chmodSync(secretosFile, 0o600)
 
 const local = existsSync(join(ROOT, ".env.local")) ? parse(readFileSync(join(ROOT, ".env.local"), "utf8")) : {}
-const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "TURNSTILE_SECRET_KEY"]
+const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "TURNSTILE_SECRET_KEY", "AI_GATEWAY_CF_TOKEN"]
 const desdeLocal = Object.fromEntries(copiar.filter((k) => local[k]).map((k) => [k, local[k]]))
 if (local.NEXT_PUBLIC_VAPID_PUBLIC_KEY) desdeLocal.VAPID_PUBLIC_KEY = local.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const faltan = ["ENCRYPTION_KEY", "CRON_SECRET"].filter((k) => !desdeLocal[k])

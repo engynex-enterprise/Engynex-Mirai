@@ -31,8 +31,10 @@ export function modelFrom(v: IntegrationValue, override?: string): LanguageModel
     case "ai_gemini": {
       // AI_GEMINI_BASE_URL: Gemini por el AI Gateway de Cloudflare (uso y costos, límite de peticiones; sin guardar los
       // mensajes). Ej.: https://gateway.ai.cloudflare.com/v1/<cuenta>/mirai/google-ai-studio/v1beta. Vacía = directo.
+      // Los gateways de Cloudflare exigen además su token (AI_GATEWAY_CF_TOKEN, permiso "AI Gateway Run").
       const baseURL = rt().env("AI_GEMINI_BASE_URL") || undefined
-      return createGoogleGenerativeAI({ apiKey: key, ...(baseURL ? { baseURL } : {}) })(m)
+      const cfToken = baseURL ? rt().env("AI_GATEWAY_CF_TOKEN") : undefined
+      return createGoogleGenerativeAI({ apiKey: key, ...(baseURL ? { baseURL } : {}), ...(cfToken ? { headers: { "cf-aig-authorization": `Bearer ${cfToken}` } } : {}) })(m)
     }
     case "ai_groq": return createGroq({ apiKey: key })(m)
     case "ai_openrouter": return createOpenRouter({ apiKey: key }).chat(m)
