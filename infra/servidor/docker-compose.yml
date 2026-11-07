@@ -46,18 +46,20 @@ x-api-env: &api-env
   RATE_LIMIT_STORE: memory
   IDEMPOTENCY_STORE: memory
   QUEUE_DRIVER: inline
-  # Archivos en MinIO (S3) del mismo servidor.
+  # Archivos por S3. Por defecto, SeaweedFS del mismo servidor (servicio `minio`). Para otro proveedor (Cloudflare R2,
+  # AWS S3, Backblaze…) basta con definir en el panel S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY,
+  # PUBLIC_FILES_URL y S3_PUBLIC_ENDPOINT= (vacía: los enlaces firmados salen con S3_ENDPOINT). Guía: README › Archivos.
   OBJECT_STORE: s3
-  S3_ENDPOINT: http://minio:9000
-  S3_PUBLIC_ENDPOINT: https://files.${MIRAI_DOMINIO:?}
-  S3_FORCE_PATH_STYLE: "1"
-  S3_REGION: us-east-1
-  AWS_ACCESS_KEY_ID: mirai
-  AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:?}
-  STORAGE_BUCKET_PRIVATE: mirai-private
-  STORAGE_BUCKET_BACKUPS: mirai-backups
-  STORAGE_BUCKET_PUBLIC: mirai-public
-  PUBLIC_FILES_URL: https://files.${MIRAI_DOMINIO:?}/mirai-public
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT-https://files.${MIRAI_DOMINIO}}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-1}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-mirai}
+  AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-${MINIO_PASSWORD}}
+  STORAGE_BUCKET_PRIVATE: ${STORAGE_BUCKET_PRIVATE:-mirai-private}
+  STORAGE_BUCKET_BACKUPS: ${STORAGE_BUCKET_BACKUPS:-mirai-backups}
+  STORAGE_BUCKET_PUBLIC: ${STORAGE_BUCKET_PUBLIC:-mirai-public}
+  PUBLIC_FILES_URL: ${PUBLIC_FILES_URL:-https://files.${MIRAI_DOMINIO}/mirai-public}
   # Web, cron, Google, push y pagos.
   WEB_ORIGINS: https://${MIRAI_DOMINIO:?}
   SITE_URL: https://${MIRAI_DOMINIO:?}

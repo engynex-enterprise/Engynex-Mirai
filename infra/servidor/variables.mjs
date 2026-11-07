@@ -50,6 +50,12 @@ const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLI
 const desdeLocal = Object.fromEntries(copiar.filter((k) => local[k]).map((k) => [k, local[k]]))
 if (local.NEXT_PUBLIC_VAPID_PUBLIC_KEY) desdeLocal.VAPID_PUBLIC_KEY = local.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const faltan = ["ENCRYPTION_KEY", "CRON_SECRET"].filter((k) => !desdeLocal[k])
+// Archivos en Cloudflare R2 (u otro S3) si .env.local tiene R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY y
+// R2_PUBLIC_URL. Sin ellas, el compose usa SeaweedFS del mismo servidor. S3_PUBLIC_ENDPOINT vacía: los enlaces firmados
+// salen con el endpoint de R2 (el navegador sube y descarga directo; los buckets necesitan CORS para el dominio).
+const r2 = ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_PUBLIC_URL"].every((k) => local[k])
+  ? { S3_ENDPOINT: local.R2_ENDPOINT, S3_REGION: "auto", S3_ACCESS_KEY_ID: local.R2_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: local.R2_SECRET_ACCESS_KEY, S3_PUBLIC_ENDPOINT: "", PUBLIC_FILES_URL: local.R2_PUBLIC_URL.replace(/\/+$/, "") }
+  : {}
 
 // NEXT_PUBLIC_* del navegador: los propios de este despliegue + los demás de .env.local (Turnstile, Wompi, AdSense…),
 // nunca los de Supabase ni el sitio de otro ambiente.
@@ -64,13 +70,14 @@ for (const [k, v] of Object.entries(local))
   if (k.startsWith("NEXT_PUBLIC_") && !(k in publicos) && !/SUPABASE|SITE_URL|API_URL|REALTIME|LIVE_SOURCE/.test(k) && v) publicos[k] = v
 const buildB64 = Buffer.from(Object.entries(publicos).map(([k, v]) => `${k}=${v}`).join("\n") + "\n").toString("base64")
 
-const todo = { MIRAI_DOMINIO: dominio, ...nuevos, ...desdeLocal, WEB_BUILD_ENV_B64: buildB64 }
+const todo = { MIRAI_DOMINIO: dominio, ...nuevos, ...desdeLocal, ...r2, WEB_BUILD_ENV_B64: buildB64 }
 writeFileSync(salida, Object.entries(todo).map(([k, v]) => `${k}=${v}`).join("\n") + "\n", { mode: 0o600 })
 chmodSync(salida, 0o600)
 
 console.log(`✓ Variables del servidor para ${dominio}: ${salida} (permisos 600; ningún valor se imprime)`)
 console.log(`  Generadas una vez (se reutilizan): ${Object.keys(nuevos).join(", ")} → ${secretosFile}`)
 console.log(`  Desde .env.local: ${Object.keys(desdeLocal).join(", ") || "ninguna"}`)
+console.log(`  Archivos: ${Object.keys(r2).length ? "Cloudflare R2 (" + new URL(r2.S3_ENDPOINT).host + ")" : "SeaweedFS del servidor"}`)
 console.log(`  Navegador (WEB_BUILD_ENV_B64): ${Object.keys(publicos).join(", ")}`)
 if (faltan.length) console.log(`! Faltan en .env.local: ${faltan.join(", ")} (cópialas de producción antes de desplegar)`)
 console.log("  A mano en el panel: AI_GATEWAY_API_KEY, TURNSTILE_SECRET_KEY y las de Mercado Pago y Wompi (si las usas).")
