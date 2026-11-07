@@ -31,3 +31,6 @@ legacy/server/public/
 **/.turbo/
 # Enlace a la .env.local de la raíz (ver docs/DEPLOY-VERCEL.md › Monorepo)
 apps/web/.env.local
+
+# Copias de trabajo de agentes (git worktree)
+.claude/worktrees/

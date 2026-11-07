@@ -12,7 +12,7 @@
 - **Idioma:** UI, textos, comentarios de cara al usuario y respuestas al dueño del producto en **español de Colombia**, con tuteo.
 - **Principio:** *extremadamente simple*. Cada sección tiene "Cómo funciona" (`HELP`), cada modal su descripción (`MDESC`), cada campo su ayuda (`fieldHelp()`).
 - **Dónde vive (desde 2026-11-07):** un VPS de Hostinger (`vps.engynex.com`) con **Dokploy**: la v7 completa en Docker (`infra/servidor/docker-compose.yml`: Postgres 17, PostgREST, Redis, SeaweedFS, API NestJS con login propio, tiempo real, web, cron y copias). **Ya no usa Vercel ni Supabase** (quedan apagados como respaldo unas semanas). Guía: `infra/servidor/README.md`.
-- **Ambientes:** producción = rama `v6` → https://mirai.engynex.com (Dokploy despliega con `compose.deploy` o desde su panel). No hay ambiente de pruebas en línea: se prueba con `pnpm local:serve`, `pnpm e2e:local --auth=mirai --sin-supabase` y `node infra/servidor/prueba-local.mjs` (el mismo despliegue en este computador).
+- **Ambientes:** producción = rama `main` → https://mirai.engynex.com. Push a `main` → CI en verde → `.github/workflows/desplegar-vps.yml` pide el despliegue a Dokploy (o a mano: Actions › Desplegar VPS). `v6` quedó como rama histórica. No hay ambiente de pruebas en línea: se prueba con `pnpm local:serve`, `pnpm e2e:local --auth=mirai --sin-supabase` y `node infra/servidor/prueba-local.mjs` (el mismo despliegue en este computador).
 
 ## 2. Comandos
 Desde la raíz (pnpm 10 con `corepack enable`; Turborepo guarda en caché build, typecheck, lint y test por paquete):
