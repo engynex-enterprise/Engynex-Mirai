@@ -1,15 +1,15 @@
-// Arma las variables de entorno de Mirai en Coolify (infra/coolify/docker-compose.yml) SIN imprimir ningún valor.
+// Arma las variables de entorno de Mirai para Dokploy o Coolify (infra/servidor/docker-compose.yml) SIN imprimir ningún valor.
 //
-//   node infra/coolify/variables.mjs mirai.engynex.com
+//   node infra/servidor/variables.mjs mirai.engynex.com
 //
 // - Secretos nuevos (contraseñas de la base, PostgREST, MinIO, Better Auth, state de Google): se generan UNA vez y se
-//   guardan en ~/.mirai/coolify-<dominio>.secretos (permisos 600, fuera del repositorio). Las siguientes corridas los
+//   guardan en ~/.mirai/servidor-<dominio>.secretos (permisos 600, fuera del repositorio). Las siguientes corridas los
 //   reutilizan: BETTER_AUTH_SECRET y las contraseñas de la base NUNCA deben cambiar.
 // - Los que ya existen (ENCRYPTION_KEY, CRON_SECRET, Google, push) salen de la .env.local de la raíz: deben ser
 //   idénticos a los de producción (ENCRYPTION_KEY descifra las integraciones guardadas).
 // - WEB_BUILD_ENV_B64: los NEXT_PUBLIC_* del navegador en base64 (argumento de compilación de la web).
-// Resultado: ~/.mirai/coolify-<dominio>.env → en Coolify › el recurso › Environment Variables › "Developer view",
-// pega su contenido y guarda. AI_GATEWAY_API_KEY y las de pagos se agregan a mano en Coolify (no se copian aquí).
+// Resultado: ~/.mirai/servidor-<dominio>.env → en Dokploy › Environment (o Coolify › Developer view) pega su contenido
+// y guarda. AI_GATEWAY_API_KEY y las de pagos se agregan a mano en el panel (no se copian aquí).
 import { randomBytes } from "node:crypto"
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
@@ -19,14 +19,14 @@ import { fileURLToPath } from "node:url"
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
 const dominio = (process.argv[2] ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "")
 if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dominio)) {
-  console.error("Uso: node infra/coolify/variables.mjs <dominio>   (p. ej. mirai.engynex.com)")
+  console.error("Uso: node infra/servidor/variables.mjs <dominio>   (p. ej. mirai.engynex.com)")
   process.exit(1)
 }
 
 const dir = join(homedir(), ".mirai")
 mkdirSync(dir, { recursive: true, mode: 0o700 })
-const secretosFile = join(dir, `coolify-${dominio}.secretos`)
-const salida = join(dir, `coolify-${dominio}.env`)
+const secretosFile = join(dir, `servidor-${dominio}.secretos`)
+const salida = join(dir, `servidor-${dominio}.env`)
 
 const parse = (text) => Object.fromEntries([...text.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']?([^"'\r\n]*)["']?\s*$/gm)].map((m) => [m[1], m[2].trim()]))
 // Solo letras y números: van dentro de URLs postgres:// sin escapar.
@@ -68,9 +68,9 @@ const todo = { MIRAI_DOMINIO: dominio, ...nuevos, ...desdeLocal, WEB_BUILD_ENV_B
 writeFileSync(salida, Object.entries(todo).map(([k, v]) => `${k}=${v}`).join("\n") + "\n", { mode: 0o600 })
 chmodSync(salida, 0o600)
 
-console.log(`✓ Variables de Coolify para ${dominio}: ${salida} (permisos 600; ningún valor se imprime)`)
+console.log(`✓ Variables del servidor para ${dominio}: ${salida} (permisos 600; ningún valor se imprime)`)
 console.log(`  Generadas una vez (se reutilizan): ${Object.keys(nuevos).join(", ")} → ${secretosFile}`)
 console.log(`  Desde .env.local: ${Object.keys(desdeLocal).join(", ") || "ninguna"}`)
 console.log(`  Navegador (WEB_BUILD_ENV_B64): ${Object.keys(publicos).join(", ")}`)
 if (faltan.length) console.log(`! Faltan en .env.local: ${faltan.join(", ")} (cópialas de producción antes de desplegar)`)
-console.log("  A mano en Coolify: AI_GATEWAY_API_KEY, TURNSTILE_SECRET_KEY y las de Mercado Pago y Wompi (si las usas).")
+console.log("  A mano en el panel: AI_GATEWAY_API_KEY, TURNSTILE_SECRET_KEY y las de Mercado Pago y Wompi (si las usas).")

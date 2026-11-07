@@ -1,7 +1,7 @@
-// Prueba local del despliegue de Coolify (infra/coolify/docker-compose.yml + docker-compose.local.yml): compila las
+// Prueba local del despliegue de Coolify (infra/servidor/docker-compose.yml + docker-compose.local.yml): compila las
 // imágenes de producción, prepara la base vacía con db-destino y revisa de punta a punta que la cuenta se cree, entre
 // y lea /v1/me con MIRAI_ENV=produccion. No imprime secretos.
-//   node infra/coolify/prueba-local.mjs [--no-build] [--down]
+//   node infra/servidor/prueba-local.mjs [--no-build] [--down]
 import { execFileSync, spawnSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
@@ -10,11 +10,11 @@ import { fileURLToPath } from "node:url"
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
 const DOM = "prueba.local"
-const ENV_FILE = join(homedir(), ".mirai", `coolify-${DOM}.env`)
-const SECRETOS = join(homedir(), ".mirai", `coolify-${DOM}.secretos`)
+const ENV_FILE = join(homedir(), ".mirai", `servidor-${DOM}.env`)
+const SECRETOS = join(homedir(), ".mirai", `servidor-${DOM}.secretos`)
 const has = (f) => process.argv.includes(f)
 const compose = (args, opts = {}) =>
-  execFileSync("docker", ["compose", "-p", "mirai-cprueba", "--env-file", ENV_FILE, "-f", "infra/coolify/docker-compose.yml", "-f", "infra/coolify/docker-compose.local.yml", ...args], { cwd: ROOT, stdio: "inherit", ...opts })
+  execFileSync("docker", ["compose", "-p", "mirai-cprueba", "--env-file", ENV_FILE, "-f", "infra/servidor/docker-compose.yml", "-f", "infra/servidor/docker-compose.local.yml", ...args], { cwd: ROOT, stdio: "inherit", ...opts })
 const parse = (f) => Object.fromEntries([...readFileSync(f, "utf8").matchAll(/^([A-Z_0-9]+)=(.*)$/gm)].map((m) => [m[1], m[2]]))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const WEB = "http://localhost:56300"
@@ -24,7 +24,7 @@ if (has("--down")) {
   process.exit(0)
 }
 
-execFileSync("node", ["infra/coolify/variables.mjs", DOM], { cwd: ROOT, stdio: "inherit" })
+execFileSync("node", ["infra/servidor/variables.mjs", DOM], { cwd: ROOT, stdio: "inherit" })
 // La web del navegador apunta a localhost (no a https://prueba.local).
 const env = parse(ENV_FILE)
 const publicos = Buffer.from(env.WEB_BUILD_ENV_B64, "base64").toString("utf8")

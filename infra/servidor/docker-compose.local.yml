@@ -1,5 +1,5 @@
 # Prueba del despliegue de Coolify EN ESTE COMPUTADOR (mismas imágenes y MIRAI_ENV=produccion, sin dominios ni HTTPS).
-#   node infra/coolify/prueba-local.mjs        (arma variables, compila, prepara la base y revisa que todo responda)
+#   node infra/servidor/prueba-local.mjs        (arma variables, compila, prepara la base y revisa que todo responda)
 # Solo cambia lo que en el VPS hace Coolify: puertos en 127.0.0.1 y URLs http://localhost en vez de https://<dominio>.
 x-urls: &urls
   BETTER_AUTH_URL: http://localhost:56300

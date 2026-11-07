@@ -1,10 +1,10 @@
-# Mirai completo en UN servidor con Coolify (v7, sin Vercel ni Supabase). Guía: infra/coolify/README.md.
+# Mirai completo en UN servidor con Dokploy o Coolify (v7, sin Vercel ni Supabase). Guía: infra/servidor/README.md.
 #
-# En Coolify: + New › Docker Compose (repositorio de GitHub, rama v6 o main) › "Docker Compose Location":
-# /infra/coolify/docker-compose.yml. Las variables ${…} aparecen en la pestaña Environment Variables de Coolify
-# (pégalas con el archivo que arma infra/coolify/variables.mjs). Las marcadas ${VAR:?} son obligatorias.
+# Dokploy: Compose (tipo Docker Compose) › Compose Path ./infra/servidor/docker-compose.yml › Isolated Deployments.
+# Coolify: Docker Compose › Location /infra/servidor/docker-compose.yml. Las variables ${…} van en Environment (las arma
+# infra/servidor/variables.mjs). Las marcadas ${VAR:?} son obligatorias.
 #
-# Dominios (Coolify › cada servicio › Domains, con https):
+# Dominios (en el panel, cada servicio, con HTTPS):
 #   web       https://${MIRAI_DOMINIO}            puerto 8080   (la web reenvía /api/auth y /v1 a la API: mismo origen)
 #   realtime  https://rt.${MIRAI_DOMINIO}         puerto 8080   (WebSocket del "Sincronizado en vivo")
 #   minio     https://files.${MIRAI_DOMINIO}      puerto 9000   (archivos: avatares públicos y enlaces firmados)
@@ -191,7 +191,7 @@ services:
       context: ../..
       dockerfile: infra/docker/web.Dockerfile
       args:
-        # NEXT_PUBLIC_* del navegador (se incrustan al compilar). Lo arma infra/coolify/variables.mjs.
+        # NEXT_PUBLIC_* del navegador (se incrustan al compilar). Lo arma infra/servidor/variables.mjs.
         WEB_BUILD_ENV_B64: ${WEB_BUILD_ENV_B64:?}
         GIT_SHA: ${SOURCE_COMMIT:-coolify}
     depends_on:
