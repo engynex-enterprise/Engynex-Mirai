@@ -1,0 +1,62 @@
+# Monitor de caídas (gratis): cada 15 minutos revisa que la web y el login de producción respondan.
+# Si fallan 3 intentos seguidos abre un issue "🔴 Mirai caído" (GitHub avisa por correo a quien vigila el repositorio);
+# cuando vuelve, comenta y lo cierra. Sin cuentas externas. Nota: GitHub pausa los flujos programados de un repositorio
+# sin actividad por 60 días (se reactivan en Actions).
+name: Vigilancia
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: vigilancia
+  cancel-in-progress: false
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SITIO: ${{ vars.SITIO_PRODUCCION || 'https://mirai.engynex.com' }}
+      GH_TOKEN: ${{ github.token }}
+      TITULO: "🔴 Mirai caído"
+    steps:
+      - name: Revisar web y login
+        id: revisar
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            web=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "$SITIO/login" || echo 000)
+            auth=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "$SITIO/api/auth/ok" || echo 000)
+            echo "intento $i: web $web · login $auth"
+            if [ "$web" = 200 ] && [ "$auth" = 200 ]; then ok=1; break; fi
+            sleep 30
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "detalle=web $web · login $auth" >> "$GITHUB_OUTPUT"
+
+      - name: Abrir o cerrar el aviso
+        env:
+          OK: ${{ steps.revisar.outputs.ok }}
+          DETALLE: ${{ steps.revisar.outputs.detalle }}
+        run: |
+          abierto=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          ahora=$(TZ=America/Bogota date '+%Y-%m-%d %H:%M')
+          if [ "$OK" = 1 ]; then
+            if [ -n "$abierto" ]; then
+              gh issue comment "$abierto" -R "$GITHUB_REPOSITORY" --body "✅ Volvió a responder ($ahora, hora de Colombia)."
+              gh issue close "$abierto" -R "$GITHUB_REPOSITORY"
+            fi
+            exit 0
+          fi
+          if [ -z "$abierto" ]; then
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$TITULO" --body "$SITIO no responde desde $ahora (hora de Colombia): $DETALLE.
+
+          Qué revisar: panel de Dokploy (https://vps.engynex.com) › Mirai › Logs; estado del VPS en hPanel de Hostinger; Cloudflare › mirai.engynex.com."
+          fi # si ya hay un aviso abierto no se repite (sin correos cada 15 minutos)
+          exit 1

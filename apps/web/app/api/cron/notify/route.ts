@@ -26,6 +26,9 @@ export const maxDuration = 60
  * reparte la pasada por hogar con Cloud Tasks (/v1/jobs/notify/tick).
  */
 export async function GET(req: NextRequest) {
+  // Desde 2026-11-07 producción vive en el VPS (cron propio del compose). Un despliegue viejo de Vercel no debe avisar
+  // a nadie con la base anterior de Supabase.
+  if (process.env.VERCEL) return new Response("Avisos desactivados en Vercel", { status: 410 })
   // Comparación en tiempo constante (no revela cuántos caracteres del secreto acertó quien prueba).
   if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET))
     return NextResponse.json({ error: "No autorizado" }, { status: 401 })
