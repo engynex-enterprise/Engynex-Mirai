@@ -39,6 +39,21 @@ const NO_HORMIGA = ["Vivienda", "Servicios públicos", "Educación", "Salud"]
 
 const catByName = (cats: CategoryIn[], n: string) => cats.find((c) => c.nombre.toLowerCase() === String(n || "").toLowerCase())
 
+/**
+ * Regla del usuario que aplica a una descripción: la palabra más larga (la más específica) que esté contenida, sin
+ * importar mayúsculas ni tildes ("uber eats" gana sobre "uber"); si empatan, la primera de la lista.
+ */
+export function matchRule<R extends Pick<KeywordRuleIn, "keyword">>(desc: string, rules: readonly R[]): R | undefined {
+  const d = norm(desc)
+  let best: R | undefined
+  let len = 0
+  for (const r of rules) {
+    const k = norm(r.keyword)
+    if (k && k.length > len && d.includes(k)) { best = r; len = k.length }
+  }
+  return best
+}
+
 export type LocalCatSource = "regla" | "historial" | "palabras"
 
 export interface LocalCatContext {
@@ -56,7 +71,7 @@ export function localCat(desc: string, ctx: LocalCatContext): { category_id: str
   const d = norm(desc)
   if (d.length < 2) return null
   const byId = (id: string | null | undefined) => (id ? ctx.categories.find((c) => c.id === id) : undefined)
-  const r = ctx.rules.find((x) => x.keyword && d.includes(norm(x.keyword)))
+  const r = matchRule(d, ctx.rules.filter((x) => byId(x.category_id)))
   const rc = r && byId(r.category_id)
   if (rc) return { category_id: rc.id, src: "regla" }
   const hist = [...ctx.expenses].reverse().find((g) => {

@@ -1,0 +1,320 @@
+{
+  "addi": {
+    "file": "/brands/addi.svg",
+    "bleed": false,
+    "from": "https://framerusercontent.com/images/z1k7Q8vHsCRiRHF6UqTSfumiSHU.svg",
+    "at": "2026-11-07"
+  },
+  "air-e": {
+    "file": "/brands/air-e.png",
+    "bleed": false,
+    "from": "https://www.air-e.com/favicon.ico",
+    "at": "2026-11-07"
+  },
+  "alkosto": {
+    "file": "/brands/alkosto.png",
+    "bleed": true,
+    "from": "https://www.alkosto.com/_ui/responsive/theme-alkosto/images/android-chrome-512x512.png",
+    "at": "2026-11-07"
+  },
+  "banco-bogota": {
+    "file": "/brands/banco-bogota.png",
+    "bleed": false,
+    "from": "https://www.bancodebogota.com/documents/38440/2631259/favicon.ico/937cf9af-0e58-89bd-0bd2-28e8bdbb6250",
+    "at": "2026-11-07"
+  },
+  "banco-popular": {
+    "file": "/brands/banco-popular.svg",
+    "bleed": false,
+    "from": "https://www.bancopopular.com.co/wps/contenthandler/dav/themelist/TemaBancoPopular/images/favicon.svg",
+    "at": "2026-11-07"
+  },
+  "banco-w": {
+    "file": "/brands/banco-w.svg",
+    "bleed": false,
+    "from": "https://www.bancow.com.co/favicon.svg",
+    "at": "2026-11-07"
+  },
+  "bancolombia": {
+    "file": "/brands/bancolombia.svg",
+    "bleed": false,
+    "from": "https://www.bancolombia.com/favicon.svg",
+    "at": "2026-11-07"
+  },
+  "bbva": {
+    "file": "/brands/bbva.png",
+    "bleed": true,
+    "from": "https://www.bbva.com.co/content/dam/library/favicons/android-chrome-192x192.png",
+    "at": "2026-11-07"
+  },
+  "bold": {
+    "file": "/brands/bold.png",
+    "bleed": false,
+    "from": "https://bold.co/android-chrome-512x512.png",
+    "at": "2026-11-07"
+  },
+  "cafam": {
+    "file": "/brands/cafam.png",
+    "bleed": true,
+    "from": "https://www.cafam.com.co/favicon.ico",
+    "at": "2026-11-07"
+  },
+  "canva": {
+    "file": "/brands/canva.png",
+    "bleed": false,
+    "from": "https://static.canva.com/domain-assets/canva/static/images/android-192x192-2.png",
+    "at": "2026-11-07"
+  },
+  "celsia": {
+    "file": "/brands/celsia.png",
+    "bleed": false,
+    "from": "https://www.celsia.com/wp-content/uploads/2021/05/cropped-logotipocelsiamedia-270x270.png",
+    "at": "2026-11-07"
+  },
+  "claro": {
+    "file": "/brands/claro.png",
+    "bleed": false,
+    "from": "https://www.claro.com.co/portal/co/recursos_tema_evo/assets/internal/icon-touch-144.png",
+    "at": "2026-11-07"
+  },
+  "coingecko": {
+    "file": "/brands/coingecko.png",
+    "bleed": false,
+    "from": "https://www.coingecko.com/favicon-96x96.png",
+    "at": "2026-11-07"
+  },
+  "colpatria": {
+    "file": "/brands/colpatria.png",
+    "bleed": true,
+    "from": "https://cdn.aglty.io/scotiabank-colombia/scotiabank-colpatria/imagenes/logo-scotiabank-colaptria-240.jpg",
+    "at": "2026-11-07"
+  },
+  "coltefinanciera": {
+    "file": "/brands/coltefinanciera.png",
+    "bleed": false,
+    "from": "https://www.coltefinanciera.com.co/wp-content/uploads/2026/01/favicon-coltefinanciera-300x300.png",
+    "at": "2026-11-07"
+  },
+  "confiar": {
+    "file": "/brands/confiar.svg",
+    "bleed": false,
+    "from": "https://www.confiar.coop/favicon.svg",
+    "at": "2026-11-07"
+  },
+  "cotrafa": {
+    "file": "/brands/cotrafa.png",
+    "bleed": false,
+    "from": "https://www.cotrafa.com.co/wp-content/uploads/2026/09/Favicon_Cotrafa-Azul-nuevo-300x300.png",
+    "at": "2026-11-07"
+  },
+  "d1": {
+    "file": "/brands/d1.png",
+    "bleed": true,
+    "from": "https://d1tiendas.vteximg.com.br/arquivos/d1tiendas-favicon.ico",
+    "at": "2026-11-07"
+  },
+  "daviplata": {
+    "file": "/brands/daviplata.svg",
+    "bleed": false,
+    "from": "https://www.daviplata.com/documents/33100/247243/Logo+dav/9c05b554-7487-ae4f-d805-84323b99ba7b",
+    "at": "2026-11-07"
+  },
+  "didi": {
+    "file": "/brands/didi.png",
+    "bleed": false,
+    "from": "https://web.didiglobal.com/didiicon.ico",
+    "at": "2026-11-07"
+  },
+  "directv": {
+    "file": "/brands/directv.png",
+    "bleed": false,
+    "from": "https://dtv-cms-prd.s3.amazonaws.com/HISPAN_(Images)/logo-dtv-s.svg",
+    "at": "2026-11-07"
+  },
+  "disney": {
+    "file": "/brands/disney.png",
+    "bleed": true,
+    "from": "https://static-assets.bamgrid.com/product/disneyplus/favicons/msftpwa-512x512-aurora.b544236c6734eb78083b1f4f31d6f873.png",
+    "at": "2026-11-07"
+  },
+  "emcali": {
+    "file": "/brands/emcali.png",
+    "bleed": false,
+    "from": "https://www.emcali.com.co/documents/20143/0/favicon-emcali.ico/cb5c0ed7-f115-e1e0-8b8e-743102161d6a",
+    "at": "2026-11-07"
+  },
+  "epm": {
+    "file": "/brands/epm.svg",
+    "bleed": false,
+    "from": "https://www.epm.com.co/etc.clientlibs/epm/clientlibs/clientlib-site/resources/images/icons/favicon_epm.svg",
+    "at": "2026-11-07"
+  },
+  "falabella": {
+    "file": "/brands/falabella.png",
+    "bleed": true,
+    "from": "https://www.bancofalabella.com.co/icons/apple-touch-icon.png",
+    "at": "2026-11-07"
+  },
+  "finandina": {
+    "file": "/brands/finandina.png",
+    "bleed": false,
+    "from": "https://www.bancofinandina.com/hubfs/faviconV2.png",
+    "at": "2026-11-07"
+  },
+  "fna": {
+    "file": "/brands/fna.png",
+    "bleed": false,
+    "from": "https://www.fna.gov.co/icons/favicon.png",
+    "at": "2026-11-07"
+  },
+  "iris": {
+    "file": "/brands/iris.png",
+    "bleed": false,
+    "from": "https://iris.com.co/wp-content/uploads/2025/07/cropped-logo_iris_footer_v2.max-170x170-1-270x270.png",
+    "at": "2026-11-07"
+  },
+  "itau": {
+    "file": "/brands/itau.png",
+    "bleed": false,
+    "from": "https://banco.itau.co/documents/43985/111719/ITAUCorporate_LOGO_340X340/24deaa94-e7f2-43f0-02eb-8ffeab356dbc",
+    "at": "2026-11-07"
+  },
+  "jfk": {
+    "file": "/brands/jfk.png",
+    "bleed": true,
+    "from": "https://www.jfk.com.co/wp-content/uploads/2024/12/cropped-favicon-jfk-270x270.jpg",
+    "at": "2026-11-07"
+  },
+  "lulo": {
+    "file": "/brands/lulo.png",
+    "bleed": false,
+    "from": "https://www.lulobank.com/apple-touch-icon.png",
+    "at": "2026-11-07"
+  },
+  "mercadolibre": {
+    "file": "/brands/mercadolibre.svg",
+    "bleed": false,
+    "from": "https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/5.21.22/mercadolibre/favicon.svg",
+    "at": "2026-11-07"
+  },
+  "movii": {
+    "file": "/brands/movii.png",
+    "bleed": true,
+    "from": "https://www.movii.com.co/wp-content/uploads/2026/05/icono-movii-03.webp",
+    "at": "2026-11-07"
+  },
+  "nequi": {
+    "file": "/brands/nequi.png",
+    "bleed": false,
+    "from": "https://cdn.prod.website-files.com/6317a229ebf7723658463b4b/652fd8c4a4ac25119892bb21_256x256%20N.png",
+    "at": "2026-11-07"
+  },
+  "occidente": {
+    "file": "/brands/occidente.svg",
+    "bleed": false,
+    "from": "https://www.bancodeoccidente.com.co/documents/39960/0/BDO_Mesa+de+trabajo+1.svg/d2fe040e-8323-71d1-cbb7-ab3ec793e979",
+    "at": "2026-11-07"
+  },
+  "olimpica": {
+    "file": "/brands/olimpica.png",
+    "bleed": true,
+    "from": "https://www.olimpica.com/arquivos/olimpica-favicon1.png",
+    "at": "2026-11-07"
+  },
+  "pichincha": {
+    "file": "/brands/pichincha.png",
+    "bleed": false,
+    "from": "https://www.bancopichincha.com.co/o/pichincha-theme/images/icon/android-icon-192x192.png",
+    "at": "2026-11-07"
+  },
+  "powwi": {
+    "file": "/brands/powwi.png",
+    "bleed": false,
+    "from": "https://powwi.co/wp-content/uploads/2022/03/cropped-favicon-header-x1-270x270.png",
+    "at": "2026-11-07"
+  },
+  "prime-video": {
+    "file": "/brands/prime-video.png",
+    "bleed": false,
+    "from": "https://m.media-amazon.com/images/G/01/digital/video/DVUI/favicons/favicon-196x196.png",
+    "at": "2026-11-07"
+  },
+  "proteccion": {
+    "file": "/brands/proteccion.png",
+    "bleed": false,
+    "from": "https://www.proteccion.com/contenidos/images/Favicon/favicon.png",
+    "at": "2026-11-07"
+  },
+  "pse": {
+    "file": "/brands/pse.png",
+    "bleed": false,
+    "from": "https://www.pse.com.co/documents/1176709/210072903/favicon-pse/18554499-7c72-d1ab-5022-e8bf6e5c5e88",
+    "at": "2026-11-07"
+  },
+  "rappi": {
+    "file": "/brands/rappi.png",
+    "bleed": false,
+    "from": "https://www.rappi.com.co/pwa-icons/512x512.png",
+    "at": "2026-11-07"
+  },
+  "rappipay": {
+    "file": "/brands/rappipay.png",
+    "bleed": false,
+    "from": "https://www.rappipay.co/wp-content/uploads/2024/06/cropped-favicon-rappipay-270x270.png",
+    "at": "2026-11-07"
+  },
+  "smartfit": {
+    "file": "/brands/smartfit.png",
+    "bleed": false,
+    "from": "https://www.smartfit.com.co/packs/media/apple-icon-152x152-cebb5d54.png",
+    "at": "2026-11-07"
+  },
+  "sura": {
+    "file": "/brands/sura.svg",
+    "bleed": false,
+    "from": "https://www.sura.co/favicon.ico",
+    "at": "2026-11-07"
+  },
+  "terpel": {
+    "file": "/brands/terpel.svg",
+    "bleed": false,
+    "from": "https://portalcolombia.terpel.com/static/favicon.svg",
+    "at": "2026-11-07"
+  },
+  "tigo": {
+    "file": "/brands/tigo.png",
+    "bleed": true,
+    "from": "https://www.tigo.com.co/apple-touch-icon.png",
+    "at": "2026-11-07"
+  },
+  "twelvedata": {
+    "file": "/brands/twelvedata.png",
+    "bleed": false,
+    "from": "https://twelvedata.com/build/favicons/favicon-512.png",
+    "at": "2026-11-07"
+  },
+  "uala": {
+    "file": "/brands/uala.png",
+    "bleed": false,
+    "from": "https://www.uala.com.co/favicon.ico",
+    "at": "2026-11-07"
+  },
+  "vanti": {
+    "file": "/brands/vanti.png",
+    "bleed": false,
+    "from": "https://www.grupovanti.com/apple-touch-icon.png",
+    "at": "2026-11-07"
+  },
+  "vix": {
+    "file": "/brands/vix.png",
+    "bleed": true,
+    "from": "https://vix.com/assets/externals/icons/apple-touch-icon-192x192.png",
+    "at": "2026-11-07"
+  },
+  "xbox": {
+    "file": "/brands/xbox.png",
+    "bleed": false,
+    "from": "https://www.xbox.com/favicon.svg",
+    "at": "2026-11-07"
+  }
+}

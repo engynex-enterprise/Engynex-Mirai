@@ -1,26 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, X } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Combobox } from "@/components/mirai/combobox"
-import { Icon } from "@/components/mirai/icon"
 import { EntityLogo } from "@/components/mirai/entity-logo"
+import { BrandLogo } from "@/components/mirai/brand-logo"
+import { brandFor } from "@/lib/brands"
 import { MoneyAutosave } from "@/components/mirai/money-autosave"
-import { SubmitButton } from "@/components/mirai/submit-button"
 import { IconButton } from "@/components/mirai/tip"
 import { ListToolbar, NoResults, useListControls, type ListFilter, type ListSort } from "@/components/mirai/list-toolbar"
 import { useCanEdit } from "@/components/app/app-context"
 import { useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
-import { categoryOptions, useCategories, useEntities, useKeywordRules, useSettings } from "@/features/catalogs/hooks"
+import { useCategories, useEntities, useSettings } from "@/features/catalogs/hooks"
 import { ENTITY_TIPOS, entityIcon, findEntity, norm } from "@/lib/domain"
 import type { Row } from "@/lib/supabase/tables"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/mirai/toast"
 import { SettingSection } from "../ui"
 import { useBookSettingsSave } from "../prefs"
+import { AddRow, TextBlur } from "./catalog-ui"
+import { Reglas } from "./reglas"
 
 type Kind = "cats" | "ings" | "ents" | "medios" | "rels" | "reglas"
 const GRUPOS = [{ value: "n", label: "Necesidad", icon: "house" }, { value: "g", label: "Gusto", icon: "coffee" }, { value: "a", label: "Ahorro", icon: "piggy-bank" }]
@@ -30,51 +31,6 @@ const TOOLBAR_FROM = 6
 
 const same = (a: string, b: string) => norm(a) === norm(b)
 const byName = <T extends { nombre: string }>(a: T, b: T) => a.nombre.localeCompare(b.nombre, "es")
-
-/** Texto que guarda al salir (edición en línea). */
-function TextBlur({ value, onSave, label, className, disabled, placeholder }: { value: string; onSave: (v: string) => void; label: string; className?: string; disabled?: boolean; placeholder?: string }) {
-  const [v, setV] = useState(value)
-  const [prev, setPrev] = useState(value)
-  if (prev !== value) { setPrev(value); setV(value) }
-  return <Input aria-label={label} className={className ?? "h-10"} value={v} disabled={disabled} placeholder={placeholder} maxLength={60} onChange={(e) => setV(e.target.value)} onBlur={() => { const t = v.trim(); if (t && t !== value) onSave(t); else setV(value) }} />
-}
-
-/**
- * Fila para agregar: el botón Agregar queda inactivo hasta escribir un nombre nuevo (si ya existe lo dice ahí mismo)
- * y muestra "Agregando…" mientras guarda. Enter también agrega.
- */
-function AddRow({ placeholder, onAdd, extra, disabled, taken, needsExtra }: {
-  placeholder: string; onAdd: (nombre: string) => Promise<unknown> | void; extra?: React.ReactNode; disabled?: boolean
-  /** Devuelve true si el nombre ya existe. */
-  taken?: (nombre: string) => boolean
-  /** Falta elegir algo en `extra` (p. ej. la categoría de una regla): texto del motivo. */
-  needsExtra?: string | false
-}) {
-  const [n, setN] = useState("")
-  const [busy, setBusy] = useState(false)
-  const t = n.trim()
-  const dup = !!t && !!taken?.(t)
-  const ok = !!t && !dup && !needsExtra && !disabled
-  const add = async () => {
-    if (!ok || busy) return
-    setBusy(true)
-    // Si falla, el aviso lo muestra la mutación y el texto queda escrito para intentar de nuevo.
-    try { await onAdd(t); setN("") } catch { /* aviso de la mutación */ }
-    setBusy(false)
-  }
-  return (
-    <div className="grid gap-1.5 border-b pb-4">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Input className="h-10 flex-1" placeholder={placeholder} value={n} maxLength={60} disabled={disabled} aria-invalid={dup || undefined}
-          onChange={(e) => setN(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add() } }} aria-label={placeholder} />
-        {extra}
-        <SubmitButton className="h-10" onClick={add} disabled={!ok} loading={busy} loadingText="Agregando…"
-          hint={disabled ? "Tu rol no permite cambiar esta lista" : dup ? "Ese nombre ya existe" : needsExtra || "Escribe un nombre"}><Plus /> Agregar</SubmitButton>
-      </div>
-      {dup && <p className="text-xs text-danger" role="alert">“{t}” ya está en la lista.</p>}
-    </div>
-  )
-}
 
 /** Conteo debajo del título: "12 categorías". */
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -165,7 +121,10 @@ function Simple({ table, title, icon, placeholder, defIcon, desc, one, many }: {
           {c.rows.map((x) => (
             <li key={x.id} className={cn("grid grid-cols-[3rem_1fr_auto] items-center gap-2 border-b py-2 last:border-0", cuentas ? "sm:grid-cols-[10rem_1fr_13rem_2.25rem]" : "sm:grid-cols-[10rem_1fr_auto]")}>
               <Combobox value={x.icon} onChange={(v) => save.mutate({ id: x.id, icon: v } as never)} options={ICON_OPTIONS} disabled={!can} />
-              <TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} />
+              <div className="flex min-w-0 items-center gap-2.5">
+                {cuentas && brandFor(x.nombre) && <BrandLogo k={brandFor(x.nombre)!} size={32} />}
+                <div className="min-w-0 flex-1"><TextBlur label={`Nombre de ${x.nombre}`} value={x.nombre} disabled={!can} onSave={(v) => save.mutate({ id: x.id, nombre: v } as never)} /></div>
+              </div>
               <IconButton icon="trash-2" destructive label={`Eliminar ${x.nombre}`} className={cuentas ? "sm:order-last" : undefined} disabled={!can} onClick={() => del.mutate(x as never)} />
               {cuentas && <div className="col-span-3 sm:col-span-1"><CuentaDeMedio x={x} can={can} onSave={(asset) => save.mutate({ id: x.id, asset_id: asset } as never)} /></div>}
             </li>
@@ -232,47 +191,6 @@ function Relaciones() {
           </li>
         ))}
       </ul>
-    </SettingSection>
-  )
-}
-
-// ——— Reglas de importación ———
-type Rule = Row<"keyword_rules">
-const RULE_SORTS: ListSort<Rule>[] = [{ value: "recientes", label: "Más recientes", by: () => 0 }, { value: "palabra", label: "Palabra (A-Z)", by: (a, b) => a.keyword.localeCompare(b.keyword, "es") }]
-
-function Reglas() {
-  const { data, isPending } = useKeywordRules()
-  const { data: cats } = useCategories()
-  const save = useSave("keyword_rules")
-  const del = useSoftDelete("keyword_rules", "Regla eliminada")
-  const can = useCanEdit()
-  const [cat, setCat] = useState("")
-  const catName = (id: string | null) => cats?.find((x) => x.id === id)?.nombre ?? ""
-  const c = useListControls(data, { text: (r) => `${r.keyword} ${catName(r.category_id)}`, sorts: RULE_SORTS })
-  if (isPending) return <Skeleton className="h-64 rounded-lg" />
-  const opts = categoryOptions(cats)
-  return (
-    <SettingSection icon="file-up" title="Reglas de importación" desc="Si la descripción de un movimiento contiene la palabra, se le pone esa categoría (al importar extractos y al escribir gastos).">
-      <AddRow placeholder="Si contiene… (ej. EXITO)" disabled={!can} needsExtra={!cat && "Elige la categoría"} taken={(k) => !!data?.some((r) => same(r.keyword, k))}
-        extra={<div className="sm:w-56"><Combobox value={cat} onChange={setCat} options={opts} placeholder="Categoría" /></div>}
-        onAdd={(keyword) => save.mutateAsync({ keyword: keyword.toLowerCase(), category_id: cat } as never)} />
-      {!data?.length ? <p className="pt-4 text-sm text-muted-foreground">Aún no tienes reglas. También se crean solas cuando corriges la categoría de un gasto importado.</p> : (
-        <>
-          {data.length >= TOOLBAR_FROM && <ListToolbar c={c} placeholder="Buscar palabra o categoría" sorts={RULE_SORTS} className="pt-4" />}
-          {!c.rows.length ? <div className="pt-4"><NoResults c={c} /></div> : (
-            <ul className="grid pt-2" aria-label="Reglas">
-              {c.rows.map((r) => (
-                <li key={r.id} className="grid grid-cols-[1fr_auto] items-center gap-2 border-b py-2 last:border-0 sm:grid-cols-[1fr_auto_14rem_auto]">
-                  <TextBlur label={`Palabra ${r.keyword}`} value={r.keyword} disabled={!can} onSave={(v) => save.mutate({ id: r.id, keyword: v.toLowerCase() } as never)} />
-                  <IconButton icon="trash-2" destructive label={`Eliminar regla ${r.keyword}`} className="sm:order-last" disabled={!can} onClick={() => del.mutate({ id: r.id, nombre: r.keyword })} />
-                  <Icon name="arrow-right" className="hidden size-4 text-muted-foreground sm:block" aria-hidden />
-                  <div className="col-span-2 sm:col-span-1"><Combobox value={r.category_id ?? ""} onChange={(v) => save.mutate({ id: r.id, category_id: v } as never)} options={opts} disabled={!can} /></div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
     </SettingSection>
   )
 }

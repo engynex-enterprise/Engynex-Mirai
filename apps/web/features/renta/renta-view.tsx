@@ -1,5 +1,7 @@
 "use client"
 
+import { BrandLogo } from "@/components/mirai/brand-logo"
+import { brandFor } from "@/lib/brands"
 import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { CircleCheck, Download, FileSpreadsheet, FileText, Paperclip, Trash2, Upload } from "lucide-react"
@@ -112,7 +114,7 @@ export function RentaView({ data, actions, fileUrl, contador, exportName }: {
   const tiposBien = [...new Set(P.B.map((b) => b.tipo))]
   const bienCols: DTColumn<BienRow>[] = [
     { id: "bien", header: "Bien", sort: (b) => b.nombre, csv: (b) => b.nombre,
-      cell: (b) => <DTPrimary media={<ToneIcon icon={BT[b.tipo]?.i ?? "tag"} tone={BTONE[b.tipo] ?? toneFor(b.tipo)} />} title={b.nombre}
+      cell: (b) => <DTPrimary media={brandFor(b.entidad) ? <BrandLogo k={brandFor(b.entidad)!} size={36} /> : <ToneIcon icon={BT[b.tipo]?.i ?? "tag"} tone={BTONE[b.tipo] ?? toneFor(b.tipo)} />} title={b.nombre}
         sub={[BT[b.tipo]?.l, b.entidad, b.fecha_adq ? `desde ${fmtDate(b.fecha_adq)}` : ""].filter(Boolean).join(" · ")} /> },
     { id: "ident", header: "Identificación", csv: (b) => b.ident ?? "", cell: (b) => b.ident || <span className="text-muted-foreground">—</span> },
     { id: "costo", header: "Costo fiscal", align: "right", sort: (b) => b.costo, csv: (b) => b.costo, cell: (b) => <Money value={b.costo} /> },

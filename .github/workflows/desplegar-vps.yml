@@ -1,0 +1,78 @@
+# Producción en el VPS (Hostinger + Dokploy, desde 2026-11-07; infra/servidor/README.md).
+# Cuando el CI termina en verde por un push a la rama de producción (variable del repo RAMA_PRODUCCION, por defecto v6),
+# le pide a Dokploy que despliegue el compose "Mirai" (Dokploy baja esa rama y compila en el VPS) y espera a que termine
+# y a que la web responda. También se puede lanzar a mano (Actions › Desplegar VPS › Run workflow).
+#
+# Secretos del repositorio (Settings › Secrets and variables › Actions):
+#   DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_COMPOSE_ID  — API de Dokploy (x-api-key)
+#   CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET      — llave de servicio de Cloudflare Access (el panel está detrás)
+# Las migraciones de la base NO van aquí: se aplican a mano y antes con `pnpm db:migrate:vps` (aditivas).
+name: Desplegar VPS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desplegar-vps
+  cancel-in-progress: false # nunca cortar un despliegue a la mitad
+
+jobs:
+  desplegar:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == (vars.RAMA_PRODUCCION || 'v6'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: produccion-vps
+    env:
+      DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+      COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+      CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      SITIO: ${{ vars.SITIO_PRODUCCION || 'https://mirai.engynex.com' }}
+    steps:
+      - name: Pedir el despliegue a Dokploy
+        run: |
+          set -euo pipefail
+          api() { curl -fsS --retry 3 -H "x-api-key: $DOKPLOY_API_KEY" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" -H "content-type: application/json" "$@"; }
+          antes=$(api "${DOKPLOY_URL%/}/api/deployment.allByCompose?composeId=$COMPOSE_ID" | jq 'length')
+          echo "antes=$antes" >> "$GITHUB_ENV"
+          api -X POST "${DOKPLOY_URL%/}/api/compose.deploy" -d "{\"composeId\":\"$COMPOSE_ID\",\"title\":\"GitHub ${GITHUB_SHA::7}\",\"description\":\"CI en verde (${GITHUB_REF_NAME})\"}" > /dev/null
+          echo "Despliegue pedido."
+
+      - name: Esperar a que Dokploy termine
+        run: |
+          set -euo pipefail
+          api() { curl -fsS --retry 3 -H "x-api-key: $DOKPLOY_API_KEY" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" "$@"; }
+          for i in $(seq 1 210); do
+            sleep 10
+            lista=$(api "${DOKPLOY_URL%/}/api/deployment.allByCompose?composeId=$COMPOSE_ID")
+            [ "$(echo "$lista" | jq 'length')" -gt "$antes" ] || continue
+            estado=$(echo "$lista" | jq -r 'sort_by(.createdAt) | last | .status')
+            echo "$(date +%H:%M:%S) $estado"
+            case "$estado" in
+              done) exit 0 ;;
+              error) echo "::error::Dokploy marcó error: revisa el registro del despliegue en el panel"; exit 1 ;;
+            esac
+          done
+          echo "::error::El despliegue no terminó en 35 minutos"; exit 1
+
+      - name: Revisar que la web y el login respondan
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            web=$(curl -s -o /dev/null -w '%{http_code}' "$SITIO/login" || true)
+            auth=$(curl -s -o /dev/null -w '%{http_code}' "$SITIO/api/auth/ok" || true)
+            echo "web $web · auth $auth"
+            [ "$web" = 200 ] && [ "$auth" = 200 ] && exit 0
+            sleep 10
+          done
+          echo "::error::La web o el login no responden después del despliegue"; exit 1

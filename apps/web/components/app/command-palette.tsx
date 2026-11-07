@@ -1,5 +1,7 @@
 "use client"
 
+import { BrandLogo } from "@/components/mirai/brand-logo"
+import { brandFor } from "@/lib/brands"
 import { Illustration } from "@/components/mirai/illustration"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -39,7 +41,7 @@ function Glyph({ name, tone = "gray", children }: { name?: string; tone?: IconTo
 }
 
 /** Un resultado de registro del libro: [clave, texto que se busca, título, detalle, ícono, color, enlace]. */
-type Hit = { k: string; v: string; t: string; sub?: string; icon: string; tone: IconTone; href: string }
+type Hit = { k: string; v: string; t: string; sub?: string; icon: string; tone: IconTone; href: string; brand?: string | null }
 type Group = { heading: string; hits: Hit[] }
 
 /** Agregar una deuda o un préstamo de un tipo ya escogido (?nuevo=<tipo>, lo lee features/loans/loans-view.tsx). */
@@ -93,14 +95,14 @@ async function searchIndex(bookId: string): Promise<Group[]> {
       const cobrar = x.kind === "cobrar"
       return { k: x.id, v: `${cobrar ? "préstamo me debe" : "deuda le debo"} ${tipo} ${name} ${x.concepto ?? ""}`, t: name, sub: `${cobrar ? "Me debe" : "Le debo"}${tipo ? ` · ${tipo}` : ""}${x.concepto ? ` · ${x.concepto}` : ""}`, icon: cobrar ? "hand-coins" : "landmark", tone: cobrar ? "green" : "red", href: `/${cobrar ? "me-deben" : "le-debo"}?id=${x.id}` }
     }) },
-    { heading: "Tarjetas de crédito", hits: tc.map((x: any) => ({ k: x.id, v: `tarjeta de credito ${x.nombre}`, t: x.nombre, sub: "Tarjeta", icon: "credit-card", tone: "red", href: "/tarjetas" })) },
-    { heading: "Gastos fijos", hits: f.map((x: any) => ({ k: x.id, v: `fijo ${x.nombre}`, t: x.nombre, sub: money(x.valor), icon: "house", tone: "amber", href: `/fijos?id=${x.id}` })) },
-    { heading: "Suscripciones", hits: su.map((x: any) => ({ k: x.id, v: `suscripcion ${x.nombre}`, t: x.nombre, sub: `${money(x.valor)}${x.activa === false ? " · pausada" : ""}`, icon: "repeat", tone: "violet", href: "/suscripciones" })) },
-    { heading: "Proveedores", hits: pr.map((x: any) => ({ k: x.id, v: `proveedor ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo || "Proveedor", icon: "store", tone: "amber", href: `/proveedores?id=${x.id}` })) },
+    { heading: "Tarjetas de crédito", hits: tc.map((x: any) => ({ k: x.id, v: `tarjeta de credito ${x.nombre}`, t: x.nombre, sub: "Tarjeta", icon: "credit-card", tone: "red", brand: brandFor(x.nombre), href: "/tarjetas" })) },
+    { heading: "Gastos fijos", hits: f.map((x: any) => ({ k: x.id, v: `fijo ${x.nombre}`, t: x.nombre, sub: money(x.valor), icon: "house", tone: "amber", brand: brandFor(x.nombre), href: `/fijos?id=${x.id}` })) },
+    { heading: "Suscripciones", hits: su.map((x: any) => ({ k: x.id, v: `suscripcion ${x.nombre}`, t: x.nombre, sub: `${money(x.valor)}${x.activa === false ? " · pausada" : ""}`, icon: "repeat", tone: "violet", brand: brandFor(x.nombre), href: "/suscripciones" })) },
+    { heading: "Proveedores", hits: pr.map((x: any) => ({ k: x.id, v: `proveedor ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo || "Proveedor", icon: "store", tone: "amber", brand: brandFor(x.nombre), href: `/proveedores?id=${x.id}` })) },
     { heading: "Metas", hits: me.map((x: any) => ({ k: x.id, v: `meta ahorro ${x.nombre}`, t: x.nombre, sub: `Meta de ${money(x.objetivo)}`, icon: "piggy-bank", tone: "green", href: "/metas" })) },
-    { heading: "Inversiones", hits: inv.map((x: any) => ({ k: x.id, v: `inversion ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo?.toUpperCase?.() === "CDT" ? "CDT" : x.tipo, icon: "trending-up", tone: "violet", href: "/inversiones" })) },
-    { heading: "Cuentas y bienes", hits: ac.map((x: any) => ({ k: x.id, v: `cuenta bien activo ${x.nombre}`, t: x.nombre, sub: money(x.valor), icon: "wallet", tone: "green", href: "/balance" })) },
-    { heading: "Bancos y entidades", hits: en.map((x: any) => ({ k: x.id, v: `entidad banco ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo, icon: "landmark", tone: "navy", href: "/ajustes?tab=ents" })) },
+    { heading: "Inversiones", hits: inv.map((x: any) => ({ k: x.id, v: `inversion ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo?.toUpperCase?.() === "CDT" ? "CDT" : x.tipo, icon: "trending-up", tone: "violet", brand: brandFor(x.nombre), href: "/inversiones" })) },
+    { heading: "Cuentas y bienes", hits: ac.map((x: any) => ({ k: x.id, v: `cuenta bien activo ${x.nombre}`, t: x.nombre, sub: money(x.valor), icon: "wallet", tone: "green", brand: brandFor(x.nombre), href: "/balance" })) },
+    { heading: "Bancos y entidades", hits: en.map((x: any) => ({ k: x.id, v: `entidad banco ${x.nombre} ${x.tipo ?? ""}`, t: x.nombre, sub: x.tipo, icon: "landmark", tone: "navy", brand: brandFor(x.nombre), href: "/ajustes?tab=ents" })) },
     { heading: "Lista de deseos", hits: de.map((x: any) => ({ k: x.id, v: `deseo ${x.nombre}`, t: x.nombre, sub: money(x.precio), icon: "heart", tone: "red", href: "/deseos" })) },
     { heading: "Recordatorios y fechas", hits: ev.map((x: any) => ({ k: x.id, v: `recordatorio fecha ${x.titulo}`, t: x.titulo, sub: x.fecha ? fmtDate(x.fecha) : undefined, icon: "calendar", tone: "blue", href: "/calendario" })) },
     { heading: "Gastos recientes", hits: g.map((x: any) => ({ k: x.id, v: `gasto ${x.descripcion} ${x.fecha}`, t: x.descripcion || "Gasto", sub: `${x.fecha ? fmtDate(x.fecha) : ""} · ${money(x.valor)}`, icon: "receipt", tone: "gray", href: `/gastos?mes=${String(x.fecha).slice(0, 7)}` })) },
@@ -139,7 +141,7 @@ export function CommandPalette() {
           <CommandGroup key={gr.heading} heading={gr.heading}>
             {gr.hits.map((h) => (
               <CommandItem key={h.k} value={`${h.v} ${h.k}`} onSelect={() => go(h.href)}>
-                <Glyph name={h.icon} tone={h.tone} /> <span className="min-w-0 truncate">{h.t}</span>
+                {h.brand ? <BrandLogo k={h.brand} size={28} /> : <Glyph name={h.icon} tone={h.tone} />} <span className="min-w-0 truncate">{h.t}</span>
                 {h.sub ? <span className="ml-auto shrink-0 text-xs text-muted-foreground" data-money={/\$/.test(h.sub) || undefined}>{h.sub}</span> : null}
               </CommandItem>
             ))}

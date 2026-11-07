@@ -7,8 +7,13 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { Icon } from "./icon"
+import { BrandLogo } from "./brand-logo"
 
-export type Option = { value: string; label: string; icon?: string; hint?: string; group?: string }
+export type Option = {
+  value: string; label: string; icon?: string; hint?: string; group?: string
+  /** Marca de lib/brands.ts (banco, servicio…): se muestra su logo en vez del ícono. */
+  brand?: string | null
+}
 
 /**
  * Selector con búsqueda (sel() de la v4). Opcional: crear una opción nueva desde el pie
@@ -34,7 +39,7 @@ export function Combobox({
         <Button id={id} type="button" variant="outline" role="combobox" aria-expanded={open} aria-haspopup="listbox" aria-invalid={invalid} aria-label={ariaLabel} aria-labelledby={ariaLabelledby} disabled={disabled}
           className={cn("h-11 w-full justify-between font-normal", !sel && "text-muted-foreground", className)}>
           <span className="flex min-w-0 items-center gap-2">
-            {sel?.icon && <Icon name={sel.icon} className="text-muted-foreground" />}
+            {sel?.brand ? <BrandLogo k={sel.brand} size={22} /> : sel?.icon && <Icon name={sel.icon} className="text-muted-foreground" />}
             <span className="truncate">{sel?.label ?? placeholder}</span>
           </span>
           <ChevronsUpDown className="opacity-50" />
@@ -49,7 +54,7 @@ export function Combobox({
               <CommandGroup key={g} heading={g || undefined}>
                 {options.filter((o) => (o.group ?? "") === g).map((o) => (
                   <CommandItem key={o.value} value={`${o.label} ${o.hint ?? ""}`} onSelect={() => { onChange(o.value); setOpen(false) }}>
-                    {o.icon && <span className="grid size-7 place-items-center rounded-full bg-muted"><Icon name={o.icon} className="size-4" /></span>}
+                    {o.brand ? <BrandLogo k={o.brand} size={28} /> : o.icon && <span className="grid size-7 place-items-center rounded-full bg-muted"><Icon name={o.icon} className="size-4" /></span>}
                     <span className="grid min-w-0">
                       <span className="truncate">{o.label}</span>
                       {o.hint && <span className="truncate text-xs text-muted-foreground">{o.hint}</span>}

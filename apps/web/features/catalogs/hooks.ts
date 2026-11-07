@@ -1,5 +1,6 @@
 "use client"
 
+import { brandFor } from "@/lib/brands"
 import { useQuery } from "@/lib/query"
 import { createClient } from "@/utils/supabase/client"
 import { useApp, useBookId } from "@/components/app/app-context"
@@ -74,7 +75,7 @@ export const memberOptions = (m: Row<"family_members">[] = []): Option[] => [
   ...m.map((x) => ({ value: x.id, label: x.nombre, icon: "user", hint: x.rol })),
 ]
 
-export const methodOptions = (m: Row<"payment_methods">[] = []): Option[] => m.map((x) => ({ value: x.id, label: x.nombre, icon: x.icon }))
+export const methodOptions = (m: Row<"payment_methods">[] = []): Option[] => m.map((x) => ({ value: x.id, label: x.nombre, icon: x.icon, brand: brandFor(x.nombre) }))
 
 export const CURRENCY_OPTIONS: Option[] = [
   { value: "COP", label: "Pesos (COP)", icon: "banknote" },
@@ -86,7 +87,7 @@ export const contactOptions = (c: Row<"contacts">[] = []): Option[] =>
   c.map((x) => ({ value: x.id, label: x.nombre, icon: x.tipo === "empresa" ? "building-2" : "user-round", hint: [x.relacion, x.telefono].filter(Boolean).join(" · ") }))
 
 export const entityOptions = (e: Row<"entities">[] = []): Option[] =>
-  e.map((x) => ({ value: x.id, label: x.nombre, icon: entityIcon(x.tipo), hint: [x.tipo, x.nit && `NIT ${x.nit}`].filter(Boolean).join(" · ") }))
+  e.map((x) => ({ value: x.id, label: x.nombre, icon: entityIcon(x.tipo), brand: brandFor(x.nombre), hint: [x.tipo, x.nit && `NIT ${x.nit}`].filter(Boolean).join(" · ") }))
 
 export const memberName = (id: string | null | undefined, m: Row<"family_members">[] = []) => (id ? (m.find((x) => x.id === id)?.nombre ?? "—") : "Familia")
 

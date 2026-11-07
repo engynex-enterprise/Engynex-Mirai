@@ -1,7 +1,13 @@
 import BRANDS_RAW from "@/lib/data/brands.json"
 
 // Logos de servicios de terceros (scripts/brand-logos.mjs): solo identifican el servicio y no se modifican.
-export type Brand = { n: string; cat: string; kw: string; body?: string; w?: number; h?: number; src?: string; mono?: { bg: string; t: string; fg: string } }
+export type Brand = {
+  n: string; cat: string; kw: string; body?: string; w?: number; h?: number; src?: string; mono?: { bg: string; t: string; fg: string }
+  /** Ícono oficial publicado por la entidad en su sitio (scripts/brand-official.mjs), servido desde /public/brands. */
+  img?: string
+  /** El ícono llena su cuadro (esquinas opacas): se dibuja sin placa ni margen. */
+  bleed?: boolean
+}
 export const BRANDS = BRANDS_RAW as Record<string, Brand>
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")

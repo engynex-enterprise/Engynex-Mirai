@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
       { source: "/manifest.webmanifest", headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }] },
       // Íconos, splash y capturas: cambian solo al regenerarlos (npm run pwa:assets); un día de caché.
       { source: "/pwa/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
+      { source: "/brands/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" }] },
     ];
   },
   turbopack: {

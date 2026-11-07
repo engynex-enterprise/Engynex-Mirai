@@ -2,7 +2,7 @@
 // Fuentes con licencia libre: @iconify-json/logos (Gil Barbara, CC0, a color) y simple-icons (CC0, monocromo con el
 // color oficial). Las marcas que no están en ninguna fuente libre se muestran como monograma con el color de la marca.
 // Uso: node scripts/brand-logos.mjs  → lib/data/brands.json
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 
 const require = createRequire(import.meta.url)
@@ -122,6 +122,17 @@ const B = [
   ["davivienda", "Davivienda", "mono:#ED1C24:D", "bancos", "davivienda"],
   ["bbva", "BBVA", "mono:#004481:BBVA", "bancos", "bbva"],
   ["nubank", "Nu", "si:nubank", "bancos", "\\bnu\\b|nubank"],
+  ["applepay", "Apple Pay", "si:applepay", "pagos", "apple ?pay"],
+  ["googlepay", "Google Pay", "si:googlepay", "pagos", "google ?pay|\\bgpay\\b"],
+  ["samsungpay", "Samsung Pay", "si:samsungpay", "pagos", "samsung ?pay|samsung wallet"],
+  ["stripe", "Stripe", "si:stripe", "pagos", "\\bstripe\\b"],
+  ["payoneer", "Payoneer", "si:payoneer", "pagos", "payoneer"],
+  ["wise", "Wise", "si:wise", "pagos", "\\bwise\\b|transferwise"],
+  ["revolut", "Revolut", "si:revolut", "pagos", "revolut"],
+  ["westernunion", "Western Union", "si:westernunion", "pagos", "western ?union"],
+  ["moneygram", "MoneyGram", "si:moneygram", "pagos", "money ?gram"],
+  ["cashapp", "Cash App", "si:cashapp", "pagos", "cash ?app"],
+  ["hsbc", "HSBC", "si:hsbc", "bancos", "\\bhsbc\\b"],
   ["binance", "Binance", "si:binance", "bancos", "binance"],
   ["coinbase", "Coinbase", "si:coinbase", "bancos", "coinbase"],
   // Bancos, billeteras y cooperativas de Colombia (Perfil › Recibe pagos). Sin logo libre: monograma con su color.
@@ -151,9 +162,62 @@ const B = [
   ["confiar", "Confiar Cooperativa Financiera", "mono:#E87722:C", "bancos", "confiar cooperativa"],
   ["cotrafa", "Cotrafa Cooperativa Financiera", "mono:#00A651:Ct", "bancos", "cotrafa"],
   ["jfk", "JFK Cooperativa Financiera", "mono:#003DA5:JFK", "bancos", "jfk cooperativa"],
+  ["bancoomeva", "Bancoomeva", "mono:#006C35:Bc", "bancos", "bancoomeva|\\bcoomeva\\b"],
+  ["serfinanza", "Banco Serfinanza", "mono:#E30613:Sf", "bancos", "serfinanza"],
+  ["tuya", "Tuya (Tarjeta Éxito)", "mono:#FFD200:T:#1D1D1B", "bancos", "\\btuya\\b|tarjeta exito"],
+  ["santander", "Banco Santander", "mono:#EC0000:S", "bancos", "banco santander|^santander$"],
+  ["iris", "Iris", "mono:#5B2EFF:iris", "bancos", "\\biris\\b|iris bank"],
+  ["coltefinanciera", "Coltefinanciera", "mono:#00508F:Cf", "bancos", "coltefinanciera"],
+  ["fna", "Fondo Nacional del Ahorro", "mono:#00843D:FNA", "bancos", "fondo nacional del ahorro|\\bfna\\b"],
+  ["addi", "Addi", "mono:#2F4CF5:addi", "pagos", "\\baddi\\b"],
+  ["sistecredito", "Sistecrédito", "mono:#E4032E:Sc", "pagos", "siste ?credito"],
+  ["bold", "Bold", "mono:#121E6C:bold", "pagos", "\\bbold\\b"],
+  ["wompi", "Wompi", "mono:#2C2A29:W:#B0F2AE", "pagos", "wompi"],
+  ["efecty", "Efecty", "mono:#FFD100:E:#1A1A1A", "pagos", "efecty"],
+  ["banrep", "Banco de la República", "mono:#7A1F3D:BR", "bancos", "banco de la republica|\\bbanrep\\b"],
   ["breb", "Bre-B", "mono:#0F2A71:Bre-B", "pagos", "bre-?b\\b"],
   ["pse", "PSE", "mono:#005CA9:PSE", "pagos", "\\bpse\\b"],
   ["transfiya", "Transfiya", "mono:#5B2D8E:TY", "pagos", "transfiya"],
+  // Pensiones y cesantías (Colombia)
+  ["porvenir", "Porvenir", "mono:#E2231A:P", "pensiones", "^porvenir$|porvenir s\\.?a|(fondo|afp|pensiones|cesantias) porvenir|porvenir (pensiones|cesantias)"],
+  ["proteccion", "Protección", "mono:#004B8D:P", "pensiones", "afp proteccion|fondo proteccion|pensiones proteccion|cesantias proteccion|^proteccion$"],
+  ["colfondos", "Colfondos", "mono:#00539B:C", "pensiones", "colfondos"],
+  ["skandia", "Skandia", "mono:#00A443:S", "pensiones", "skandia"],
+  ["colpensiones", "Colpensiones", "mono:#004884:C", "pensiones", "colpensiones"],
+  // Compras y mercado (Colombia)
+  ["mercadolibre", "Mercado Libre", "mono:#FFE600:ML:#2D3277", "compras", "mercado ?libre"],
+  ["exito", "Éxito", "mono:#FFE800:éxito:#1D1D1B", "mercado", "\\bexito\\b|almacenes exito"],
+  ["carulla", "Carulla", "mono:#00A160:C", "mercado", "carulla"],
+  ["d1", "Tiendas D1", "mono:#E30613:D1", "mercado", "\\bd1\\b|tiendas d1"],
+  ["ara", "Tiendas Ara", "mono:#E30613:ara", "mercado", "\\bara\\b|tiendas ara"],
+  ["olimpica", "Olímpica", "mono:#E30613:O", "mercado", "\\bolimpica\\b|supertiendas olimpica"],
+  ["jumbo", "Jumbo", "mono:#00A650:J", "mercado", "\\bjumbo\\b"],
+  ["alkosto", "Alkosto", "mono:#ED1C24:A", "compras", "alkosto|ktronix"],
+  ["homecenter", "Homecenter", "mono:#FF6600:H", "compras", "home ?center|sodimac"],
+  ["terpel", "Terpel", "mono:#E30613:T", "transporte", "terpel"],
+  ["avianca", "Avianca", "si:avianca", "viajes", "avianca|lifemiles"],
+  ["airbnb", "Airbnb", "si:airbnb", "viajes", "airbnb"],
+  ["booking", "Booking.com", "si:bookingdotcom", "viajes", "booking"],
+  ["aliexpress", "AliExpress", "si:aliexpress", "compras", "ali ?express"],
+  ["zara", "Zara", "si:zara", "compras", "\\bzara\\b"],
+  // Servicios públicos (Colombia)
+  ["epm", "EPM", "mono:#00843D:epm", "servicios", "\\bepm\\b|empresas publicas de medellin"],
+  ["enel", "Enel", "mono:#0555FA:enel", "servicios", "\\benel\\b|codensa"],
+  ["vanti", "Vanti", "mono:#00A3E0:V", "servicios", "\\bvanti\\b|gas natural fenosa"],
+  ["acueducto-bogota", "Acueducto de Bogotá", "mono:#0072BC:EAAB", "servicios", "acueducto de bogota|acueducto bogota|\\beaab\\b"],
+  ["celsia", "Celsia", "mono:#FF6B00:C", "servicios", "celsia"],
+  ["air-e", "Air-e", "mono:#00A3E0:Ae", "servicios", "\\bair-e\\b"],
+  ["afinia", "Afinia", "mono:#E4002B:Af", "servicios", "afinia"],
+  ["gases-occidente", "Gases de Occidente", "mono:#0058A3:GdO", "servicios", "gases de occidente"],
+  ["emcali", "EMCALI", "mono:#00539F:Em", "servicios", "emcali"],
+  // Salud y cajas de compensación (Colombia)
+  ["sura", "SURA", "mono:#0033A0:S", "salud", "\\bsura\\b|suramericana"],
+  ["sanitas", "Sanitas", "mono:#0072CE:S", "salud", "sanitas"],
+  ["nueva-eps", "Nueva EPS", "mono:#00843D:NE", "salud", "nueva eps"],
+  ["compensar", "Compensar", "mono:#E87722:C", "salud", "^compensar$|compensar (eps|caja)|(eps|caja|caja de compensacion) compensar"],
+  ["colsubsidio", "Colsubsidio", "mono:#E30613:Cs", "salud", "colsubsidio"],
+  ["cafam", "Cafam", "mono:#00A1DE:C", "salud", "cafam"],
+  ["comfama", "Comfama", "mono:#E6007E:C", "salud", "comfama"],
   // Más servicios por suscripción
   ["gitlab", "GitLab", "logos:gitlab", "software", "gitlab"],
   ["jetbrains", "JetBrains", "logos:jetbrains-icon", "software", "jetbrains|intellij|pycharm|webstorm"],
@@ -184,6 +248,9 @@ const B = [
   ["tinder", "Tinder", "si:tinder", "servicios", "tinder"],
 ]
 
+// Íconos oficiales descargados del sitio de cada entidad (scripts/brand-official.mjs): img + bleed, conserva mono/body.
+const OFFICIAL = existsSync("lib/data/brands-official.json") ? JSON.parse(readFileSync("lib/data/brands-official.json", "utf8")) : {}
+
 const out = {}
 const missing = []
 for (const [k, n, src, cat, kw] of B) {
@@ -201,6 +268,9 @@ for (const [k, n, src, cat, kw] of B) {
     logo = { mono: { bg: `#${a.replace("#", "")}`.replace("##", "#"), t: b, fg: c ? `#${c.replace("#", "")}` : "#FFFFFF" } }
   }
   out[k] = { n, cat, kw, ...logo }
+  if (OFFICIAL[k]) Object.assign(out[k], { img: OFFICIAL[k].file, bleed: !!OFFICIAL[k].bleed })
 }
+const orphan = Object.keys(OFFICIAL).filter((k) => !out[k])
 writeFileSync("lib/data/brands.json", JSON.stringify(out))
-console.log(`marcas: ${Object.keys(out).length}`, missing.length ? `\nsin logo en la fuente: ${missing.join(", ")}` : "")
+const nImg = Object.values(out).filter((b) => b.img).length
+console.log(`marcas: ${Object.keys(out).length} (con ícono oficial: ${nImg})`, missing.length ? `\nsin logo en la fuente: ${missing.join(", ")}` : "", orphan.length ? `\níconos oficiales sin marca: ${orphan.join(", ")}` : "")

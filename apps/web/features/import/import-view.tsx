@@ -20,11 +20,11 @@ import { EntityLogo } from "@/components/mirai/entity-logo"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
-import { invalidateBook, useList } from "@/hooks/use-book-data"
+import { invalidateBook, useList, useSave } from "@/hooks/use-book-data"
 import { createClient } from "@/utils/supabase/client"
 import { addCardPurchase, payCreditCard } from "@/features/cards/commands"
 import { qk } from "@/lib/supabase/tables"
-import { csvExternalIds, detectSubs, localCat, localHormiga, parseCSV, type CsvRow } from "@/lib/domain"
+import { csvExternalIds, detectSubs, localCat, localHormiga, parseCSV, reglasDeCorrecciones, type CsvRow } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
@@ -69,6 +69,7 @@ export function ImportView() {
   const router = useRouter()
   const { data: cats = [] } = useCategories()
   const { data: rules = [] } = useKeywordRules()
+  const saveRule = useSave("keyword_rules")
   const { data: members = [] } = useMembers()
   const { data: cfg } = useSettings()
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
@@ -190,6 +191,23 @@ export function ImportView() {
     const lista = qc.getQueriesData<typeof history>({ queryKey: qk(bookId, "expenses") }).map(([, d]) => d).find((d) => Array.isArray(d) && d.length) ?? history
     const nuevas = detectSubs(lista.map((g) => ({ ...g, valor: Number(g.valor) })), subs)
     toast.success(`Importamos ${partes}`, nuevas.length ? { description: `Encontramos ${nuevas.length} cobro${nuevas.length === 1 ? "" : "s"} que se repite${nuevas.length === 1 ? "" : "n"} cada mes: ¿son suscripciones?`, action: { label: "Revisar", onClick: () => router.push("/suscripciones") } } : undefined)
+    // Lo que la persona corrigió a mano: se ofrece recordarlo como regla para el próximo extracto.
+    const propuestas = reglasDeCorrecciones(gastos.filter((r) => r.manual), rules)
+    if (propuestas.length) {
+      const nombre = (id: string) => cats.find((c) => c.id === id)?.nombre ?? ""
+      toast.info(propuestas.length === 1 ? "¿Recordamos tu cambio?" : `¿Recordamos tus ${propuestas.length} cambios?`, {
+        description: `${propuestas.slice(0, 3).map((p) => `«${p.keyword}» → ${nombre(p.category_id)}`).join(", ")}${propuestas.length > 3 ? "…" : ""}. La próxima vez quedan solos en esa categoría.`,
+        duration: 15000,
+        action: {
+          label: propuestas.length === 1 ? "Crear regla" : `Crear ${propuestas.length} reglas`,
+          onClick: () => {
+            void Promise.all(propuestas.map((p) => saveRule.mutateAsync(p as never)))
+              .then(() => toast.success(propuestas.length === 1 ? "Regla creada" : `${propuestas.length} reglas creadas`, { action: { label: "Ver reglas", onClick: () => router.push("/ajustes?tab=reglas") } }))
+              .catch(() => { /* el aviso lo muestra la mutación */ })
+          },
+        },
+      })
+    }
     setRows(null); setTxt("")
   }
 

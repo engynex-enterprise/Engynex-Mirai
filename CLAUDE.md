@@ -18,7 +18,9 @@
 Desde la raíz (pnpm 10 con `corepack enable`; Turborepo guarda en caché build, typecheck, lint y test por paquete):
 ```bash
 pnpm install         # todo el workspace (apps/* y packages/*)
-pnpm dev             # http://localhost:3000 (apps/web; lee apps/web/.env.local → enlace a la .env.local de la raíz)
+pnpm dev             # TODO local en Docker (base, API, tiempo real) + next dev en http://localhost:55300, cuenta demo (sin Supabase)
+pnpm dev:web         # solo next dev en :3000 con la .env.local de la raíz (modo viejo)
+pnpm db:migrate:vps  # esquema (db/postgres) a la base del VPS por túnel SSH; `-- --pendientes` solo lista lo que falta
 pnpm build           # build de producción (turbo run build; la web corre gen-icons + next build)
 pnpm typecheck       # next typegen + tsc en la web, tsc en cada paquete
 pnpm lint            # ESLint (0 errores)
@@ -107,6 +109,7 @@ En la raíz: `supabase/migrations` (SQL versionado e idempotente, fuente única 
 - **Funciones 5.4:** calculadoras (`lib/domain/calculadoras.ts`), hallazgos (`lib/domain/insights.ts`, tarjeta en Inicio), lista de deseos (`wishlist`), patrimonio mes a mes (`net_worth_snapshots`, se guarda al abrir Balance), Academia (`lib/content/academia.ts`, avance en `user_preferences.extra.academia`) y referidos (`lib/referidos.ts`: código por persona, premio al crear el hogar en la bienvenida; ajustes en consola › Sistema).
 - **Cálculo integral (una sola cifra en toda la app):** `lib/domain/flujo-integral.ts` (`flujoIntegral`, `estadoIntegral`, `snapshotMes`, `proyeccionMeses`) junta entradas y salidas de todos los módulos sin contar dos veces (fijo↔gasto, tarjeta en base caja, cuota↔gasto, suscripción↔cobro). Lo usan Balance, Dashboard (`lib/domain/dashboard.ts`), Inicio, Flujo de caja y el chat. Saldos de cuentas: `lib/domain/cuentas.ts` (`conSaldos`, medios de pago ligados a una cuenta). Mapa de conexiones entre módulos: `docs/sinergia/mapa.md`.
 - **Escrituras enlazadas (RPC):** `add_card_purchase`, `pay_credit_card`, `pay_subscription`, `goal_contribute`, `link_expense_fixed`. Úsalas en vez de varias escrituras sueltas. Las cascadas nuevas se activan con el encabezado `x-mirai-enlaces` (lo manda `utils/supabase/*`) o `platform_settings.sync_enlaces`.
+- **Reglas de importación:** `matchRule` (gana la palabra más larga, sin tildes) en `packages/domain/src/hormiga.ts`; uso, sugerencias y reglas desde correcciones en `reglas.ts`. Ajustes › Reglas (`features/settings/tabs/reglas.tsx`): probador, sugerencias, aplicar a gastos anteriores con Deshacer.
 - **Avisos:** cron horario con `pg_cron` contra producción; cada envío reclama su clave en `notification_log` (`notify_claim`) para no duplicar. WhatsApp nunca usa plantillas de ejemplo de Meta (`esPlantillaDeMeta`); sin plantilla propia aprobada va como texto libre.
 - **Tablas de datos:** usa `<DataTable>` (`components/mirai/data-table.tsx`, estilo Meta) para listas con búsqueda, filtros, orden y exportar. En celular dibuja tarjetas (una sola versión del DOM).
 - **Consola admin:** acciones en `features/admin/server.ts` (todas con `requirePlatformAdmin()` y registro en `admin_audit`). Por privacidad la consola nunca muestra montos ni movimientos de los hogares.
@@ -119,7 +122,7 @@ En la raíz: `supabase/migrations` (SQL versionado e idempotente, fuente única 
 - **Base compartida:** pruebas y producción usan la misma base de Supabase. Las migraciones deben ser **aditivas** (no cambiar el comportamiento de la versión publicada); lo que restrinja va detrás de un interruptor (`platform_settings`).
 
 ## 4. Diseño
-Microsoft 365 / Fluent + shadcn, limpieza tipo Meta. Paleta Engynex: navy `#1F2B4B`, lima `#9EDB4E`, verde `#3F7A1E`; tokens en `app/globals.css` (claro/oscuro). Isotipos propios (`lib/data/iso.json`, `<IsoIcon k="…"/>`). **Logos de terceros (Google, Netflix, Telegram…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; monograma si no hay logo libre). Nunca como decoración ni como logo de Mirai.**
+Microsoft 365 / Fluent + shadcn, limpieza tipo Meta. Paleta Engynex: navy `#1F2B4B`, lima `#9EDB4E`, verde `#3F7A1E`; tokens en `app/globals.css` (claro/oscuro). Isotipos propios (`lib/data/iso.json`, `<IsoIcon k="…"/>`). **Logos de terceros (Google, Netflix, Telegram, bancos…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; si no hay, el ícono oficial que la entidad publica en su sitio, descargado una vez con `scripts/brand-official.mjs` a `public/brands/` — nunca enlazado a un tercero en tiempo real —; si tampoco, monograma). Los selectores (`Option.brand`) y el ⌘K muestran el logo. Nunca como decoración ni como logo de Mirai.**
 
 ## 5. Dominio Colombia (detalle en `.agents/rules/colombia.md`)
 Valores anuales en tablas `ref_*` (con fuente): UVT 2024–2026, SMMLV 2026, festivos 2026, calendario de renta 2026 (general — Decreto 2229/2023 — y plazo especial por el sismo, Decreto 1226/2026). Verifícalos con fuentes oficiales (subagente `finanzas-colombia`) antes de cambiarlos; nunca se inventan. Todo cálculo tributario es **estimado**.

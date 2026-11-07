@@ -8,7 +8,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev --filter=web",
+    "dev": "node infra/local/e2e-local.mjs --auth=mirai --serve --dev --sin-supabase",
+    "dev:web": "turbo run dev --filter=web",
     "build": "turbo run build",
     "start": "pnpm --filter web start",
     "typecheck": "turbo run typecheck",
@@ -26,7 +27,8 @@
     "local:reset": "node infra/local/stack.mjs reset --supa",
     "local:test": "node infra/local/stack.mjs test",
     "db:destino": "node packages/db/scripts/db-destino.mjs",
-    "migrate:ensayo": "node --experimental-strip-types --no-warnings scripts/migrate/ensayo.ts"
+    "migrate:ensayo": "node --experimental-strip-types --no-warnings scripts/migrate/ensayo.ts",
+    "db:migrate:vps": "node infra/servidor/migrar.mjs"
   },
   "prettier": "@mirai/config/prettier",
   "devDependencies": {

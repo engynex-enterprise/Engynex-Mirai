@@ -1,4 +1,5 @@
 // Importar extractos bancarios en CSV (equivalente a pnum/pdate/classify/parseCSV de c_views.js de la v4).
+import { matchRule } from "./hormiga"
 import type { KeywordRuleIn } from "./types"
 
 /**
@@ -29,11 +30,9 @@ export function pdate(s: unknown): string | null {
   return null
 }
 
-/** Categoría por la primera regla cuya palabra esté en la descripción; `null` = "Otros". */
+/** Categoría por la regla más específica cuya palabra esté en la descripción (matchRule); `null` = "Otros". */
 export function classify(desc: string, rules: KeywordRuleIn[]): string | null {
-  const d = desc.toLowerCase()
-  const r = rules.find((x) => x.keyword && d.includes(x.keyword.toLowerCase()))
-  return r ? r.category_id : null
+  return matchRule(desc, rules)?.category_id ?? null
 }
 
 export interface CsvRow {

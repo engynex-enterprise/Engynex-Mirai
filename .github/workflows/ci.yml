@@ -3,15 +3,16 @@
 # - En cada PR y push a pruebas/main: lint, typecheck, Vitest y build con Turborepo (caché local de turbo en Actions).
 # - Infraestructura: terraform fmt, prueba de contrato entre nubes, validate de las 9 raíces (GCP, AWS, Azure ×
 #   bootstrap/pruebas/produccion), terraform test con proveedores simulados, actionlint y bash -n de los scripts.
-# - Cuando este flujo termina en verde en pruebas o main, deploy.yml construye y despliega (workflow_run).
-# - E2E (Playwright): contra el despliegue de pruebas (Vercel mientras exista: deployment_status) o una URL a mano.
+# - Cuando este flujo termina en verde por un push a la rama de producción (v6), desplegar-vps.yml despliega en el VPS
+#   con Dokploy. deploy.yml (GCP/AWS/Azure) no hace nada mientras no exista MIRAI_CLOUD.
+# - E2E (Playwright): a mano con una URL (workflow_dispatch). En el computador: pnpm e2e:local --auth=mirai --sin-supabase.
 #   La base es compartida: las E2E usan solo el usuario QA (tests/e2e/qa.ts).
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [pruebas, main]
+    branches: [v6, main]
   deployment_status:
   workflow_dispatch:
     inputs:
@@ -34,7 +35,7 @@ jobs:
       # lib/env.ts solo exige que existan, así que en CI van marcadores.
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci.supabase.co' }}
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_ci_placeholder' }}
-      NEXT_PUBLIC_SITE_URL: https://engynex-mirai-pruebas.vercel.app
+      NEXT_PUBLIC_SITE_URL: https://mirai.engynex.com
       SUPABASE_SECRET_KEY: ci-placeholder-no-real-secret
       ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtYmFzZTY0LXh4eA==
       CRON_SECRET: ci-placeholder-cron-secret
