@@ -1,5 +1,5 @@
 # Producción en el VPS (Hostinger + Dokploy, desde 2026-11-07; infra/servidor/README.md).
-# Cuando el CI termina en verde por un push a la rama de producción (variable del repo RAMA_PRODUCCION, por defecto v6),
+# Cuando el CI termina en verde por un push a la rama de producción (variable del repo RAMA_PRODUCCION, por defecto main),
 # le pide a Dokploy que despliegue el compose "Mirai" (Dokploy baja esa rama y compila en el VPS) y espera a que termine
 # y a que la web responda. También se puede lanzar a mano (Actions › Desplegar VPS › Run workflow).
 #
@@ -24,10 +24,8 @@ concurrency:
 
 jobs:
   desplegar:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == (vars.RAMA_PRODUCCION || 'v6'))
+    # Solo un CI que terminó en verde (no los saltados por deployment_status de Vercel) o una corrida a mano.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     environment: produccion-vps
@@ -39,7 +37,23 @@ jobs:
       CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       SITIO: ${{ vars.SITIO_PRODUCCION || 'https://mirai.engynex.com' }}
     steps:
+      - name: ¿Toca desplegar?
+        id: toca
+        env:
+          EVENTO: ${{ github.event_name }}
+          ORIGEN: ${{ github.event.workflow_run.event }}
+          RAMA: ${{ github.event.workflow_run.head_branch }}
+          PRODUCCION: ${{ vars.RAMA_PRODUCCION || 'main' }}
+        run: |
+          echo "evento=$EVENTO origen=$ORIGEN rama=$RAMA producción=$PRODUCCION"
+          if [ "$EVENTO" = workflow_dispatch ] || { [ "$ORIGEN" = push ] && [ "$RAMA" = "$PRODUCCION" ]; }; then
+            echo "si=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "No es un push a $PRODUCCION: no se despliega."
+          fi
+
       - name: Pedir el despliegue a Dokploy
+        if: steps.toca.outputs.si == '1'
         run: |
           set -euo pipefail
           api() { curl -fsS --retry 3 -H "x-api-key: $DOKPLOY_API_KEY" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" -H "content-type: application/json" "$@"; }
@@ -49,6 +63,7 @@ jobs:
           echo "Despliegue pedido."
 
       - name: Esperar a que Dokploy termine
+        if: steps.toca.outputs.si == '1'
         run: |
           set -euo pipefail
           api() { curl -fsS --retry 3 -H "x-api-key: $DOKPLOY_API_KEY" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" "$@"; }
@@ -66,6 +81,7 @@ jobs:
           echo "::error::El despliegue no terminó en 35 minutos"; exit 1
 
       - name: Revisar que la web y el login respondan
+        if: steps.toca.outputs.si == '1'
         run: |
           set -euo pipefail
           for _ in $(seq 1 30); do
