@@ -7,7 +7,7 @@
 # Dominios (en el panel, cada servicio, con HTTPS):
 #   web       https://${MIRAI_DOMINIO}            puerto 8080   (la web reenvía /api/auth y /v1 a la API: mismo origen)
 #   realtime  https://rt.${MIRAI_DOMINIO}         puerto 8080   (WebSocket del "Sincronizado en vivo")
-#   minio     https://files.${MIRAI_DOMINIO}      puerto 9000   (archivos: avatares públicos y enlaces firmados)
+#   minio     (solo con el perfil seaweedfs) https://files.${MIRAI_DOMINIO} puerto 9000. Producción: Cloudflare R2
 # La base, PostgREST, Redis y la API NO tienen dominio: solo se ven dentro de la red de Docker.
 
 x-restart: &restart
@@ -133,6 +133,9 @@ services:
   # mirai-public se lee sin firma (avatares, anuncios).
   minio:
     <<: *restart
+    # Opcional (perfil `seaweedfs`): producción usa Cloudflare R2. Se enciende solo si se pide por nombre (la prueba
+    # local, infra/servidor/prueba-local.mjs) o con COMPOSE_PROFILES=seaweedfs para volver a guardar en el servidor.
+    profiles: ["seaweedfs"]
     image: chrislusf/seaweedfs:4.50
     environment:
       MINIO_PASSWORD: ${MINIO_PASSWORD:?}
@@ -153,6 +156,7 @@ services:
       retries: 40
 
   minio-init:
+    profiles: ["seaweedfs"]
     image: chrislusf/seaweedfs:4.50
     restart: "no"
     depends_on: { minio: { condition: service_healthy } }
@@ -172,7 +176,6 @@ services:
       db: { condition: service_healthy }
       postgrest: { condition: service_started }
       redis: { condition: service_healthy }
-      minio-init: { condition: service_completed_successfully }
     environment:
       <<: *api-env
       MODE: api

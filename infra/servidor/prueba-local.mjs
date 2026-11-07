@@ -36,7 +36,7 @@ execFileSync("sh", ["-c", `umask 077; cat > "${ENV_FILE}"`], { input: text })
 
 console.log("▶ Base, PostgREST, Redis y MinIO")
 compose(["up", "-d", "--wait", "db", "redis", "minio"])
-compose(["up", "-d", "minio-init", "postgrest"])
+compose(["up", "-d", "minio-init", "postgrest"]) // minio y minio-init: perfil seaweedfs (se encienden por nombre)
 const s = parse(SECRETOS)
 const url = `postgres://postgres:${s.POSTGRES_PASSWORD}@localhost:56432/mirai`
 const listo = spawnSync("docker", ["exec", "mirai-cprueba-db-1", "psql", "-U", "postgres", "-d", "mirai", "-Atc", "select to_regclass('public._mirai_migrations') is not null"], { encoding: "utf8" }).stdout.trim()
