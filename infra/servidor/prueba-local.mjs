@@ -29,7 +29,7 @@ execFileSync("node", ["infra/servidor/variables.mjs", DOM], { cwd: ROOT, stdio: 
 const env = parse(ENV_FILE)
 const publicos = Buffer.from(env.WEB_BUILD_ENV_B64, "base64").toString("utf8")
   .replace(/^NEXT_PUBLIC_SITE_URL=.*$/m, `NEXT_PUBLIC_SITE_URL=${WEB}`)
-  .replace(/^NEXT_PUBLIC_REALTIME_URL=.*$/m, "NEXT_PUBLIC_REALTIME_URL=http://localhost:56081")
+  .replace(/^NEXT_PUBLIC_REALTIME_URL=.*\n?/m, "") + "NEXT_PUBLIC_REALTIME_URL=http://localhost:56081\n" // aquí no hay Traefik que enrute /socket.io
 const b64 = Buffer.from(publicos).toString("base64")
 const text = readFileSync(ENV_FILE, "utf8").replace(/^WEB_BUILD_ENV_B64=.*$/m, `WEB_BUILD_ENV_B64=${b64}`)
 execFileSync("sh", ["-c", `umask 077; cat > "${ENV_FILE}"`], { input: text })

@@ -9,7 +9,7 @@ Es el mismo stack que `pnpm local:serve` (infra/local) y se prueba igual en este
 ```
 Internet ──▶ Traefik del panel (HTTPS automático con Let's Encrypt)
               ├─ https://<dominio>         → web :8080 ──(/api/auth, /v1)──▶ api :8080
-              ├─ https://rt.<dominio>      → realtime :8080 (WebSocket)
+              ├─ https://<dominio>/socket.io → realtime :8080 (WebSocket, mismo dominio)
               └─ https://files.<dominio>   → minio :9000 (archivos, SeaweedFS)
 red interna: db :5432 · postgrest :3000 · redis :6379 · cron · db-backup
 ```
@@ -24,7 +24,7 @@ red interna: db :5432 · postgrest :3000 · redis :6379 · cron · db-backup
 
 ## 2. DNS (zona engynex.com en Hostinger; se puede por la API)
 
-Registros **A** hacia la IP del VPS, TTL 300: `<dominio>`, `rt.<dominio>`, `files.<dominio>` (y `panel.<dominio>` para
+Registros **A** hacia la IP del VPS, TTL 300: `<dominio>`, `files.<dominio>` (y `panel.<dominio>` para
 el panel con HTTPS). Para probar antes del corte: un subdominio nuevo (p. ej. `nuevo.mirai.engynex.com`); el corte
 final solo cambia el registro de `mirai.engynex.com`.
 
@@ -51,7 +51,7 @@ de `.env.local` y deben ser las de producción. A mano en el panel: `AI_GATEWAY_
 5. **Environment**: pega el contenido de `~/.mirai/servidor-<dominio>.env` y guarda (Dokploy lo escribe como `.env` al
    lado del compose; el compose lo usa con `${VAR}`).
 6. **Domains** (+ Add Domain, HTTPS con Let's Encrypt): servicio `web` → `<dominio>` puerto 8080; `realtime` →
-   `rt.<dominio>` puerto 8080; `minio` → `files.<dominio>` puerto 9000.
+   `<dominio>` con ruta `/socket.io` puerto 8080; `minio` → `files.<dominio>` puerto 9000.
 7. **Deploy**. La primera vez la base queda vacía hasta el paso 5 (es esperado que la API no quede sana todavía).
 
 ## 4b. Coolify (alternativa)

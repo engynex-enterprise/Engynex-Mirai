@@ -6,7 +6,7 @@
 #
 # Dominios (en el panel, cada servicio, con HTTPS):
 #   web       https://${MIRAI_DOMINIO}            puerto 8080   (la web reenvía /api/auth y /v1 a la API: mismo origen)
-#   realtime  https://rt.${MIRAI_DOMINIO}         puerto 8080   (WebSocket del "Sincronizado en vivo")
+#   realtime  https://${MIRAI_DOMINIO}/socket.io  puerto 8080   (WebSocket del "Sincronizado en vivo", mismo dominio)
 #   minio     (solo con el perfil seaweedfs) https://files.${MIRAI_DOMINIO} puerto 9000. Producción: Cloudflare R2
 # La base, PostgREST, Redis y la API NO tienen dominio: solo se ven dentro de la red de Docker.
 
@@ -187,7 +187,7 @@ services:
       start_period: 40s
       retries: 5
 
-  # ── Tiempo real (socket.io). Dominio rt.<dominio>, puerto 8080. Escucha los cambios de la base (pg_notify). ──
+  # ── Tiempo real (socket.io). En el panel: <dominio> con ruta /socket.io, puerto 8080. Escucha los cambios de la base (pg_notify). ──
   realtime:
     <<: *restart
     build: { context: ../.., dockerfile: apps/api/Dockerfile }

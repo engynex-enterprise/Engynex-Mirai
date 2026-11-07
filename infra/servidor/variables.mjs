@@ -64,7 +64,8 @@ const publicos = {
   NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:9",
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sin-supabase-no-se-usa",
   NEXT_PUBLIC_LIVE_SOURCE: "gateway",
-  NEXT_PUBLIC_REALTIME_URL: `https://rt.${dominio}`,
+  // Sin NEXT_PUBLIC_REALTIME_URL: el tiempo real va por el MISMO dominio (/socket.io → servicio realtime en el panel).
+  // Un subdominio de dos niveles (rt.mirai.engynex.com) no lo cubre el certificado gratis de Cloudflare (*.engynex.com).
 }
 for (const [k, v] of Object.entries(local))
   if (k.startsWith("NEXT_PUBLIC_") && !(k in publicos) && !/SUPABASE|SITE_URL|API_URL|REALTIME|LIVE_SOURCE/.test(k) && v) publicos[k] = v
