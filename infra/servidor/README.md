@@ -2,7 +2,7 @@
 
 Todo Mirai en **un solo VPS** (Hostinger KVM 1 o 2, plantilla "Ubuntu 24.04 with Dokploy") administrado con
 [Dokploy](https://dokploy.com) (o [Coolify](https://coolify.io): el mismo `docker-compose.yml` sirve para los dos):
-base Postgres 17, PostgREST interno, Redis, archivos (MinIO), API, tiempo real, web, copias diarias y cron.
+base Postgres 17, PostgREST interno, Redis, archivos (SeaweedFS, compatible con S3), API, tiempo real, web, copias diarias y cron.
 Es el mismo stack que `pnpm local:serve` (infra/local) y se prueba igual en este computador con
 `node infra/servidor/prueba-local.mjs` (MIRAI_ENV=produccion, mismas imágenes).
 
@@ -10,7 +10,7 @@ Es el mismo stack que `pnpm local:serve` (infra/local) y se prueba igual en este
 Internet ──▶ Traefik del panel (HTTPS automático con Let's Encrypt)
               ├─ https://<dominio>         → web :8080 ──(/api/auth, /v1)──▶ api :8080
               ├─ https://rt.<dominio>      → realtime :8080 (WebSocket)
-              └─ https://files.<dominio>   → minio :9000 (archivos)
+              └─ https://files.<dominio>   → minio :9000 (archivos, SeaweedFS)
 red interna: db :5432 · postgrest :3000 · redis :6379 · cron · db-backup
 ```
 

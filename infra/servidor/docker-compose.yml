@@ -124,33 +124,43 @@ services:
       interval: 5s
       retries: 20
 
-  # ── Archivos (S3 compatible). Dominio files.<dominio>, puerto 9000. ──
+  # ── Archivos (S3 compatible) con SeaweedFS. Dominio files.<dominio>, puerto 9000. ──
+  # MinIO dejó de publicar imágenes públicas (quay.io pide credenciales desde 2025): SeaweedFS habla el mismo S3
+  # (firmas V4, enlaces firmados, estilo de ruta). El servicio se sigue llamando `minio` para no cambiar las URLs
+  # internas (S3_ENDPOINT=http://minio:9000) ni el dominio del panel. Usuario S3 "mirai" con MINIO_PASSWORD; el bucket
+  # mirai-public se lee sin firma (avatares, anuncios).
   minio:
     <<: *restart
-    image: quay.io/minio/minio:latest
-    command: ["server", "/data"]
-    environment:
-      MINIO_ROOT_USER: mirai
-      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:?}
-      MINIO_BROWSER: "off"
-    volumes: ["minio-data:/data"]
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      retries: 30
-
-  minio-init:
-    image: quay.io/minio/mc:latest
-    restart: "no"
-    depends_on: { minio: { condition: service_healthy } }
+    image: chrislusf/seaweedfs:4.50
     environment:
       MINIO_PASSWORD: ${MINIO_PASSWORD:?}
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - >
-        mc alias set m http://minio:9000 mirai "$$MINIO_PASSWORD" &&
-        mc mb -p m/mirai-private m/mirai-backups m/mirai-public &&
-        mc anonymous set download m/mirai-public
+      - |
+        cat > /etc/s3.json <<EOF
+        {"identities":[
+          {"name":"mirai","credentials":[{"accessKey":"mirai","secretKey":"$$MINIO_PASSWORD"}],"actions":["Admin","Read","Write","List","Tagging"]},
+          {"name":"anonymous","actions":["Read:mirai-public"]}
+        ]}
+        EOF
+        exec weed server -dir=/data -volume.max=0 -master.volumeSizeLimitMB=1024 -s3 -s3.port=9000 -s3.config=/etc/s3.json
+    volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status && nc -z 127.0.0.1 9000"]
+      interval: 5s
+      retries: 40
+
+  minio-init:
+    image: chrislusf/seaweedfs:4.50
+    restart: "no"
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for b in mirai-private mirai-backups mirai-public; do
+          echo "s3.bucket.create -name $$b" | weed shell -master=minio:9333 >/dev/null 2>&1 || true
+        done
+        echo "s3.bucket.list" | weed shell -master=minio:9333 2>/dev/null | grep -c mirai- | grep -q 3 && echo "buckets listos"
 
   # ── API (NestJS + Better Auth). Sin dominio: la web le reenvía /api/auth y /v1 (cookie del mismo origen). ──
   api:
