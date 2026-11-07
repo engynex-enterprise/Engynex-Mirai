@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           api() { curl -fsS --retry 3 -H "x-api-key: $DOKPLOY_API_KEY" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" "$@"; }
-          for i in $(seq 1 210); do
+          for _ in $(seq 1 210); do
             sleep 10
             lista=$(api "${DOKPLOY_URL%/}/api/deployment.allByCompose?composeId=$COMPOSE_ID")
             [ "$(echo "$lista" | jq 'length')" -gt "$antes" ] || continue
@@ -68,7 +68,7 @@ jobs:
       - name: Revisar que la web y el login respondan
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             web=$(curl -s -o /dev/null -w '%{http_code}' "$SITIO/login" || true)
             auth=$(curl -s -o /dev/null -w '%{http_code}' "$SITIO/api/auth/ok" || true)
             echo "web $web · auth $auth"

@@ -56,6 +56,7 @@ jobs:
             if [[ "$RAMA" == "main" ]]; then AMBIENTE=produccion; else AMBIENTE=pruebas; fi
             SHA="$SHA_RUN"; SECO=false
           fi
+          # shellcheck disable=SC2129 # una línea por salida se lee mejor
           echo "ambiente=$AMBIENTE" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "seco=$SECO" >> "$GITHUB_OUTPUT"

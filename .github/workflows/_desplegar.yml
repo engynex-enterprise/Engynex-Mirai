@@ -169,6 +169,7 @@ jobs:
           WEB="${REGISTRY}/web@${WEB_DIGEST}"
           echo "api=$API" >> "$GITHUB_OUTPUT"
           echo "web=$WEB" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC2016 # las comillas invertidas del resumen son Markdown, no una expansión
           printf -- '- api: `%s`\n- web: `%s`\n' "$API" "$WEB" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Escanear la web (Trivy, falla con CRITICAL)
@@ -256,7 +257,7 @@ jobs:
           SMOKE_URL: ${{ vars.MIRAI_SMOKE_URL }}
         run: |
           set -euo pipefail
-          for i in $(seq 1 12); do
+          for _ in $(seq 1 12); do
             if body="$(curl -fsS --max-time 10 "$SMOKE_URL")"; then
               echo "OK: $body"
               grep -q "${SHA:0:12}" <<<"$body" || echo "::warning::La versión publicada aún no muestra ${SHA:0:12} (caché o CDN)."

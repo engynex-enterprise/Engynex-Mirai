@@ -103,7 +103,7 @@ jobs:
         run: |
           set -euo pipefail
           LOCK=$([[ "$ACCION" == "apply" ]] && echo "-lock=true" || echo "-lock=false")
-          terraform -chdir="$RAIZ" plan -input=false $LOCK -out=tfplan -no-color | tee plan.txt
+          terraform -chdir="$RAIZ" plan -input=false "$LOCK" -out=tfplan -no-color | tee plan.txt
           { echo "### Plan de ${{ matrix.ambiente }} ($CLOUD)"; echo '```'; grep -E '^(Plan:|No changes)|will be destroyed|must be replaced' plan.txt || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           if grep -qE 'will be destroyed|must be replaced' plan.txt; then echo "::warning::El plan destruye o reemplaza recursos: revísalo antes de aplicar."; fi
 
