@@ -26,7 +26,7 @@ x-api-env: &api-env
   AUTH_DATABASE_URL: postgres://mirai_app:${MIRAI_APP_PASSWORD:?}@db:5432/mirai
   AUTH_PROXY_HOPS: "1"
   AUTH_MAIL_DRIVER: services
-  AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-no-responder@engynex.com}
+  AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-no-responder@mirai.engynex.com}
   TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
   # Datos por el PostgREST interno (RLS igual que en Supabase) y conexión directa para auth y LISTEN.
   DB_ADAPTER: postgrest
