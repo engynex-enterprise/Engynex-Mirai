@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
+import { completarLeccion } from "./academia"
 import { QA, admin } from "./qa"
 
 // Los casos de soporte y opiniones de QA avisan a los administradores reales: al final se borran (con sus avisos).
@@ -161,11 +162,8 @@ test("academia por niveles con insignias y tu opinión con elogio sin la página
   await expect(page.getByRole("heading", { name: "Nivel intermedio" })).toBeVisible()
   await expect(page.getByRole("list", { name: "Insignias" })).toBeVisible()
   await page.getByRole("button", { name: /Los gastos hormiga/ }).click()
-  const dlg = page.getByRole("dialog", { name: "Los gastos hormiga" })
-  await dlg.getByRole("radio", { name: "$3.650.000" }).click()
-  await expect(dlg.getByText(/¡Correcto!/)).toBeVisible()
-  await dlg.getByRole("button", { name: /Terminar lección|Listo/ }).click()
-  await expect(dlg).toHaveCount(0)
+  await completarLeccion(page, "$3.650.000")
+  await page.getByRole("button", { name: "Academia", exact: true }).click()
   await expect(page.getByText(/\d+ de \d+ lecciones/).first()).toBeVisible()
   await shot(page, "academia", info.project.name)
 

@@ -109,3 +109,61 @@ export function insignias(hechas: string[]): Insignia[] {
     { id: "graduado", label: "Graduado Mirai", desc: "Terminaste toda la Academia", icon: "graduation-cap", ok: n === LECCIONES.length },
   ]
 }
+
+// ——— E-learning: pasos de una lección, puntos, racha, evaluaciones y certificados ———
+
+/** Fecha (AAAA-MM-DD) en que se terminó cada lección. Guardado en user_preferences.extra.academia_log. */
+export type AcademiaLog = Record<string, string>
+/** Mejor nota de la evaluación de cada nivel (0–100) y su fecha. Guardado en extra.academia_eval. */
+export type Evaluaciones = Partial<Record<Nivel, { pct: number; fecha: string }>>
+
+export const XP_LECCION = 10
+export const XP_EVALUACION = 30
+/** Nota mínima para aprobar la evaluación de un nivel y ganar su certificado. */
+export const APROBAR = 70
+
+/** Pasos del reproductor: portada, una idea por pantalla, repaso y resultado. */
+export type Paso = { tipo: "intro" } | { tipo: "punto"; i: number } | { tipo: "repaso" } | { tipo: "fin" }
+export const pasosDe = (l: Leccion): Paso[] => [{ tipo: "intro" }, ...l.puntos.map((_, i) => ({ tipo: "punto" as const, i })), { tipo: "repaso" }, { tipo: "fin" }]
+
+export const leccionesDe = (n: Nivel) => LECCIONES.filter((l) => nivelDe(l) === n)
+export const nivelCompleto = (hechas: string[], n: Nivel) => leccionesDe(n).every((l) => hechas.includes(l.id))
+const aprobado = (e: Evaluaciones, n: Nivel) => (e[n]?.pct ?? 0) >= APROBAR
+
+/** Puntos de experiencia: 10 por lección y 30 por evaluación aprobada. */
+export function puntos(hechas: string[], evals: Evaluaciones = {}): number {
+  const n = LECCIONES.filter((l) => hechas.includes(l.id)).length
+  return n * XP_LECCION + (Object.keys(NIVELES) as Nivel[]).filter((k) => aprobado(evals, k)).length * XP_EVALUACION
+}
+
+/** Minutos de lecciones terminadas. */
+export const minutosAprendidos = (hechas: string[]) => LECCIONES.filter((l) => hechas.includes(l.id)).reduce((a, l) => a + l.minutos, 0)
+
+const diaMs = 864e5
+const dia = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / diaMs
+
+/** Racha: días seguidos con al menos una lección. La actual sigue viva si la última fue hoy o ayer. */
+export function racha(log: AcademiaLog, hoy: string): { actual: number; mejor: number } {
+  const dias = [...new Set(Object.values(log).filter((f) => /^\d{4}-\d{2}-\d{2}/.test(f)).map((f) => dia(f.slice(0, 10))))].sort((a, b) => a - b)
+  let mejor = 0, run = 0
+  for (let i = 0; i < dias.length; i++) { run = i && dias[i] - dias[i - 1] === 1 ? run + 1 : 1; mejor = Math.max(mejor, run) }
+  const h = dia(hoy)
+  const ult = dias.at(-1)
+  return { actual: ult !== undefined && h - ult <= 1 ? run : 0, mejor }
+}
+
+/** Preguntas de la evaluación de un nivel: el repaso de cada lección del nivel. */
+export const preguntasNivel = (n: Nivel) => leccionesDe(n).map((l) => ({ id: l.id, titulo: l.titulo, ...l.pregunta }))
+
+/** Nota (0–100) de una evaluación: respuestas en el mismo orden de `preguntasNivel`. */
+export function notaEvaluacion(n: Nivel, respuestas: (number | null)[]): number {
+  const ps = preguntasNivel(n)
+  if (!ps.length) return 0
+  return Math.round((ps.filter((p, i) => respuestas[i] === p.correcta).length / ps.length) * 100)
+}
+
+/** Certificados ganados: uno por nivel aprobado y el de la Academia completa (todas las lecciones y niveles). */
+export function certificados(hechas: string[], evals: Evaluaciones = {}) {
+  const niveles = (Object.keys(NIVELES) as Nivel[]).filter((n) => nivelCompleto(hechas, n) && aprobado(evals, n))
+  return { niveles, completa: niveles.length === Object.keys(NIVELES).length }
+}

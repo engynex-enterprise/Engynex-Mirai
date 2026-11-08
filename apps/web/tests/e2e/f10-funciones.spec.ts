@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
+import { completarLeccion } from "./academia"
 import { QA, admin } from "./qa"
 
 const REF = { email: "qa.referido@mirai.test", password: `${QA.password}-ref`, nombre: "Rita Referida" }
@@ -41,9 +42,8 @@ test("calculadoras, lista de deseos, academia y patrimonio", async ({ page }, in
 
   await page.goto("/academia")
   await page.getByRole("button", { name: /El presupuesto 50\/30\/20/ }).click()
-  await page.getByRole("dialog").getByRole("radio", { name: "$400.000" }).click()
-  await expect(page.getByText(/¡Correcto!/)).toBeVisible()
-  await page.getByRole("dialog").getByRole("button", { name: /^(Terminar lección|Listo)$/ }).click()
+  await completarLeccion(page, "$400.000")
+  await page.getByRole("button", { name: "Academia", exact: true }).click()
   await expect(page.getByText(/\d+ de \d+ lecciones/)).toBeVisible()
   await expect(page.getByRole("button", { name: /Completada El presupuesto 50\/30\/20/ })).toBeVisible()
   await shot(page, "academia", info.project.name)
