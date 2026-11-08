@@ -21,13 +21,11 @@ import { Icon } from "@/components/mirai/icon"
 import { IsoIcon, hasIso } from "@/components/mirai/iso-icon"
 import { NAV, isGroup, navIdOf, type NavGroup, type NavLeaf } from "@/lib/nav"
 import { can, featureOfSection } from "@/lib/plans"
-import { createClient } from "@/utils/supabase/client"
-import { isMiraiAuth } from "@/lib/auth/provider"
 import { cn } from "@/lib/utils"
 import { useApp } from "./app-context"
 import { ROLE_INFO } from "@/lib/household/roles"
 import { useShell } from "./shell-store"
-import type { LiveStatus, PresenceUser } from "@/hooks/use-realtime"
+import type { LiveStatus, PresenceUser } from "@/hooks/use-live"
 import { switchBook } from "./actions"
 import { ModeSwitch } from "./mode-switch"
 import { togglePrivacy } from "./privacy"
@@ -47,7 +45,7 @@ const NO_BADGES: Record<string, number | string> = {}
 
 export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; badges: Record<string, number | string>; hidden?: string[]; unread: number }) {
   // Hasta terminar de hidratar, lo mismo que pintó el servidor (sin datos): evita el error #418 cuando la API o el tiempo
-  // real responden antes de que React hidrate el menú (V7-H4, AUTH_PROVIDER=mirai).
+  // real responden antes de que React hidrate el menú.
   const hydrated = useHydrated()
   const { hidden = [] } = props
   const live: LiveStatus = hydrated ? props.live : "conectando"
@@ -335,8 +333,7 @@ function UserMenu() {
             <DropdownMenuItem
               variant="destructive"
               onSelect={async () => {
-                if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut()
-                else await createClient().auth.signOut()
+                await (await import("@/lib/auth/mirai")).signOut()
                 router.replace("/login")
                 router.refresh()
               }}

@@ -4,11 +4,10 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/mirai/toast"
 import { SubmitButton } from "@/components/mirai/submit-button"
-import { createClient } from "@/utils/supabase/client"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { PasswordMeter, passwordScore } from "@/components/auth/password-meter"
 import { AuthHeader, EnterSubmit, PasswordInput } from "@/components/auth/auth-ui"
-import { isMiraiAuth } from "@/lib/auth/provider"
+import { resetPassword } from "@/lib/auth/mirai"
 
 export default function ActualizarClavePage() {
   const router = useRouter()
@@ -22,21 +21,14 @@ export default function ActualizarClavePage() {
   async function save() {
     if (!valido || busy) return
     setBusy(true)
-    if (isMiraiAuth()) {
-      // Better Auth: el enlace del correo trae ?token=… (o ?error=INVALID_TOKEN si venció). No abre sesión: se entra después.
-      const q = new URLSearchParams(location.search)
-      const token = q.get("token")
-      if (!token || q.get("error")) { setBusy(false); return toast.error("El enlace no es válido o ya venció", { description: "Pide uno nuevo en “¿La olvidaste?”." }) }
-      const r = await (await import("@/lib/auth/mirai")).resetPassword(token, pw)
-      if (!r.ok) { setBusy(false); return toast.error("No pudimos cambiar la contraseña", { description: r.msg }) }
-      toast.success("Contraseña actualizada")
-      router.replace("/login?aviso=clave")
-      return
-    }
-    const { error } = await createClient().auth.updateUser({ password: pw })
-    if (error) { setBusy(false); return toast.error("No pudimos cambiar la contraseña", { description: error.message }) }
+    // El enlace del correo trae ?token=… (o ?error=INVALID_TOKEN si venció). No abre sesión: se entra después.
+    const q = new URLSearchParams(location.search)
+    const token = q.get("token")
+    if (!token || q.get("error")) { setBusy(false); return toast.error("El enlace no es válido o ya venció", { description: "Pide uno nuevo en “¿La olvidaste?”." }) }
+    const r = await resetPassword(token, pw)
+    if (!r.ok) { setBusy(false); return toast.error("No pudimos cambiar la contraseña", { description: r.msg }) }
     toast.success("Contraseña actualizada")
-    router.replace("/inicio")
+    router.replace("/login?aviso=clave")
   }
 
   return (

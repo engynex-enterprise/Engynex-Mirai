@@ -7,3 +7,5 @@ export type MyHousehold = { id: string; nombre: string; access: AccessRole; acti
 export type AccountData = { account: AccountState; sessions: SessionRow[]; events: AccountEvent[]; households: MyHousehold[]; incoming: TransferView[] }
 export type TransferPerson = { userId: string; nombre: string; email: string | null; avatar: string | null; access: AccessRole; ok: boolean }
 export type TransferCandidates = { ok: boolean; msg: string; people: TransferPerson[]; tienePago: boolean; hogar: string }
+/** Forma de entrar que se quita: Google (por su identidad) o la contraseña. */
+export type RemoveMethodInput = { kind: "google"; identityId: string } | { kind: "password" }

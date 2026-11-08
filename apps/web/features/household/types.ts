@@ -60,3 +60,17 @@ export type InviteResult = {
   share?: Share
   delivery?: LastResult
 }
+
+/** Datos para invitar a una persona (POST /v1/households/:h/invitations). */
+export type InviteInput = {
+  destino: string
+  nombre?: string | null
+  parentesco?: string | null
+  access: "admin" | "editor" | "registra" | "viewer"
+  familyId?: string | null
+  /** Es otra persona aunque se llame igual que un integrante sin cuenta. */
+  nueva?: boolean
+}
+
+/** Crear (sin `id`) o editar un integrante. `force`: guardar aunque ya haya alguien con el mismo nombre. */
+export type FamilyMemberInput = { id?: string | null; nombre: string; rol?: string | null; avatar?: string | null; nacimiento?: string | null; cupo?: number; force?: boolean }

@@ -20,7 +20,7 @@ import { useApp } from "@/components/app/app-context"
 import { fetchMyRule, fetchTelegramLinked, saveMyRule } from "../api"
 import { useSettings } from "@/features/catalogs/hooks"
 import { notifyChannels, sendDigestNow, sendTestNow, telegramConfirm, telegramStartLink, telegramUnlink } from "@/features/notify/api"
-import { calendarStatus, connectGoogleViaApi, googleViaApi, syncCalendar } from "@/features/correo/api"
+import { calendarStatus, connectGoogleViaApi, syncCalendar } from "@/features/correo/api"
 import { BrandLogo } from "@/components/mirai/brand-logo"
 import { currentPush, disablePush, enablePush, pushSupported } from "@/features/notify/push-client"
 import { AVISOS, CANALES, defaultMatriz, onFor, type CanalKey, type Canales, type Matriz } from "@/lib/notify/rules"
@@ -75,7 +75,7 @@ const NoDisponible = ({ que }: { que: string }) => <p className="pt-3 text-sm te
 function TelegramLink() {
   const { user } = useApp()
   const qc = useQueryClient()
-  const { data: linked } = useQuery({ queryKey: ["tg-link", user.id], queryFn: () => fetchTelegramLinked(user.id) })
+  const { data: linked } = useQuery({ queryKey: ["tg-link", user.id], queryFn: () => fetchTelegramLinked() })
   const [url, setUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (linked) return (
@@ -99,7 +99,6 @@ function TelegramLink() {
 }
 
 function PushDevice() {
-  const { user } = useApp()
   const [on, setOn] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => { currentPush().then((s) => setOn(!!s)).catch(() => setOn(false)) }, [])
@@ -109,7 +108,7 @@ function PushDevice() {
       {on ? <StatusPill tone="pagado" check>Activo en este dispositivo</StatusPill> : <StatusPill tone="gray">Apagado en este dispositivo</StatusPill>}
       <Button size="sm" variant="outline" disabled={busy || on === null} onClick={async () => {
         setBusy(true)
-        try { if (on) { await disablePush(); setOn(false); toast("Push apagado en este dispositivo") } else { await enablePush(user.id); setOn(true); toast.success("Push activado en este dispositivo") } }
+        try { if (on) { await disablePush(); setOn(false); toast("Push apagado en este dispositivo") } else { await enablePush(); setOn(true); toast.success("Push activado en este dispositivo") } }
         catch (e) { toast.error((e as Error).message) }
         setBusy(false)
       }}>{busy && <Spinner />}{on ? "Apagar aquí" : "Activar en este dispositivo"}</Button>
@@ -132,7 +131,7 @@ function GoogleCalendarSection({ on, onChange }: { on: boolean; onChange: (v: bo
       {!st ? <Spinner /> : !st.plan ? <p className="pt-3 text-sm text-muted-foreground">Llevar tus pagos a Google Calendar está en Mirai Premium.</p> : !st.conectado ? (
         <div className="flex flex-wrap items-center gap-3 pt-3">
           <p className="text-sm text-muted-foreground">Aún no conectas tu Google Calendar.</p>
-          <Button variant="outline" size="sm" asChild><a href={`/api/google/connect?s=calendar&back=${encodeURIComponent("/ajustes?tab=alertas")}`} onClick={(e) => { if (googleViaApi()) { e.preventDefault(); void connectGoogleViaApi("calendar", "/ajustes?tab=alertas") } }}><BrandLogo k="google-calendar" size={16} bare /> Conectar Google Calendar</a></Button>
+          <Button variant="outline" size="sm" onClick={() => void connectGoogleViaApi("calendar", "/ajustes?tab=alertas")}><BrandLogo k="google-calendar" size={16} bare /> Conectar Google Calendar</Button>
         </div>
       ) : <>
         <SettingRow title="Mantener mis pagos en Google Calendar" desc={st.eventos ? `Mirai lleva ${st.eventos} evento${st.eventos === 1 ? "" : "s"} en tu calendario.` : "Cada mañana revisamos tus pagos y cobros."}>

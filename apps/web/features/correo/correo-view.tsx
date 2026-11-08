@@ -30,7 +30,7 @@ import { fmtDate } from "@/lib/format"
 import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { defaultPaySource, parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
 import { classifyBatch } from "@/features/expenses/use-ai-category"
-import { connectGoogleViaApi, googleConnection, googleDisconnect, googleViaApi, insertExpenses, scanMail, type MailRow } from "./api"
+import { connectGoogleViaApi, googleConnection, googleDisconnect, insertExpenses, scanMail, type MailRow } from "./api"
 import { MAILQ_DEFAULT } from "./query"
 
 type Row = MailRow & { incl: boolean; category_id: string | null; hormiga: boolean; src: "ia" | "regla" | null; manual?: boolean; pago: string }
@@ -111,7 +111,7 @@ export function CorreoView() {
         <Card className="items-center gap-4 p-8 text-center shadow-card ring-0">
           <span className="relative"><IsoIcon k="correo" size={64} /><span className="absolute -right-3 -bottom-2"><BrandLogo k="gmail" size={32} /></span></span>
           <div><h2 className="text-lg font-semibold">Conecta tu Gmail</h2><p className="max-w-md text-muted-foreground">Solo pedimos permiso de lectura. Mirai busca los correos de compras de tus bancos; no lee nada más ni envía correos.</p></div>
-          <Button variant="outline" size="lg" onClick={() => { if (googleViaApi()) void connectGoogleViaApi("gmail", "/correo"); else location.href = "/api/google/connect?s=gmail&back=/correo" }}><BrandLogo k="google" size={20} bare /> Conectar con Google</Button>
+          <Button variant="outline" size="lg" onClick={() => void connectGoogleViaApi("gmail", "/correo")}><BrandLogo k="google" size={20} bare /> Conectar con Google</Button>
           <p className="text-xs text-muted-foreground">Puedes desconectarlo cuando quieras.</p>
         </Card>
       ) : (

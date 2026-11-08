@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { BrandLogo } from "@/components/mirai/brand-logo"
-import { createClient } from "@/utils/supabase/client"
 import { toast } from "@/components/mirai/toast"
-import { isMiraiAuth } from "@/lib/auth/provider"
 import { abrirVentanaGoogle, escucharGoogle } from "./google-popup"
 
 /**
  * Botón "Continuar con Google" con el logo oficial de Google (pautas de marca de Google Sign-In).
- * Auth propio (v7): Google se abre en una ventana flotante y esta pestaña espera; al terminar entra a `next`, y si algo
+ * Google se abre en una ventana flotante y esta pestaña espera; al terminar entra a `next`, y si algo
  * falla la persona sigue aquí con el aviso. Si el navegador bloquea la ventana, se usa esta misma pestaña.
  */
 export function GoogleButton({ next = "/inicio" }: { next?: string }) {
@@ -23,7 +21,6 @@ export function GoogleButton({ next = "/inicio" }: { next?: string }) {
   const hecho = useRef(false)
 
   useEffect(() => {
-    if (!isMiraiAuth()) return
     return escucharGoogle((m) => {
       if (hecho.current) return // llega por dos vías (canal y postMessage): una sola vez
       hecho.current = true
@@ -61,21 +58,9 @@ export function GoogleButton({ next = "/inicio" }: { next?: string }) {
     setEsperando(true)
   }
 
-  async function conSupabase() {
-    setBusy(true)
-    const { error } = await createClient().auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
-    })
-    if (error) {
-      setBusy(false)
-      toast.error("No pudimos abrir Google", { description: error.message })
-    }
-  }
-
   return (
     <div className="grid gap-2">
-      <Button type="button" variant="outline" size="lg" className="w-full" disabled={busy} onClick={() => (isMiraiAuth() ? conVentana() : conSupabase())}>
+      <Button type="button" variant="outline" size="lg" className="w-full" disabled={busy} onClick={() => conVentana()}>
         {busy || esperando ? <Spinner /> : <BrandLogo k="google" size={20} bare />}
         {esperando ? "Esperando a Google…" : "Continuar con Google"}
       </Button>

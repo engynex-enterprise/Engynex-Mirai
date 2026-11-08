@@ -26,8 +26,6 @@ import { Panel, SectionTitle } from "@/components/mirai/panel"
 import { Tip } from "@/components/mirai/tip"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
-import { isMiraiAuth } from "@/lib/auth/provider"
 import { ingresoMensual, totales } from "@/lib/domain"
 import { digitosDian, edad, monthName, proxCumple, todayISO } from "@/lib/format"
 import { BANNER_THEMES, type BannerThemeKey } from "@/lib/content/banners"
@@ -95,8 +93,8 @@ export function ProfileView() {
   const { data: p } = useQuery({ queryKey: key, queryFn: () => fetchProfile(user.id) })
   const { data: identities } = useQuery({
     queryKey: ["identities", user.id],
-    // v7: con AUTH_PROVIDER=mirai las formas de entrar salen de Better Auth (listAccounts).
-    queryFn: async () => (isMiraiAuth() ? (await import("@/lib/auth/mirai")).identities() : ((await createClient().auth.getUserIdentities()).data?.identities ?? [])),
+    // Las formas de entrar salen de Better Auth (listAccounts).
+    queryFn: async () => (await import("@/lib/auth/mirai")).identities(),
   })
   const { data: counts } = useQuery({
     queryKey: ["b", bookId, "profile-counts"],
