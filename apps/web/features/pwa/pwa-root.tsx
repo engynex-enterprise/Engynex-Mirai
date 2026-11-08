@@ -6,7 +6,7 @@ import { useTheme } from "next-themes"
 import { toast } from "@/components/mirai/toast"
 import { PWA_COLORS, SHARE_ACTION } from "@/lib/pwa/config"
 import { isStandalone } from "@/lib/pwa/platform"
-import { registerServiceWorker, swEnabled } from "./sw-client"
+import { registerServiceWorker, swEnabled, unregisterStaleServiceWorkers } from "./sw-client"
 import { usePwa, type BeforeInstallPromptEvent } from "./store"
 
 const UPDATE_TOAST = "mirai-version-nueva"
@@ -57,7 +57,12 @@ export function PwaRoot() {
 
   // Service worker, versión nueva y mensajes (tocar una notificación).
   useEffect(() => {
-    if (!swEnabled()) return
+    if (!swEnabled()) {
+      // pnpm dev (sin service worker): si en este mismo localhost quedó uno de una versión compilada (pnpm local:serve o
+      // las pruebas), serviría archivos y páginas viejas ("This page couldn't load" o la página sin conexión). Se quita.
+      void unregisterStaleServiceWorkers()
+      return
+    }
     const sw = navigator.serviceWorker
     let reg: ServiceWorkerRegistration | null = null
     const offer = (w: ServiceWorker | "build") => {

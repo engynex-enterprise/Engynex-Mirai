@@ -9,7 +9,7 @@
 //
 // Al cambiar este archivo sube VERSION: la app muestra "Hay una versión nueva · Actualizar" y el nuevo service worker
 // espera a que la persona toque Actualizar (mensaje SKIP_WAITING) para no cambiarle la app mientras escribe.
-const VERSION = "5.6-offline-1"
+const VERSION = "5.6-offline-2"
 const STATIC = `mirai-static-${VERSION}`
 const SHELL = `mirai-shell-${VERSION}`
 // Sin versión: las páginas guardadas sobreviven a una actualización del service worker.
@@ -77,8 +77,12 @@ const cacheablePage = (url, res) =>
   (res.headers.get("content-type") || "").includes("text/html")
 
 async function putPage(url, res) {
+  // Una página que falló al armarse en el servidor llega con 200 (Next ya había empezado a enviarla) y trae la pantalla
+  // de error (<html id="__next_error__">): no se guarda, para no mostrarla luego sin conexión.
+  const html = await res.text()
+  if (html.includes('id="__next_error__"')) return
   const c = await caches.open(PAGES)
-  await c.put(pageKey(url.href), res)
+  await c.put(pageKey(url.href), new Response(html, { status: res.status, statusText: res.statusText, headers: res.headers }))
   const keys = await c.keys()
   for (let i = 0; i < keys.length - MAX_PAGES; i++) await c.delete(keys[i])
 }
@@ -115,6 +119,7 @@ async function warm(urls) {
       const res = await fetch(url.href, { credentials: "same-origin", headers: { Accept: "text/html" } })
       if (!cacheablePage(url, res)) continue
       const html = await res.clone().text()
+      if (html.includes('id="__next_error__"')) continue
       await putPage(url, res)
       for (const m of html.matchAll(/\/_next\/static\/[^"'\s)\\]+/g)) assets.add(m[0])
     } catch { /* sin red: se intenta en la próxima */ }

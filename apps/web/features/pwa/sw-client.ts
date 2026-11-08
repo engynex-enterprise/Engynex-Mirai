@@ -17,3 +17,15 @@ export async function clearAppCaches() {
   await Promise.all(keys.map((k) => caches.delete(k)))
   return keys.length
 }
+
+/** Desarrollo: quita service workers y cachés de Mirai que hayan quedado de una versión compilada en el mismo origen. */
+export async function unregisterStaleServiceWorkers() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations()
+    if (!regs.length) return
+    await Promise.all(regs.map((r) => r.unregister()))
+    if (typeof caches !== "undefined") for (const k of await caches.keys()) if (k.startsWith("mirai-")) await caches.delete(k)
+    console.info("Mirai: se quitó un service worker viejo de este localhost (modo desarrollo).")
+  } catch { /* sin permiso */ }
+}

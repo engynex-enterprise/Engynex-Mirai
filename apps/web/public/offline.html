@@ -73,6 +73,11 @@
       })
       if (n) document.getElementById("pages").hidden = false
       else document.getElementById("msg").textContent = "Mirai necesita internet para mostrarte esta sección. Revisa el wifi o los datos del celular."
+      // Hay internet pero Mirai no respondió (mantenimiento o el servidor reiniciando): se dice así, no "sin conexión".
+      if (navigator.onLine) {
+        document.querySelector("h1").textContent = "Mirai no responde en este momento"
+        document.getElementById("msg").textContent = "Tienes internet, pero no pudimos conectar con Mirai. Puede estar actualizándose: intenta en un momento." + (n ? " Mientras tanto, puedes abrir lo guardado:" : "")
+      }
     }).catch(function () {})
   })()
 </script>
