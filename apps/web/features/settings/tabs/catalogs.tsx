@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Combobox } from "@/components/mirai/combobox"
 import { EntityLogo } from "@/components/mirai/entity-logo"
@@ -13,15 +12,15 @@ import { ListToolbar, NoResults, useListControls, type ListFilter, type ListSort
 import { useCanEdit } from "@/components/app/app-context"
 import { useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { ICON_OPTIONS } from "@/features/catalogs/category-dialog"
-import { useCategories, useEntities, useSettings } from "@/features/catalogs/hooks"
+import { useCategories, useEntities } from "@/features/catalogs/hooks"
 import { ENTITY_TIPOS, entityIcon, findEntity, norm } from "@/lib/domain"
 import type { Row } from "@/lib/supabase/tables"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/mirai/toast"
 import { SettingSection } from "../ui"
-import { useBookSettingsSave } from "../prefs"
 import { AddRow, TextBlur } from "./catalog-ui"
 import { Reglas } from "./reglas"
+import { Relaciones } from "./relaciones"
 
 type Kind = "cats" | "ings" | "ents" | "medios" | "rels" | "reglas"
 const GRUPOS = [{ value: "n", label: "Necesidad", icon: "house" }, { value: "g", label: "Gusto", icon: "coffee" }, { value: "a", label: "Ahorro", icon: "piggy-bank" }]
@@ -170,27 +169,6 @@ function Entidades() {
           ))}
         </ul>
       )}
-    </SettingSection>
-  )
-}
-
-// ——— Relaciones ———
-function Relaciones() {
-  const { data: cfg } = useSettings()
-  const save = useBookSettingsSave()
-  const can = useCanEdit()
-  if (!cfg) return <Skeleton className="h-40 rounded-lg" />
-  const rels = cfg.relaciones ?? []
-  return (
-    <SettingSection icon="users" title="Relaciones" desc={`Cómo conoces a tus contactos (para préstamos y cobros). ${count(rels.length, "relación", "relaciones")}.`}>
-      <AddRow placeholder="Nueva relación (ej. Primo)" disabled={!can} taken={(n) => rels.some((r) => same(r, n))} onAdd={(n) => save.mutateAsync({ relaciones: [...rels, n] })} />
-      <ul className="flex flex-wrap gap-2 pt-4" aria-label="Relaciones">
-        {rels.map((r) => (
-          <li key={r} className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary pr-1 pl-3 text-sm font-medium">{r}
-            <button type="button" disabled={!can} aria-label={`Quitar ${r}`} title={`Quitar ${r}`} className="grid size-6 place-items-center rounded-full outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40" onClick={() => save.mutate({ relaciones: rels.filter((x) => x !== r) })}><X className="size-3.5" /></button>
-          </li>
-        ))}
-      </ul>
     </SettingSection>
   )
 }

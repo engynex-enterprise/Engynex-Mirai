@@ -60,7 +60,8 @@ type Props<T> = {
   loading?: boolean
   columns: DTColumn<T>[]
   rowKey: (row: T) => string
-  search?: { placeholder: string; text: (row: T) => string }
+  /** `initial`: texto con el que arranca la búsqueda (p. ej. `?q=` desde otro lado de la app). */
+  search?: { placeholder: string; text: (row: T) => string; initial?: string }
   filters?: DTFilter<T>[]
   /** Pestañas rápidas sobre la lista (la de "Todos" va sin `match`). */
   views?: DTView<T>[]
@@ -129,7 +130,7 @@ export function DataTable<T>({
 }: Props<T>) {
   const mobile = useIsMobile()
   const list = !!item
-  const [q, setQ] = useState("")
+  const [q, setQ] = useState(search?.initial ?? "")
   const [active, setActive] = useState<Record<string, string[]>>({})
   const [ranges, setRanges] = useState<Record<string, Range>>({})
   const [dates, setDates] = useState<Record<string, Dates>>({})

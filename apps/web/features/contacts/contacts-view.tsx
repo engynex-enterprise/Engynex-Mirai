@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs"
 import { Copy, HandCoins, Plus, Store } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -74,6 +74,8 @@ export function ContactsView() {
 }
 
 function Personas({ nuevo, setNuevo }: { nuevo: boolean; setNuevo: (o: boolean) => void }) {
+  // ?q= abre la lista ya filtrada (p. ej. desde Ajustes › Relaciones: los contactos de una relación).
+  const [q0] = useQueryState("q", parseAsString.withDefault(""))
   const canEdit = useCanEdit()
   const [id, setId] = useIdParam()
   const [editing, setEditing] = useState<Row<"contacts"> | null>(null)
@@ -104,7 +106,7 @@ function Personas({ nuevo, setNuevo }: { nuevo: boolean; setNuevo: (o: boolean) 
           { id: "relacion", header: "Relación", csv: (c) => c.relacion },
         ]}
         initialSort={{ id: "nombre", dir: "asc" }}
-        search={{ placeholder: "Buscar contacto", text: (c) => `${c.nombre} ${c.telefono ?? ""} ${c.email ?? ""} ${c.doc ?? ""} ${c.ciudad ?? ""} ${c.relacion ?? ""}` }}
+        search={{ placeholder: "Buscar contacto", initial: q0, text: (c) => `${c.nombre} ${c.telefono ?? ""} ${c.email ?? ""} ${c.doc ?? ""} ${c.ciudad ?? ""} ${c.relacion ?? ""}` }}
         filters={[
           { id: "tipo", label: "Tipo", options: [{ value: "persona", label: "Personas" }, { value: "empresa", label: "Empresas" }], match: (c, v) => (c.tipo === "empresa" ? "empresa" : "persona") === v },
           { id: "prest", label: "Préstamos", options: [{ value: "si", label: "Con préstamos" }, { value: "no", label: "Sin préstamos" }], match: (c, v) => (loansOf(c).length > 0) === (v === "si") },

@@ -25,7 +25,7 @@ import { payFixedExpense } from "./commands"
 import { FFREC, FSTEP, categoriaSugerida, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
-import { categoryOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods } from "@/features/catalogs/hooks"
+import { categoryOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { Check, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -80,19 +80,24 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
   const { data: methods = [] } = usePaymentMethods()
   const { data: members = [] } = useMembers()
   const { data: rules = [] } = useKeywordRules()
+  // Valores por defecto (Ajustes › Valores por defecto): categoría y medio de un fijo nuevo.
+  const { data: cfg } = useSettings()
+  const defs = (cfg?.defaults ?? {}) as { fijo_cat?: string; fijo_medio?: string; medio?: string }
+  const defCat = cats.find((c) => c.id === defs.fijo_cat)?.id
+  const defMedio = [defs.fijo_medio, defs.medio].find((id) => !!id && methods.some((m) => m.id === id))
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
-  const [catManual, setCatManual] = useState(!!fixed || !!preset?.category_id)
+  const [catManual, setCatManual] = useState(!!fixed || !!preset?.category_id || !!defCat)
   const [newCat, setNewCat] = useState<string | null>(null)
   const ai = useAICategory({ manual: catManual, onCategory: (id) => form.setValue("category_id", id) })
   const plus7 = new Date(new Date(today + "T12:00:00").getTime() + 7 * 864e5).toISOString().slice(0, 10)
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      nombre: fixed?.nombre ?? preset?.nombre ?? "", category_id: fixed?.category_id ?? preset?.category_id ?? cats.find((c) => c.nombre === "Vivienda")?.id ?? null,
+      nombre: fixed?.nombre ?? preset?.nombre ?? "", category_id: fixed?.category_id ?? preset?.category_id ?? defCat ?? cats.find((c) => c.nombre === "Vivienda")?.id ?? null,
       tipoValor: fixed?.variable ? "rango" : "fijo", valor: Number(fixed?.valor ?? 0), vmin: Number(fixed?.vmin ?? 0), vmax: Number(fixed?.vmax ?? 0),
       frec: fixed?.frec ?? "mensual", prox: fixed ? fijoProxIso(toIn(fixed), today) : fijoProxIso(null, today),
       diaQ1: fixed?.frec === "quincenal" ? Math.min(15, fixed.dia) : 15, dia2: fixed?.dia2 ?? 30,
-      fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? preset?.payment_method_id ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? preset?.proveedor ?? "", provider_id: fixed?.provider_id ?? preset?.provider_id ?? null,
+      fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? preset?.payment_method_id ?? defMedio ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? preset?.proveedor ?? "", provider_id: fixed?.provider_id ?? preset?.provider_id ?? null,
       personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),

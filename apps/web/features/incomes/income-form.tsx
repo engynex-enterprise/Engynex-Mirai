@@ -69,6 +69,12 @@ const schema = z.object({
 type Values = z.infer<typeof schema>
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; income?: Row<"incomes"> | null }
 
+/** Quién recibe un ingreso nuevo (Ajustes › Valores por defecto), si esa persona sigue en el hogar. */
+const defQuien = (defaults: unknown, members: { id: string }[]) => {
+  const q = ((defaults ?? {}) as { ing_quien?: string }).ing_quien
+  return q && members.some((m) => m.id === q) ? q : "familia"
+}
+
 const tipoDef = (t: TipoIngreso) => TIPOS_INGRESO.find((x) => x.value === t) ?? TIPOS_INGRESO[TIPOS_INGRESO.length - 1]
 /** Pagos por mes de la frecuencia (anual: el valor ya es el del pago). */
 const veces = (frec: string, dias: number) => (frec === "diario" ? Math.max(1, dias || 30) : frec === "semanal" ? 52 / 12 : frec === "quincenal" ? 2 : 1)
@@ -122,7 +128,7 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
       b1: frec0 === "quincenal" ? b10 : Math.round(mensual0 / 2), b2: frec0 === "quincenal" ? b20 : mensual0 - Math.round(mensual0 / 2),
       ded: R.ded ?? "mitad", x1: R.x1 ?? 0, dias: R.dias ?? 30,
       dia: income?.dia ?? 30, d1: R.d1 ?? 15, d2: R.d2 ?? (income ? 31 : 30), dow: String(R.dow ?? 5), mes: String(R.mes ?? 12),
-      quien: income?.member_id ?? "familia",
+      quien: income ? (income.member_id ?? "familia") : defQuien(cfg?.defaults, members),
     },
   })
   const { errors, isSubmitting } = form.formState

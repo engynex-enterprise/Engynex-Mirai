@@ -23,7 +23,7 @@ const IaTab = dynamic(() => import("./tabs/ia").then((m) => m.IaTab), { loading:
 const AiUsageView = dynamic(() => import("@/features/ia-uso/uso-view").then((m) => m.AiUsageView), { loading: TabLoading })
 const AlertasTab = dynamic(() => import("./tabs/alerts").then((m) => m.AlertasTab), { loading: TabLoading })
 const FinanzasTab = dynamic(() => import("./tabs/finance").then((m) => m.FinanzasTab), { loading: TabLoading })
-const DefaultsTab = dynamic(() => import("./tabs/finance").then((m) => m.DefaultsTab), { loading: TabLoading })
+const DefaultsTab = dynamic(() => import("./tabs/defaults").then((m) => m.DefaultsTab), { loading: TabLoading })
 const CatalogTab = dynamic(() => import("./tabs/catalogs").then((m) => m.CatalogTab), { loading: TabLoading })
 const HogarTab = dynamic(() => import("./tabs/household").then((m) => m.HogarTab), { loading: TabLoading })
 const DatosTab = dynamic(() => import("./tabs/data").then((m) => m.DatosTab), { loading: TabLoading })

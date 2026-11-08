@@ -73,14 +73,24 @@ export async function fetchHouseholdIntegrations(_householdId: string, bookId: s
 
 // ── Datos de referencia ────────────────────────────────────────────────────────────────────────────────────────
 
-export type LatestRefs = { trm: { fecha: string; valor: number } | null; usura: { desde: string; hasta: string; tasa_ea: number } | null }
+export type LatestRefs = {
+  trm: { fecha: string; valor: number } | null
+  usura: { desde: string; hasta: string; tasa_ea: number } | null
+  /** Valores oficiales por año (ref_uvt, ref_smmlv) con su fuente. */
+  uvt: { year: number; valor: number; fuente: string | null }[]
+  smmlv: { year: number; valor: number; fuente: string | null }[]
+}
 
-/** TRM y tasa de usura más recientes. */
+/** TRM y tasa de usura más recientes, y la UVT y el salario mínimo oficiales por año. */
 export async function fetchLatestRefs(): Promise<LatestRefs> {
   const { browserApi, unwrap } = await api()
   const a = browserApi()
-  const [t, u] = await Promise.all([a.refs.trm({ query: { limit: 1 } }), a.refs.usura({ query: { limit: 1 } })])
+  const [t, u, uv, sm] = await Promise.all([a.refs.trm({ query: { limit: 1 } }), a.refs.usura({ query: { limit: 1 } }), a.refs.uvt(), a.refs.smmlv()])
   const trm = unwrap(t)[0]
   const usura = unwrap(u)[0]
-  return { trm: trm ? { fecha: trm.fecha, valor: trm.valor } : null, usura: usura ? { desde: usura.desde, hasta: usura.hasta, tasa_ea: usura.tasa_ea } : null }
+  return {
+    trm: trm ? { fecha: trm.fecha, valor: trm.valor } : null,
+    usura: usura ? { desde: usura.desde, hasta: usura.hasta, tasa_ea: usura.tasa_ea } : null,
+    uvt: unwrap(uv), smmlv: unwrap(sm),
+  }
 }
