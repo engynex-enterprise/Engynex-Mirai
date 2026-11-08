@@ -1,8 +1,8 @@
 import "server-only"
 // Reenvío del mismo origen hacia la API (v7, V7-B). En producción el balanceador manda /api/auth/* y /v1/* a la API y
 // nunca llegan aquí; en local (o sin balanceador) la web los reenvía para que la cookie httpOnly siga siendo del mismo
-// origen. Solo con AUTH_PROVIDER=mirai. Sin seguir redirecciones y con todas las Set-Cookie.
-import { apiUrl } from "@/lib/api/rollout"
+// origen. Sin seguir redirecciones y con todas las Set-Cookie.
+import { apiUrl } from "@/lib/api/config"
 
 const PASS = ["accept", "accept-language", "content-type", "cookie", "origin", "referer", "user-agent", "x-captcha-response", "idempotency-key", "x-mirai-client", "traceparent", "authorization"]
 

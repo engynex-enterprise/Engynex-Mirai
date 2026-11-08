@@ -1,16 +1,10 @@
-// Escrituras y lecturas sueltas del libro por el CRUD genérico de la API (V7-H): lo que las vistas hacían con
-// `createClient().from(tabla)…` fuera de useList / useSave / useSoftDelete (editar un campo, crear y usar el id,
-// borrar o deshacer desde un aviso). Mismo interruptor que esos hooks: `book-tables` (o `book-tables:<tabla>`).
-// Devuelven la forma `{ data, error }` de supabase-js para que cada vista cambie lo mínimo; `error.message` llega en
-// español (el `msg` de la API). Las escrituras nunca se repiten por Supabase (para no duplicarlas).
-import { apiList, apiSetDeleted, apiSnapshotPart, apiUpsert, writableViaApi, type ListArgs } from "./book-tables"
-import { apiOn } from "./session"
+// Escrituras y lecturas sueltas del libro por el CRUD genérico de la API: lo que las vistas hacen fuera de useList /
+// useSave / useSoftDelete (editar un campo, crear y usar el id, borrar o deshacer desde un aviso). Devuelven
+// `{ data, error }`; `error.message` llega en español (el `msg` de la API).
+import { apiList, apiSetDeleted, apiSnapshotPart, apiUpsert, type ListArgs } from "./book-tables"
 
 export type RowResult<T> = { data: T | null; error: { message: string } | null }
 type Rec = Record<string, unknown>
-
-/** ¿Esta tabla del libro va por la API? (interruptor `book-tables[:tabla]` y tabla del CRUD genérico). */
-export const rowsViaApi = (table: string) => apiOn("book-tables", table) && writableViaApi(table)
 
 const FALLBACK = "No se pudo completar la operación."
 
@@ -39,9 +33,6 @@ export const apiRestoreRow = (bookId: string, table: string, id: string) => asRe
 
 /** Filas vivas con filtros `eq` (sin relaciones embebidas). */
 export const apiRows = <T = Rec>(bookId: string, table: string, o: ListArgs = {}) => apiList(bookId, table, o) as Promise<T[]>
-
-/** ¿El fondo de emergencia se lee por el snapshot de la API? (interruptor `snapshot`, como useBookData). */
-export const fundViaApi = () => apiOn("snapshot")
 
 /** Fondo de emergencia del libro (una fila o ninguna), por `GET /snapshot?parts=emergency_funds`. */
 export async function apiFund<T = Rec>(bookId: string): Promise<T | null> {

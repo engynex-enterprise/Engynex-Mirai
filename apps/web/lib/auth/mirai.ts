@@ -1,5 +1,5 @@
-// Flujos de auth con AUTH_PROVIDER=mirai (Better Auth). Cada pantalla los usa SOLO si isMiraiAuth(); con `supabase`
-// el código de siempre sigue intacto. Devuelven { ok, msg } con mensajes en español (AUTH_ERRORS de @mirai/contracts).
+// Flujos de auth (Better Auth en la API, mismo origen) que usan las pantallas de entrar, registro, clave, dos factores
+// y cuentas conectadas. Devuelven { ok, msg } con mensajes en español (AUTH_ERRORS de @mirai/contracts).
 import { authErrorMessage } from "@mirai/contracts/modules/auth"
 import { LEGAL_VERSION } from "@/lib/legal/version"
 
@@ -135,7 +135,7 @@ export async function linkGoogle(callbackURL: string): Promise<Done> {
   return error ? fail(error) : { ok: true }
 }
 
-/** Formas de entrar (como getUserIdentities de Supabase: provider + identity_data). */
+/** Formas de entrar (`provider` + `identity_data`, la forma que ya usaba la pantalla de cuentas conectadas). */
 export async function identities(): Promise<{ provider: string; identity_data: Record<string, unknown> }[]> {
   const c = await client()
   const { data } = await c.listAccounts()

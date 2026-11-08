@@ -1,35 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { publicOrigin } from "@/lib/site-url"
-import type { EmailOtpType } from "@supabase/supabase-js"
-import { supabaseServer } from "@/utils/supabase/server"
-import { safeNext } from "@/lib/security/safe-next"
-import { serverAuthProvider } from "@/lib/auth/provider"
 
 /**
- * Enlaces de correo con token_hash (plantillas de Supabase Auth). Para `email_change` con "cambio de correo seguro"
- * hay dos enlaces (correo viejo y nuevo): el primero deja el cambio a medias (?correo=falta_otro) y el segundo lo
- * termina (?correo=listo). profiles.email se actualiza solo (trigger on_auth_user_change).
+ * Enlaces de correo con token_hash de la versión con Supabase. Los enlaces del auth propio van a /api/auth/* (y vuelven
+ * a /auth/callback), así que uno viejo ya no sirve: se pide entrar de nuevo.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl
-  const origin = publicOrigin(request)
-  // AUTH_PROVIDER=mirai: los enlaces de Better Auth van a /api/auth/*; uno viejo de Supabase ya no sirve.
-  if (serverAuthProvider() === "mirai") return NextResponse.redirect(`${origin}/login?error=enlace`)
-  const token_hash = searchParams.get("token_hash")
-  const type = searchParams.get("type") as EmailOtpType | null
-  const raw = searchParams.get("next")
-  const next = safeNext(raw, type === "recovery" ? "/actualizar-clave" : type === "email_change" ? "/perfil#cuentas" : "/inicio")
-  if (token_hash && type) {
-    const supabase = await supabaseServer()
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash })
-    if (!error && type === "email_change") {
-      const { data } = await supabase.auth.getUser()
-      const [path, hash = "cuentas"] = next.split("#")
-      const sep = path.includes("?") ? "&" : "?"
-      const estado = data.user?.new_email ? "falta_otro" : "listo"
-      return NextResponse.redirect(`${origin}${data.user ? `${path}${sep}correo=${estado}#${hash}` : `/login?aviso=correo`}`)
-    }
-    if (!error) return NextResponse.redirect(`${origin}${next}`)
-  }
-  return NextResponse.redirect(`${origin}/login?error=enlace`)
+  return NextResponse.redirect(`${publicOrigin(request)}/login?error=enlace`)
 }

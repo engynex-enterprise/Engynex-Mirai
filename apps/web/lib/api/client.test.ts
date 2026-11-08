@@ -7,7 +7,7 @@ import { ApiError, failure, NETWORK_MSG } from "./errors"
 import { createApiFetcher, createRawFetch, newTraceparent, validTraceparent } from "./fetcher"
 import { unwrap, unwrapData } from "./unwrap"
 import { apiRetry } from "./query"
-import { canFallback, listQuery, listableViaApi, readWithFallback, writeBody, writableViaApi } from "./book-tables"
+import { listQuery, writeBody } from "./book-tables"
 
 const BOOK = "11111111-1111-4111-8111-111111111111"
 const ROW = "22222222-2222-4222-8222-222222222222"
@@ -203,29 +203,9 @@ describe("reintentos de TanStack (apiRetry)", () => {
 })
 
 describe("CRUD del libro por la API", () => {
-  it("solo tablas genéricas y sin relaciones embebidas", () => {
-    expect(listableViaApi("goals")).toBe(true)
-    expect(listableViaApi("goals", "id,nombre")).toBe(true)
-    expect(listableViaApi("loans", "*, loan_payments(*)")).toBe(false)
-    expect(listableViaApi("chat_threads")).toBe(false)
-    expect(listableViaApi("profiles")).toBe(false)
-    expect(writableViaApi("expenses")).toBe(true)
-    expect(writableViaApi("automation_runs")).toBe(false)
-  })
-
   it("listQuery: misma semántica que useList", () => {
     expect(listQuery({})).toEqual({})
     expect(listQuery({ select: "*" })).toEqual({})
     expect(listQuery({ select: "id, nombre", order: { column: "fecha", ascending: false }, eq: { tipo: "x", n: 2, borrador: undefined } })).toEqual({ select: "id,nombre", order: "fecha.desc", "eq.tipo": "x", "eq.n": "2" })
-  })
-
-  it("lecturas con respaldo solo si la API no respondió o falló de su lado", async () => {
-    const local = vi.fn(async () => "local")
-    expect(await readWithFallback(async () => { throw ApiError.network() }, local)).toBe("local")
-    expect(await readWithFallback(async () => { throw ApiError.from(503, null) }, local)).toBe("local")
-    await expect(readWithFallback(async () => { throw ApiError.from(403, { msg: "No" }) }, local)).rejects.toThrow("No")
-    await expect(readWithFallback(async () => { throw new Error("otro") }, local)).rejects.toThrow("otro")
-    expect(await readWithFallback(async () => "api", local)).toBe("api")
-    expect(canFallback(ApiError.from(404, null))).toBe(false)
   })
 })

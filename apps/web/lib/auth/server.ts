@@ -3,7 +3,7 @@ import "server-only"
 // API desde el servidor (Server Actions, RSC) se reenvía como `Authorization: Bearer <token de sesión>` (plugin bearer).
 // La web no guarda ningún secreto.
 import { cookies } from "next/headers"
-import { apiUrl } from "@/lib/api/rollout"
+import { apiUrl } from "@/lib/api/config"
 import { MIRAI_SESSION_COOKIES } from "./provider"
 
 /** Token firmado de la cookie de sesión (o null). */

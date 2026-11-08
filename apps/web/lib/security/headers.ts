@@ -4,17 +4,17 @@
 //  · Siempre activa (no puede romper nada de Mirai): no dejar que otros sitios metan Mirai en un iframe
 //    (frame-ancestors), sin plugins (object-src) y sin <base> ajeno (base-uri).
 //  · Completa (scripts, conexiones, imágenes, iframes): en modo "solo reportar" hasta revisarla en el navegador con
-//    Google, AdSense, Turnstile, Supabase y Sentry. Con MIRAI_CSP_ENFORCE=1 se aplica de verdad.
+//    Google, AdSense, Turnstile y Sentry. Con MIRAI_CSP_ENFORCE=1 se aplica de verdad.
 //    script-src lleva 'unsafe-inline' porque Next.js mete scripts en línea sin nonce (con cacheComponents un nonce
 //    obligaría a renderizar todo dinámico) y https: porque AdSense carga scripts de varios dominios de Google.
 
 type Header = { key: string; value: string }
 
-type CspOpts = { dev: boolean; supabaseUrl?: string; apiUrl?: string; realtimeUrl?: string }
+type CspOpts = { dev: boolean; apiUrl?: string; realtimeUrl?: string }
 
 const urlOf = (u?: string) => { try { return u ? new URL(u) : null } catch { return null } }
 
-/** Origen de la API (v6) y del gateway de tiempo real (http(s) + ws(s) del mismo host). */
+/** Origen de la API y del gateway de tiempo real (http(s) + ws(s) del mismo host). */
 function apiOrigins(o: CspOpts): string[] {
   const out: string[] = []
   const api = urlOf(o.apiUrl)
@@ -25,15 +25,13 @@ function apiOrigins(o: CspOpts): string[] {
 }
 
 export function cspDirectives(o: CspOpts): string {
-  const sb = urlOf(o.supabaseUrl)
-  const supa = sb ? [sb.origin, `wss://${sb.host}`] : []
   const d: Record<string, string[]> = {
     "default-src": ["'self'"],
     "script-src": ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", "https:", ...(o.dev ? ["'unsafe-eval'"] : [])],
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:", "https:"],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", ...supa, ...apiOrigins(o), "https:", "wss:", ...(o.dev ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : [])],
+    "connect-src": ["'self'", ...apiOrigins(o), "https:", "wss:", ...(o.dev ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : [])],
     "frame-src": ["'self'", "https:"],
     "worker-src": ["'self'", "blob:"],
     "media-src": ["'self'", "data:", "blob:"],

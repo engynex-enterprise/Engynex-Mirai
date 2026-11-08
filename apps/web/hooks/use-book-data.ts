@@ -3,13 +3,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useQuery } from "@/lib/query"
 import { toast } from "@/components/mirai/toast"
-import { createClient } from "@/utils/supabase/client"
-import { useBookId, useViaApi } from "@/components/app/app-context"
+import { useBookId } from "@/components/app/app-context"
 import { qk, type BookTable, type Insert, type Row, type Update } from "@/lib/supabase/tables"
 import { BOOK_PART_NAMES, partsForTable } from "@/lib/book-data"
 import { bookPartKey } from "@/features/book/use-book-data"
 import type { QueryClient } from "@tanstack/react-query"
-import { apiList, apiSetDeleted, apiUpsert, listableViaApi, readWithFallback, writableViaApi } from "@/lib/api/book-tables"
+import { apiList, apiSetDeleted, apiUpsert } from "@/lib/api/book-tables"
 import { apiRetry } from "@/lib/api/query"
 
 /**
@@ -88,32 +87,15 @@ type ListOpts<T extends BookTable> = {
   enabled?: boolean
 }
 
-/**
- * Lista los registros vivos (sin borrar) de una tabla del libro activo. Con el interruptor `book-tables` (o
- * `book-tables:<tabla>`) encendido la pide a la API (misma clave y misma forma; si la API no responde, a Supabase).
- */
+/** Lista los registros vivos (sin borrar) de una tabla del libro activo: GET /v1/books/:b/t/:tabla. */
 export function useList<T extends BookTable>(table: T, opts: ListOpts<T> = {}) {
   const bookId = useBookId()
-  const via = useViaApi("book-tables", table) && listableViaApi(table, opts.select)
   return useQuery({
     queryKey: qk(bookId, table, opts.eq ?? null, opts.order ?? null),
     enabled: opts.enabled ?? true,
-    ...(via ? { retry: apiRetry } : {}),
-    queryFn: async ({ signal }) => {
-      if (via) return readWithFallback(() => apiList(bookId, table, opts, signal) as Promise<Row<T>[]>, () => listFromDb(table, bookId, opts, signal))
-      return listFromDb(table, bookId, opts, signal)
-    },
+    retry: apiRetry,
+    queryFn: ({ signal }) => apiList(bookId, table, opts, signal) as Promise<Row<T>[]>,
   })
-}
-
-/** Modo heredado (interruptor apagado, o tablas fuera del CRUD genérico): Supabase directo. */
-async function listFromDb<T extends BookTable>(table: T, bookId: string, opts: ListOpts<T>, signal: AbortSignal) {
-  let q = createClient().from(table).select(opts.select ?? "*").eq("book_id" as never, bookId as never).is("deleted_at" as never, null).abortSignal(signal)
-  for (const [k, v] of Object.entries(opts.eq ?? {})) q = v === null ? q.is(k as never, null) : q.eq(k as never, v as never)
-  if (opts.order) q = q.order(opts.order.column as never, { ascending: opts.order.ascending ?? true })
-  const { data, error } = await q
-  if (error) throw new Error(error.message)
-  return data as unknown as Row<T>[]
 }
 
 // Los registros nuevos reciben su UUID definitivo en el navegador (antes eran filas "tmp-…" que no se podían borrar ni
@@ -137,31 +119,15 @@ const ACTION_TABLES = new Set<string>(["expenses", "incomes", "extra_incomes", "
 export function useSave<T extends BookTable>(table: T, messages?: { created?: string; updated?: string }) {
   const bookId = useBookId()
   const qc = useQueryClient()
-  const via = useViaApi("book-tables", table) && writableViaApi(table)
   return useMutation({
     mutationFn: async (values: Insert<T> | (Update<T> & { id: string })) => {
       const isNew = !(values as { id?: string }).id
       const id = idOf(values)
       markLocalWrite(table, id)
       try {
-        if (via) {
-          // PUT /t/:tabla/:id crea (con el id del navegador) o edita: repetirlo da lo mismo.
-          if (!isNew) await waitSaved(id)
-          return (await apiUpsert(bookId, table, id, values as Record<string, unknown>)) as unknown as Row<T>
-        }
-        // Modo heredado (interruptor apagado): Supabase directo.
-        const sb = createClient()
-        if (!isNew) {
-          await waitSaved(id)
-          // Edición: update y no upsert. Con upsert Postgres valida el registro completo como si fuera
-          // nuevo y un cambio parcial (solo el ícono) fallaba por las columnas obligatorias (nombre).
-          const { data, error } = await sb.from(table).update(values as never).eq("id" as never, id as never).select()
-          if (error) throw new Error(error.message)
-          if (data?.length) return data[0] as unknown as Row<T>
-        }
-        const { data, error } = await sb.from(table).upsert({ ...values, id, book_id: bookId } as never).select().single()
-        if (error) throw new Error(error.message)
-        return data as unknown as Row<T>
+        // PUT /t/:tabla/:id crea (con el id del navegador) o edita solo los campos que llegan: repetirlo da lo mismo.
+        if (!isNew) await waitSaved(id)
+        return (await apiUpsert(bookId, table, id, values as Record<string, unknown>)) as unknown as Row<T>
       } finally {
         markLocalWrite(table, id) // el eco de Realtime llega justo después de la respuesta
         if (isNew) { settle.get(id)?.(); settle.delete(id); inflight.delete(id) }
@@ -201,19 +167,11 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
 export function useSoftDelete<T extends BookTable>(table: T, label = "Registro eliminado", opts: { also?: BookTable[] } = {}) {
   const bookId = useBookId()
   const qc = useQueryClient()
-  const via = useViaApi("book-tables", table) && writableViaApi(table)
   const setDeleted = async (id: string, value: string | null) => {
     await waitSaved(id) // si el registro se acaba de crear, primero termina de guardarse
     markLocalWrite(table, id)
-    if (via) {
-      // DELETE /t/:tabla/:id (papelera) o POST …/restore ("Deshacer").
-      try { await apiSetDeleted(bookId, table, id, value) } finally { markLocalWrite(table, id) }
-      return
-    }
-    // Modo heredado (interruptor apagado): Supabase directo.
-    const { error } = await createClient().from(table).update({ deleted_at: value } as never).eq("id" as never, id as never)
-    markLocalWrite(table, id)
-    if (error) throw new Error(error.message)
+    // DELETE /t/:tabla/:id (papelera) o POST …/restore ("Deshacer").
+    try { await apiSetDeleted(bookId, table, id, value) } finally { markLocalWrite(table, id) }
   }
   return useMutation({
     mutationFn: async (row: { id: string; nombre?: string; descripcion?: string; concepto?: string }) => setDeleted(row.id, new Date().toISOString()),

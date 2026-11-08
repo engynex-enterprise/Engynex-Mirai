@@ -5,7 +5,7 @@ import { Panel } from "@/components/mirai/panel"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { RentaView } from "@/features/renta/renta-view"
 import type { RentaData } from "@/features/renta/data"
-import type { Share } from "./actions"
+import type { Share } from "./types"
 import { contadorFileUrl, contadorNote, contadorNotes } from "./portal-actions"
 import { NotesThread } from "./notes"
 

@@ -1,15 +1,13 @@
 "use client"
 
 import { useEffect } from "react"
-import { createClient } from "@/utils/supabase/client"
 import { useBookId } from "@/components/app/app-context"
 import { runPendingAutomations } from "./api"
-import { LIVE_SOURCE } from "@/hooks/use-live"
 import { onGatewayAutomation } from "@/hooks/use-live-gateway"
 
 const KEY = "mirai:auto-kick"
 
-/** Pide revisar la cola ya (tras una cuota, una compra con tarjeta, un cobro…): no depende solo de Realtime. */
+/** Pide revisar la cola ya (tras una cuota, una compra con tarjeta, un cobro…): no depende solo del tiempo real. */
 export const kickAutomations = () => { if (typeof window !== "undefined") window.dispatchEvent(new Event("mirai:auto-kick")) }
 
 /**
@@ -19,8 +17,6 @@ export const kickAutomations = () => { if (typeof window !== "undefined") window
 export function AutomationRunner() {
   const bookId = useBookId()
   useEffect(() => {
-    // Modo heredado (sin el gateway de la API): Supabase Realtime en el canal auto:{libro}.
-    const sb = LIVE_SOURCE === "gateway" ? null : createClient()
     let t: ReturnType<typeof setTimeout> | undefined
     const kick = () => {
       clearTimeout(t)
@@ -31,19 +27,14 @@ export function AutomationRunner() {
       const last = Number(sessionStorage.getItem(`${KEY}:${bookId}`) ?? 0)
       if (Date.now() - last > 600_000) { sessionStorage.setItem(`${KEY}:${bookId}`, String(Date.now())); kick() }
     } catch { /* sin almacenamiento: el cron lo procesa */ }
-    // Fuente del aviso: Supabase Realtime (por defecto) o el gateway de la API (interruptor de hooks/use-live.ts).
-    const ch = !sb ? null : sb
-      .channel(`auto:${bookId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "automation_events", filter: `book_id=eq.${bookId}` }, kick)
-      .subscribe()
-    const offGateway = LIVE_SOURCE === "gateway" ? onGatewayAutomation(bookId, kick) : undefined
-    // Respaldo si Realtime se demora: lo que se registra desde esta pestaña revisa la cola al instante.
+    // Aviso del gateway de tiempo real de la API cuando la base encola un evento del libro.
+    const offGateway = onGatewayAutomation(bookId, kick)
+    // Respaldo si el tiempo real se demora: lo que se registra desde esta pestaña revisa la cola al instante.
     addEventListener("mirai:accion", kick)
     addEventListener("mirai:auto-kick", kick)
     return () => {
       clearTimeout(t)
-      if (ch) sb?.removeChannel(ch)
-      offGateway?.()
+      offGateway()
       removeEventListener("mirai:accion", kick)
       removeEventListener("mirai:auto-kick", kick)
     }

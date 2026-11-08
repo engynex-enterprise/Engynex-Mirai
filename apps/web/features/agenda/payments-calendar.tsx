@@ -29,7 +29,7 @@ import { fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
 import { conFechasDian, iso } from "@/lib/domain"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
-import { connectGoogleViaApi, googleViaApi, syncCalendar } from "@/features/correo/api"
+import { connectGoogleViaApi, syncCalendar } from "@/features/correo/api"
 import { ECAT, calEvents, calIcs, type CalEvent, type ECatKey } from "./events"
 import { useFechasDian } from "./use-dian"
 import { saveFile } from "@/lib/pwa/save-file"
@@ -241,7 +241,7 @@ function GoogleCalendarButton() {
       const r = await syncCalendar()
       setBusy(false)
       if (r.ok) return toast.success(r.msg)
-      if (/Conecta tu cuenta de Google|venció/.test(r.msg)) { toast(r.msg, { action: { label: "Conectar", onClick: () => { if (googleViaApi()) void connectGoogleViaApi("calendar", "/recordatorios"); else location.href = "/api/google/connect?s=calendar&back=/recordatorios" } } }); return }
+      if (/Conecta tu cuenta de Google|venció/.test(r.msg)) { toast(r.msg, { action: { label: "Conectar", onClick: () => void connectGoogleViaApi("calendar", "/recordatorios") } }); return }
       toast.error("No se pudo sincronizar", { description: r.msg })
     }}>{busy ? <Spinner /> : <BrandLogo k="google-calendar" size={18} bare />} Google Calendar</Button>
   )
