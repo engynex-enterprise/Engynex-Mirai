@@ -1,11 +1,9 @@
 import { expect, test } from "@playwright/test"
-import { MIRAI_AUTH } from "./qa"
 import { shot } from "./helpers"
 
 // Auth propio (v7): un regreso de Google que no sirve (estado vencido, o el mismo regreso dos veces) vuelve al login de
 // Mirai con el aviso en español, no a la página de error en inglés de Better Auth.
 test("Google: un regreso inválido vuelve al login con el aviso en español", async ({ page }) => {
-  test.skip(!MIRAI_AUTH, "Solo con AUTH_PROVIDER=mirai (con Supabase el regreso lo maneja /auth/callback)")
   await page.goto("/api/auth/callback/google?state=estado-que-no-existe&code=x")
   await expect(page).toHaveURL(/\/login\?error=google/)
   await expect(page.getByText("No pudimos entrar con Google")).toBeVisible()
@@ -15,7 +13,6 @@ test("Google: un regreso inválido vuelve al login con el aviso en español", as
 // "Continuar con Google" abre una ventana flotante: la pestaña de Mirai no se va, y si Google falla la ventana se cierra
 // y la persona sigue en la pantalla de entrada con el aviso.
 test("Google: se abre en una ventana flotante y un error vuelve a la pantalla de entrada", async ({ page, context }, info) => {
-  test.skip(!MIRAI_AUTH, "Solo con AUTH_PROVIDER=mirai")
   // Google no se visita de verdad: su página se reemplaza por una de prueba.
   await context.route(/accounts\.google\.com/, (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<title>Google (prueba)</title><p>Google</p>" }))
   await page.goto("/login")

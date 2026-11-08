@@ -1,11 +1,5 @@
-// Consola › Planes, Cupones y Comunicados por la API (V7-H3, interruptor `admin`): /v1/admin/{plans,coupons,broadcasts}
-// (@PlatformAdmin y admin_audit en la API). Con el interruptor apagado es lo de siempre: `plans`, `coupons` y
-// `broadcasts` directo con la sesión del administrador (modo heredado: las únicas ramas con `.from` de estos paneles).
-// Todas lanzan Error con el mensaje para la persona (en español, como lo mostraban los paneles).
-import { apiOn } from "@/lib/api/session"
-import { createClient } from "@/utils/supabase/client"
-
-const on = () => apiOn("admin")
+// Consola › Planes, Cupones y Comunicados por la API: /v1/admin/{plans,coupons,broadcasts} (@PlatformAdmin y
+// admin_audit en la API). Todas lanzan Error con el mensaje para la persona (en español, como lo muestran los paneles).
 const api = async () => {
   const { browserApi, unwrap, unwrapData } = await import("@/lib/api/client")
   return { a: browserApi().admin, unwrap, unwrapData }
@@ -17,44 +11,29 @@ export type PlanFull = { id: string; nombre: string; descripcion: string; precio
 
 /** Todos los planes (también los ocultos), en el orden de Planes. */
 export async function loadAdminPlans(): Promise<PlanFull[]> {
-  if (on()) {
-    const { a, unwrap } = await api()
-    return unwrap(await a.plans()) as unknown as PlanFull[]
-  }
-  return ((await createClient().from("plans").select("*").order("orden").order("precio_mes")).data ?? []) as unknown as PlanFull[]
+  const { a, unwrap } = await api()
+  return unwrap(await a.plans()) as unknown as PlanFull[]
 }
 
 /** Opciones de los selectores de la consola. */
 export async function loadPlanOptions(): Promise<{ value: string; label: string; mes: number; anio: number }[]> {
-  if (on()) return (await loadAdminPlans()).sort((x, y) => x.orden - y.orden).map((p) => ({ value: p.id, label: p.nombre, mes: p.precio_mes, anio: p.precio_anio }))
-  return ((await createClient().from("plans").select("id,nombre,precio_mes,precio_anio").order("orden")).data ?? []).map((p) => ({ value: p.id, label: p.nombre, mes: p.precio_mes, anio: p.precio_anio }))
+  return (await loadAdminPlans()).sort((x, y) => x.orden - y.orden).map((p) => ({ value: p.id, label: p.nombre, mes: p.precio_mes, anio: p.precio_anio }))
 }
 
 const EXISTE_PLAN = "Ya existe un plan con ese nombre."
 
 /** Crea (`isNew`) o edita un plan. */
 export async function savePlan(id: string, isNew: boolean, row: Omit<PlanFull, "id">): Promise<void> {
-  if (on()) {
-    const { a, unwrap, unwrapData } = await api()
-    // PUT crea o edita: un plan nuevo con el identificador de otro lo pisaría, así que se revisa antes (como el 23505).
-    if (isNew && unwrap(await a.plans()).some((p) => p.id === id)) throw new Error(EXISTE_PLAN)
-    const { nombre, descripcion, precio_mes, precio_anio, funciones, anuncios, limites, activo, publico, destacado, orden } = row
-    unwrapData(await a.savePlan({ params: { planId: id }, body: { nombre, descripcion, precio_mes, precio_anio, funciones: funciones as never, anuncios, limites, activo, publico, destacado, orden } }))
-    return
-  }
-  const sb = createClient()
-  const { error } = isNew ? await sb.from("plans").insert({ ...row, id }) : await sb.from("plans").update({ ...row, id }).eq("id", id)
-  if (error) throw new Error(error.code === "23505" ? EXISTE_PLAN : error.message)
+  const { a, unwrap, unwrapData } = await api()
+  // PUT crea o edita: un plan nuevo con el identificador de otro lo pisaría, así que se revisa antes.
+  if (isNew && unwrap(await a.plans()).some((p) => p.id === id)) throw new Error(EXISTE_PLAN)
+  const { nombre, descripcion, precio_mes, precio_anio, funciones, anuncios, limites, activo, publico, destacado, orden } = row
+  unwrapData(await a.savePlan({ params: { planId: id }, body: { nombre, descripcion, precio_mes, precio_anio, funciones: funciones as never, anuncios, limites, activo, publico, destacado, orden } }))
 }
 
 export async function deletePlan(id: string): Promise<void> {
-  if (on()) {
-    const { a, unwrapData } = await api()
-    unwrapData(await a.deletePlan({ params: { planId: id } }))
-    return
-  }
-  const { error } = await createClient().from("plans").delete().eq("id", id)
-  if (error) throw new Error(error.code === "23503" ? "Hay suscripciones o pagos con este plan: ocúltalo y deja de venderlo." : error.message)
+  const { a, unwrapData } = await api()
+  unwrapData(await a.deletePlan({ params: { planId: id } }))
 }
 
 // ── Cupones ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -63,11 +42,8 @@ export type CouponFull = { codigo: string; descripcion: string; tipo: "porcentaj
 type CouponFields = Omit<CouponFull, "codigo" | "usos" | "created_at">
 
 export async function loadCoupons(): Promise<CouponFull[]> {
-  if (on()) {
-    const { a, unwrap } = await api()
-    return unwrap(await a.coupons()) as unknown as CouponFull[]
-  }
-  return ((await createClient().from("coupons").select("*").order("created_at", { ascending: false })).data ?? []) as CouponFull[]
+  const { a, unwrap } = await api()
+  return unwrap(await a.coupons()) as unknown as CouponFull[]
 }
 
 const EXISTE_CUPON = "Ya existe un cupón con ese código."
@@ -75,36 +51,20 @@ const couponBody = (c: CouponFields) => ({ descripcion: c.descripcion, tipo: c.t
 
 /** Crea (`isNew`) o edita un cupón (el código no cambia al editar). */
 export async function saveCoupon(isNew: boolean, codigo: string, row: CouponFull): Promise<void> {
-  if (on()) {
-    const { a, unwrap, unwrapData } = await api()
-    if (isNew && unwrap(await a.coupons()).some((c) => c.codigo === codigo)) throw new Error(EXISTE_CUPON)
-    unwrapData(await a.saveCoupon({ params: { codigo }, body: couponBody(row) }))
-    return
-  }
-  const sb = createClient()
-  const { error } = isNew ? await sb.from("coupons").insert({ ...row, codigo }) : await sb.from("coupons").update({ ...row, codigo }).eq("codigo", codigo)
-  if (error) throw new Error(error.code === "23505" ? EXISTE_CUPON : error.message)
+  const { a, unwrap, unwrapData } = await api()
+  if (isNew && unwrap(await a.coupons()).some((c) => c.codigo === codigo)) throw new Error(EXISTE_CUPON)
+  unwrapData(await a.saveCoupon({ params: { codigo }, body: couponBody(row) }))
 }
 
 export async function deleteCoupon(codigo: string): Promise<void> {
-  if (on()) {
-    const { a, unwrapData } = await api()
-    unwrapData(await a.deleteCoupon({ params: { codigo } }))
-    return
-  }
-  const { error } = await createClient().from("coupons").delete().eq("codigo", codigo)
-  if (error) throw new Error(error.message)
+  const { a, unwrapData } = await api()
+  unwrapData(await a.deleteCoupon({ params: { codigo } }))
 }
 
 /** Pausa o activa un cupón. */
 export async function toggleCoupon(c: CouponFull): Promise<void> {
-  if (on()) {
-    const { a, unwrapData } = await api()
-    unwrapData(await a.saveCoupon({ params: { codigo: c.codigo }, body: couponBody({ ...c, activo: !c.activo }) }))
-    return
-  }
-  const { error } = await createClient().from("coupons").update({ activo: !c.activo }).eq("codigo", c.codigo)
-  if (error) throw new Error(error.message)
+  const { a, unwrapData } = await api()
+  unwrapData(await a.saveCoupon({ params: { codigo: c.codigo }, body: couponBody({ ...c, activo: !c.activo }) }))
 }
 
 // ── Comunicados ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -113,9 +73,6 @@ export type BroadcastRow = { id: string; titulo: string; cuerpo: string; href: s
 
 /** Los 100 comunicados más recientes. */
 export async function loadBroadcasts(): Promise<BroadcastRow[]> {
-  if (on()) {
-    const { a, unwrap } = await api()
-    return unwrap(await a.broadcasts())
-  }
-  return (await createClient().from("broadcasts").select("*").order("created_at", { ascending: false }).limit(100)).data ?? []
+  const { a, unwrap } = await api()
+  return unwrap(await a.broadcasts())
 }

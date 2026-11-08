@@ -18,7 +18,7 @@ export function useFechasDian(eventos: Pick<CalendarEventIn, "template_key">[] |
   const { data } = useQuery({
     queryKey: ["ref", "dian-auto", user.id],
     staleTime: 30 * 60_000,
-    // V7-H2: perfil por /v1/me/profile (`me`) y calendario DIAN por /v1/refs/* (`refs`); apagado, Supabase.
+    // Perfil por /v1/me/profile y calendario DIAN por /v1/refs/*.
     queryFn: async () => {
       const p = await fetchProfile(user.id).catch(() => null)
       if (!/^\d{2}$/.test(p?.digitos ?? "")) return null

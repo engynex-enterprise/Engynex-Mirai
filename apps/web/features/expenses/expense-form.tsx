@@ -24,8 +24,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
 import { useBookId } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
-import { apiFund, apiInsertRow, apiUpdateRow, fundViaApi, rowsViaApi } from "@/lib/api/book-rows"
+import { apiFund, apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { linkExpenseFixed, unlinkExpenseFixed, payWithEmergencyFund } from "./commands"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
@@ -123,8 +122,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
   useEffect(() => {
     if (!open || expense) return
     const set = (data: { activo: boolean; saldo: number | string } | null) => setFondo(data ? { activo: data.activo, saldo: Number(data.saldo) } : null)
-    if (fundViaApi()) apiFund<{ activo: boolean; saldo: number }>(bookId).then(set, () => set(null))
-    else createClient().from("emergency_funds").select("activo,saldo").eq("book_id", bookId).maybeSingle().then(({ data }) => set(data))
+    apiFund<{ activo: boolean; saldo: number }>(bookId).then(set, () => set(null))
   }, [open, expense, bookId])
 
   // Categoría automática mientras escribe: regla → historial → palabras clave (si no la eligió a mano)
@@ -220,8 +218,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       provider_id: v.provider_id,
       deducible: v.deducible || null,
     }
-    const { data, error } = !rowsViaApi("expenses") ? await createClient().from("expenses").upsert(row).select().single()
-      : expense ? await apiUpdateRow<Row<"expenses">>(bookId, "expenses", expense.id, row) : await apiInsertRow<Row<"expenses">>(bookId, "expenses", row)
+    const { data, error } = expense ? await apiUpdateRow<Row<"expenses">>(bookId, "expenses", expense.id, row) : await apiInsertRow<Row<"expenses">>(bookId, "expenses", row)
     if (error || !data) return toast.error("No se pudo guardar el gasto", { description: error?.message })
 
     if (isImprevisto && v.usarFondo && fondo?.activo && fondo.saldo > 0 && !expense) {

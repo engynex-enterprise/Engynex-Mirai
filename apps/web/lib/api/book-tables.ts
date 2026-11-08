@@ -1,12 +1,7 @@
-// CRUD genérico del libro y snapshot por la API (v6 F2-H-3): lo que usan useList / useSave / useSoftDelete
-// (hooks/use-book-data.ts) y useBookData (features/book/use-book-data.ts) cuando su interruptor está encendido.
-// Las claves de TanStack, la invalidación, el eco local, el UUID del navegador e `inflight` no cambian: solo la fuente.
-// Lecturas: si la API no responde (red o 5xx) se lee de Supabase como siempre. Escrituras: nunca se repiten por otro
-// camino (para no duplicarlas); el error llega al toast con el mensaje en español de la API.
-import { isGenericTable } from "@mirai/contracts/book-tables"
+// CRUD genérico del libro y snapshot por la API: lo que usan useList / useSave / useSoftDelete
+// (hooks/use-book-data.ts) y useBookData (features/book/use-book-data.ts). El error llega al toast con el mensaje en
+// español de la API.
 import type { BookPart, PartRows } from "@mirai/domain/book-data"
-import { isApiError } from "./errors"
-import { isMiraiAuth } from "@/lib/auth/provider"
 
 /** Columnas que la API pone sola (el esquema de escritura las rechaza: z.strictObject). */
 export const SYSTEM_COLUMNS = ["id", "book_id", "created_by", "created_at", "updated_at", "deleted_at"] as const
@@ -16,12 +11,6 @@ export type ListArgs = {
   eq?: Record<string, string | number | boolean | null | undefined>
   select?: string
 }
-
-/** ¿Esta lista se puede pedir a la API? (tabla del CRUD genérico y sin relaciones embebidas en `select`). */
-export const listableViaApi = (table: string, select?: string) => isGenericTable(table) && !(select ?? "").includes("(")
-
-/** ¿Esta tabla se puede escribir por el CRUD genérico? */
-export const writableViaApi = (table: string) => isGenericTable(table)
 
 /** Query de `GET /t/:table` con la misma semántica de useList: `eq.campo=valor|null`, `order=campo.asc|desc`, `select`. */
 export function listQuery(o: ListArgs): Record<string, string> {
@@ -42,21 +31,6 @@ export function writeBody(values: Record<string, unknown>): Record<string, unkno
   return out
 }
 
-/**
- * ¿El error permite leer de Supabase como respaldo? (la API no respondió o falló de su lado; no los 4xx). v7: con
- * AUTH_PROVIDER=mirai nunca (no hay sesión de Supabase: el respaldo fallaría con un error que confunde más).
- */
-export const canFallback = (e: unknown) => isApiError(e) && (e.code === "NETWORK" || e.status >= 500) && !isMiraiAuth()
-
-/** Lectura con respaldo: la API y, si no responde, lo de siempre. */
-export async function readWithFallback<T>(viaApi: () => Promise<T>, local: () => Promise<T>): Promise<T> {
-  try {
-    return await viaApi()
-  } catch (e) {
-    if (canFallback(e)) return local()
-    throw e
-  }
-}
 
 const client = () => import("./client")
 

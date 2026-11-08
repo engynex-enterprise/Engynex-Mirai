@@ -1,6 +1,6 @@
 "use client"
 
-// Verificación en dos pasos con AUTH_PROVIDER=mirai (v7, V7-B): el código de la app de autenticación, un código de
+// Verificación en dos pasos (Better Auth): el código de la app de autenticación, un código de
 // respaldo, y el re-enrolamiento cuando el TOTP de Supabase no se pudo migrar (`?reactivar=1`).
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"

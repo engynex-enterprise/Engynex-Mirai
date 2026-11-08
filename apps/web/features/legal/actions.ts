@@ -1,6 +1,5 @@
 "use server"
-// Aceptación de los Términos y la Política (Ley 1581) con AUTH_PROVIDER=mirai (v7, V7-B): /v1/me/consents en la API
-// (tabla consents). Con supabase se sigue usando user_metadata como siempre (legal-update.tsx).
+// Aceptación de los Términos y la Política (Ley 1581): /v1/me/consents en la API (tabla consents).
 import { z } from "zod"
 import { miraiApi, miraiApiMsg } from "@/lib/auth/server"
 

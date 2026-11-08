@@ -4,22 +4,16 @@ import { useMemo } from "react"
 import { useQuery } from "@/lib/query"
 import { useBookId } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
 import { qk } from "@/lib/supabase/tables"
 import { calcRenta, smmlvFor, titularId } from "@/lib/domain"
 import { esImpuesto, type ExtrasIntegral } from "@/lib/domain/flujo-integral"
 import type { LoadedBook } from "@/lib/book-data"
 import { calEst, nextOcc } from "@/features/agenda/fiscal"
-import { loadRentaData, rentaInput } from "@/features/renta/data"
+import { rentaInput } from "@/features/renta/data"
 import { useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
-import { apiOn } from "@/lib/api/session"
 
-/**
- * La Declaración para el estimado de la renta. Interruptor `accountant` (el endpoint es del titular del contador,
- * V7-H2): encendido, GET /v1/books/:b/renta; apagado, loadRentaData con Supabase como siempre.
- */
+/** La Declaración para el estimado de la renta: GET /v1/books/:b/renta (endpoint del titular del contador). */
 async function loadRenta(bookId: string) {
-  if (!apiOn("accountant")) return loadRentaData(createClient(), bookId)
   const { browserApi, unwrap } = await import("@/lib/api/client")
   return unwrap(await browserApi().accountantOwner.renta({ params: { bookId } }))
 }

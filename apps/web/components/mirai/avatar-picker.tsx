@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { filesViaApi, uploadFile } from "@/lib/files/upload"
+import { uploadFile } from "@/lib/files/upload"
 import { Check, ImageUp, Search, Shuffle, Type, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,6 @@ import { BrandLogo } from "./brand-logo"
 import { ResponsiveDialog } from "./responsive-dialog"
 import { UserAvatar, initials } from "./user-avatar"
 import { AVATARS, AVATAR_CATS, AVATAR_COUNT, MIRAI_PREFIX, miraiAvatar, type AvatarCat } from "@/lib/content/avatars"
-import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 
 /** Reduce la foto a 512 px (webp) antes de subirla: carga rápido y ocupa poco. */
@@ -97,18 +96,9 @@ export function AvatarPicker({ open, onOpenChange, value, name, onPick, googlePh
     setBusy(true)
     try {
       const blob = await shrink(f)
-      // v7 (interruptor `files`; siempre con AUTH_PROVIDER=mirai): sube por la API (la ruta {tu id}/… la arma el servidor).
-      if (filesViaApi()) {
-        const r = await uploadFile({ bucket: "avatars", body: blob, name: "avatar.webp", type: "image/webp" })
-        if (r.publicUrl) pick(r.publicUrl)
-        return
-      }
-      // Modo heredado (interruptor apagado): Supabase Storage directo.
-      const sb = createClient()
-      const path = `${uploadFor}/${crypto.randomUUID()}.webp`
-      const { error } = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/webp", upsert: false })
-      if (error) throw error
-      pick(sb.storage.from("avatars").getPublicUrl(path).data.publicUrl)
+      // Sube por la API (la ruta {tu id}/… la arma el servidor).
+      const r = await uploadFile({ bucket: "avatars", body: blob, name: "avatar.webp", type: "image/webp" })
+      if (r.publicUrl) pick(r.publicUrl)
     } catch (e) {
       toast.error("No se pudo subir la foto", { description: e instanceof Error ? e.message : undefined })
     } finally { setBusy(false) }

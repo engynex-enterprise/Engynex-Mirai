@@ -38,7 +38,7 @@ export default function Privacidad() {
       <h2>5. Seguridad</h2>
       <p>Los datos se guardan cifrados en tránsito y en reposo, con reglas de acceso por hogar. Las claves de servicios externos se guardan cifradas y nunca llegan al navegador. Puedes activar la verificación en dos pasos.</p>
       <h2>6. Encargados y transferencias</h2>
-      <p>Usamos proveedores de infraestructura (Supabase y Vercel), de pagos (Mercado Pago y Wompi) si pagas Premium, de publicidad (Google AdSense) solo si aceptas sus cookies y, solo si los activas, de correo, mensajería e inteligencia artificial. Algunos pueden almacenar datos fuera de Colombia con niveles adecuados de protección.</p>
+      <p>Usamos proveedores de infraestructura (Hostinger, con servidores en Brasil, y Cloudflare para la red y los archivos), de pagos (Mercado Pago y Wompi) si pagas Premium, de publicidad (Google AdSense) solo si aceptas sus cookies y, solo si los activas, de correo, mensajería e inteligencia artificial. Algunos pueden almacenar datos fuera de Colombia con niveles adecuados de protección.</p>
       <h2>7. Vigencia</h2>
       <p>Conservamos tus datos mientras tengas cuenta. Al borrarla eliminamos tu información en un plazo máximo de 30 días, salvo lo que la ley obligue a conservar.</p>
     </>

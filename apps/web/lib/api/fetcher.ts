@@ -1,5 +1,6 @@
-// Fetcher de la API de Mirai (v6 F2-H-1): el mismo para el navegador y el servidor de Next. Agrega a cada petición
-//   · Authorization: Bearer <JWT de Supabase> (y, si la API responde 401, renueva la sesión una vez y reintenta)
+// Fetcher de la API de Mirai: el mismo para el navegador y el servidor de Next. Agrega a cada petición
+//   · Authorization: Bearer <token> cuando lo hay (el servidor de Next reenvía el de la cookie de sesión; el navegador
+//     no manda token: la cookie viaja sola). Si la API responde 401, pide el token otra vez y reintenta una vez.
 //   · Idempotency-Key en las escrituras (POST/PUT/PATCH/DELETE): la API repite la misma respuesta si llega dos veces
 //   · X-Mirai-Client (web@<build>) y traceparent (W3C) para seguir la petición en cualquier backend de trazas. El
 //     traceparent lo da `traceparent()`: en el servidor de Next es el de la traza ACTIVA de OpenTelemetry (la petición

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { filesViaApi, uploadFile } from "@/lib/files/upload"
+import { uploadFile } from "@/lib/files/upload"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
 import { useQuery } from "@/lib/query"
@@ -25,7 +25,6 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { IconButton } from "@/components/mirai/tip"
 import { ToneIcon } from "@/components/mirai/tone-icon"
-import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import { autoMap, buildTemplateMessage, caseConfig, esPlantillaDeMeta, isNamed, pickTemplate, sampleValues, templateSlots, WA_CASES, WA_VARS, type MetaTemplate, type ParamPreview, type WaCase, type WaCaseCfg, type WaMap, type WaSettings } from "@/lib/notify/whatsapp"
 import { bodyVarCount, canEdit, draftComponents, emptyDraft, isDynamicUrl, metaToDraft, REJECT_REASON, STATUS_LABEL, validateDraft, WA_CATEGORIES, WA_LANGS, type DraftButton, type TemplateDraft } from "@/lib/notify/wa-templates"
@@ -36,22 +35,14 @@ import { adminWaDeleteTemplate, adminWaPreview, adminWaSaveSettings, adminWaSave
 const QK = ["admin", "wa"] as const
 const CAT_N: Record<string, string> = { UTILITY: "Utilidad", MARKETING: "Marketing", AUTHENTICATION: "Autenticación" }
 
-// ── Subir imagen (Supabase Storage, bucket público) ─────────────────────────────────────────────────────────────
+// ── Subir imagen (bucket público `public-assets`, carpeta whatsapp/, por la API) ────────────────────────────────
 
 async function uploadImage(f: File) {
   if (!["image/png", "image/jpeg"].includes(f.type)) throw new Error("La imagen debe ser JPG o PNG.")
   if (f.size > 5 * 1024 * 1024) throw new Error("La imagen pesa más de 5 MB.")
-  // v7 (interruptor `files`): bucket público `public-assets` (carpeta whatsapp/) por la API.
-  if (filesViaApi()) {
-    const r = await uploadFile({ bucket: "public-assets", body: f, name: f.name, folder: "whatsapp" })
-    if (!r.publicUrl) throw new Error("No se pudo obtener la dirección de la imagen.")
-    return r.publicUrl
-  }
-  const sb = createClient()
-  const path = `whatsapp/${crypto.randomUUID()}.${f.type === "image/png" ? "png" : "jpg"}`
-  const { error } = await sb.storage.from("public-assets").upload(path, f, { contentType: f.type })
-  if (error) throw new Error(error.message)
-  return sb.storage.from("public-assets").getPublicUrl(path).data.publicUrl
+  const r = await uploadFile({ bucket: "public-assets", body: f, name: f.name, folder: "whatsapp" })
+  if (!r.publicUrl) throw new Error("No se pudo obtener la dirección de la imagen.")
+  return r.publicUrl
 }
 
 /** Escoger la imagen del encabezado: subir una, usar la de marca o dejar la por defecto. */

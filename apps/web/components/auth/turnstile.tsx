@@ -8,8 +8,7 @@ declare global { interface Window { turnstile?: { render: (el: HTMLElement, o: R
 
 /**
  * Cloudflare Turnstile (captcha invisible). Solo se muestra si existe NEXT_PUBLIC_TURNSTILE_SITE_KEY;
- * la validación la hace Supabase Auth (Bot and Abuse Protection) con el token o, con AUTH_PROVIDER=mirai, la API
- * (plugin captcha de Better Auth, encabezado x-captcha-response).
+ * la validación la hace la API (plugin captcha de Better Auth, encabezado x-captcha-response).
  */
 export function useCaptcha() {
   const [token, setToken] = useState<string | undefined>(undefined)

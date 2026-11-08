@@ -4,13 +4,10 @@ import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"
-import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
-import { apiOn } from "@/lib/api/session"
-import { gamiCheckLegacy, gamiVisitLegacy } from "./legacy"
+import { useBookId } from "@/components/app/app-context"
 import { qk } from "@/lib/supabase/tables"
 import { gamiPending, todayBogota } from "@/lib/domain"
 import { useGami } from "./use-gami"
-import { logroNotifs } from "@/features/notify/api"
 
 export async function confetti(n = 110) {
   if (typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -21,8 +18,6 @@ export async function confetti(n = 110) {
 /** Registra la visita del día y celebra insignias, misiones y subidas de nivel (gamiVisit + gamiCheck de la v4). */
 export function GamiCheck() {
   const bookId = useBookId()
-  const { user } = useApp()
-  const canEdit = useCanEdit()
   const router = useRouter()
   const qc = useQueryClient()
   const g = useGami()
@@ -34,15 +29,13 @@ export function GamiCheck() {
     if (visited.current === key) return
     visited.current = key
     const t = setTimeout(async () => {
-      // V7-H2: POST /v1/books/:b/gami/visit con el interruptor `gami` (apagado: Supabase, rama heredada).
-      if (apiOn("gami")) {
-        const { browserApi } = await import("@/lib/api/client")
-        await browserApi().gami.visit({ params: { bookId }, query: {} }).catch(() => undefined)
-      } else await gamiVisitLegacy(bookId, user.id, todayBogota())
+      // POST /v1/books/:b/gami/visit (visita del día para la racha, sin duplicar).
+      const { browserApi } = await import("@/lib/api/client")
+      await browserApi().gami.visit({ params: { bookId }, query: {} }).catch(() => undefined)
       qc.invalidateQueries({ queryKey: qk(bookId, "gami") })
     }, 1200)
     return () => clearTimeout(t)
-  }, [bookId, user.id, qc])
+  }, [bookId, qc])
 
   const sig = g ? `${g.X.total}|${Object.keys(g.st.unl).length}|${g.M.map((m) => m.p).join(",")}` : ""
   useEffect(() => {
@@ -53,22 +46,15 @@ export function GamiCheck() {
     if (!badges.length && !missions.length && !subio && !first) return
     running.current = true
     const t = setTimeout(async () => {
-      // V7-H2: con `gami` encendido la API evalúa y guarda (POST …/gami/check: insignias, misiones, nivel y campana) y
-      // dice qué celebrar; apagado, lo de siempre desde el navegador (rama heredada).
-      let cel = { first, badges: badges as { id: string; n: string; d: string }[], missions: missions as { k: string; t: string; xp: number }[], nivel: subio ? { n: g.L.n, name: g.L.name } : null }
-      if (apiOn("gami")) {
-        try {
-          const { browserApi, unwrapData } = await import("@/lib/api/client")
-          const r = unwrapData(await browserApi().gami.check({ params: { bookId }, query: {} }))
-          cel = { first: r.first, badges: r.badges, missions: r.missions, nivel: r.nivel }
-          if (!r.first && (r.badges.length || r.nivel)) qc.invalidateQueries({ queryKey: ["notifications"] })
-        } catch {
-          cel = { first: true, badges: [], missions: [], nivel: null }
-        }
-      } else {
-        await gamiCheckLegacy({ bookId, today: g.today, badges, missions, first, subio, canEdit, maxLevel: Math.max(g.st.maxLevel, g.L.n), init: g.st.init ?? g.today })
-        // Insignias y nivel también quedan en la campana (kind "logro", sin duplicados).
-        if (!first && (badges.length || subio)) void logroNotifs({ bookId, badges: badges.map((b) => ({ id: b.id, n: b.n, d: b.d })), nivel: subio ? { n: g.L.n, name: g.L.name } : null }).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))
+      // La API evalúa y guarda (POST …/gami/check: insignias, misiones, nivel y campana) y dice qué celebrar.
+      let cel: { first: boolean; badges: { id: string; n: string; d: string }[]; missions: { k: string; t: string; xp: number }[]; nivel: { n: number; name: string } | null }
+      try {
+        const { browserApi, unwrapData } = await import("@/lib/api/client")
+        const r = unwrapData(await browserApi().gami.check({ params: { bookId }, query: {} }))
+        cel = { first: r.first, badges: r.badges, missions: r.missions, nivel: r.nivel }
+        if (!r.first && (r.badges.length || r.nivel)) qc.invalidateQueries({ queryKey: ["notifications"] })
+      } catch {
+        cel = { first: true, badges: [], missions: [], nivel: null }
       }
       qc.invalidateQueries({ queryKey: qk(bookId, "gami") })
       running.current = false

@@ -1,12 +1,10 @@
 "use client"
 
 import { useQueries, type QueryClient, type UseQueryResult } from "@tanstack/react-query"
-import { createClient } from "@/utils/supabase/client"
 import { useBookId } from "@/components/app/app-context"
 import { qk } from "@/lib/supabase/tables"
-import { assembleBook, BOOK_PART_NAMES, loadBookPart, type BookPart, type BookParts, type LoadedBook, type PartRows } from "@/lib/book-data"
-import { apiSnapshotPart, readWithFallback } from "@/lib/api/book-tables"
-import { apiOn } from "@/lib/api/session"
+import { assembleBook, BOOK_PART_NAMES, type BookPart, type BookParts, type LoadedBook, type PartRows } from "@/lib/book-data"
+import { apiSnapshotPart } from "@/lib/api/book-tables"
 import { useHydrated } from "@/hooks/use-hydrated"
 
 /** Clave de una parte del libro: ["b", bookId, "summary", tabla]. Invalidar qk(bookId, "summary") recarga todas. */
@@ -18,11 +16,8 @@ const PART_STALE = 60_000
 const partQuery = (bookId: string, part: BookPart) => ({
   queryKey: bookPartKey(bookId, part),
   staleTime: PART_STALE,
-  queryFn: ({ signal }: { signal: AbortSignal }) =>
-    // Interruptor `snapshot`: las partes que se piden juntas van en una sola petición a la API (si no responde, Supabase).
-    apiOn("snapshot")
-      ? readWithFallback(() => apiSnapshotPart(bookId, part), () => loadBookPart(createClient(), bookId, part, signal))
-      : loadBookPart(createClient(), bookId, part, signal),
+  // GET /v1/books/:b/snapshot: las partes que se piden juntas van en una sola petición a la API.
+  queryFn: () => apiSnapshotPart(bookId, part),
 })
 
 type BookResult = { data: LoadedBook | undefined; isPending: boolean; isLoading: boolean; isFetching: boolean; error: Error | null }

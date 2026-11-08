@@ -3,12 +3,7 @@ import { connection } from "next/server"
 import { ArrowRight, Check, Crown, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { ApiConfig } from "@/lib/api/modules"
-import { globalApiOn } from "@/lib/api/rollout"
 import { publicServerApi } from "@/lib/api/server"
-import { serverAuthProvider } from "@/lib/auth/provider"
-import { miraiApiConfig } from "@/lib/dal"
-import { supabaseServer } from "@/utils/supabase/server"
 import { FEATURES, FEATURE_LIST, FREE_PLAN, GRATIS_INCLUYE, ahorroAnual, precio, type PlanLimits } from "@/lib/plans"
 import { SITE_URL } from "./content"
 
@@ -17,30 +12,17 @@ type PlanPublico = { id: string; nombre: string; precio_mes: number; precio_anio
 /** Respaldo si la base no responde a tiempo: los mismos valores que usa la app (usePlans y FREE_PLAN). */
 const RESPALDO = { mes: 14900, anio: 149000, gratis: FREE_PLAN.limites, premiumAds: false }
 
-/** ¿Los planes se leen de la API? (V7-H3: con AUTH_PROVIDER=mirai siempre; si no, el interruptor `billing` en "on"). */
-async function plansApi(): Promise<ApiConfig | null> {
-  await connection()
-  if (serverAuthProvider() === "mirai") return miraiApiConfig()
-  return globalApiOn("billing", () => supabaseServer()).catch(() => null)
-}
-
-/** Modo heredado: la tabla plans con la sesión de Supabase. */
-async function legacyPlans() {
-  const sb = await supabaseServer()
-  return (await sb.from("plans").select("id,nombre,precio_mes,precio_anio,anuncios,limites,publico,activo")).data
-}
-
 /** GET /v1/plans (público: solo los públicos y activos). */
-async function apiPlans(cfg: ApiConfig) {
-  const res = await publicServerApi(cfg).billing.plans()
+async function apiPlans() {
+  await connection()
+  const res = await publicServerApi().billing.plans()
   return res.status === 200 ? res.body.map((p) => ({ ...p, publico: true, activo: true })) : null
 }
 
 /** Planes públicos desde la tabla plans, sin bloquear la página si la base tarda. */
 async function planesPublicos() {
   try {
-    const cfg = await plansApi()
-    const consulta = cfg ? apiPlans(cfg) : legacyPlans()
+    const consulta = apiPlans()
     const data = await Promise.race([consulta, new Promise<null>((r) => setTimeout(() => r(null), 2500))])
     const list = ((data ?? []) as (PlanPublico & { publico: boolean; activo: boolean })[]).filter((p) => p.publico && p.activo)
     const premium = list.find((p) => p.id === "premium")

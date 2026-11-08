@@ -56,7 +56,7 @@ function useRenta(digitos: string) {
   return useQuery({
     queryKey: ["ref", "renta", digitos],
     enabled: /^\d{2}$/.test(digitos),
-    // V7-H2: /v1/refs/renta-calendar y /v1/refs/renta-regimenes con el interruptor `refs` (apagado: Supabase).
+    // /v1/refs/renta-calendar y /v1/refs/renta-regimenes de la API.
     queryFn: async () => {
       const [rows, reg] = await Promise.all([fetchRentaCalendar(digitos), fetchRentaRegimenes()])
       return { rows, reg }

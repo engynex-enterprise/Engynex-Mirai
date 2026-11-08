@@ -1,27 +1,30 @@
 #!/usr/bin/env node
-// E2E de Playwright contra el stack LOCAL (nunca contra la base compartida de Supabase). Guía: infra/local/README.md.
+// E2E de Playwright contra el stack LOCAL (nunca contra producción). Guía: infra/local/README.md.
 //
 //   pnpm e2e:local                         toda la batería (escritorio 1366 px + móvil 400 px)
 //   pnpm e2e:local -- f1-gastos            un archivo (o cualquier argumento de `playwright test`)
 //   pnpm e2e:local -- --project=escritorio
-//   pnpm e2e:local --api                   modo api-on: la web le habla a la API local (MIRAI_API_ROLLOUT=all)
 //   pnpm e2e:local --no-build              reusa la última compilación local (.next-local) y dist/ de la API
 //   pnpm e2e:local --keep                  deja web, API y gateway corriendo al terminar (para mirar a mano)
 //   pnpm e2e:local --build-only            solo compila API y web con variables locales (sin Playwright)
 //   pnpm e2e:local --dev                   la web con `next dev` (sin compilar): errores de React completos (p. ej. hidratación)
-//   pnpm e2e:local --auth=mirai            v7 (V7-H4): auth propio (Better Auth en la API, cookie del mismo origen) y TODO
-//                                          por la API sobre la base DESTINO (db + PostgREST interno + MinIO), sin Supabase:
-//                                          implica --api, DB_ADAPTER=postgrest, OBJECT_STORE=s3 y el gateway con la cookie
+//   pnpm e2e:local --serve                 levanta todo SIN Playwright y con una cuenta de demo (pnpm local:serve)
 //
-// Qué levanta: Docker (infra/local: Supabase local = GoTrue + PostgREST + storage-api sobre Postgres 17 con las 56
-// migraciones, Redis, MinIO), la API (MODE=api) y el gateway (MODE=realtime, pg_notify) en :55080/:55081 y la web
-// (`next start`, compilada en .next-local) en :55300. Usuario QA local (lo crea global-setup con la clave local).
+// Igual que producción: auth propio (Better Auth en la API, cookie del mismo origen) y TODO por la API sobre la base
+// DESTINO (Postgres 17 + PostgREST interno + MinIO), DB_ADAPTER=postgrest, OBJECT_STORE=s3 y el gateway con la cookie.
+// El "Supabase local" de infra/local queda APAGADO y toda URL de Supabase que la API todavía pide apunta a un puerto
+// muerto: si algo intentara hablarle a Supabase, falla y se ve. (`--auth=mirai` y `--sin-supabase` se aceptan y no
+// cambian nada: son el comportamiento de siempre.)
+//
+// Qué levanta: Docker (infra/local: Postgres 17 con las migraciones, PostgREST, Redis, MinIO), la API (MODE=api) y el
+// gateway (MODE=realtime, pg_notify) en :55080/:55081 y la web (`next start`, compilada en .next-local) en :55300.
+// Usuario QA local (lo crea global-setup registrándose por la API).
 //
 // Salvaguardas (se revisan ANTES de correr cualquier cosa):
 //   1. Ninguna variable de .env.local llega a los procesos: cada nombre que tenga se pone vacío o con su valor local
 //      (Next, Node y Playwright no pisan una variable ya definida), así un secreto nuevo tampoco se cuela.
 //   2. Todo URL del entorno final apunta a localhost; si aparece *.supabase.co o el host real de .env.local, se aborta.
-//   3. Después de compilar, el bundle del navegador no puede contener el host de Supabase de .env.local.
+//   3. Después de compilar, el bundle del navegador no puede contener el host de Supabase de .env.local (ni ninguno real).
 //   Los valores de .env.local nunca se imprimen.
 import { spawn, spawnSync } from "node:child_process"
 import { createWriteStream } from "node:fs"
@@ -31,24 +34,17 @@ import { LOCAL, localKeys, ROOT, up } from "./stack.mjs"
 
 const argv = process.argv.slice(2)
 const has = (f) => argv.includes(f)
-// v7: auth propio. Va con todo por la API (no hay sesión de Supabase con la que la web pueda leer la base).
-const AUTH = argv.find((a) => a.startsWith("--auth="))?.split("=")[1] === "mirai" ? "mirai" : "supabase"
-const MIRAI = AUTH === "mirai"
-const API_ON = has("--api") || MIRAI
+// El modo `--auth=supabase` (web con Supabase Auth) ya no existe: la web solo sabe hablar con la API.
+if (argv.some((a) => a.startsWith("--auth=") && a !== "--auth=mirai")) throw new Error("La web ya no tiene modo Supabase: corre pnpm e2e:local sin --auth")
 const NO_BUILD = has("--no-build")
 const KEEP = has("--keep")
 const DEV = has("--dev")
 const BUILD_ONLY = has("--build-only")
 // --serve: levanta todo (base, API, tiempo real, web) y lo deja corriendo SIN Playwright, con una cuenta de demo.
 const SERVE = has("--serve")
-// --sin-supabase (con --auth=mirai): ni siquiera el "Supabase local" está encendido y toda URL de Supabase apunta a un
-// puerto muerto. Si algún camino de la web o la API todavía le habla a Supabase, falla y se ve (en vez de responder
-// en silencio desde el Supabase local). Es la prueba de que la migración no deja nada atrás.
-const SIN_SUPA = has("--sin-supabase")
-if (SIN_SUPA && !MIRAI) throw new Error("--sin-supabase necesita --auth=mirai")
+// La API todavía pide variables de Supabase al arrancar: van a un puerto muerto (si algo le hablara, falla y se ve).
 const DEAD = "http://localhost:9"
-const DB_ADAPTER = argv.find((a) => a.startsWith("--db-adapter="))?.split("=")[1] ?? (MIRAI ? "postgrest" : "supabase")
-const passthrough = argv.filter((a) => !["--api", "--no-build", "--keep", "--build-only", "--dev", "--serve", "--sin-supabase"].includes(a) && !a.startsWith("--db-adapter=") && !a.startsWith("--auth=") && a !== "--")
+const passthrough = argv.filter((a) => !["--api", "--no-build", "--keep", "--build-only", "--dev", "--serve", "--sin-supabase"].includes(a) && !a.startsWith("--auth=") && a !== "--")
 
 const WEB_PORT = new URL(LOCAL.webUrl).port
 const API_PORT = new URL(LOCAL.apiUrl).port
@@ -62,7 +58,7 @@ const DEMO = { email: "demo@mirai.local", password: "Mirai-demo-local-2026", nom
 // 32 bytes en base64, solo local (cifra integraciones de prueba en la base de Docker).
 const LOCAL_ENCRYPTION_KEY = Buffer.alloc(32, 0x4d).toString("base64")
 
-/** Nombres (sin valores) de .env.local, y el host de Supabase real para la salvaguarda (no se imprime). */
+/** Nombres (sin valores) de .env.local, y los hosts reales para la salvaguarda (no se imprimen). */
 function realEnvFile() {
   const f = join(ROOT, ".env.local")
   if (!existsSync(f)) return { names: [], forbidden: [] }
@@ -91,29 +87,21 @@ async function buildEnv() {
   const local = {
     MIRAI_ENV: "local",
     NEXT_TELEMETRY_DISABLED: "1",
-    // Web (navegador y servidor de Next)
-    NEXT_PUBLIC_SUPABASE_URL: LOCAL.supaUrl,
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: keys.anon,
-    SUPABASE_SECRET_KEY: keys.service,
+    // Web (navegador y servidor de Next): solo necesita la API y su propio origen.
     NEXT_PUBLIC_SITE_URL: LOCAL.webUrl,
-    NEXT_PUBLIC_LIVE_SOURCE: "gateway",
     NEXT_PUBLIC_REALTIME_URL: LOCAL.realtimeUrl,
-    ENCRYPTION_KEY: LOCAL_ENCRYPTION_KEY,
-    CRON_SECRET: "mirai-local-cron",
+    MIRAI_API_URL: LOCAL.apiUrl,
     MIRAI_NEXT_DIST_DIR: DIST,
     // API y gateway
-    SUPABASE_URL: LOCAL.supaUrl,
+    ENCRYPTION_KEY: LOCAL_ENCRYPTION_KEY,
+    CRON_SECRET: "mirai-local-cron",
+    SUPABASE_URL: DEAD,
     SUPABASE_PUBLISHABLE_KEY: keys.anon,
     SUPABASE_JWT_SECRET: LOCAL.jwtSecret,
-    AUTH_ISSUER: `${LOCAL.supaUrl}/auth/v1`,
-    AUTH_JWKS_URL: `${LOCAL.supaUrl}/auth/v1/.well-known/jwks.json`,
+    AUTH_ISSUER: `${DEAD}/auth/v1`,
+    AUTH_JWKS_URL: `${DEAD}/auth/v1/.well-known/jwks.json`,
     WEB_ORIGINS: LOCAL.webUrl,
-    DB_ADAPTER,
-    DATABASE_URL: LOCAL.supaDbUrl,
-    POSTGREST_URL: `${LOCAL.supaUrl}/rest/v1`,
-    POSTGREST_JWT_SECRET: LOCAL.jwtSecret,
     REDIS_URL: LOCAL.redisUrl,
-    REALTIME_DATABASE_URL: LOCAL.supaDbUrl,
     LOG_LEVEL: "warn",
     // V7-H3: la batería navega mucho más rápido que una persona con el mismo usuario QA; con todo por la API las
     // 300 peticiones/min por persona de producción dan 429 a mitad de una prueba.
@@ -124,12 +112,9 @@ async function buildEnv() {
     E2E_BASE_URL: LOCAL.webUrl,
     E2E_QA_EMAIL: QA_EMAIL,
     E2E_QA_PASSWORD: QA_PASSWORD,
-    E2E_API: API_ON ? "on" : "off",
     E2E_API_URL: LOCAL.apiUrl,
-    ...(API_ON ? { MIRAI_API_ROLLOUT: "all", MIRAI_API_URL: LOCAL.apiUrl } : { MIRAI_API_ROLLOUT: "off" }),
-    ...(MIRAI ? miraiEnv(keys) : {}),
-    ...(MIRAI && SERVE ? realGoogle() : {}),
-    ...(SIN_SUPA ? { NEXT_PUBLIC_SUPABASE_URL: DEAD, SUPABASE_URL: DEAD, AUTH_ISSUER: `${DEAD}/auth/v1`, AUTH_JWKS_URL: `${DEAD}/auth/v1/.well-known/jwks.json` } : {}),
+    ...miraiEnv(keys),
+    ...(SERVE ? realGoogle() : {}),
   }
   const all = { ...base, ...env, ...local }
   assertLocal(all, real.forbidden)
@@ -139,12 +124,6 @@ async function buildEnv() {
   return { all, api, forbidden: real.forbidden }
 }
 
-/**
- * v7 (V7-H4) `--auth=mirai`: la API con Better Auth sobre la base DESTINO local (esquema `auth` de 0003_auth_better),
- * datos por el PostgREST interno, archivos en MinIO y el gateway escuchando la base destino. La web con
- * AUTH_PROVIDER=mirai (getAppContext → /v1/me con la cookie). Las pruebas crean usuarios por /api/auth (qa.ts).
- * Valores solo de Docker local.
- */
 /**
  * --serve: "Entrar con Google" con un cliente OAuth real de .env.local: GOOGLE_LOCAL_CLIENT_ID/SECRET (solo local) o, si
  * no está, GOOGLE_CLIENT_ID/SECRET. Nunca se imprimen.
@@ -166,6 +145,11 @@ function realGoogle() {
  *  producción falla aquí también. Las pruebas (E2E_DB_URL) siguen con el superusuario para preparar datos. */
 const APP_DB_URL = LOCAL.dbUrl.replace("postgres:mirai-local@", "mirai_app:mirai-local-app@")
 
+/**
+ * La API con Better Auth sobre la base DESTINO local (esquema `auth` de 0003_auth_better), datos por el PostgREST
+ * interno, archivos en MinIO y el gateway escuchando la base destino. La web pide todo a la API (getAppContext → /v1/me
+ * con la cookie). Las pruebas crean usuarios por /api/auth (qa.ts). Valores solo de Docker local.
+ */
 function miraiEnv(keys) {
   return {
     AUTH_PROVIDER: "mirai",
@@ -192,7 +176,6 @@ function miraiEnv(keys) {
     AWS_SECRET_ACCESS_KEY: LOCAL.s3.secretKey,
     PUBLIC_FILES_URL: `${LOCAL.s3.endpoint}/${LOCAL.s3.buckets[2]}`,
     // Playwright (tests/e2e/qa.ts): base destino y su PostgREST con la llave service_role local.
-    E2E_AUTH: "mirai",
     E2E_DB_URL: LOCAL.dbUrl,
     E2E_POSTGREST_URL: LOCAL.postgrestUrl,
     E2E_SERVICE_KEY: keys.service,
@@ -295,26 +278,24 @@ async function main() {
   const RUN = join(ROOT, "infra/local/.run/api")
   mkdirSync(RUN, { recursive: true })
   for (const port of [WEB_PORT, API_PORT, RT_PORT]) if (portBusy(port)) throw new Error(`El puerto ${port} está ocupado (¿otra corrida con --keep?). Ciérrala: lsof -ti tcp:${port} | xargs kill`)
-  console.log(SIN_SUPA ? "▶ Docker: Postgres 17 + Redis + MinIO (Supabase local APAGADO)" : "▶ Docker: Supabase local + Postgres 17 + Redis + MinIO")
-  if (SIN_SUPA) {
-    // Apaga el "Supabase local" si quedó encendido de otra corrida (los datos se conservan en sus volúmenes).
-    const supa = spawnSync("docker", ["ps", "-q", "--filter", "name=^mirai-local-supa-"], { encoding: "utf8" }).stdout.trim().split(/\s+/).filter(Boolean)
-    if (supa.length) spawnSync("docker", ["stop", ...supa], { stdio: "ignore" })
-  }
-  await up({ supa: !SIN_SUPA })
+  console.log("▶ Docker: Postgres 17 + PostgREST + Redis + MinIO (Supabase local APAGADO)")
+  // Apaga el "Supabase local" si quedó encendido (pnpm local:up --supa); los datos se conservan en sus volúmenes.
+  const supa = spawnSync("docker", ["ps", "-q", "--filter", "name=^mirai-local-supa-"], { encoding: "utf8" }).stdout.trim().split(/\s+/).filter(Boolean)
+  if (supa.length) spawnSync("docker", ["stop", ...supa], { stdio: "ignore" })
+  await up({ supa: false })
 
   if (!NO_BUILD) {
     console.log("▶ Compilando la API y la web (.next-local) con variables locales")
     run("pnpm", ["--filter", "api", "build"], apiEnv)
     if (!DEV) {
       run("pnpm", ["--filter", "web", "build"], env)
-      writeFileSync(join(ROOT, "apps/web", DIST, "mirai-local.json"), JSON.stringify({ supabase: LOCAL.supaUrl, at: new Date().toISOString() }))
+      writeFileSync(join(ROOT, "apps/web", DIST, "mirai-local.json"), JSON.stringify({ api: LOCAL.apiUrl, at: new Date().toISOString() }))
     }
   } else if (!DEV && !existsSync(join(ROOT, "apps/web", DIST, "mirai-local.json"))) throw new Error("No hay compilación local: corre sin --no-build")
   // En --dev el bundle se arma al vuelo: la salvaguarda 2 (URLs del entorno solo a localhost) sigue aplicando.
   if (!DEV) assertBundle(forbidden)
   if (BUILD_ONLY) {
-    console.log("✓ API y web compiladas con variables locales (sin tocar Supabase)")
+    console.log("✓ API y web compiladas con variables locales")
     return
   }
 
@@ -328,19 +309,19 @@ async function main() {
   await waitHttp("web", `${LOCAL.webUrl}/login`, 180_000)
 
   if (SERVE) {
-    if (MIRAI) await demoAccount()
+    await demoAccount()
     console.log(`\n✓ Mirai corriendo en este computador (Ctrl+C para cerrar todo)`)
     console.log(`  App:            ${LOCAL.webUrl}`)
     console.log(`  API:            ${LOCAL.apiUrl}  (tiempo real ${LOCAL.realtimeUrl})`)
     console.log(`  Base de datos:  ${LOCAL.dbUrl.replace(/:[^:@/]+@/, ":•••@")}`)
     console.log(`  Archivos:       consola de MinIO http://localhost:55901`)
     console.log(`  Correos:        los de registro y recuperar clave quedan en infra/local/.run/logs/API.log (con su enlace)`)
-    if (MIRAI) console.log(`  Google:         ${realGoogle().GOOGLE_CLIENT_ID ? "cliente real de .env.local (autoriza http://localhost:55300/api/auth/callback/google)" : "sin cliente real: usa correo y clave"}`)
-    if (MIRAI) console.log(`  Cuenta demo:    ${DEMO.email} / ${DEMO.password}`)
+    console.log(`  Google:         ${realGoogle().GOOGLE_CLIENT_ID ? "cliente real de .env.local (autoriza http://localhost:55300/api/auth/callback/google)" : "sin cliente real: usa correo y clave"}`)
+    console.log(`  Cuenta demo:    ${DEMO.email} / ${DEMO.password}`)
     console.log(`  Registros:      infra/local/.run/logs/{API,gateway,web}.log`)
     return
   }
-  console.log(`▶ Playwright contra ${LOCAL.webUrl} (modo api-${API_ON ? "on" : "off"}, auth ${AUTH})`)
+  console.log(`▶ Playwright contra ${LOCAL.webUrl} (todo por la API, auth propio)`)
   const r = spawnSync("pnpm", ["exec", "playwright", "test", ...passthrough], { stdio: "inherit", cwd: join(ROOT, "apps/web"), env })
   if (!KEEP) stopAll()
   else console.log(`… sigue corriendo: web ${LOCAL.webUrl} · API ${LOCAL.apiUrl} · correo de prueba http://localhost:55025 (Ctrl+C para cerrar)`)

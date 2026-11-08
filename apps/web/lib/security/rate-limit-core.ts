@@ -1,5 +1,5 @@
-// Límite de tasa de ventana fija. Puro (sin red ni base): lo usa el respaldo en memoria de lib/security/rate-limit.ts
-// y tiene la misma regla que la función SQL rate_limit_hit (migración 20261103001400_seguridad.sql).
+// Límite de tasa de ventana fija. Puro (sin red ni base): misma regla que la función SQL rate_limit_hit
+// (migración 20261103001400_seguridad.sql) que aplica la API.
 
 export type Window = { start: number; count: number }
 export type LimitResult = { ok: boolean; remaining: number; resetMs: number }

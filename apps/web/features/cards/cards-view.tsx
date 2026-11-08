@@ -22,8 +22,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { createClient } from "@/utils/supabase/client"
-import { apiDeleteRow, apiRestoreRow, apiRows, rowsViaApi } from "@/lib/api/book-rows"
+import { apiDeleteRow, apiRestoreRow, apiRows } from "@/lib/api/book-rows"
 import { EntityLogo } from "@/components/mirai/entity-logo"
 import { ListRow } from "@/components/mirai/list-row"
 import { StatusPill } from "@/components/mirai/status-pill"
@@ -70,22 +69,8 @@ export function CardsView() {
   const card = cards.find((c) => c.id === sel) ?? cards[0]
 
   const refresh = () => { invalidateBook(qc, bookId, "credit_cards"); invalidateBook(qc, bookId, "card_purchases"); invalidateBook(qc, bookId, "card_payments"); invalidateBook(qc, bookId, "expenses") }
-  /** Borra la tarjeta: la base se lleva sus compras, sus pagos y los gastos que quedaron de esas compras (y Deshacer los trae). */
+  /** Borra la tarjeta: sus compras vivas a la papelera y la tarjeta (la base se lleva sus pagos y los gastos de esas compras); Deshacer trae solo esas compras. */
   const borrar = async (c: CardRow) => {
-    if (rowsViaApi("credit_cards") && rowsViaApi("card_purchases")) return borrarApi(c)
-    const now = new Date().toISOString()
-    await createClient().from("card_purchases").update({ deleted_at: now }).eq("card_id", c.id).is("deleted_at", null)
-    await createClient().from("credit_cards").update({ deleted_at: now }).eq("id", c.id)
-    toast("Tarjeta eliminada", { action: { label: "Deshacer", onClick: async () => {
-      await createClient().from("credit_cards").update({ deleted_at: null }).eq("id", c.id)
-      await createClient().from("card_purchases").update({ deleted_at: null }).eq("card_id", c.id).eq("deleted_at", now)
-      refresh()
-    } } })
-    setSel(null)
-    refresh()
-  }
-  /** Lo mismo por la API: las compras vivas de la tarjeta a la papelera y la tarjeta; Deshacer trae solo esas compras. */
-  const borrarApi = async (c: CardRow) => {
     const compras = await apiRows<{ id: string }>(bookId, "card_purchases", { eq: { card_id: c.id }, select: "id" }).catch(() => [])
     for (const p of compras) await apiDeleteRow(bookId, "card_purchases", p.id)
     await apiDeleteRow(bookId, "credit_cards", c.id)

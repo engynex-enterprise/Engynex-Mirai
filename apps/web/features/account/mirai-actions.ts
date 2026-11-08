@@ -1,5 +1,5 @@
 "use server"
-// Acciones de la cuenta con AUTH_PROVIDER=mirai (v7, V7-B): van a la API con la sesión de la cookie (Bearer de sesión).
+// Acciones de la cuenta en el servidor: van a la API con la sesión de la cookie (Bearer de sesión).
 import { z } from "zod"
 import { PASSWORD_MAX, PASSWORD_MIN } from "@mirai/contracts/modules/auth"
 import { miraiApi, miraiApiMsg } from "@/lib/auth/server"

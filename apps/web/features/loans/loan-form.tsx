@@ -28,8 +28,7 @@ import { SubmitButton } from "@/components/mirai/submit-button"
 import { FormSkeleton } from "@/components/skeletons/form-skeleton"
 import { useApp, useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import {
   CASA_EMPENO, FRECS, SISTEMAS, addPeriod, TASA_EMPENO, TIPOS_CREDITO, camposLoan, faltantesLoan, findContact, findEntity, histPlan, loanEngine, norm, normProv, previewLoan,
   rateFromCuota, sistemaDe,
@@ -284,8 +283,6 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
     if (!tipo || !C) return
     if (faltan.length) return toast.error(faltan[0].msg)
     setBusy(true)
-    // Todo por la API o todo como siempre (contacto, préstamo y pagos de antes van juntos).
-    const api = rowsViaApi("contacts") && rowsViaApi("loans") && rowsViaApi("loan_payments")
     let cid: string | null = null
     let ctRow: Row<"contacts"> | null = null
     if (usaPersona) {
@@ -294,14 +291,11 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
         cid = ctYa.id; ctRow = ctYa
         const doc = nc.doc.replace(/\D/g, "")
         const patch = { ...(!ctYa.telefono && nc.telefono.trim() ? { telefono: nc.telefono.trim() } : {}), ...(!ctYa.email && nc.email.trim() ? { email: nc.email.trim() } : {}), ...(!ctYa.doc && doc ? { doc, doc_tipo: nc.docTipo } : {}) }
-        if (Object.keys(patch).length) {
-          if (api) await apiUpdateRow(bookId, "contacts", ctYa.id, patch)
-          else await createClient().from("contacts").update(patch).eq("id", ctYa.id)
-        }
+        if (Object.keys(patch).length) await apiUpdateRow(bookId, "contacts", ctYa.id, patch)
         toast(`Ya tenías a “${ctYa.nombre}” en Contactos: lo usamos`, { description: "No creamos otro contacto igual." })
       } else if (quien === "new") {
         const nuevo = { tipo: "persona" as const, nombre: nc.nombre.trim(), doc_tipo: nc.docTipo, doc: nc.doc.replace(/\D/g, ""), telefono: nc.telefono, email: nc.email, relacion: nc.relacion, direccion: addr, ciudad: addr.ciudad }
-        const { data, error } = api ? await apiInsertRow<Row<"contacts">>(bookId, "contacts", nuevo) : await createClient().from("contacts").insert({ book_id: bookId, ...nuevo }).select("*").single()
+        const { data, error } = await apiInsertRow<Row<"contacts">>(bookId, "contacts", nuevo)
         if (error || !data) { setBusy(false); return toast.error("No se pudo crear el contacto", { description: error?.message }) }
         cid = data.id; ctRow = data as Row<"contacts">
       } else { cid = contact; ctRow = contacts.find((c) => c.id === contact) as Row<"contacts"> | undefined ?? null }
@@ -316,13 +310,10 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
       tasa_ea: intEf === "tasa" && C.ea ? num(ea) || null : null, provider_id: prov, vence: unico ? vence : null, fiado: tipo === "fiado", ...(primeraEf ? { primera: primeraEf } : {}),
       ...(notaF ? { nota: notaF } : {}),
     }
-    const { data: L, error } = api ? await apiInsertRow<{ id: string }>(bookId, "loans", prestamo) : await createClient().from("loans").insert({ book_id: bookId, ...prestamo }).select("id").single()
+    const { data: L, error } = await apiInsertRow<{ id: string }>(bookId, "loans", prestamo)
     if (error || !L) { setBusy(false); return toast.error("No se pudo guardar", { description: error?.message }) }
     const previos = histPays.map((p) => ({ loan_id: L.id, fecha: p.fecha, tipo: p.tipo, valor: p.valor ?? 0, modo: p.modo ?? null, nota: "Pago anterior a Mirai" }))
-    if (previos.length) {
-      if (api) for (const p of previos) await apiInsertRow(bookId, "loan_payments", p)
-      else await createClient().from("loan_payments").insert(previos.map((p) => ({ book_id: bookId, ...p })))
-    }
+    for (const p of previos) await apiInsertRow(bookId, "loan_payments", p)
     if (pdf && verPdf) {
       const e = loanEngine({ ...params, payments: histPays.map((p) => ({ ...p, valor: p.valor ?? 0 })) }, today)
       await descargarAcuerdo({ kind, hoy: today, user, contact: ctRow, nombre: quienNombre || "Otra persona", monto: financiado, concepto: conceptoF, inicio: inicioEf, plazo: params.plazo, frec: params.frec, sistema: params.sistema, tasa: params.tasa, e })

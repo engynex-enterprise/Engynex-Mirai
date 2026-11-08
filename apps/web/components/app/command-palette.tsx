@@ -18,9 +18,7 @@ import { loanTipo, tipoDef, tiposDe } from "@/lib/domain/loan-tipos"
 
 /** Palabras extra de cada sección (la descripción de su pestaña: "gastos hormiga", "Netflix"…). */
 const TAB_DESC = new Map(Object.values(PAGE_TABS).flat().map((t) => [t.id, t.desc]))
-import { readWithFallback } from "@/lib/api/book-tables"
-import { apiRows, rowsViaApi } from "@/lib/api/book-rows"
-import { createClient } from "@/utils/supabase/client"
+import { apiRows } from "@/lib/api/book-rows"
 import { useShell } from "./shell-store"
 import { useBookId } from "./app-context"
 import { ADD_ITEMS } from "./add-menu"
@@ -53,26 +51,18 @@ const n = (v: unknown) => Number(v ?? 0)
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fetch = (t: string, cols: string, lim?: number, order?: { column: string; ascending: boolean }) => Promise<any[]>
 
-/** Modo heredado (interruptor `book-tables` apagado): Supabase directo con la sesión. */
-const fromDb = (bookId: string): Fetch => (t, cols, lim = 200, order) => {
-  let q = createClient().from(t as never).select(cols).eq("book_id" as never, bookId as never).is("deleted_at" as never, null)
-  if (order) q = q.order(order.column as never, { ascending: order.ascending })
-  return Promise.resolve(q.limit(lim)).then((r) => (r.data ?? []) as any[]).catch(() => [])
-}
-
 /**
- * V7-H3: por el CRUD genérico de la API (GET /v1/books/:b/t/:tabla, interruptor `book-tables[:tabla]`). Sin relaciones
- * embebidas: los nombres de los préstamos se completan con contactos, entidades y proveedores (que ya se piden).
+ * Por el CRUD genérico de la API (GET /v1/books/:b/t/:tabla). Sin relaciones embebidas: los nombres de los préstamos
+ * se completan con contactos, entidades y proveedores (que ya se piden).
  */
 const fromApi = (bookId: string): Fetch => (t, cols, lim = 200, order) =>
-  readWithFallback(() => apiRows<any>(bookId, t, { select: cols, ...(order ? { order } : {}) }), () => fromDb(bookId)(t, cols, lim, order)).then((r) => r.slice(0, lim)).catch(() => [])
+  apiRows<any>(bookId, t, { select: cols, ...(order ? { order } : {}) }).then((r) => r.slice(0, lim)).catch(() => [])
 
 async function searchIndex(bookId: string): Promise<Group[]> {
-  const by: Fetch = (t, cols, lim, order) => (rowsViaApi(t) ? fromApi(bookId) : fromDb(bookId))(t, cols, lim, order)
-  const loansViaApi = rowsViaApi("loans")
+  const by = fromApi(bookId)
   const [c, l0, f, g, pr, su, tc, me, en, inv, de, ac, ev] = await Promise.all([
     by("contacts", "id,nombre,ciudad"),
-    loansViaApi ? by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,provider_id") : by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,contacts(nombre),entities(nombre),providers(nombre)"),
+    by("loans", "id,kind,tipo,concepto,fiado,prenda,entity_id,contact_id,provider_id"),
     by("fixed_expenses", "id,nombre,valor"),
     by("expenses", "id,descripcion,fecha,valor", 150, { column: "fecha", ascending: false }),
     by("providers", "id,nombre,tipo,activo"),
@@ -86,7 +76,7 @@ async function searchIndex(bookId: string): Promise<Group[]> {
     by("calendar_events", "id,titulo,fecha", 100),
   ])
   const named = (list: any[], id: unknown) => { const x = id ? list.find((y) => y.id === id) : null; return x ? { nombre: x.nombre } : null }
-  const l = loansViaApi ? l0.map((x) => ({ ...x, contacts: named(c, x.contact_id), entities: named(en, x.entity_id), providers: named(pr, x.provider_id) })) : l0
+  const l = l0.map((x) => ({ ...x, contacts: named(c, x.contact_id), entities: named(en, x.entity_id), providers: named(pr, x.provider_id) }))
   const money = (v: unknown) => fmtMoney(n(v))
   return [
     { heading: "Contactos", hits: c.map((x: any) => ({ k: x.id, v: `contacto ${x.nombre} ${x.ciudad ?? ""}`, t: x.nombre, sub: x.ciudad, icon: "user", tone: "blue", href: `/contactos?id=${x.id}` })) },

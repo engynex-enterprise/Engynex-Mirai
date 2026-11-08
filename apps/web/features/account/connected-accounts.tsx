@@ -15,8 +15,6 @@ import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { Tip } from "@/components/mirai/tip"
 import { ToneIcon } from "@/components/mirai/tone-icon"
-import { createClient } from "@/utils/supabase/client"
-import { isMiraiAuth } from "@/lib/auth/provider"
 import { googleIdentities, signInMethods, type Method } from "@/lib/account/account"
 import { haceCuanto } from "@/lib/household/invites"
 import { Confirm } from "@/features/household/roles-ui"
@@ -65,12 +63,7 @@ export function ConnectedAccounts() {
   const old = params.get("old")
   const handled = useRef<string | null>(null)
   useEffect(() => {
-    if (!cuentas && !correo) {
-      // Supabase también puede devolver el error en el #hash (#error_code=identity_already_exists…).
-      const h = typeof window !== "undefined" ? window.location.hash : ""
-      if (/error_code=identity_already_exists|already.linked/i.test(h)) { const [, t, d] = RETURN_MSG["cuentas:ya_existe"]; toast.error(t, { description: d }); history.replaceState(null, "", `${pathname}#cuentas`) }
-      return
-    }
+    if (!cuentas && !correo) return
     if (!account) return
     const key = `${cuentas}|${correo}|${old}`
     if (handled.current === key) return
@@ -92,16 +85,8 @@ export function ConnectedAccounts() {
   const linkGoogle = async (oldId?: string) => {
     setLinking(true)
     const next = `${PERFIL}?cuentas=conectada${oldId ? `&old=${oldId}` : ""}#cuentas`
-    if (isMiraiAuth()) {
-      const r = await (await import("@/lib/auth/mirai")).linkGoogle(next)
-      if (!r.ok) { setLinking(false); toast.error("No pudimos abrir Google", { description: r.msg }) }
-      return
-    }
-    const { error } = await createClient().auth.linkIdentity({
-      provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`, queryParams: { prompt: "select_account" } },
-    })
-    if (error) { setLinking(false); toast.error("No pudimos abrir Google", { description: /manual linking|disabled/i.test(error.message) ? "La conexión de cuentas está apagada en Mirai." : "Intenta de nuevo en un momento." }) }
+    const r = await (await import("@/lib/auth/mirai")).linkGoogle(next)
+    if (!r.ok) { setLinking(false); toast.error("No pudimos abrir Google", { description: r.msg }) }
   }
 
   const remove = async (m: Method) => {
@@ -114,8 +99,7 @@ export function ConnectedAccounts() {
   }
 
   const reenter = async () => {
-    if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut()
-    else await createClient().auth.signOut()
+    await (await import("@/lib/auth/mirai")).signOut()
     router.replace(`/login?next=${encodeURIComponent(`${PERFIL}#cuentas`)}`)
   }
 

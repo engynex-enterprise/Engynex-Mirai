@@ -21,8 +21,6 @@ import { FeedbackForm, feedbackContexto, useMyFeedback } from "@/features/opinio
 import { Stars } from "@/features/opiniones/stars"
 import { TIPO_TONE } from "@/features/opiniones/tones"
 import { ToneIcon } from "@/components/mirai/tone-icon"
-import { apiOn } from "@/lib/api/session"
-import { createClient } from "@/utils/supabase/client"
 import { sendFeedback } from "@/features/opiniones/api"
 import { APP_VER, RELEASES } from "@/lib/content/ayuda"
 import { ATAJOS, keyLabel } from "@/lib/content/centro-ayuda"
@@ -68,15 +66,10 @@ function Estado({ ok, label, detail, children }: { ok: boolean | null; label: st
   )
 }
 
-/** Una lectura corta del servidor: la API (GET /v1/platform/notice, lee la base) o, en el modo heredado, Supabase. */
+/** Una lectura corta del servidor: GET /v1/platform/notice (la API lee la base). */
 async function pingServer() {
-  if (apiOn("me")) {
-    const { browserApi, unwrap } = await import("@/lib/api/client")
-    unwrap(await browserApi().me.platformNotice())
-    return
-  }
-  const { error } = await createClient().from("platform_settings").select("aviso_global").limit(1).maybeSingle()
-  if (error) throw new Error(error.message)
+  const { browserApi, unwrap } = await import("@/lib/api/client")
+  unwrap(await browserApi().me.platformNotice())
 }
 
 export function EstadoModule() {

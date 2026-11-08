@@ -2,27 +2,24 @@
 
 import { useQueryClient } from "@tanstack/react-query"
 import { useQuery } from "@/lib/query"
-import { fileUrl, filesViaApi, uploadFile } from "@/lib/files/upload"
+import { fileUrl, uploadFile } from "@/lib/files/upload"
 import { toast } from "@/components/mirai/toast"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
 import { conv } from "@/lib/domain"
 import { qk } from "@/lib/supabase/tables"
 import { fetchRentaData } from "./data"
-import { insertRentaRows, saveRentaMember, saveRentaRow, saveRentaUvt, saveTaxYear, setRentaDeleted, signedUrlLegacy, uploadRentaLegacy } from "./api"
+import { insertRentaRows, saveRentaMember, saveRentaRow, saveRentaUvt, saveTaxYear, setRentaDeleted } from "./api"
 import { RentaView, type RentaActions } from "./renta-view"
 
-/**
- * Declaración de renta del titular. V7-H2: lee y escribe por la API con el interruptor `tax` (./api.ts y
- * fetchRentaData); apagado, Supabase directo desde el navegador con RLS (rama heredada).
- */
+/** Declaración de renta del titular: lee y escribe por la API (./api.ts y fetchRentaData). */
 export function RentaOwner() {
   const bookId = useBookId()
-  const { user, household } = useApp()
+  const { household } = useApp()
   const canEdit = useCanEdit()
   const qc = useQueryClient()
   const key = qk(bookId, "renta")
-  const { data } = useQuery({ queryKey: key, queryFn: () => fetchRentaData(bookId, user.id) })
+  const { data } = useQuery({ queryKey: key, queryFn: () => fetchRentaData(bookId) })
   if (!data) return <PageSkeleton kpis={3} />
   const done = () => qc.invalidateQueries({ queryKey: key })
 
@@ -50,17 +47,12 @@ export function RentaOwner() {
     },
     async saveMember(id, patch) { await saveRentaMember(household.id, id, patch); done(); qc.invalidateQueries({ queryKey: ["h", household.id, "family_members"] }) },
     async upload(y, docKey, f) {
-      // v7 (interruptor `files`): sube por la API a {libro}/renta/{año}/… (la API revisa rol, tamaño y tipo).
-      let path: string
-      if (filesViaApi()) path = (await uploadFile({ bucket: "attachments", body: f, name: f.name, bookId, folder: `renta/${y}` })).key
-      else {
-        path = `${bookId}/renta/${y}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, "_")}`
-        await uploadRentaLegacy(path, f)
-      }
+      // Sube por la API a {libro}/renta/{año}/… (la API revisa rol, tamaño y tipo).
+      const path = (await uploadFile({ bucket: "attachments", body: f, name: f.name, bookId, folder: `renta/${y}` })).key
       await saveRentaRow(bookId, "attachments", { doc_key: docKey, year: y, path, nombre: f.name, mime: f.type || "application/octet-stream", size: f.size, ref_table: "tax_years" })
       done()
     },
     async delAttachment(id) { await setRentaDeleted(bookId, "attachments", id, true); done() },
   }
-  return <RentaView data={data} actions={canEdit ? actions : null} fileUrl={async (p) => (filesViaApi() ? fileUrl("attachments", p).catch(() => null) : signedUrlLegacy(p))} />
+  return <RentaView data={data} actions={canEdit ? actions : null} fileUrl={async (p) => fileUrl("attachments", p).catch(() => null)} />
 }

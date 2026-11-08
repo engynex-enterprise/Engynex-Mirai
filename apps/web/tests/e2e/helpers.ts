@@ -3,7 +3,7 @@ import { clearAuthLimits, QA, setQaDefaultBook, setQaPlan, setQaWelcome } from "
 
 /** Entra con el usuario QA (en Premium, salvo que se pida Gratis) y pasa la bienvenida si hace falta. */
 export async function login(page: Page, plan: "premium" | "gratis" = "premium", { welcome = false } = {}) {
-  await clearAuthLimits() // solo con E2E_AUTH=mirai: Better Auth limita a 5 entradas por minuto por IP
+  await clearAuthLimits() // Better Auth limita a 5 entradas por minuto por IP
   await setQaDefaultBook()
   await page.goto("/login")
   await page.getByLabel("Correo").fill(QA.email)
@@ -27,9 +27,8 @@ export function watchErrors(page: Page) {
   return list
 }
 
-/** Modo de la batería (v6 F2-H-8): `api-on` guarda sus capturas aparte (`…-api.png`) para comparar con `api-off`. */
-export const API_MODE = process.env.E2E_API === "on" ? "on" : "off"
-export const shot = (page: Page, name: string, project: string) => page.screenshot({ path: `tests/.out/${name}-${project}${API_MODE === "on" ? "-api" : ""}.png`, fullPage: true })
+/** Captura de página completa en tests/.out/<nombre>-<proyecto>.png. */
+export const shot = (page: Page, name: string, project: string) => page.screenshot({ path: `tests/.out/${name}-${project}.png`, fullPage: true })
 
 /**
  * Crea una entidad (banco o casa de empeño) desde el selector de una deuda. Si ya existía con ese nombre (p. ej. en un

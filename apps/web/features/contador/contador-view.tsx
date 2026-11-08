@@ -66,7 +66,7 @@ export function ContadorView() {
   const key = ["b", book.id, "accountant_shares"]
   const { data, isPending } = useQuery({
     queryKey: key,
-    // V7-H2: GET …/accountant/{shares,notes} con el interruptor `accountant` (apagado: Supabase directo).
+    // GET …/accountant/{shares,notes} de la API.
     queryFn: async () => {
       const { shares, notes } = await fetchOwnerData(book.id)
       return { shares, notes: notes as (Note & { share_id: string })[] }

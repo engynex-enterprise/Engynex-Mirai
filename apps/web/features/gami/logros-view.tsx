@@ -64,7 +64,7 @@ export function LogrosView() {
   if (!g) return <PageSkeleton kpis={3} />
   const { X, L, st } = g
   const toggle = async (v: boolean) => {
-    // V7-H2: PATCH /v1/books/:b/settings con el interruptor `books` (apagado: Supabase, rama heredada).
+    // PATCH /v1/books/:b/settings.
     try { await saveBookSettings(bookId, { gami: v }) } catch (e) { return toast.error("No se pudo guardar", { description: (e as Error).message }) }
     qc.invalidateQueries({ queryKey: qk(bookId, "gami") })
     toast(v ? "Logros activados" : "Logros ocultos")

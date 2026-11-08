@@ -21,15 +21,13 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { addCardPurchase, payCreditCard } from "@/features/cards/commands"
 import { qk } from "@/lib/supabase/tables"
 import { csvExternalIds, detectSubs, localCat, localHormiga, parseCSV, reglasDeCorrecciones, type CsvRow } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import { categoryOptions, memberOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import { parsePaySource, paySourceOptions } from "@/features/cards/pay-source"
 import { classifyBatch } from "@/features/expenses/use-ai-category"
-import { importStatement, importV4Backup, statementViaApi } from "./api"
+import { importStatement, importV4Backup } from "./api"
 import { usePwa } from "@/features/pwa/store"
 
 /** `ext`: id estable del movimiento (no deja importarlo dos veces). `hManual`: la persona cambió la marca de hormiga. */
@@ -152,36 +150,11 @@ export function ImportView() {
     const gastos = sel.filter((r) => !r.abono)
     const entradas = sel.filter((r) => r.abono)
     const errores: string[] = []
-    const hsrc = (r: Row) => (r.hManual ? ("manual" as const) : r.src === "ia" ? ("ia" as const) : ("regla" as const))
-    if (statementViaApi()) {
-      // Por la API (interruptor `importer`; siempre con AUTH_PROVIDER=mirai): la API vuelve a leer el mismo texto y
-      // escribe gastos/ingresos extra o compras/pagos de la tarjeta, sin duplicar los `csv:`.
-      const filas = (rows ?? []).flatMap((r, i) => (r.incl ? [{ i, category_id: r.abono ? null : (r.category_id ?? otros), ...(r.abono ? {} : { hormiga: r.hormiga }) }] : []))
-      // Sin medio de pago escogido (`medio` con id null) queda como siempre: movimientos sin medio de pago.
-      const fuente = src.kind === "tarjeta" ? { tipo: "tarjeta" as const, id: src.id } : { tipo: "medio" as const, id: src.id }
-      errores.push(...(await importStatement({ csv: txt, fuente, member_id, filas })).errores)
-    } else if (src.kind === "tarjeta") {
-      // Extracto de la tarjeta: cada débito es una compra con tarjeta (y su gasto); cada abono, un pago a la tarjeta.
-      const rs = await Promise.all([
-        ...gastos.map((r) => addCardPurchase({ p_card: src.id, p_fecha: r.fecha, p_descripcion: r.descripcion, p_valor: r.valor, p_cuotas: 1, p_category: (r.category_id ?? otros) ?? undefined, p_como_gasto: true, p_external_id: r.ext, p_member: member_id ?? undefined })),
-        ...entradas.map((r) => payCreditCard({ p_card: src.id, p_valor: r.valor, p_fecha: r.fecha, p_tipo: "otro", p_nota: `Importado: ${r.descripcion}` })),
-      ])
-      rs.forEach((x) => x.error && errores.push(x.error.message))
-    } else {
-      // Modo heredado (interruptor apagado): Supabase directo.
-      const sb = createClient()
-      if (gastos.length) {
-        const { error } = await sb.from("expenses").insert(gastos.map((r) => ({
-          book_id: bookId, fecha: r.fecha, descripcion: r.descripcion, valor: r.valor, category_id: r.category_id ?? otros,
-          member_id, payment_method_id: src.id, hormiga: r.hormiga, hormiga_src: hsrc(r), origen: "importar" as const, external_id: r.ext,
-        })))
-        if (error) errores.push(error.message)
-      }
-      if (entradas.length) {
-        const { error } = await sb.from("extra_incomes").insert(entradas.map((r) => ({ book_id: bookId, fecha: r.fecha, descripcion: r.descripcion, valor: r.valor, member_id, payment_method_id: src.id, external_id: r.ext })))
-        if (error) errores.push(error.message)
-      }
-    }
+    // La API vuelve a leer el mismo texto y escribe gastos/ingresos extra o compras/pagos de la tarjeta, sin duplicar los `csv:`.
+    const filas = (rows ?? []).flatMap((r, i) => (r.incl ? [{ i, category_id: r.abono ? null : (r.category_id ?? otros), ...(r.abono ? {} : { hormiga: r.hormiga }) }] : []))
+    // Sin medio de pago escogido (`medio` con id null) quedan movimientos sin medio de pago.
+    const origen = src.kind === "tarjeta" ? { tipo: "tarjeta" as const, id: src.id } : { tipo: "medio" as const, id: src.id }
+    errores.push(...(await importStatement({ csv: txt, fuente: origen, member_id, filas })).errores)
     setBusy(false)
     invalidateBook(qc, bookId, "expenses"); invalidateBook(qc, bookId, "extra_incomes"); invalidateBook(qc, bookId, "credit_cards"); invalidateBook(qc, bookId, "card_purchases")
     if (errores.length) return toast.error("No se pudieron importar todos los movimientos", { description: errores[0] })

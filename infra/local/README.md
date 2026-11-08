@@ -1,16 +1,15 @@
 # Arnés local de Mirai v7 (Docker)
 
-Todo corre en este computador: **nunca** toca Supabase ni la base compartida (pruebas = producción). Los valores de
-aquí (contraseñas, secreto JWT, llaves anon/service) son solo de Docker local.
+Todo corre en este computador: **nunca** toca producción. Igual que producción: auth propio (Better Auth en la API) y
+todo por la API sobre la base destino. Los valores de aquí (contraseñas, secreto JWT, llaves anon/service) son solo de
+Docker local.
 
 ## Comandos (desde la raíz)
 
 | Comando | Qué hace |
 |---|---|
-| `pnpm e2e:local` | **La batería E2E de Playwright contra el stack local** (escritorio 1366 px + móvil 400 px). Levanta Docker, compila API y web con variables locales, arranca API, gateway y web, y corre Playwright. |
+| `pnpm e2e:local` | **La batería E2E de Playwright contra el stack local** (escritorio 1366 px + móvil 400 px). Levanta Docker (sin el "Supabase local"), compila API y web con variables locales, arranca API, gateway y web, y corre Playwright. Better Auth en la API (cookie httpOnly del mismo origen, `/api/auth` y `/v1` reenviados por la web), datos por el PostgREST interno de la base **destino** (`DB_ADAPTER=postgrest`), archivos en MinIO (`OBJECT_STORE=s3`) y el gateway con la cookie. El usuario QA se crea por `/api/auth/sign-up/email` y `admin()` de las pruebas va al PostgREST destino (`tests/e2e/qa.ts`). Las variables de Supabase que la API aún pide apuntan a un puerto muerto. |
 | `pnpm e2e:local -- f1-gastos --project=escritorio` | Un archivo / un proyecto (lo que va después de `--` se le pasa a `playwright test`). |
-| `pnpm e2e:local --api` | Modo api-on: la web le habla a la API local (`MIRAI_API_ROLLOUT=all`). |
-| `pnpm e2e:local --auth=mirai -- f0-shell` | **v7 (V7-H4): auth propio de punta a punta, sin Supabase.** Better Auth en la API (cookie httpOnly del mismo origen, `/api/auth` y `/v1` reenviados por la web), datos por el PostgREST interno de la base **destino** (`DB_ADAPTER=postgrest`), archivos en MinIO (`OBJECT_STORE=s3`) y el gateway con la cookie. Implica `--api`. El usuario QA se crea por `/api/auth/sign-up/email` y `admin()` de las pruebas va al PostgREST destino (`tests/e2e/qa.ts`). |
 | `pnpm e2e:local --no-build` | Reusa la última compilación local (`apps/web/.next-local`, `apps/api/dist`). |
 | `pnpm e2e:local --build-only` | Solo compila API y web con variables locales (un `next build` con `.env.local` puede leer la base compartida al prerenderizar). |
 | `pnpm e2e:local --keep` | Deja web (:55300), API (:55080) y gateway (:55081) corriendo al terminar. |
@@ -30,12 +29,11 @@ aquí (contraseñas, secreto JWT, llaves anon/service) son solo de Docker local.
 | `redis` | 55379 | Adaptador de socket.io y presencia del gateway. |
 | `minio` | 55900 (consola 55901) | Archivos por S3 (buckets `mirai-local-private`, `-backups`, `-public`). |
 | `gcs` | 55443 | Emulador de Cloud Storage (`fake-gcs-server`) para el adaptador `gcs` de ObjectStore. |
-| perfil `supa`: `supa-db` | 55434 | **"Supabase local"**: Postgres 17 + GoTrue + storage-api + las 56 migraciones + triggers `mirai_live_notify`. Base de la E2E (la web de hoy usa supabase-js) y origen de los ensayos. |
+| perfil `supa`: `supa-db` | 55434 | **"Supabase local"** (solo `pnpm local:up --supa`): Postgres 17 + GoTrue + storage-api + las 56 migraciones + triggers `mirai_live_notify`. Origen de los ensayos de migración; la E2E ya no lo usa. |
 | `supa-gateway` | 55421 | Hace de Kong: `/auth/v1` (GoTrue), `/rest/v1` (PostgREST), `/storage/v1` (storage-api). |
 | `supa-mail` | 55025 | Buzón de mentiras para los correos de GoTrue (enlace mágico, recuperar clave). |
 
-La E2E usa el tiempo real del gateway de la API (`NEXT_PUBLIC_LIVE_SOURCE=gateway`, `pg_notify` → Redis), no
-Supabase Realtime.
+El tiempo real es el gateway de la API (`pg_notify` → Redis → socket.io).
 
 ## Salvaguardas de `pnpm e2e:local`
 
@@ -44,9 +42,10 @@ Supabase Realtime.
    se cuela. Los valores de `.env.local` nunca se imprimen.
 2. Antes de arrancar se revisa que todo URL del entorno apunte a `localhost`; si aparece `*.supabase.co` o el host de
    `.env.local`, se aborta.
-3. Después de compilar se revisa que el JavaScript del navegador no contenga el host de Supabase real.
+3. Después de compilar se revisa que el JavaScript del navegador no contenga el host de Supabase real ni otro de
+   `.env.local`.
 4. La web compila en `apps/web/.next-local` (no pisa `.next`) y corre en :55300 (nunca reutiliza un `next start` de
-   :3100). Usuario QA local `qa.e2e@mirai.test` (lo crea `global-setup` con la llave local).
+   :3100). Usuario QA local `qa.e2e@mirai.test` (lo crea `global-setup` registrándose por la API).
 
 ## Problemas comunes
 

@@ -1,18 +1,10 @@
 import { adsTxt } from "@/lib/ads"
-import { serverAuthProvider } from "@/lib/auth/provider"
-import { miraiApiConfig } from "@/lib/dal"
 import { publicServerApi } from "@/lib/api/server"
-import { supabaseAdmin } from "@/lib/supabase/admin"
 
-/** Cliente de AdSense de la consola (Integraciones globales). v7 (AUTH_PROVIDER=mirai): GET /v1/platform/adsense. */
+/** Cliente de AdSense de la consola (Integraciones globales): GET /v1/platform/adsense. */
 async function consoleClient(): Promise<string | null | undefined> {
-  if (serverAuthProvider() === "mirai") {
-    const cfg = miraiApiConfig()
-    const res = await publicServerApi(cfg).me.platformAdsense()
-    return res.status === 200 ? res.body.client : null
-  }
-  const { data } = await supabaseAdmin().from("platform_integrations").select("modo,config").eq("kind", "adsense").maybeSingle()
-  return data && data.modo !== "apagada" ? (data.config as { client?: string } | null)?.client : null
+  const res = await publicServerApi().me.platformAdsense()
+  return res.status === 200 ? res.body.client : null
 }
 
 /** ads.txt de Google AdSense: el id de cliente de la consola o, como respaldo, el de las variables de entorno. */

@@ -50,13 +50,8 @@ ARG GIT_SHA=dev
 # GIT_SHA (neutro) y VERCEL_GIT_COMMIT_SHA (lo que hoy lee next.config.ts) → NEXT_PUBLIC_BUILD_ID.
 ENV GIT_SHA=${GIT_SHA} \
     VERCEL_GIT_COMMIT_SHA=${GIT_SHA}
-# Marcadores SOLO para compilar (apps/web/lib/env.ts exige que existan, igual que .github/workflows/ci.yml; se van
-# con V7-R cuando la web ya no tenga secretos de Supabase).
-# Van dentro del RUN, no como ENV: no quedan en ninguna capa. Los reales llegan en Cloud Run desde Secret Manager.
+# La web no tiene secretos: compilar solo necesita las NEXT_PUBLIC_* del navegador (WEB_BUILD_ENV_B64).
 RUN if [ -n "$WEB_BUILD_ENV_B64" ]; then printf '%s' "$WEB_BUILD_ENV_B64" | base64 -d > apps/web/.env.production; fi && \
-    SUPABASE_SECRET_KEY=build-placeholder-no-real-secret \
-    ENCRYPTION_KEY=Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtYmFzZTY0LXh4eA== \
-    CRON_SECRET=build-placeholder-cron-secret \
     pnpm turbo run build --filter=web && \
     test -f apps/web/.next/standalone/apps/web/server.js || \
       (echo "No se generó la salida standalone (apps/web/.next/standalone/apps/web/server.js): revisa output en next.config.ts." && exit 1)

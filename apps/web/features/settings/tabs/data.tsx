@@ -23,8 +23,6 @@ import { ToneIcon, type IconTone } from "@/components/mirai/tone-icon"
 import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
 import { useApp } from "@/components/app/app-context"
 import { can } from "@/lib/household/roles"
-import { createClient } from "@/utils/supabase/client"
-import { isMiraiAuth } from "@/lib/auth/provider"
 import { fetchAudit, fetchBackups } from "../api"
 import { SampleButton } from "@/features/setup/sample-button"
 import { backupUrl, createBackup, deleteAccount, deleteBackup, exportBookJson, exportMyData, formatBlocks, restoreBackup, restoreFromJson } from "@/features/data/api"
@@ -195,8 +193,7 @@ function Cuenta() {
               setBusy("del")
               const r = await deleteAccount({ confirm: conf }).catch(() => ({ ok: false, msg: "No pudimos eliminar tu cuenta. Intenta de nuevo." }))
               if (!r.ok) { toast.error(r.msg); setBusy(null); return }
-              // v7: con AUTH_PROVIDER=mirai la sesión es de Better Auth; con supabase, la de siempre (rama heredada).
-              if (isMiraiAuth()) await (await import("@/lib/auth/mirai")).signOut(); else await createClient().auth.signOut()
+              await (await import("@/lib/auth/mirai")).signOut()
               router.replace("/login?eliminada=1")
             }}>{busy === "del" && <Spinner />} Eliminar para siempre</Button>
           </AlertDialogFooter>

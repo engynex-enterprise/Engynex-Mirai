@@ -141,7 +141,7 @@ const FIX: Record<string, Partial<Faq>> = {
   "¿Puedo apagar la IA o usar ChatGPT o Gemini?": { a: "Sí. En <b>Ajustes › Inteligencia artificial</b> puedes apagarla, apagar funciones una por una y ordenar los proveedores. Gemini y Groq tienen plan gratis; para OpenAI o Claude se usa una clave de API (las suscripciones personales no se pueden vincular). Si un proveedor falla, Mirai prueba con el siguiente." },
   "La lectura con foto no funciona": { a: "Revisa que tengas un proveedor de IA activo y la lectura de fotos encendida en Ajustes › Inteligencia artificial. Usa una foto nítida, con buena luz y el documento completo. Si no lee bien, escribe los datos a mano.", go: "ajustes", tab: "ia" },
   "¿Puedo usar Mirai en el celular?": { a: "Sí, y mejor si lo instalas: toca tu foto en el menú › <b>Instalar Mirai</b>. En iPhone, abre Mirai en Safari, toca <b>Compartir</b> y luego <b>Agregar a inicio</b>. Queda con su ícono, se abre a pantalla completa y te llegan los avisos. El menú se abre con <b>Menú</b> en la barra de abajo.", go: "ajustes", tab: "app" },
-  "¿Dónde se guardan mis datos?": { a: "En la nube de Mirai (Supabase), protegidos con permisos por hogar: solo tú y las personas que invites pueden verlos. Puedes descargar una copia o eliminar tu cuenta en <b>Ajustes › Datos y cuenta</b>.", go: "ajustes", tab: "respaldo" },
+  "¿Dónde se guardan mis datos?": { a: "En los servidores de Mirai (Hostinger, en Brasil; los archivos en Cloudflare), protegidos con permisos por hogar: solo tú y las personas que invites pueden verlos. Puedes descargar una copia o eliminar tu cuenta en <b>Ajustes › Datos y cuenta</b>.", go: "ajustes", tab: "respaldo" },
 }
 /** Preguntas nuevas de la v5 (van al final de su categoría). */
 const FAQ_V5: Faq[] = [

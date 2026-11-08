@@ -17,8 +17,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { assetCuadrar, assetDescuadrar } from "./commands"
 import { esCuentaDinero, type SaldoCuenta } from "@/lib/domain/cuentas"
 import { fmtDate } from "@/lib/format"
@@ -85,13 +84,8 @@ function Body({ onOpenChange, initialSide, edit }: { onOpenChange: (o: boolean) 
         const quiere = (mid: string) => dinero && auto && elegidos.has(mid)
         const cambios = methods.filter((m) => quiere(m.id) !== (m.asset_id === id))
         const medio = { nombre: nombre.trim(), icon: "wallet", sort: methods.length + 1, asset_id: id }
-        if (rowsViaApi("payment_methods")) {
-          await Promise.all(cambios.map((m) => apiUpdateRow(bookId, "payment_methods", m.id, { asset_id: quiere(m.id) ? id : null })))
-          if (dinero && auto && crearMedio && nombreLibre) await apiInsertRow(bookId, "payment_methods", medio)
-        } else {
-          await Promise.all(cambios.map((m) => createClient().from("payment_methods").update({ asset_id: quiere(m.id) ? id : null }).eq("id", m.id)))
-          if (dinero && auto && crearMedio && nombreLibre) await createClient().from("payment_methods").insert({ book_id: bookId, ...medio })
-        }
+        await Promise.all(cambios.map((m) => apiUpdateRow(bookId, "payment_methods", m.id, { asset_id: quiere(m.id) ? id : null })))
+        if (dinero && auto && crearMedio && nombreLibre) await apiInsertRow(bookId, "payment_methods", medio)
         for (const t of ["assets", "payment_methods"]) invalidateBook(qc, bookId, t)
       }
       const txtAuto = dinero && auto ? "Desde ahora el saldo sube y baja solo con tus gastos e ingresos." : undefined

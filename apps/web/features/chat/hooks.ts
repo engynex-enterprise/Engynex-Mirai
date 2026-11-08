@@ -15,8 +15,8 @@ export function useThreads(enabled = true) {
   const { user, book } = useApp()
   return useQuery({
     queryKey: [...THREADS_KEY, user.id, book.id], enabled,
-    // Interruptor `chat`: GET /v1/books/:b/chat/threads (./api.ts); apagado, la misma consulta de siempre.
-    queryFn: () => listThreads(book.id, user.id),
+    // GET /v1/books/:b/chat/threads (./api.ts).
+    queryFn: () => listThreads(book.id),
   })
 }
 
@@ -48,7 +48,7 @@ const fileName = (t: ChatThread, ext: string) => `mirai-${t.titulo.normalize("NF
 const download = (name: string, text: string, type: string) => {
   void saveFile(new Blob([text], { type }), name)
 }
-/** Mensajes para exportar (API con el interruptor `chat`; si no, la consulta de siempre: ./api.ts). */
+/** Mensajes para exportar (por la API: ./api.ts). */
 const threadMsgs = (id: string) => listMessages(id)
 
 /** Acciones del historial (menú ⋯, clic derecho y encabezado): fijar, renombrar, título, duplicar, archivar, exportar y borrar. */

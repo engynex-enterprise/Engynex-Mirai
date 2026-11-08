@@ -8,17 +8,14 @@ import { z } from "zod"
 import { toast } from "@/components/mirai/toast"
 import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { useQuery } from "@/lib/query"
-import { createClient } from "@/utils/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { LEGAL_VERSION } from "@/lib/legal/version"
 import { useCaptcha } from "./turnstile"
 import { GoogleButton } from "./google-button"
 import { PasswordMeter, passwordScore } from "./password-meter"
 import { AuthDone, AuthHeader, PasswordInput } from "./auth-ui"
-import { isMiraiAuth } from "@/lib/auth/provider"
 
 const FORM_ID = "registro"
 
@@ -47,31 +44,15 @@ export function RegisterForm() {
   useEffect(() => { if (ref && /^[A-Z0-9]{6,12}$/.test(ref)) document.cookie = `mirai_ref=${ref}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax` }, [ref])
   const { data: abierto } = useQuery({
     queryKey: ["registro-abierto"],
-    queryFn: async () => (isMiraiAuth() ? (await (await import("@/lib/auth/mirai")).authConfig()).registroAbierto : ((await createClient().rpc("registro_abierto")).data ?? true)),
+    queryFn: async () => (await (await import("@/lib/auth/mirai")).authConfig()).registroAbierto,
     staleTime: 60_000,
   })
 
-  /** AUTH_PROVIDER=mirai: Better Auth guarda nombre, aceptación legal (Ley 1581) y referido para handle_new_user(). */
-  async function onSubmitMirai(v: Values) {
+  /** Better Auth guarda nombre, aceptación legal (Ley 1581) y referido para handle_new_user(). */
+  async function onSubmit(v: Values) {
     const r = await (await import("@/lib/auth/mirai")).signUp({ nombre: v.nombre.trim(), email: v.email, password: v.password, ref, captcha: captcha.token })
     captcha.reset()
     if (!r.ok) return toast.error("No pudimos crear tu cuenta", { description: r.msg })
-    setSentTo(v.email)
-  }
-
-  async function onSubmit(v: Values) {
-    if (isMiraiAuth()) return onSubmitMirai(v)
-    const { error } = await createClient().auth.signUp({
-      email: v.email,
-      password: v.password,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback?next=/bienvenida`,
-        data: { nombre: v.nombre.trim(), acepta_version: LEGAL_VERSION, ...(ref ? { ref } : {}) },
-        captchaToken: captcha.token,
-      },
-    })
-    captcha.reset()
-    if (error) return toast.error("No pudimos crear tu cuenta", { description: error.message })
     setSentTo(v.email)
   }
 

@@ -1,5 +1,5 @@
-// Escrituras sueltas del libro (V7-H1): interruptor `book-tables[:tabla]`, PUT con el id del navegador sin las columnas
-// del sistema, papelera y "Deshacer", y los errores de la API como `{ error: { message } }` en español.
+// Escrituras sueltas del libro (V7-H1): PUT con el id del navegador sin las columnas del sistema, papelera y
+// "Deshacer", y los errores de la API como `{ error: { message } }` en español.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const upsert = vi.fn()
@@ -16,32 +16,13 @@ const BOOK = "11111111-1111-4111-8111-111111111111"
 const ROW = "22222222-2222-4222-8222-222222222222"
 const res = (status: number, body: unknown) => ({ status, body, headers: new Headers() })
 
-async function session(flags: Record<string, boolean>) {
-  const { setApiSession } = await import("./session")
-  setApiSession({ cfg: { url: "https://api.test", flags }, userId: "u", householdId: "h", bookId: BOOK })
-}
-
 beforeEach(() => {
   vi.stubGlobal("window", {})
-  vi.stubGlobal("document", { cookie: "" })
   for (const f of [upsert, remove, restore, list, snapshot]) f.mockReset()
 })
 afterEach(() => vi.unstubAllGlobals())
 
 describe("book-rows", () => {
-  it("rowsViaApi: apagado sin interruptor; encendido por módulo o por tabla; nunca para tablas fuera del CRUD genérico", async () => {
-    const { rowsViaApi } = await import("./book-rows")
-    await session({})
-    expect(rowsViaApi("expenses")).toBe(false)
-    await session({ "book-tables": true })
-    expect(rowsViaApi("expenses")).toBe(true)
-    expect(rowsViaApi("emergency_funds")).toBe(false)
-    expect(rowsViaApi("chat_threads")).toBe(false)
-    await session({ "book-tables": true, "book-tables:loans": false })
-    expect(rowsViaApi("loans")).toBe(false)
-    expect(rowsViaApi("loan_payments")).toBe(true)
-  })
-
   it("apiInsertRow: PUT con un id nuevo y sin book_id ni id en el cuerpo; devuelve la fila", async () => {
     upsert.mockResolvedValue(res(200, { id: "x", book_id: BOOK, nombre: "Viaje" }))
     const { apiInsertRow } = await import("./book-rows")
@@ -86,9 +67,7 @@ describe("book-rows", () => {
 
   it("apiFund: la fila del fondo por el snapshot (o null si no hay)", async () => {
     snapshot.mockResolvedValueOnce(res(200, { parts: { emergency_funds: [{ activo: true, saldo: 50000 }] } }))
-    const { apiFund, fundViaApi } = await import("./book-rows")
-    await session({ snapshot: true })
-    expect(fundViaApi()).toBe(true)
+    const { apiFund } = await import("./book-rows")
     expect(await apiFund(BOOK)).toEqual({ activo: true, saldo: 50000 })
     snapshot.mockResolvedValueOnce(res(200, { parts: { emergency_funds: [] } }))
     expect(await apiFund(BOOK)).toBeNull()

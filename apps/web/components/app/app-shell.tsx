@@ -47,7 +47,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const path = usePathname()
   const ctx = useApp()
   const me = useMemo(() => ({ id: ctx.user.id, nombre: ctx.user.nombre, avatar: ctx.user.avatar }), [ctx.user])
-  const { status, online } = useBookLive(ctx.book.id, me, path) // Supabase Realtime salvo NEXT_PUBLIC_LIVE_SOURCE=gateway
+  const { status, online } = useBookLive(ctx.book.id, me, path) // gateway de tiempo real de la API
   useIdlePrefetchBook(ctx.book.id)
   const setOnline = useShell((s) => s.setOnline)
   useEffect(() => { setOnline(online.map((o) => ({ id: o.id, nombre: o.nombre, avatar: o.avatar }))) }, [online, setOnline])

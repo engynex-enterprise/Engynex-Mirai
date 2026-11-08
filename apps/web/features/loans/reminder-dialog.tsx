@@ -17,8 +17,7 @@ import type { LoanEngine } from "@/lib/domain"
 import { fmtDate, fmtMoney } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { cobroTexto, normalizarCobros } from "@/lib/domain/cobros"
-import { createClient } from "@/utils/supabase/client"
-import { apiMyProfile, profileViaApi } from "./commands"
+import { apiMyProfile } from "./commands"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cobroWaStatus, sendCobroWhatsApp } from "@/features/notify/api"
 
@@ -71,7 +70,7 @@ export function ReminderDialog({ open, onOpenChange, engine, concepto, contact, 
   // Tus llaves y cuentas de Perfil › Recibe pagos (la principal por defecto) van al final del mensaje
   const { data: cobros = [] } = useQuery({
     queryKey: ["profile", user.id, "cobro"], enabled: open,
-    queryFn: async () => normalizarCobros(profileViaApi() ? (await apiMyProfile()).cobro : (await createClient().from("profiles").select("cobro").eq("id", user.id).single()).data?.cobro),
+    queryFn: async () => normalizarCobros((await apiMyProfile()).cobro),
   })
   const [pago, setPago] = useState<Pago>("principal")
   const bloque = cobros.length && pago !== "no" ? cobroTexto(user.nombre, cobros, cobros.length > 1 ? pago : "todas", "Me puedes pagar aquí:") : ""
