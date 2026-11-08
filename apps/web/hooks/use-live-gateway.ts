@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { createBurst, LiveGatewayClient } from "@mirai/contracts/realtime-client"
 import { useApp } from "@/components/app/app-context"
 import { invalidateBook, isLocalEcho } from "./use-book-data"
+import { playSound } from "@/lib/sound"
 
 export type PresenceUser = { id: string; nombre: string; avatar: string | null; path: string; at: string }
 export type LiveStatus = "conectando" | "en-vivo" | "sin-conexion"
@@ -63,7 +64,11 @@ export function useLiveGateway(bookId: string, me: Omit<PresenceUser, "at" | "pa
           if (ch.bookId !== bookId || isLocalEcho(ch.table, ch.id)) return
           burst.add(ch.table)
         }),
-        c.on("notification", () => void qc.invalidateQueries({ queryKey: ["notifications"] })),
+        c.on("notification", (n) => {
+          void qc.invalidateQueries({ queryKey: ["notifications"] })
+          // Aviso nuevo en la campana: suena (lib/sound.ts; marcar como leído no suena).
+          if (n.op === "INSERT") playSound("bell")
+        }),
         c.on("presence", (p) => {
           if (p.bookId === bookId) startTransition(() => setOnline(p.users))
         }),

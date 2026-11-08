@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useQuery } from "@/lib/query"
-import { ExternalLink, FlaskConical, Send } from "lucide-react"
+import { ExternalLink, FlaskConical, Send, Volume2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -26,6 +26,7 @@ import { currentPush, disablePush, enablePush, pushSupported } from "@/features/
 import { AVISOS, CANALES, defaultMatriz, onFor, type CanalKey, type Canales, type Matriz } from "@/lib/notify/rules"
 import { formatCoPhone, normalizeCoPhone } from "@/lib/notify/whatsapp"
 import { cn } from "@/lib/utils"
+import { playSound, setSoundEnabled, soundEnabled, subscribeSound } from "@/lib/sound"
 import { SettingRow, SettingSection, SettingSkeleton, SettingStack } from "../ui"
 import { useBookSettingsSave } from "../prefs"
 
@@ -207,6 +208,7 @@ export function AlertasTab() {
 
       <SettingSection icon="bell" title="En la aplicación">
         <SettingRow title="Avisos en la campana" desc="Los avisos aparecen en la campana de arriba."><Switch checked={can.app !== false} onCheckedChange={(v) => setCan("app", v)} aria-label="Avisos en la campana" /></SettingRow>
+        <SoundRow />
         <SettingRow title="Avisos emergentes al abrir" desc="Hasta 3 avisos urgentes cuando entras a Mirai."><Switch checked={can.popup !== false} disabled={can.app === false} onCheckedChange={(v) => setCan("popup", v)} aria-label="Avisos emergentes al abrir" /></SettingRow>
         <SettingRow title="Horario de silencio" desc="No mostramos emergentes ni enviamos push en este horario.">
           <div className="flex flex-wrap items-center gap-2">
@@ -278,5 +280,18 @@ export function AlertasTab() {
         <SettingRow title="Valor de referencia de un gasto hormiga" desc="Los gastos por debajo de este valor pueden contarse como hormiga."><div className="w-48"><MoneyAutosave value={+cfg.umbral} onSave={(v) => saveCfg.mutate({ umbral: v })} /></div></SettingRow>
       </SettingSection>
     </SettingStack>
+  )
+}
+
+/** Sonido de los avisos en este dispositivo (lib/sound.ts): toasts y notificaciones nuevas de la campana. */
+function SoundRow() {
+  const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true)
+  return (
+    <SettingRow title="Sonido de los avisos" desc="Suena un tono corto cuando aparece un aviso o llega una notificación. Se guarda en este dispositivo.">
+      <div className="flex flex-wrap items-center gap-2">
+        <Switch checked={on} onCheckedChange={(v) => { setSoundEnabled(v); if (v) playSound("bell", { force: true }) }} aria-label="Sonido de los avisos" />
+        <Button variant="ghost" size="sm" onClick={() => playSound("bell", { force: true })}><Volume2 /> Probar</Button>
+      </div>
+    </SettingRow>
   )
 }

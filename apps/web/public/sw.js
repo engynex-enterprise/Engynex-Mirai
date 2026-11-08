@@ -119,6 +119,7 @@ self.addEventListener("push", (event) => {
       ...(d.image ? { image: d.image } : {}),
       tag: d.tag || "mirai",
       renotify: !!d.renotify && !!d.tag,
+      silent: false, // con el sonido del sistema (en la app suena lib/sound.ts)
       requireInteraction: !!d.requireInteraction,
       timestamp: Date.now(),
       lang: "es-CO",
