@@ -8,11 +8,8 @@
 # MIRAI_CLOUD el flujo no hace nada (hoy la web sigue en Vercel).
 name: Desplegar
 
+# Desde 2026-11-07 producción está en el VPS (desplegar-vps.yml): este flujo de GCP/AWS/Azure queda solo a mano.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [pruebas, main]
   workflow_dispatch:
     inputs:
       ambiente:
