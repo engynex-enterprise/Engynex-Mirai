@@ -37,8 +37,6 @@
     "@opentelemetry/sdk-node": "0.300.0",
     "@react-pdf/renderer": "^4.9.0",
     "@sentry/nextjs": "^11.10.0",
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.118.0",
     "@tanstack/react-query": "^5.105.0",
     "@tanstack/react-query-devtools": "^5.105.0",
     "@tanstack/react-table": "^9.3.1",
@@ -83,6 +81,7 @@
     "@iconify-json/logos": "^1.2.18",
     "@mirai/config": "workspace:*",
     "@playwright/test": "^1.64.1",
+    "@supabase/supabase-js": "^2.118.0",
     "@tailwindcss/turbopack": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.20.5",
@@ -98,13 +97,12 @@
     "prettier-plugin-tailwindcss": "^0.8.1",
     "sharp": "^0.35.5",
     "simple-icons": "^16.36.0",
-    "supabase": "^2.122.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.5"
   },
-  "description": "Mirai web (Next.js 16 + shadcn + Supabase): front y, mientras llega apps/api, también su servidor.",
+  "description": "Mirai web (Next.js 16 + shadcn): el front; los datos y el auth van por la API (apps/api).",
   "engines": {
     "node": ">=20"
   }

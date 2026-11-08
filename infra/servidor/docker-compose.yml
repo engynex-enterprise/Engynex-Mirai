@@ -216,23 +216,13 @@ services:
         GIT_SHA: ${SOURCE_COMMIT:-coolify}
     depends_on:
       api: { condition: service_healthy }
+    # La web no guarda secretos: todo (auth, datos, IA, avisos, Google, cifrado) lo hace la API. Solo necesita saber
+    # dónde está la API (red interna) y su propio dominio.
     environment:
       MIRAI_ENV: produccion
       TZ: America/Bogota
-      AUTH_PROVIDER: mirai
       MIRAI_API_URL: http://api:8080
-      MIRAI_API_ROLLOUT: all
       NEXT_PUBLIC_SITE_URL: https://${MIRAI_DOMINIO:?}
-      # lib/env.ts todavía las exige (V7-R): puerto muerto, nada le habla a Supabase.
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sin-supabase-no-se-usa
-      SUPABASE_SECRET_KEY: sin-supabase-no-se-usa
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
-      CRON_SECRET: ${CRON_SECRET:?}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      AI_GEMINI_BASE_URL: ${AI_GEMINI_BASE_URL:-}
-      AI_GATEWAY_CF_TOKEN: ${AI_GATEWAY_CF_TOKEN:-}
 
   # ── Reloj: los mismos trabajos que Cloud Scheduler (infra/terraform/clouds/gcp/stack/jobs.tf) por HTTP a la API. ──
   cron:

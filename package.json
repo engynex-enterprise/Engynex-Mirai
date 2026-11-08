@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "node infra/local/e2e-local.mjs --auth=mirai --serve --dev --sin-supabase",
+    "dev": "node infra/local/e2e-local.mjs --serve --dev",
     "dev:web": "turbo run dev --filter=web",
     "build": "turbo run build",
     "start": "pnpm --filter web start",
@@ -21,7 +21,7 @@
     "db:migrate:prod": "turbo run db:migrate:prod --filter=@mirai/db",
     "db:types": "turbo run db:types --filter=@mirai/db",
     "ci": "turbo run lint typecheck test build",
-    "local:serve": "node infra/local/e2e-local.mjs --auth=mirai --serve",
+    "local:serve": "node infra/local/e2e-local.mjs --serve",
     "local:up": "node infra/local/stack.mjs up --supa",
     "local:down": "node infra/local/stack.mjs down",
     "local:reset": "node infra/local/stack.mjs reset --supa",

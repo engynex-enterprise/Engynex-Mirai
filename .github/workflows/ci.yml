@@ -5,20 +5,15 @@
 #   bootstrap/pruebas/produccion), terraform test con proveedores simulados, actionlint y bash -n de los scripts.
 # - Cuando este flujo termina en verde por un push a la rama de producción (v6), desplegar-vps.yml despliega en el VPS
 #   con Dokploy. deploy.yml (GCP/AWS/Azure) no hace nada mientras no exista MIRAI_CLOUD.
-# - E2E (Playwright): a mano con una URL (workflow_dispatch). En el computador: pnpm e2e:local --auth=mirai --sin-supabase.
-#   La base es compartida: las E2E usan solo el usuario QA (tests/e2e/qa.ts).
+# - E2E (Playwright): en el computador, contra el stack local en Docker (pnpm e2e:local; infra/local/README.md). Las
+#   pruebas preparan datos directo en la base local, así que no corren contra un despliegue.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [v6, main]
-  deployment_status:
   workflow_dispatch:
-    inputs:
-      base_url:
-        description: "URL del despliegue para las E2E (vacío = no correr E2E)"
-        required: false
 
 concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name }}
@@ -26,17 +21,12 @@ concurrency:
 
 jobs:
   verificar:
-    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       TZ: America/Bogota
-      # Valores públicos (los mismos de Vercel › Config). Los secretos del servidor no hacen falta para compilar:
-      # lib/env.ts solo exige que existan, así que en CI van marcadores.
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci.supabase.co' }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_ci_placeholder' }}
+      # La web compila sin secretos (solo NEXT_PUBLIC_*). Marcadores para las pruebas de la API y los paquetes.
       NEXT_PUBLIC_SITE_URL: https://mirai.engynex.com
-      SUPABASE_SECRET_KEY: ci-placeholder-no-real-secret
       ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtYmFzZTY0LXh4eA==
       CRON_SECRET: ci-placeholder-cron-secret
     steps:
@@ -56,7 +46,6 @@ jobs:
       - run: pnpm turbo run lint typecheck test build --cache-dir=.turbo/cache
 
   infra:
-    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -103,37 +92,3 @@ jobs:
           ./actionlint -color
       - name: Scripts de despliegue (bash -n)
         run: for f in infra/deploy/*/*.sh infra/cloudbuild/scripts/*.sh; do bash -n "$f"; done
-
-  e2e:
-    # Despliegue de Vercel listo en la rama pruebas (Preview) o corrida manual con una URL.
-    if: >-
-      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' && github.event.deployment.ref == 'pruebas') ||
-      (github.event_name == 'workflow_dispatch' && inputs.base_url != '')
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      TZ: America/Bogota
-      E2E_BASE_URL: ${{ inputs.base_url || github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      E2E_QA_EMAIL: ${{ secrets.E2E_QA_EMAIL }}
-      E2E_QA_PASSWORD: ${{ secrets.E2E_QA_PASSWORD }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.deployment.sha || github.sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter web exec playwright install --with-deps chromium
-      - run: pnpm --filter web exec playwright test
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: capturas-e2e
-          path: apps/web/tests/.out
-          retention-days: 7
