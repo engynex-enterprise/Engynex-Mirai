@@ -1,13 +1,11 @@
-// Archivos por la API (v7 V7-E, interruptor `files`): la web ya no sube a Supabase Storage. Flujo:
+// Archivos por la API. Flujo:
 //   POST /v1/files/uploads (la API revisa permiso, tamaño y tipo, y arma la ruta) → PUT directo al almacenamiento con
-//   la URL firmada y sus encabezados (GCS, S3, Azure o Supabase: la web no sabe cuál) → POST /v1/files/uploads/complete
+//   la URL firmada y sus encabezados (S3, R2, GCS…: la web no sabe cuál) → POST /v1/files/uploads/complete
 //   (la API revisa que el archivo exista, pese lo declarado y su contenido sea del tipo; si no, lo borra).
-// Con el interruptor apagado, cada pantalla sigue con su subida de siempre (ver `filesViaApi()`).
 // El núcleo es puro (recibe el cliente y fetch) para probarlo sin red: upload.test.ts.
 import type { FileBucket } from "@mirai/contracts/modules/files"
 import { BUCKET_RULES } from "@mirai/contracts/modules/files"
 import { ApiError } from "@/lib/api/errors"
-import { apiOn } from "@/lib/api/session"
 
 export type UploadInput = { bucket: FileBucket; body: Blob; name: string; type?: string; bookId?: string; folder?: string }
 export type Uploaded = { bucket: FileBucket; key: string; size: number; contentType: string | null; publicUrl: string | null }
@@ -58,9 +56,6 @@ export async function uploadWith(api: FilesApi, i: UploadInput, f: typeof fetch 
 export async function fileUrlWith(api: FilesApi, bucket: FileBucket, key: string, download = false): Promise<string> {
   return data<{ url: string }>(await api.url({ query: { bucket, key, ...(download ? { download: "1" as const } : {}) } })).url
 }
-
-/** ¿Los archivos van por la API ahora? (interruptor `files`; solo en el navegador). */
-export const filesViaApi = () => apiOn("files")
 
 const client = async (): Promise<FilesApi> => {
   const { browserApi } = await import("@/lib/api/client")

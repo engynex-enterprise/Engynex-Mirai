@@ -29,7 +29,7 @@ export function useNotifications() {
   const { user, book } = useApp()
   return useQuery({
     queryKey: ["notifications", user.id, book.id],
-    // v6: con el interruptor `bell` encendido va por la API (features/notify/bell.ts); apagado, la consulta de siempre.
+    // Campana por la API (features/notify/bell.ts).
     queryFn: () => bellList(user.id, book.id),
   })
 }
@@ -37,14 +37,13 @@ export function useNotifications() {
 export function NotificationsSheet() {
   const open = useShell((s) => s.bell)
   const setOpen = useShell((s) => s.setBell)
-  const { user } = useApp()
   const qc = useQueryClient()
   const { data, isPending } = useNotifications()
   const [ver, setVer] = useState<"todas" | "sin-leer">("todas")
   const unread = data?.filter((n) => !n.read_at).length ?? 0
   const list = ver === "sin-leer" ? data?.filter((n) => !n.read_at) : data
   const markAll = useMutation({
-    mutationFn: () => bellReadAll(user.id),
+    mutationFn: () => bellReadAll(),
     onSettled: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   })
   const markOne = (id: string) => bellReadOne(id).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))

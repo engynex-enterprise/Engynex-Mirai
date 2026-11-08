@@ -1,49 +1,45 @@
-// Chat por la API (v6 F2-H-5/H-6, interruptor `chat`): acciones sin streaming (sugerencias, confirmar/cancelar
-// propuestas, adjuntos, título, duplicar, detalles) y los hilos que el navegador leía y escribía directo en
-// chat_threads / chat_messages. Misma firma y misma forma que ./actions.ts y que las consultas de ./hooks.ts; con el
-// interruptor apagado es exactamente lo de siempre. El streaming está en ./store.ts (@/lib/api/chat).
-import { createClient } from "@/utils/supabase/client"
-import { readWithFallback } from "@/lib/api/book-tables"
+// Chat por la API: acciones sin streaming (sugerencias, confirmar/cancelar propuestas, adjuntos, título, duplicar,
+// detalles) y los hilos (listar, buscar, cambiar, calificar). El streaming está en ./store.ts (@/lib/api/chat).
 import { failure, isApiError } from "@/lib/api/errors"
-import { activeBookId, apiOn } from "@/lib/api/session"
-import { viaApiOr } from "@/lib/api/via"
-import { MSG_COLS, THREAD_COLS, toMsg, type ChatMsg, type ChatThread } from "@/lib/chat/types"
+import { activeBookId } from "@/lib/api/session"
+import type { ChatHints, ChatMsg, ChatThread, Propuesta } from "@/lib/chat/types"
+import type { AttachResult, ConfirmResult, ThreadInfo, TitleResult } from "@mirai/ai/server/chat-actions"
 import { fileRefOf } from "@/features/ai/api"
-import * as actions from "./actions"
 
-const on = () => apiOn("chat")
-/** viaApiOr con la forma de la respuesta fijada por la acción (la versión de la API tiene que devolver lo mismo). */
-const wrap = <A extends unknown[], R>(action: (...a: A) => Promise<R>, api: (...a: A) => Promise<NoInfer<R>>) => viaApiOr(on, action, api)
 const client = () => import("@/lib/api/client")
 const book = () => ({ bookId: activeBookId() })
 const thread = (threadId: string) => ({ bookId: activeBookId(), threadId })
 
-export const chatHints = wrap(actions.chatHints, async () => {
+/** Nombre, rol, banderas del libro y estado de la IA (créditos) para la pantalla del chat. */
+export async function chatHints(): Promise<ChatHints> {
   const { browserApi, unwrap } = await client()
   return unwrap(await browserApi().chat.hints({ params: book() }))
-})
+}
 
-export const chatConfirm = wrap(actions.chatConfirm, async (messageId, propId) => {
+/** Confirma una propuesta del chat: recién aquí se escribe en el libro. */
+export async function chatConfirm(messageId: string, propId: string): Promise<ConfirmResult> {
   try {
     const { browserApi, unwrapData } = await client()
     return { ok: true as const, ...unwrapData(await browserApi().chat.confirm({ params: { ...book(), messageId, propId } })) }
   } catch (e) {
     return failure(e)
   }
-})
+}
 
-export const chatCancel = wrap(actions.chatCancel, async (messageId, propId) => {
+/** Cancela una propuesta (no escribe nada en el libro). */
+export async function chatCancel(messageId: string, propId: string): Promise<{ ok: boolean; propuesta?: Propuesta }> {
   try {
     const { browserApi, unwrapData } = await client()
     return { ok: true, propuesta: unwrapData(await browserApi().chat.cancel({ params: { ...book(), messageId, propId } })).propuesta }
   } catch (e) {
-    // La acción respondía { ok:false } si la propuesta ya no estaba pendiente; los demás errores se lanzan como antes.
+    // Si la propuesta ya no estaba pendiente responde { ok:false }; los demás errores se lanzan.
     if (isApiError(e) && (e.code === "CONFLICT" || e.code === "NOT_FOUND")) return { ok: false }
     throw e
   }
-})
+}
 
-export const chatAttach = wrap(actions.chatAttach, async (fd) => {
+/** Adjunto del chat (foto o PDF de una factura, recibo, comprobante o extracto). */
+export async function chatAttach(fd: FormData): Promise<AttachResult> {
   try {
     const file = await fileRefOf(fd)
     if (!file) return { ok: false as const, msg: "Elige una foto o un PDF." }
@@ -54,77 +50,58 @@ export const chatAttach = wrap(actions.chatAttach, async (fd) => {
   } catch (e) {
     return failure(e)
   }
-})
+}
 
-export const chatTitle = wrap(actions.chatTitle, async (threadId) => {
+/** Título nuevo para una conversación: con IA si se puede; si no, con un algoritmo. */
+export async function chatTitle(threadId: string): Promise<TitleResult> {
   try {
     const { browserApi, unwrapData } = await client()
     return { ok: true as const, ...unwrapData(await browserApi().chat.title({ params: thread(threadId) })) }
   } catch (e) {
     return failure(e)
   }
-})
+}
 
-export const chatDuplicate = wrap(actions.chatDuplicate, async (threadId) => {
+/** Copia una conversación con todos sus mensajes ("… (copia)"). */
+export async function chatDuplicate(threadId: string): Promise<{ ok: true; id: string; titulo: string } | { ok: false; msg: string }> {
   try {
     const { browserApi, unwrapData } = await client()
     return { ok: true as const, ...unwrapData(await browserApi().chat.duplicate({ params: thread(threadId) })) }
   } catch (e) {
     return failure(e)
   }
-})
+}
 
-export const chatThreadInfo = wrap(actions.chatThreadInfo, async (threadId) => {
+/** Detalles de una conversación: mensajes, preguntas y créditos de IA que costó. */
+export async function chatThreadInfo(threadId: string): Promise<ThreadInfo> {
   const { browserApi, unwrap } = await client()
   return unwrap(await browserApi().chat.info({ params: thread(threadId) }))
-})
-
-// ── Hilos (antes supabase-js directo en ./hooks.ts) ──────────────────────────────────────────────────────────────
-
-async function threadsFromDb(bookId: string, userId: string): Promise<ChatThread[]> {
-  const { data, error } = await createClient().from("chat_threads").select(THREAD_COLS).eq("book_id", bookId).eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(200)
-  if (error) throw new Error(error.message)
-  return (data ?? []) as ChatThread[]
 }
 
-async function messagesFromDb(threadId: string): Promise<ChatMsg[]> {
-  const { data, error } = await createClient().from("chat_messages").select(MSG_COLS).eq("thread_id", threadId).is("deleted_at", null).order("created_at")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map(toMsg)
-}
+// ── Hilos ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Conversaciones propias del libro (también las archivadas), la más reciente primero. */
-export function listThreads(bookId: string, userId: string): Promise<ChatThread[]> {
-  if (!on()) return threadsFromDb(bookId, userId)
-  return readWithFallback(async () => {
-    const { browserApi, unwrap } = await client()
-    return unwrap(await browserApi().chat.threads({ params: { bookId }, query: { limit: 200 } })).items as ChatThread[]
-  }, () => threadsFromDb(bookId, userId))
+export async function listThreads(bookId: string): Promise<ChatThread[]> {
+  const { browserApi, unwrap } = await client()
+  return unwrap(await browserApi().chat.threads({ params: { bookId }, query: { limit: 200 } })).items as ChatThread[]
 }
 
-/** Mensajes de una conversación (vacío si ya no existe, como la consulta directa). */
-export function listMessages(threadId: string): Promise<ChatMsg[]> {
-  if (!on()) return messagesFromDb(threadId)
-  return readWithFallback(async () => {
-    const { browserApi, unwrap } = await client()
-    try {
-      return unwrap(await browserApi().chat.messages({ params: thread(threadId) })).items as ChatMsg[]
-    } catch (e) {
-      if (isApiError(e) && e.code === "NOT_FOUND") return []
-      throw e
-    }
-  }, () => messagesFromDb(threadId))
+/** Mensajes de una conversación (vacío si ya no existe). */
+export async function listMessages(threadId: string): Promise<ChatMsg[]> {
+  const { browserApi, unwrap } = await client()
+  try {
+    return unwrap(await browserApi().chat.messages({ params: thread(threadId) })).items as ChatMsg[]
+  } catch (e) {
+    if (isApiError(e) && e.code === "NOT_FOUND") return []
+    throw e
+  }
 }
 
 /**
- * Cambia varias conversaciones como el `update(...).in("id", ids)` de siempre: `titulo`, `fijado`, `archivado` o
- * `deleted_at` (fecha = borrar, null = deshacer). Devuelve el mensaje de error o null.
+ * Cambia varias conversaciones: `titulo`, `fijado`, `archivado` o `deleted_at` (fecha = borrar, null = deshacer).
+ * Devuelve el mensaje de error o null.
  */
 export async function updateThreads(ids: string[], v: Record<string, unknown>): Promise<string | null> {
-  if (!on()) {
-    const { error } = await createClient().from("chat_threads").update(v as never).in("id", ids)
-    return error ? error.message : null
-  }
   try {
     const { browserApi, unwrapData } = await client()
     const api = browserApi()
@@ -143,27 +120,16 @@ export async function updateThreads(ids: string[], v: Record<string, unknown>): 
   }
 }
 
-// ── V7-H3: buscar en las conversaciones y calificar una respuesta ──────────────────────────────────────────────
+// ── Buscar en las conversaciones y calificar una respuesta ──────────────────────────────────────────────────────
 
-/** Ids de conversaciones propias cuyo texto contiene `t` (hasta 80 mensajes), como el `ilike` de siempre. */
+/** Ids de conversaciones propias cuyo texto contiene `t`. */
 export async function searchThreads(bookId: string, t: string): Promise<Set<string>> {
-  const legacy = async () => {
-    const { data } = await createClient().from("chat_messages").select("thread_id").eq("book_id", bookId).is("deleted_at", null).ilike("content", `%${t.replace(/[%_]/g, "")}%`).limit(80)
-    return new Set((data ?? []).map((r) => r.thread_id))
-  }
-  if (!on()) return legacy()
-  return readWithFallback(async () => {
-    const { browserApi, unwrap } = await client()
-    return new Set(unwrap(await browserApi().chat.search({ params: { bookId }, query: { q: t.slice(0, 100) } })).threadIds)
-  }, legacy)
+  const { browserApi, unwrap } = await client()
+  return new Set(unwrap(await browserApi().chat.search({ params: { bookId }, query: { q: t.slice(0, 100) } })).threadIds)
 }
 
 /** 👍 (1), 👎 (-1) o quitar (null) la calificación de una respuesta. Devuelve el mensaje de error o null. */
 export async function rateMessage(messageId: string, feedback: 1 | -1 | null): Promise<string | null> {
-  if (!on()) {
-    const { error } = await createClient().from("chat_messages").update({ feedback }).eq("id", messageId)
-    return error ? error.message : null
-  }
   try {
     const { browserApi, unwrapData } = await client()
     unwrapData(await browserApi().chat.rateMessage({ params: { ...book(), messageId }, body: { feedback } }))

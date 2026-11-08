@@ -1,84 +1,94 @@
-// Avisos por la API (v6 F2-H-5, interruptor `notify`): /v1/books/:b/notifications/*, telegram/* y cobro-whatsapp.
-// Misma firma y misma forma que las Server Actions de ./actions.ts; con el interruptor apagado son exactamente esas.
-// logroNotifs va con el interruptor `gami` (POST /v1/books/:b/gami/logros, V7-H3).
-import type { Canal } from "@/lib/notify/digest"
+// Avisos por la API: /v1/books/:b/notifications/*, telegram/* y cobro-whatsapp. logroNotifs va por
+// POST /v1/books/:b/gami/logros. Los errores vuelven como { ok:false, msg } con el texto en español de la API.
+import type { Canal } from "@mirai/services/notify/digest"
 import { failure } from "@/lib/api/errors"
-import { activeBookId, apiOn } from "@/lib/api/session"
-import { viaApiOr } from "@/lib/api/via"
-import * as actions from "./actions"
+import { activeBookId } from "@/lib/api/session"
 
-const on = () => apiOn("notify")
 const api = async () => {
   const { browserApi, unwrap, unwrapData } = await import("@/lib/api/client")
   return { api: browserApi(), unwrap, unwrapData, params: { bookId: activeBookId() } }
 }
 
-export const sendDigestNow = viaApiOr(on, actions.sendDigestNow, async (canal) => {
+/** "Enviar resumen ahora" por un canal (también sirve de prueba si no hay avisos). */
+export async function sendDigestNow(canal: Canal): Promise<{ ok: boolean; msg: string }> {
   try {
     const { api: a, unwrapData, params } = await api()
     return { ok: true, msg: unwrapData(await a.notify.digestNow({ params, body: { canal } })).msg }
   } catch (e) { return failure(e) }
-})
+}
 
-export const notifyChannels = viaApiOr(on, actions.notifyChannels, async (): Promise<Record<Canal, boolean>> => {
+/** Canales que Mirai ofrece a este hogar (los activa el administrador en la consola). */
+export async function notifyChannels(): Promise<Record<Canal, boolean>> {
   try {
     const { api: a, unwrap, params } = await api()
     return unwrap(await a.notify.channels({ params }))
   } catch { return { email: false, telegram: false, whatsapp: false, push: false } }
-})
+}
 
-export const sendTestNow = viaApiOr(on, actions.sendTestNow, async (canal) => {
+/** "Enviarme una prueba" por un canal: un mensaje corto, sin el resumen. */
+export async function sendTestNow(canal: Canal): Promise<{ ok: boolean; msg: string }> {
   try {
     const { api: a, unwrapData, params } = await api()
     return { ok: true, msg: unwrapData(await a.notify.test({ params, body: { canal } })).msg }
   } catch (e) { return failure(e) }
-})
+}
 
-export const telegramStartLink = viaApiOr(on, actions.telegramStartLink, async () => {
+/** Telegram: genera un código y el enlace t.me/<bot>?start=<código>. */
+export async function telegramStartLink(): Promise<{ ok: boolean; url?: string; msg?: string }> {
   try {
     const { api: a, unwrapData, params } = await api()
     return { ok: true, url: unwrapData(await a.notify.telegramLink({ params })).url }
   } catch (e) { return failure(e) }
-})
+}
 
-export const telegramConfirm = viaApiOr(on, actions.telegramConfirm, async () => {
+/** Telegram: busca el mensaje "/start <código>" en el bot y guarda el chat. */
+export async function telegramConfirm(): Promise<{ ok: boolean; msg: string }> {
   try {
     const { api: a, unwrapData, params } = await api()
     return { ok: true, msg: unwrapData(await a.notify.telegramConfirm({ params })).msg }
   } catch (e) { return failure(e) }
-})
+}
 
-export const telegramUnlink = viaApiOr(on, actions.telegramUnlink, async () => {
+export async function telegramUnlink(): Promise<void> {
   const { api: a, unwrapData, params } = await api()
   unwrapData(await a.notify.telegramUnlink({ params }))
-})
+}
 
-export const openAppNotifs = viaApiOr(on, actions.openAppNotifs, async () => {
+/** Al abrir la app: actualiza la campana y devuelve hasta 3 avisos urgentes para mostrar. */
+export async function openAppNotifs(): Promise<{ id: string; t: string; b: string; go: string; lvl: string }[]> {
   try {
     const { api: a, unwrap, params } = await api()
     return unwrap(await a.notify.open({ params }))
   } catch { return [] }
-})
+}
 
-/** V7-H3: insignias y nivel → campana por POST /v1/books/:b/gami/logros (interruptor `gami`). Como la acción, nunca lanza. */
-export const logroNotifs = viaApiOr(() => apiOn("gami"), actions.logroNotifs, async (input) => {
+export type LogroInput = {
+  bookId: string
+  badges: { id: string; n: string; d: string }[]
+  nivel: { n: number; name: string } | null
+}
+
+/** Insignias nuevas y subida de nivel → campana (POST /v1/books/:b/gami/logros). Nunca lanza. */
+export async function logroNotifs(input: LogroInput): Promise<{ ok: boolean }> {
   try {
     const { api: a, unwrapData } = await api()
     unwrapData(await a.gami.logros({ params: { bookId: input.bookId }, body: { badges: input.badges, nivel: input.nivel } }))
     return { ok: true }
   } catch { return { ok: false } }
-})
+}
 
-export const cobroWaStatus = viaApiOr(on, actions.cobroWaStatus, async () => {
+/** ¿Se puede enviar el recordatorio de cobro desde el número de Mirai? */
+export async function cobroWaStatus(): Promise<{ disponible: boolean; verificado: boolean; motivo?: string }> {
   try {
     const { api: a, unwrap, params } = await api()
     return unwrap(await a.notify.cobroWaStatus({ params }))
   } catch { return { disponible: false, verificado: false } }
-})
+}
 
-export const sendCobroWhatsApp = viaApiOr(on, actions.sendCobroWhatsApp, async (input) => {
+/** Envía a quien te debe el recordatorio de su cuota desde el número de Mirai (requiere su consentimiento). */
+export async function sendCobroWhatsApp(input: { loanId: string; consentimiento: true }): Promise<{ ok: boolean; msg: string }> {
   try {
     const { api: a, unwrapData, params } = await api()
     return { ok: true, msg: unwrapData(await a.notify.cobroWaSend({ params, body: input })).msg }
   } catch (e) { return failure(e) }
-})
+}
