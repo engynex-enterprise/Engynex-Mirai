@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 import { LEGAL_VERSION } from "../../lib/legal/version"
 
-/** Usuario de pruebas (se crea confirmado con la clave secreta; no envía correos). */
+/** Usuario de pruebas (se registra por la API y queda con el correo verificado; no envía correos). */
 try { process.loadEnvFile?.(".env.local") } catch { /* en CI las variables vienen del entorno */ }
 export const QA = {
   email: process.env.E2E_QA_EMAIL ?? "qa.e2e@mirai.test",
@@ -9,19 +9,17 @@ export const QA = {
   nombre: "Ana Prueba",
 }
 
-// v7 (V7-H4): E2E_AUTH=mirai (pnpm e2e:local --auth=mirai) = auth propio (Better Auth en la API) sobre la Postgres
-// DESTINO local (sin Supabase). Las pruebas siguen usando `admin()` igual: las tablas van al PostgREST de la base
-// destino con la llave service_role local, y `auth.admin.*` se arma con Better Auth (registro por la API) + SQL directo
-// a la base local. Solo funciona contra Docker local (E2E_DB_URL / E2E_POSTGREST_URL apuntan a localhost).
-export const MIRAI_AUTH = process.env.E2E_AUTH === "mirai"
-
-const supabaseAdmin = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } })
-type Sb = ReturnType<typeof supabaseAdmin>
+// Auth propio (Better Auth en la API) sobre la Postgres local de Docker (pnpm e2e:local). `admin()` usa supabase-js
+// solo como cliente de PostgREST: las tablas van al PostgREST de la base local con la llave service_role local, y
+// `auth.admin.*` se arma con Better Auth (registro por la API) + SQL directo a la base local. Solo funciona contra
+// Docker local (E2E_DB_URL / E2E_POSTGREST_URL apuntan a localhost).
+const restClient = (url: string, key: string, init: Parameters<typeof createClient>[2]) => createClient(url, key, init)
+type Sb = ReturnType<typeof restClient>
 type PgRow = Record<string, unknown>
 
 async function pg<T extends PgRow = PgRow>(sql: string, params: unknown[] = []): Promise<T[]> {
   const url = process.env.E2E_DB_URL
-  if (!url || !/localhost|127\.0\.0\.1/.test(url)) throw new Error("E2E_AUTH=mirai necesita E2E_DB_URL de la base local")
+  if (!url || !/localhost|127\.0\.0\.1/.test(url)) throw new Error("Las pruebas necesitan E2E_DB_URL de la base local (pnpm e2e:local)")
   const { default: PG } = await import("pg")
   const c = new PG.Client({ connectionString: url })
   await c.connect()
@@ -34,7 +32,7 @@ async function pg<T extends PgRow = PgRow>(sql: string, params: unknown[] = []):
 
 /** Quita los límites de intentos del auth propio (las pruebas entran muchas veces seguidas desde la misma IP). */
 export async function clearAuthLimits() {
-  if (MIRAI_AUTH) await pg("delete from auth.rate_limits")
+  await pg("delete from auth.rate_limits")
 }
 
 /** Crea la cuenta como lo haría una persona (POST /api/auth/sign-up/email) y la deja con el correo verificado. */
@@ -77,13 +75,12 @@ const miraiAuthAdmin = {
 let miraiAdmin: Sb | null = null
 
 export function admin(): Sb {
-  if (!MIRAI_AUTH) return supabaseAdmin()
   if (miraiAdmin) return miraiAdmin
   // PostgREST de la base destino (sin /rest/v1): supabase-js arma <url>/rest/v1/…, el fetch lo quita.
   const rest = (process.env.E2E_POSTGREST_URL ?? "http://localhost:55430").replace(/\/+$/, "")
-  if (!/localhost|127\.0\.0\.1/.test(rest)) throw new Error("E2E_AUTH=mirai necesita E2E_POSTGREST_URL local")
+  if (!/localhost|127\.0\.0\.1/.test(rest)) throw new Error("Las pruebas necesitan E2E_POSTGREST_URL local (pnpm e2e:local)")
   const key = process.env.E2E_SERVICE_KEY ?? ""
-  const sb = createClient(rest, key, {
+  const sb = restClient(rest, key, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(String(input instanceof Request ? input.url : input).replace(`${rest}/rest/v1`, rest), init) },
   })
@@ -94,27 +91,6 @@ export function admin(): Sb {
 
 /** Borra y recrea el usuario de QA (con sus hogares) para empezar limpio. */
 export async function resetQaUser() {
-  if (MIRAI_AUTH) return resetQaUserMirai()
-  const sb = admin()
-  const { data } = await sb.auth.admin.listUsers({ perPage: 1000 })
-  const old = data.users.find((u) => u.email === QA.email)
-  if (old) {
-    const { data: hh } = await sb.from("household_members").select("household_id").eq("user_id", old.id)
-    if (hh?.length) await sb.from("households").delete().in("id", hh.map((h) => h.household_id))
-    await sb.auth.admin.deleteUser(old.id)
-  }
-  const { error } = await sb.auth.admin.createUser({
-    email: QA.email, password: QA.password, email_confirm: true,
-    user_metadata: { nombre: QA.nombre, acepta_version: LEGAL_VERSION },
-  })
-  if (error) throw error
-  // Restos de corridas anteriores: hogares de prueba que quedaron sin integrantes.
-  const { data: orphans } = await sb.from("households").select("id,household_members(user_id)").eq("nombre", "Familia Prueba")
-  const ids = (orphans ?? []).filter((h) => !(h.household_members as unknown[]).length).map((h) => h.id)
-  if (ids.length) await sb.from("households").delete().in("id", ids)
-}
-
-async function resetQaUserMirai() {
   const [old] = await pg<{ id: string }>("select id::text from auth.users where lower(email) = lower($1)", [QA.email])
   if (old) {
     await pg("delete from public.households where id in (select household_id from public.household_members where user_id = $1)", [old.id])
@@ -124,11 +100,8 @@ async function resetQaUserMirai() {
   await pg("delete from public.households h where h.nombre = 'Familia Prueba' and not exists (select 1 from public.household_members m where m.household_id = h.id)")
 }
 
-const qaId = async (): Promise<string | undefined> => {
-  if (MIRAI_AUTH) return (await pg<{ id: string }>("select id::text from auth.users where lower(email) = lower($1)", [QA.email]))[0]?.id
-  const { data } = await admin().auth.admin.listUsers({ perPage: 1000 })
-  return data.users.find((u) => u.email === QA.email)?.id
-}
+const qaId = async (): Promise<string | undefined> =>
+  (await pg<{ id: string }>("select id::text from auth.users where lower(email) = lower($1)", [QA.email]))[0]?.id
 
 /** Marca la bienvenida como vista para QA (las pruebas no la ven, salvo la suya). */
 export async function setQaWelcome(seen: boolean) {
