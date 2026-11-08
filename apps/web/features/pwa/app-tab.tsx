@@ -11,6 +11,7 @@ import { PWA_SHORTCUTS } from "@/lib/pwa/config"
 import { useInstall } from "./install"
 import { usePwa } from "./store"
 import { clearAppCaches, swEnabled } from "./sw-client"
+import { OfflineSection } from "./offline-section"
 
 const noop = () => () => {}
 const PLAT: Record<string, string> = {
@@ -54,6 +55,8 @@ export function AppTab() {
           <span className="text-sm text-muted-foreground">{badge ? "Disponible" : "No disponible aquí"}</span>
         </SettingRow>
       </SettingSection>
+
+      <OfflineSection />
 
       <SettingSection icon="zap" title="Accesos directos" desc={ios ? "En iPhone no hay accesos directos en el ícono: usa el botón + de abajo o la tecla N en un teclado." : "Mantén presionado el ícono de Mirai (en el computador, clic derecho) para ir directo a:"}>
         <ul className="grid gap-2 sm:grid-cols-2">

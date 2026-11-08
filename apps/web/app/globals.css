@@ -429,3 +429,63 @@ html.standalone.ios.dark .pwa-statusbar { background: #141418; }
 @keyframes mirai-page-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
 html.rm::view-transition-group(*), html.rm::view-transition-old(*), html.rm::view-transition-new(*) { animation: none !important; }
+
+/* ───────────── Apariencia nativa por plataforma (lib/pwa/platform.ts marca <html>: ios, android, mac, windows, touch) ─────────────
+   Celular: barra superior (components/app/mobile-topbar.tsx) y barra inferior (mobile-tabbar.tsx) con el estilo de cada
+   sistema; tablet: menú en íconos (features/pwa/native.tsx); escritorio instalado: cursor de app. */
+
+/* Barra superior del celular: en iPhone el título aparece centrado al desplazarte (título grande de iOS) y "Atrás" lleva
+   texto; en Android el título va a la izquierda, siempre visible y más grande (Material 3), y Atrás es solo la flecha. */
+.mobile-topbar { top: 0; }
+html.standalone .mobile-topbar { top: env(safe-area-inset-top); }
+.topbar-title { opacity: 0; transform: translateY(6px); transition: opacity .2s ease, transform .2s ease; text-align: center; font-size: 17px; letter-spacing: -.01em; }
+.mobile-topbar[data-scrolled] .topbar-title { opacity: 1; transform: none; }
+.topbar-back-label { display: none; }
+html.ios .topbar-back-label { display: inline; }
+html.android .topbar-title { opacity: 1; transform: none; text-align: left; font-size: 20px; font-weight: 500; padding-left: .25rem; }
+html.android .mobile-topbar[data-scrolled] { box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+@media (max-width: 767px) {
+  /* Lo pegajoso dentro de la página queda debajo de la barra superior. */
+  main .sticky.top-0, html.standalone main .sticky.top-0 { top: calc(env(safe-area-inset-top) + 3.25rem); }
+}
+
+/* Barra inferior: iPhone (tinte de marca, sin rayita, etiqueta pequeña, línea fina arriba) y Android (píldora detrás del
+   ícono, Material 3). */
+html.ios .tabbar { box-shadow: 0 -.5px 0 var(--border); }
+html:is(.ios, .android) .tabbar-item::after { display: none; }
+html.ios .tabbar-item { font-size: 10px; font-weight: 500; }
+html.android .tabbar-item { font-size: 12px; font-weight: 500; gap: .25rem; }
+html.android .tabbar-icon { width: 4rem; height: 2rem; border-radius: 9999px; transition: background-color .2s; }
+html.android .tabbar-item[data-active] .tabbar-icon { background: var(--brand-soft); }
+html.android .tabbar-item[data-active] { color: var(--foreground); }
+.tabbar-item[data-active]:not(:is(html.ios, html.android) *)::after { content: ""; position: absolute; inset: 0 1rem auto; height: 3px; border-radius: 9999px; background: var(--brand); }
+
+/* Teclado en pantalla abierto: fuera la barra inferior y el globo del chat (no tapan el campo). */
+html.kbd .tabbar, html.kbd .chat-fab { display: none; }
+html.kbd main#main { padding-bottom: 1.5rem; }
+
+/* Franja "Sin conexión" (features/pwa/offline-sync.tsx). */
+.offline-bar { top: calc(env(safe-area-inset-top) + .75rem); }
+@media (max-width: 767px) { .offline-bar { top: calc(env(safe-area-inset-top) + 3.6rem); } }
+@media (display-mode: window-controls-overlay) { .offline-bar { top: calc(env(titlebar-area-height, 2.25rem) + .75rem); } }
+
+/* iPhone/iPad: sin el menú al mantener presionado y sin el zoom al tocar un campo (la letra del campo ya es de 16 px). */
+html.ios :where(input, select, textarea) { font-size: max(16px, 1em); }
+html.touch :where(button, [role="button"], [role="tab"], nav, [data-slot="sidebar"]) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* Escritorio instalado: como una app (flecha en vez de manito en los botones, sin seleccionar la interfaz). */
+html.standalone:not(.touch) :where(button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], label) { cursor: default; }
+
+/* Barras de desplazamiento finas como las del sistema en escritorio; ocultas en pantallas táctiles. */
+html:not(.touch) * { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent; }
+html.touch * { scrollbar-width: none; }
+html.touch *::-webkit-scrollbar { display: none; }
+
+/* Pantallas plegables y tablets en horizontal: el contenido no se estira de más. */
+@media (min-width: 1600px) { main#main { max-width: 1480px; } }
+
+/* La barra superior del celular es fija: al saltar a un elemento (enlaces #, foco, desplazarse hasta él) queda debajo
+   de la barra y no tapado. Mientras está transparente deja pasar los toques al contenido (solo sus botones responden). */
+@media (max-width: 767px) { html { scroll-padding-top: calc(env(safe-area-inset-top) + 3.75rem); } }
+.mobile-topbar:not([data-scrolled]) { pointer-events: none; }
+.mobile-topbar:not([data-scrolled]) :is(button, a) { pointer-events: auto; }

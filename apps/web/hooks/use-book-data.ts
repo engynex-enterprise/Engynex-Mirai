@@ -3,13 +3,18 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useQuery } from "@/lib/query"
 import { toast } from "@/components/mirai/toast"
-import { useBookId } from "@/components/app/app-context"
+import { useApp, useBookId } from "@/components/app/app-context"
 import { qk, type BookTable, type Insert, type Row, type Update } from "@/lib/supabase/tables"
 import { BOOK_PART_NAMES, partsForTable } from "@/lib/book-data"
 import { bookPartKey } from "@/features/book/use-book-data"
 import type { QueryClient } from "@tanstack/react-query"
 import { apiList, apiSetDeleted, apiUpsert } from "@/lib/api/book-tables"
 import { apiRetry } from "@/lib/api/query"
+import { isNetworkError, isOffline, queueSetDeleted, queueUpsert } from "@/lib/offline/outbox"
+
+/** Aviso único de "guardado en este dispositivo" mientras no hay conexión (no uno por cada cambio). */
+const avisarCola = () => toast("Guardado en este dispositivo", { id: "mirai-cola", description: "No hay conexión. Lo enviamos solo cuando vuelva el internet." })
+const etiqueta = (v: Record<string, unknown>) => String(v.descripcion ?? v.nombre ?? v.concepto ?? v.titulo ?? "").slice(0, 60) || undefined
 
 /**
  * Consultas derivadas (leen varias tablas) y de qué tablas dependen. Antes cualquier cambio del libro las
@@ -118,16 +123,22 @@ const ACTION_TABLES = new Set<string>(["expenses", "incomes", "extra_incomes", "
 
 export function useSave<T extends BookTable>(table: T, messages?: { created?: string; updated?: string }) {
   const bookId = useBookId()
+  const userId = useApp().user.id
   const qc = useQueryClient()
   return useMutation({
+    // "always": corre también sin conexión; en ese caso el cambio queda en la cola local (lib/offline/outbox.ts).
+    networkMode: "always",
     mutationFn: async (values: Insert<T> | (Update<T> & { id: string })) => {
       const isNew = !(values as { id?: string }).id
       const id = idOf(values)
       markLocalWrite(table, id)
+      const v = values as Record<string, unknown>
+      const enCola = async () => { await queueUpsert(userId, bookId, table, id, v, etiqueta(v)); avisarCola(); return { ...v, id, book_id: bookId } as unknown as Row<T> }
       try {
         // PUT /t/:tabla/:id crea (con el id del navegador) o edita solo los campos que llegan: repetirlo da lo mismo.
         if (!isNew) await waitSaved(id)
-        return (await apiUpsert(bookId, table, id, values as Record<string, unknown>)) as unknown as Row<T>
+        if (isOffline()) return await enCola()
+        try { return (await apiUpsert(bookId, table, id, v)) as unknown as Row<T> } catch (e) { if (isNetworkError(e)) return await enCola(); throw e }
       } finally {
         markLocalWrite(table, id) // el eco de Realtime llega justo después de la respuesta
         if (isNew) { settle.get(id)?.(); settle.delete(id); inflight.delete(id) }
@@ -166,14 +177,20 @@ export function useSave<T extends BookTable>(table: T, messages?: { created?: st
 /** `also`: tablas que un trigger cambia al borrar (p. ej. el abono devuelve el valor de la meta) y deben refrescarse. */
 export function useSoftDelete<T extends BookTable>(table: T, label = "Registro eliminado", opts: { also?: BookTable[] } = {}) {
   const bookId = useBookId()
+  const userId = useApp().user.id
   const qc = useQueryClient()
   const setDeleted = async (id: string, value: string | null) => {
     await waitSaved(id) // si el registro se acaba de crear, primero termina de guardarse
     markLocalWrite(table, id)
-    // DELETE /t/:tabla/:id (papelera) o POST …/restore ("Deshacer").
-    try { await apiSetDeleted(bookId, table, id, value) } finally { markLocalWrite(table, id) }
+    const enCola = async () => { await queueSetDeleted(userId, bookId, table, id, !!value); avisarCola() }
+    // DELETE /t/:tabla/:id (papelera) o POST …/restore ("Deshacer"). Sin conexión, a la cola local.
+    try {
+      if (isOffline()) return await enCola()
+      try { await apiSetDeleted(bookId, table, id, value) } catch (e) { if (isNetworkError(e)) return await enCola(); throw e }
+    } finally { markLocalWrite(table, id) }
   }
   return useMutation({
+    networkMode: "always",
     mutationFn: async (row: { id: string; nombre?: string; descripcion?: string; concepto?: string }) => setDeleted(row.id, new Date().toISOString()),
     onMutate: async (row) => {
       await qc.cancelQueries({ queryKey: qk(bookId, table) })

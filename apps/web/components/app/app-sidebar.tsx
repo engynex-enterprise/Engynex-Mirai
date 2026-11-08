@@ -92,7 +92,7 @@ export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; ba
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton data-tour="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-10 justify-center rounded-md bg-primary font-semibold text-primary-foreground shadow-[0_2px_6px_rgba(42,127,20,.3)] hover:bg-primary-hover hover:text-primary-foreground active:bg-primary-hover active:text-primary-foreground group-data-[collapsible=icon]:rounded-full">
-              <CirclePlus /> <span className="flex-none">Agregar</span> <Kbd className="ml-auto bg-white/20 text-inherit group-data-[collapsible=icon]:hidden">N</Kbd>
+              <CirclePlus /> <span className="flex-none group-data-[collapsible=icon]:hidden">Agregar</span> <Kbd className="ml-auto bg-white/20 text-inherit group-data-[collapsible=icon]:hidden">N</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -332,7 +332,13 @@ function UserMenu() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              onSelect={async () => {
+              onSelect={async (e) => {
+                // Cambios hechos sin conexión que aún no salen: se intentan enviar y, si siguen ahí, se pregunta.
+                const { flushOutbox, refreshPending, useOffline } = await import("@/lib/offline/outbox")
+                await flushOutbox(user.id).catch(() => null)
+                await refreshPending()
+                const n = useOffline.getState().pending
+                if (n && !window.confirm(`Tienes ${n} ${n === 1 ? "cambio" : "cambios"} sin enviar (los hiciste sin conexión). Si sales ahora se pierden. ¿Salir de todos modos?`)) { e.preventDefault(); return }
                 await (await import("@/lib/auth/mirai")).signOut()
                 router.replace("/login")
                 router.refresh()

@@ -205,7 +205,7 @@ export function HomeView() {
           </Card>
 
           {/* Historias */}
-          <div className="no-scrollbar -mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+          <div className="no-scrollbar -mx-3 flex snap-x gap-2.5 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
             <Story href={`/balance?tab=${d.which}`} bg={d.q.disp >= 0 ? "bg-[linear-gradient(160deg,#9EDB4E,#2A7F14_60%,#13778F)]" : "bg-[linear-gradient(160deg,#FF8A9B,#D0243F)]"} iso="balance" label="Te queda esta quincena" value={<Money value={d.q.disp} />} sub={`Entra ${fmtShort(d.q.E)} · sale ${fmtShort(d.q.Sa)}`} />
             <Story href="/balance" bg="bg-[linear-gradient(160deg,#5AA9FF,#1B5FA8_60%,#1F2B4B)]" iso="inicio" label="Lo que tienes menos lo que debes" value={<Money value={d.T.pat} />} sub="Patrimonio neto" />
             <StoryAd />

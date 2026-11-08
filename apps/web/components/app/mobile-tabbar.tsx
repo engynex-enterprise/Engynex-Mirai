@@ -16,13 +16,19 @@ export function MobileTabBar() {
   const setAdd = useShell((s) => s.setAdd)
   // Gastos también queda activa en /fijos (es una pestaña de Gastos).
   const here = `/${navIdOf(path.split("/")[1] || "inicio")}`
-  const tab = (href: string, label: string, icon: React.ReactNode) => (
-    <Link href={href} className={cn("relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none", here.startsWith(href) ? "text-brand after:absolute after:inset-x-4 after:top-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-muted-foreground")} aria-current={here.startsWith(href) ? "page" : undefined}>
-      {icon}{label}
-    </Link>
-  )
+  // Estilo de cada sistema (app/globals.css › Barra inferior): iPhone con el color de la marca y sin rayita; Android con
+  // la píldora detrás del ícono (Material 3); en el navegador, la rayita arriba.
+  const tab = (href: string, label: string, icon: React.ReactNode) => {
+    const on = here.startsWith(href)
+    return (
+      <Link href={href} onClick={() => { if (!on) haptic("light") }} data-active={on || undefined}
+        className={cn("tabbar-item relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none", on ? "text-brand" : "text-muted-foreground")} aria-current={on ? "page" : undefined}>
+        <span className="tabbar-icon grid place-items-center">{icon}</span>{label}
+      </Link>
+    )
+  }
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 bg-glass shadow-[0_-1px_3px_rgba(0,0,0,.08)] backdrop-blur-xl md:hidden" aria-label="Navegación principal">
+    <nav className="tabbar pb-safe fixed inset-x-0 bottom-0 z-40 bg-glass shadow-[0_-1px_3px_rgba(0,0,0,.08)] backdrop-blur-xl md:hidden" aria-label="Navegación principal">
       <div className="mx-auto flex max-w-lg items-end">
         {tab("/inicio", "Inicio", <House className="size-5" />)}
         {tab("/gastos", "Gastos", <Receipt className="size-5" />)}
@@ -31,8 +37,8 @@ export function MobileTabBar() {
           Agregar
         </button>
         {tab("/recordatorios", "Pagos", <Bell className="size-5" />)}
-        <button type="button" onClick={() => setOpenMobile(true)} className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" aria-haspopup="dialog">
-          <Menu className="size-5" aria-hidden />Menú
+        <button type="button" onClick={() => { haptic("light"); setOpenMobile(true) }} className="tabbar-item flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" aria-haspopup="dialog">
+          <span className="tabbar-icon grid place-items-center"><Menu className="size-5" aria-hidden /></span>Menú
         </button>
       </div>
     </nav>

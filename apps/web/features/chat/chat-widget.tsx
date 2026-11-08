@@ -42,7 +42,7 @@ function Fab({ onClick }: { onClick: () => void }) {
   return (
     <button ref={ref} type="button" aria-label={unread ? "Pregúntale a Mirai (tienes una respuesta lista)" : "Pregúntale a Mirai"}
       className={cn(
-        "group fixed z-40 grid size-[52px] touch-none place-items-center rounded-full bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#24561A)] shadow-[0_10px_28px_rgba(31,43,75,.38),0_2px_6px_rgba(0,0,0,.12)] ring-4 ring-background transition-all duration-300 hover:-translate-y-0.5 hover:scale-105 md:size-[60px]",
+        "chat-fab group fixed z-40 grid size-[52px] touch-none place-items-center rounded-full bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#24561A)] shadow-[0_10px_28px_rgba(31,43,75,.38),0_2px_6px_rgba(0,0,0,.12)] ring-4 ring-background transition-all duration-300 hover:-translate-y-0.5 hover:scale-105 md:size-[60px]",
         !pos && "right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:right-6 md:bottom-6", away && "pointer-events-none translate-y-4 scale-75 opacity-0", (unread || busy) && "chat-halo",
       )}
       style={pos ? { left: pos.x, top: pos.y } : undefined}

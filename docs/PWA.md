@@ -59,12 +59,20 @@ y aguantan que Android los recorte en círculo. Cada vista abre el formulario co
 | Guardar PDF/Excel/CSV | Abre la hoja Compartir (Guardar en Archivos, WhatsApp…) en vez de descargar (una descarga en iOS instalado deja a la persona sin botón para volver) | Hoja Compartir en la app instalada; descarga en el navegador | Descarga normal | Descarga normal |
 | Transición entre secciones | Safari 18+ | Chrome 111+ | Chrome/Edge 111+ | Safari 18+ |
 
-## Service worker y privacidad
+## Service worker, sin conexión y privacidad
 
-- **Nunca** se guardan páginas, respuestas RSC (`RSC: 1`, `?_rsc`), `/api`, `/auth` ni nada de Supabase (otro dominio):
-  traen datos de cada persona. Solo se guardan archivos públicos con huella (`/_next/static`), `/pwa`, `/brand` y la
-  página offline.
-- Navegación: siempre a la red (con *navigation preload*); sin conexión, `offline.html`.
+- **Sin conexión (desde 2026-11-08, a pedido del dueño):** las páginas de la app que la persona abre, y las principales
+  que la app pide preparar (`WARM`, cada 12 h, `features/pwa/offline-sync.tsx › OFFLINE_PAGES`), se guardan en la caché
+  `mirai-pages` con sus archivos `/_next/static`. Con internet la navegación va siempre a la red (con *navigation
+  preload*) y actualiza la copia; sin internet se sirve la guardada o `offline.html`, que lista las guardadas.
+- Los datos (consultas de TanStack) se guardan en IndexedDB `mirai-offline` (por persona, una semana:
+  `lib/offline/persist.ts`). Lo que se registra sin conexión con `useSave`/`useSoftDelete` queda en la cola `outbox` y se
+  envía al volver la red (la app, o el SW por Background Sync en Android/Chrome; candado `mirai-outbox` + Idempotency-Key).
+- Privacidad: todo eso es de la persona y queda solo en su dispositivo. Se borra al cerrar sesión (`lib/offline/clear.ts`
+  + `CLEAR_PRIVATE` al SW) y en Ajustes › Mirai como app › Usar sin conexión › Borrar. **Nunca** se guardan respuestas
+  RSC (`RSC: 1`, `?_rsc`), `/api`, `/v1`, `/auth`, el login, el portal del contador ni la consola.
+- Sin conexión, los enlaces internos se abren como página completa (la navegación interna de Next pediría datos al
+  servidor). Periodic Background Sync (`mirai-paginas`) refresca las páginas guardadas en Android/Chrome instalado.
 - Actualización: al cambiar `public/sw.js` **sube `VERSION`**. El nuevo SW queda en espera y la app muestra "Hay una
   versión nueva · Actualizar"; al tocarlo se activa (`SKIP_WAITING`) y la página se recarga. Además, cada despliegue
   cambia `NEXT_PUBLIC_BUILD_ID` (SHA de Vercel): si la app lleva abierta mucho tiempo y el servidor tiene otra versión
@@ -76,8 +84,8 @@ y aguantan que Android los recorte en círculo. Cada vista abre el formulario co
 - El SW se registra solo en producción (`pnpm build && pnpm start`); en `pnpm dev` no.
 - Push: `lib/notify/channels.ts` › `sendPush` acepta `actions` (máx. 2), `badge`, `image`, `requireInteraction`,
   `renotify`. El resumen diario trae "Ver pagos" y "Registrar gasto".
-- No se usa Periodic/Background Sync: los avisos ya llegan por push y el cron, y sincronizar datos en segundo plano
-  guardaría datos privados en el dispositivo.
+- Apariencia nativa: ver `lib/pwa/platform.ts` (clases por plataforma, sin zoom con los dedos), `components/app/mobile-topbar.tsx`
+  y `features/pwa/native.tsx` (tablet, teclado, deslizar para volver, Atrás cierra ventanas).
 
 ## Compartir a Mirai (Android)
 

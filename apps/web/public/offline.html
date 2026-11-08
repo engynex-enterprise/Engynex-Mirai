@@ -29,6 +29,12 @@
   button { appearance: none; border: 0; width: 100%; height: 48px; border-radius: 12px; background: var(--brand); color: var(--brand-fg); font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform .1s; }
   button:active { transform: scale(.98); }
   .status { margin-top: 12px; font-size: 13px; min-height: 18px; }
+  .pages { margin: 4px 0 18px; text-align: left; }
+  .pages h2 { font-size: 14px; margin: 0 0 8px; }
+  .pages nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pages a { display: block; padding: 11px 12px; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--ring); color: var(--fg); text-decoration: none; font-weight: 600; font-size: 14px; }
+  .pages a:active { transform: scale(.98); }
+  [hidden] { display: none !important; }
   @media (prefers-reduced-motion: reduce) { button { transition: none; } }
 </style>
 </head>
@@ -36,9 +42,13 @@
 <main>
   <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="96" height="96" aria-hidden="true"><defs><linearGradient id="iso-mirai-1" x1="0.2" y1="0" x2="0.8" y2="1"><stop offset="0" stop-color="#FFE3A0"/><stop offset="0.55" stop-color="#FFB547"/><stop offset="1" stop-color="#E98A12"/></linearGradient><linearGradient id="iso-mirai-2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#A8F0FF"/><stop offset="0.55" stop-color="#2CC7EA"/><stop offset="1" stop-color="#117FA8"/></linearGradient><linearGradient id="iso-mirai-3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7EEBC0"/><stop offset="0.55" stop-color="#14B88A"/><stop offset="1" stop-color="#0E7C74"/></linearGradient><linearGradient id="iso-hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="iso-sh" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#0A1030" stop-opacity="0"/><stop offset="1" stop-color="#0A1030" stop-opacity=".16"/></linearGradient></defs><path d="M92 88a58 58 0 1 0 116 0a58 58 0 1 0 -116 0Z" fill="url(#iso-mirai-1)" /><path d="M92 88a58 58 0 1 0 116 0a58 58 0 1 0 -116 0Z" fill="url(#iso-hl)" /><path d="M92 88a58 58 0 1 0 116 0a58 58 0 1 0 -116 0Z" fill="url(#iso-sh)" /><path d="M28 164C72 164 110 146 146 124C178 105 202 98 226 98C246 98 246 142 226 142C204 142 182 152 154 170C116 194 78 208 28 208C10 208 10 164 28 164Z" fill="url(#iso-mirai-2)" /><path d="M28 164C72 164 110 146 146 124C178 105 202 98 226 98C246 98 246 142 226 142C204 142 182 152 154 170C116 194 78 208 28 208C10 208 10 164 28 164Z" fill="url(#iso-hl)" /><path d="M28 208C78 208 116 194 154 170C182 152 204 142 226 142C246 142 246 182 226 182C206 182 186 192 160 208C130 226 94 234 56 234H28C12 234 12 208 28 208Z" fill="url(#iso-mirai-3)" /><path d="M28 208C78 208 116 194 154 170C182 152 204 142 226 142C246 142 246 182 226 182C206 182 186 192 160 208C130 226 94 234 56 234H28C12 234 12 208 28 208Z" fill="url(#iso-hl)" /><path d="M28 208C78 208 116 194 154 170C182 152 204 142 226 142C246 142 246 182 226 182C206 182 186 192 160 208C130 226 94 234 56 234H28C12 234 12 208 28 208Z" fill="url(#iso-sh)" /></svg><span class="dot" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M12 20h.01"/></svg></span></div>
   <h1>Estás sin conexión</h1>
-  <p>Mirai necesita internet para mostrarte tus cuentas al día. Revisa el wifi o los datos del celular.</p>
+  <p id="msg">Esta sección aún no está guardada en tu dispositivo. Revisa el wifi o los datos del celular.</p>
+  <section class="pages" id="pages" hidden>
+    <h2>Puedes abrir sin conexión</h2>
+    <nav id="list" aria-label="Secciones guardadas"></nav>
+  </section>
   <ul>
-    <li>Tus datos están seguros en la nube: no se pierde nada.</li>
+    <li>Lo que registres sin conexión se guarda en el dispositivo y se envía solo cuando vuelva el internet.</li>
     <li>Apenas vuelva la señal, esta pantalla se recarga sola.</li>
   </ul>
   <button type="button" id="retry">Volver a intentar</button>
@@ -52,6 +62,18 @@
       if (navigator.onLine) go(); else st.textContent = "Todavía no hay internet. Lo intentamos solos cuando vuelva."
     })
     window.addEventListener("online", go)
+    // Secciones guardadas por el service worker (public/sw.js › mirai-pages).
+    var NOMBRES = { inicio: "Inicio", gastos: "Gastos", fijos: "Gastos fijos", ingresos: "Ingresos", recordatorios: "Próximos pagos", balance: "Balance", dashboard: "Dashboard", presupuesto: "Presupuesto", flujo: "Flujo de caja", metas: "Metas", tarjetas: "Tarjetas", "le-debo": "Le debo", "me-deben": "Me deben", contactos: "Contactos", calendario: "Calendario", suscripciones: "Suscripciones", calculadoras: "Calculadoras", academia: "Academia", ajustes: "Ajustes", perfil: "Perfil" }
+    if (window.caches) caches.open("mirai-pages").then(function (c) { return c.keys() }).then(function (keys) {
+      var list = document.getElementById("list"), n = 0
+      keys.map(function (r) { return new URL(r.url).pathname }).filter(function (p) { return p !== location.pathname && p !== "/" }).sort(function (a, b) {
+        var o = Object.keys(NOMBRES); return (o.indexOf(a.slice(1)) + 1 || 99) - (o.indexOf(b.slice(1)) + 1 || 99)
+      }).slice(0, 12).forEach(function (p) {
+        var a = document.createElement("a"); a.href = p; a.textContent = NOMBRES[p.slice(1)] || p.slice(1).replace(/-/g, " "); list.appendChild(a); n++
+      })
+      if (n) document.getElementById("pages").hidden = false
+      else document.getElementById("msg").textContent = "Mirai necesita internet para mostrarte esta sección. Revisa el wifi o los datos del celular."
+    }).catch(function () {})
   })()
 </script>
 </body>

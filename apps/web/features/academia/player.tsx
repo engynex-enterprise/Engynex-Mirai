@@ -16,6 +16,7 @@ import { NIVELES, XP_LECCION, insignias, leccionesDe, nivelCompleto, nivelDe, pa
 import { glosarioById, type Termino } from "@/lib/content/glosario"
 import { playSound } from "@/lib/sound"
 import { cn } from "@/lib/utils"
+import { useHydrated } from "@/hooks/use-hydrated"
 import { NIVEL_TONE } from "./leccion"
 
 /** Primera frase de una idea (para "Lo que vas a aprender"). */
@@ -25,7 +26,8 @@ const PASO_KEY = (id: string) => `mirai-academia-paso:${id}`
 /** Leer en voz alta con la voz del navegador (español; de Colombia si existe). Sin servicios externos. */
 function useVoz() {
   const [habla, setHabla] = useState(false)
-  const ok = typeof window !== "undefined" && "speechSynthesis" in window
+  // Solo después de hidratar (el servidor no sabe si el navegador tiene voz: si no, React avisa #418).
+  const ok = useHydrated() && "speechSynthesis" in window
   const parar = useCallback(() => { if (ok) window.speechSynthesis.cancel(); setHabla(false) }, [ok])
   const leer = useCallback((texto: string) => {
     if (!ok) return
@@ -50,10 +52,14 @@ export function LeccionPlayer({ l, onSalir, onAbrir, onEvaluar }: { l: Leccion; 
   const setHelp = useShell((s) => s.setHelp)
   const pasos = useMemo(() => pasosDe(l), [l])
   const yaHecha = hechas.includes(l.id)
-  const [i, setI] = useState(() => {
-    if (yaHecha) return 0
+  // El paso guardado vive en el navegador: se usa después de hidratar (si no, el servidor dibujaría otro paso, #418).
+  const hidratado = useHydrated()
+  const [elegido, setI] = useState<number | null>(null)
+  const guardado = (() => {
+    if (!hidratado || yaHecha) return 0
     try { const n = Number(localStorage.getItem(PASO_KEY(l.id))); return n > 0 && n < pasos.length - 1 ? n : 0 } catch { return 0 }
-  })
+  })()
+  const i = elegido ?? guardado
   const [resp, setResp] = useState<number | null>(null)
   const [antes] = useState(() => insignias(hechas).filter((b) => b.ok).map((b) => b.id))
   const voz = useVoz()

@@ -19,6 +19,7 @@ import { LegalUpdate } from "@/features/legal/legal-update"
 import { PlatformNotice } from "./platform-notice"
 import { WelcomeDialog } from "@/features/onboarding/welcome-dialog"
 import { MobileTabBar } from "./mobile-tabbar"
+import { MobileTopBar } from "./mobile-topbar"
 import { NewBookDialog } from "./new-book-dialog"
 import { useShell } from "./shell-store"
 import { applyPrivacy } from "./privacy"
@@ -61,8 +62,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     <>
       <AppSidebar live={status} online={online} badges={badges} hidden={hidden} unread={unread} />
       <SidebarInset className="min-w-0 bg-transparent">
-        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-16 lg:px-8"><AdTicker /><PlatformNotice /><LegalUpdate />{children}</main>
+        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-3 pt-[3.5rem] pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 md:pt-4 md:pb-16 lg:px-8"><AdTicker /><PlatformNotice /><LegalUpdate />{children}</main>
       </SidebarInset>
+      <Suspense fallback={null}><MobileTopBar unread={unread} /></Suspense>
       <MobileTabBar />
       <AddMenu />
       <CommandPalette />

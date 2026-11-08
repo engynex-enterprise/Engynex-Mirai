@@ -4,6 +4,8 @@ import { useEffect } from "react"
 import { InstallBanner, InstallDialog } from "./install"
 import { NavProgress } from "./nav-progress"
 import { PullToRefresh } from "./pull-to-refresh"
+import { OfflineBar, OfflineSync } from "./offline-sync"
+import { NativeBehaviors } from "./native"
 
 /** Número de avisos sin leer en el ícono de la app (Android, Windows, macOS y iPhone 16.4+ con Mirai instalado). */
 function useAppBadge(unread: number) {
@@ -21,6 +23,9 @@ export function PwaShell({ unread }: { unread: number }) {
     <>
       <NavProgress />
       <PullToRefresh />
+      <OfflineSync />
+      <OfflineBar />
+      <NativeBehaviors />
       <InstallBanner />
       <InstallDialog />
     </>

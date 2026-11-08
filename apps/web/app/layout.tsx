@@ -41,6 +41,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Como una app nativa: sin zoom con los dedos (la letra se agranda en Ajustes › Apariencia). iOS ignora estas dos
+  // y lo bloquea lib/pwa/platform.ts (gestos). El teclado en pantalla achica la ventana en vez de taparla.
+  maximumScale: 1,
+  userScalable: false,
+  interactiveWidget: "resizes-content",
   viewportFit: "cover",
   colorScheme: "light dark",
   themeColor: [

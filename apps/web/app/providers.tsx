@@ -13,7 +13,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 2 },
+          // gcTime de un día: lo que se vio sigue en memoria y se guarda en el dispositivo para usarse sin conexión.
+          queries: { staleTime: 30_000, gcTime: 24 * 3600_000, refetchOnWindowFocus: false, retry: 2 },
           mutations: { retry: 0 },
         },
       }),

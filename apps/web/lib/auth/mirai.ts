@@ -93,6 +93,8 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function signOut(): Promise<void> {
   const c = await client()
   await c.signOut().catch(() => undefined)
+  // Lo guardado para usar sin conexión (datos, cambios pendientes y páginas) es de esta persona: se borra al salir.
+  await (await import("@/lib/offline/clear")).clearOfflineData().catch(() => undefined)
 }
 
 export async function signOutOthers(): Promise<Done> {

@@ -29,8 +29,11 @@ export function isStandalone(): boolean {
 }
 
 /**
- * Script en línea del <head> (app/layout.tsx): marca <html> antes de pintar con `standalone` (app instalada) e `ios`,
- * para que el CSS ajuste la barra de estado y los bordes sin parpadeo. También guarda el aviso de instalación de Chrome
- * si llega antes de que cargue React (window.__miraiInstall; lo toma features/pwa/pwa-root.tsx).
+ * Script en línea del <head> (app/layout.tsx): marca <html> antes de pintar con `standalone` (app instalada), la
+ * plataforma (`ios`, `android`, `mac`, `windows`) y `touch` (pantalla táctil), para que el CSS dé a cada una su
+ * apariencia nativa sin parpadeo. Bloquea el zoom con los dedos (iOS ignora user-scalable=no: se frenan sus gestos; el
+ * editor de automatizaciones, `.react-flow`, sí puede acercar) y, en la app instalada de escritorio, Ctrl + rueda. También
+ * guarda el aviso de instalación de Chrome si llega antes de que cargue React (window.__miraiInstall; lo toma
+ * features/pwa/pwa-root.tsx).
  */
-export const PLATFORM_SCRIPT = `(function(){try{var d=document.documentElement,n=navigator,s=n.standalone===true||["standalone","fullscreen","minimal-ui","window-controls-overlay"].some(function(m){return matchMedia("(display-mode: "+m+")").matches});if(s)d.classList.add("standalone");if(/iPad|iPhone|iPod/.test(n.userAgent)||(n.platform==="MacIntel"&&n.maxTouchPoints>1))d.classList.add("ios");addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__miraiInstall=e})}catch(e){}})()`
+export const PLATFORM_SCRIPT = `(function(){try{var d=document.documentElement,n=navigator,u=n.userAgent,c=d.classList,s=n.standalone===true||["standalone","fullscreen","minimal-ui","window-controls-overlay"].some(function(m){return matchMedia("(display-mode: "+m+")").matches});if(s)c.add("standalone");var ios=/iPad|iPhone|iPod/.test(u)||(n.platform==="MacIntel"&&n.maxTouchPoints>1);if(ios)c.add("ios");else if(/Android/i.test(u))c.add("android");else if(/Mac/.test(n.platform||u))c.add("mac");else if(/Win/.test(n.platform||u))c.add("windows");if(matchMedia("(pointer: coarse)").matches)c.add("touch");var free=function(e){var t=e.target;return t&&t.closest&&t.closest(".react-flow")};document.addEventListener("gesturestart",function(e){if(!free(e))e.preventDefault()},{passive:false});document.addEventListener("touchmove",function(e){if(e.touches&&e.touches.length>1&&!free(e))e.preventDefault()},{passive:false});if(s&&!c.contains("touch"))addEventListener("wheel",function(e){if(e.ctrlKey&&!free(e))e.preventDefault()},{passive:false});addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__miraiInstall=e})}catch(e){}})()`
