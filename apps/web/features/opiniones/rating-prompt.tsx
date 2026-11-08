@@ -19,7 +19,7 @@ export function RatingPrompt() {
   const { data: mine } = useMyFeedback()
   const { data: since } = useQuery({
     queryKey: ["profile-since", user.id],
-    queryFn: () => profileSince(user.id),
+    queryFn: () => profileSince(),
     staleTime: Infinity,
   })
   const extra = (prefs?.extra ?? {}) as { fb_prompt_at?: string }

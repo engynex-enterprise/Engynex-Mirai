@@ -1,264 +1,264 @@
-// Consola de la plataforma por la API (v6 F2-H-5, interruptor `admin`): /v1/admin/** (@PlatformAdmin y admin_audit en
-// la API). Misma firma y misma forma que las Server Actions de ./actions.ts y ./server.ts; con el interruptor apagado
-// es exactamente la acción de siempre (ni se carga el cliente). La consola sigue sin mostrar montos de los hogares.
-//
-// V7-H3: también las integraciones globales (adminGlobalIntegrations, adminSaveGlobalIntegration, adminTestGlobal,
-// adminSendTest → /v1/admin/integrations/**) y WhatsApp de la consola (./whatsapp.ts → /v1/admin/whatsapp/**). Con el
-// interruptor apagado, ./actions.ts, ./server.ts y ./whatsapp.ts son el modo heredado (Server Actions con la clave
-// secreta de Supabase).
+// Consola de la plataforma por la API: /v1/admin/** (@PlatformAdmin y admin_audit en la API). También las
+// integraciones globales (/v1/admin/integrations/**) y WhatsApp de la consola (/v1/admin/whatsapp/**).
+// La consola sigue sin mostrar montos de los hogares.
+import type { z } from "zod"
+import type { SaveSettings, UpdateFeedback } from "@mirai/contracts/modules/admin"
 import { errorMsg } from "@/lib/api/errors"
-import { apiOn } from "@/lib/api/session"
-import { viaApiOr } from "@/lib/api/via"
+import type { Row } from "@/lib/supabase/tables"
 import type { TemplateDraft } from "@/lib/notify/wa-templates"
-import type { WaCase, WaSettings } from "@/lib/notify/whatsapp"
-import * as actions from "./actions"
-import * as server from "./server"
-import * as wa from "./whatsapp"
+import type { MetaTemplate, ParamPreview, WaCase, WaSettings } from "@/lib/notify/whatsapp"
 
-export type { WaState } from "./whatsapp"
+/** Estado de WhatsApp para la consola: ajustes guardados y plantillas de la cuenta (leídas de Meta en vivo). */
+export type WaState = {
+  ok: boolean; msg?: string
+  activa: boolean; configurada: boolean; tieneWaba: boolean
+  numero?: string; settings: WaSettings; templates: MetaTemplate[]
+  defaultImage: string; base: string
+}
 
-type Ret<F extends (...a: never[]) => Promise<unknown>> = Awaited<ReturnType<F>>
+export type SubscriptionAction = { kind: "extender"; dias: number } | { kind: "plan"; plan: string } | { kind: "cancelar" } | { kind: "terminar" }
 
-const on = () => apiOn("admin")
 const admin = async () => {
   const { browserApi, unwrap, unwrapData } = await import("@/lib/api/client")
   return { a: browserApi().admin, unwrap, unwrapData }
 }
 const cleanEmail = (e: string) => e.trim().toLowerCase()
 
-// ── features/admin/actions.ts ───────────────────────────────────────────────────────────────────────────────────
+// ── Resumen, clientes, opiniones e ingresos ─────────────────────────────────────────────────────────────────────
 
-export const adminOverview = viaApiOr(on, actions.adminOverview, async () => {
+export async function adminOverview() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.overview()) as Ret<typeof actions.adminOverview>
-})
+  return unwrap(await a.overview())
+}
 
-export const adminClients = viaApiOr(on, actions.adminClients, async () => {
+export async function adminClients() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.clients()) as Ret<typeof actions.adminClients>
-})
+  return unwrap(await a.clients())
+}
 
-export const adminFeedback = viaApiOr(on, actions.adminFeedback, async () => {
+export async function adminFeedback() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.feedback()) as unknown as Ret<typeof actions.adminFeedback>
-})
+  return unwrap(await a.feedback())
+}
 
-export const adminUpdateFeedback = viaApiOr(on, actions.adminUpdateFeedback, async (id, patch) => {
+export async function adminUpdateFeedback(id: string, patch: z.input<typeof UpdateFeedback>): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.updateFeedback({ params: { feedbackId: id }, body: patch }))
-})
+}
 
-export const adminRevenue = viaApiOr(on, actions.adminRevenue, async () => {
+export async function adminRevenue() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.revenue()) as unknown as Ret<typeof actions.adminRevenue>
-})
+  return unwrap(await a.revenue())
+}
 
-export const adminGrantPremium = viaApiOr(on, actions.adminGrantPremium, async (householdId, hasta, nota) => {
+export async function adminGrantPremium(householdId: string, hasta: string, nota: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.grantPremium({ params: { householdId }, body: { hasta, nota } }))
-})
+}
 
-export const adminRevokeCourtesy = viaApiOr(on, actions.adminRevokeCourtesy, async (householdId) => {
+export async function adminRevokeCourtesy(householdId: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.revokeCourtesy({ params: { householdId } }))
-})
+}
 
-// ── features/admin/server.ts: personas ──────────────────────────────────────────────────────────────────────────
+// ── Personas ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export const adminUser = viaApiOr(on, server.adminUser, async (id) => {
+export async function adminUser(id: string) {
   const { a, unwrap } = await admin()
-  return unwrap(await a.user({ params: { userId: id } })) as unknown as Ret<typeof server.adminUser>
-})
+  return unwrap(await a.user({ params: { userId: id } }))
+}
 
-export const adminSetSuspended = viaApiOr(on, server.adminSetSuspended, async (id, suspend) => {
+export async function adminSetSuspended(id: string, suspend: boolean): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.setSuspended({ params: { userId: id }, body: { suspend } }))
-})
+}
 
-export const adminRecoveryLink = viaApiOr(on, server.adminRecoveryLink, async (id) => {
+export async function adminRecoveryLink(id: string): Promise<{ sent: boolean; link?: string; msg: string }> {
   const { a, unwrapData } = await admin()
   const { sent, link, msg } = unwrapData(await a.recoveryLink({ params: { userId: id } }))
   return link === undefined ? { sent, msg } : { sent, link, msg }
-})
+}
 
-export const adminSetPlatformAdmin = viaApiOr(on, server.adminSetPlatformAdmin, async (id, value) => {
+export async function adminSetPlatformAdmin(id: string, value: boolean): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.setPlatformAdmin({ params: { userId: id }, body: { on: value } }))
-})
+}
 
-export const adminDeleteUser = viaApiOr(on, server.adminDeleteUser, async (id, confirmEmail) => {
+export async function adminDeleteUser(id: string, confirmEmail: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.deleteUser({ params: { userId: id }, body: { confirmEmail } }))
-})
+}
 
-export const adminAddNote = viaApiOr(on, server.adminAddNote, async (userId, texto) => {
+export async function adminAddNote(userId: string, texto: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.addNote({ params: { userId }, body: { texto } }))
-})
+}
 
-export const adminDeleteNote = viaApiOr(on, server.adminDeleteNote, async (id) => {
+export async function adminDeleteNote(id: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.deleteNote({ params: { noteId: id } }))
-})
+}
 
-export const adminInviteUser = viaApiOr(on, server.adminInviteUser, async (email, nombre) => {
+export async function adminInviteUser(email: string, nombre: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.inviteUser({ body: { email: cleanEmail(email), nombre } }))
-})
+}
 
 // ── Hogares, planes y pagos ─────────────────────────────────────────────────────────────────────────────────────
 
-export const adminHouseholds = viaApiOr(on, server.adminHouseholds, async () => {
+export async function adminHouseholds() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.households()) as unknown as Ret<typeof server.adminHouseholds>
-})
+  return unwrap(await a.households())
+}
 
-export const adminAssignPlan = viaApiOr(on, server.adminAssignPlan, async (householdId, plan, hasta, nota) => {
+export async function adminAssignPlan(householdId: string, plan: string, hasta: string, nota: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.assignPlan({ params: { householdId }, body: { plan, hasta, nota } }))
-})
+}
 
-export const adminSubscriptions = viaApiOr(on, server.adminSubscriptions, async () => {
+export async function adminSubscriptions() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.subscriptions()) as unknown as Ret<typeof server.adminSubscriptions>
-})
+  return unwrap(await a.subscriptions())
+}
 
-export const adminUpdateSubscription = viaApiOr(on, server.adminUpdateSubscription, async (id, action) => {
+export async function adminUpdateSubscription(id: string, action: SubscriptionAction): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.updateSubscription({ params: { subscriptionId: id }, body: { action } }))
-})
+}
 
-export const adminManualPayment = viaApiOr(on, server.adminManualPayment, async (input) => {
+export async function adminManualPayment(input: { householdId: string; plan: string; periodo: "mes" | "anio"; monto: number; nota: string }): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.manualPayment({ body: input }))
-})
+}
 
-export const adminUpdatePayment = viaApiOr(on, server.adminUpdatePayment, async (id, patch) => {
+export async function adminUpdatePayment(id: string, patch: { estado?: "reembolsado" | "anulado"; factura_ref?: string; nota?: string }): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.updatePayment({ params: { paymentId: id }, body: patch }))
-})
+}
 
 // ── Comunicados, administradores, auditoría y sistema ───────────────────────────────────────────────────────────
 
-export const adminBroadcast = viaApiOr(on, server.adminBroadcast, async (input) => {
+export async function adminBroadcast(input: { titulo: string; cuerpo: string; href: string; segmento: string; correo: boolean }): Promise<{ personas: number; correos: number }> {
   const { a, unwrapData } = await admin()
   const { personas, correos } = unwrapData(await a.broadcast({ body: input }))
   return { personas, correos }
-})
+}
 
-export const adminAdmins = viaApiOr(on, server.adminAdmins, async () => {
+export async function adminAdmins() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.admins()) as unknown as Ret<typeof server.adminAdmins>
-})
+  return unwrap(await a.admins())
+}
 
-export const adminAddAdminByEmail = viaApiOr(on, server.adminAddAdminByEmail, async (email) => {
+export async function adminAddAdminByEmail(email: string): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.addAdmin({ body: { email: cleanEmail(email) } }))
-})
+}
 
-export const adminAuditLog = viaApiOr(on, server.adminAuditLog, async () => {
+export async function adminAuditLog() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.audit()) as unknown as Ret<typeof server.adminAuditLog>
-})
+  return unwrap(await a.audit())
+}
 
-export const adminSystem = viaApiOr(on, server.adminSystem, async () => {
+/** Ajustes de la plataforma (fila de `platform_settings`), migraciones, hogares vacíos, referidos y configuración. */
+export async function adminSystem() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.system()) as unknown as Ret<typeof server.adminSystem>
-})
+  const d = unwrap(await a.system())
+  return { ...d, settings: d.settings as Row<"platform_settings"> | null }
+}
 
-export const adminSaveSettings = viaApiOr(on, server.adminSaveSettings, async (patch) => {
+export async function adminSaveSettings(patch: z.input<typeof SaveSettings>): Promise<void> {
   const { a, unwrapData } = await admin()
   unwrapData(await a.saveSettings({ body: patch }))
-})
+}
 
-export const adminCleanOrphanHouseholds = viaApiOr(on, server.adminCleanOrphanHouseholds, async () => {
+export async function adminCleanOrphanHouseholds(): Promise<number> {
   const { a, unwrapData } = await admin()
   return unwrapData(await a.cleanOrphans()).borrados
-})
+}
 
-export const adminNotifyLog = viaApiOr(on, server.adminNotifyLog, async () => {
+export async function adminNotifyLog() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.notifyLog()) as unknown as Ret<typeof server.adminNotifyLog>
-})
+  return unwrap(await a.notifyLog())
+}
 
-export const adminTestDefaults = viaApiOr(on, server.adminTestDefaults, async () => {
+export async function adminTestDefaults(): Promise<{ email: string; whatsapp: string }> {
   const { a, unwrap } = await admin()
   return unwrap(await a.testDefaults())
-})
+}
 
-// ── Integraciones globales (V7-H3) ──────────────────────────────────────────────────────────────────────────────
+// ── Integraciones globales ──────────────────────────────────────────────────────────────────────────────────────
 
-/** Los errores que el administrador debe leer vuelven como `{ ok:false, msg }` (como las Server Actions). */
+/** Los errores que el administrador debe leer vuelven como `{ ok:false, msg }`. */
 const fail = (e: unknown) => ({ ok: false as const, msg: errorMsg(e) })
 
-export const adminGlobalIntegrations = viaApiOr(on, server.adminGlobalIntegrations, async () => {
+export async function adminGlobalIntegrations() {
   const { a, unwrap } = await admin()
-  return unwrap(await a.integrations()) as unknown as Ret<typeof server.adminGlobalIntegrations>
-})
+  return unwrap(await a.integrations())
+}
 
-export const adminSaveGlobalIntegration = viaApiOr(on, server.adminSaveGlobalIntegration, async (kind, input) => {
+export async function adminSaveGlobalIntegration(kind: string, input: { modo: string; planes: string[]; values: Record<string, string | number | boolean> }): Promise<{ ok: boolean; msg?: string; warn?: string }> {
   try {
     const { a, unwrapData } = await admin()
     const d = unwrapData(await a.saveIntegration({ params: { kind }, body: { modo: input.modo as never, planes: input.planes, values: input.values } }))
-    return { ok: true, ...(d.warn ? { warn: d.warn } : {}) } as Awaited<ReturnType<typeof server.adminSaveGlobalIntegration>>
+    return { ok: true, ...(d.warn ? { warn: d.warn } : {}) }
   } catch (e) { return fail(e) }
-})
+}
 
-export const adminTestGlobal = viaApiOr(on, server.adminTestGlobal, async (kind) => {
+export async function adminTestGlobal(kind: string): Promise<{ ok: boolean; msg: string }> {
   try {
     const { a, unwrapData } = await admin()
     return unwrapData(await a.testIntegration({ params: { kind } }))
   } catch (e) { return fail(e) }
-})
+}
 
-export const adminSendTest = viaApiOr(on, server.adminSendTest, async (kind, to) => {
+export async function adminSendTest(kind: string, to: string): Promise<{ ok: boolean; msg: string }> {
   try {
     const { a, unwrapData } = await admin()
     return unwrapData(await a.sendTest({ params: { kind }, body: { to } }))
   } catch (e) { return fail(e) }
-})
+}
 
-// ── WhatsApp de la consola (V7-H3) ──────────────────────────────────────────────────────────────────────────────
+// ── WhatsApp de la consola ──────────────────────────────────────────────────────────────────────────────────────
 
-export const adminWaState = viaApiOr(on, wa.adminWaState, async (fresh = false) => {
+export async function adminWaState(fresh = false): Promise<WaState> {
   const { a, unwrap } = await admin()
-  return unwrap(await a.waState({ query: fresh ? { fresh: "1" } : {} })) as unknown as wa.WaState
-})
+  return unwrap(await a.waState({ query: fresh ? { fresh: "1" } : {} })) as unknown as WaState
+}
 
-export const adminWaSaveSettings = viaApiOr(on, wa.adminWaSaveSettings, async (input: WaSettings) => {
+export async function adminWaSaveSettings(input: WaSettings): Promise<{ ok: boolean; msg?: string }> {
   try {
     const { a, unwrapData } = await admin()
     unwrapData(await a.waSaveSettings({ body: input as never }))
-    return { ok: true } as Awaited<ReturnType<typeof wa.adminWaSaveSettings>>
+    return { ok: true }
   } catch (e) { return fail(e) }
-})
+}
 
-export const adminWaSaveTemplate = viaApiOr(on, wa.adminWaSaveTemplate, async (draft: TemplateDraft, edit?: { id: string; status?: string }) => {
+export async function adminWaSaveTemplate(draft: TemplateDraft, edit?: { id: string; status?: string }): Promise<{ ok: boolean; msg: string }> {
   try {
     const { a, unwrapData } = await admin()
     return { ok: true, msg: unwrapData(await a.waSaveTemplate({ body: { draft, ...(edit ? { edit } : {}) } })).msg }
   } catch (e) { return fail(e) }
-})
+}
 
-export const adminWaDeleteTemplate = viaApiOr(on, wa.adminWaDeleteTemplate, async (name: string, id?: string) => {
+export async function adminWaDeleteTemplate(name: string, id?: string): Promise<{ ok: boolean; msg: string }> {
   try {
     const { a, unwrapData } = await admin()
     return { ok: true, msg: unwrapData(await a.waDeleteTemplate({ params: { name }, query: id ? { id } : {} })).msg }
   } catch (e) { return fail(e) }
-})
+}
 
-export const adminWaPreview = viaApiOr(on, wa.adminWaPreview, async (caso: WaCase, override?: WaSettings["casos"][WaCase]) => {
+export async function adminWaPreview(caso: WaCase, override?: WaSettings["casos"][WaCase]): Promise<{ ok: boolean; msg?: string; preview?: ParamPreview[]; template?: string }> {
   try {
     const { a, unwrapData } = await admin()
     const d = unwrapData(await a.waPreview({ body: { caso, ...(override ? { override } : {}) } }))
-    return { ok: true, preview: d.preview, template: d.template }
+    return { ok: true, preview: d.preview as ParamPreview[], template: d.template }
   } catch (e) { return fail(e) }
-})
+}
 
-export const adminWaSendTest = viaApiOr(on, wa.adminWaSendTest, async (input: { caso: WaCase; to: string; override?: WaSettings["casos"][WaCase] }) => {
+export async function adminWaSendTest(input: { caso: WaCase; to: string; override?: WaSettings["casos"][WaCase] }): Promise<{ ok: boolean; msg: string; preview?: ParamPreview[] }> {
   try {
     const { a, unwrapData } = await admin()
     const d = unwrapData(await a.waSendTest({ body: { caso: input.caso, to: input.to, ...(input.override ? { override: input.override } : {}) } }))
-    return d.preview ? { ok: true, msg: d.msg, preview: d.preview } : { ok: true, msg: d.msg }
+    return d.preview ? { ok: true, msg: d.msg, preview: d.preview as ParamPreview[] } : { ok: true, msg: d.msg }
   } catch (e) { return fail(e) }
-})
+}

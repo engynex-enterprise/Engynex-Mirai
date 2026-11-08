@@ -1,12 +1,11 @@
-// Uso de IA del hogar por la API (v6 F2-H-5, interruptor `ai`): GET /v1/books/:b/ai/usage. Misma firma y misma forma
-// que la Server Action myAiUsage (./actions.ts); apagado es la acción de siempre.
-import { activeBookId, apiOn } from "@/lib/api/session"
-import { viaApiOr } from "@/lib/api/via"
-import * as actions from "./actions"
+// Uso de IA del hogar por la API: GET /v1/books/:b/ai/usage (Ajustes › Uso de IA).
+import type { MyAiUsage } from "@mirai/ai/server/usage-report"
+import { activeBookId } from "@/lib/api/session"
 
-export type { MyAiUsage } from "./actions"
+export type { MyAiUsage } from "@mirai/ai/server/usage-report"
 
-export const myAiUsage = viaApiOr<Parameters<typeof actions.myAiUsage>, Awaited<ReturnType<typeof actions.myAiUsage>>>(() => apiOn("ai"), actions.myAiUsage, async () => {
+/** Cupo del mes, costo, ahorro, serie por día, por función y últimas solicitudes. */
+export async function myAiUsage(): Promise<MyAiUsage> {
   const { browserApi, unwrap } = await import("@/lib/api/client")
-  return unwrap(await browserApi().ai.usage({ params: { bookId: activeBookId() } })) as unknown as actions.MyAiUsage
-})
+  return unwrap(await browserApi().ai.usage({ params: { bookId: activeBookId() } })) as unknown as MyAiUsage
+}

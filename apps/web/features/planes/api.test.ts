@@ -1,32 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const state = vi.hoisted(() => ({ on: false }))
 const api = vi.hoisted(() => ({ billing: { checkout: vi.fn(), renewal: vi.fn() } }))
 
-vi.mock("./actions", () => ({
-  startCheckout: vi.fn(async () => ({ ok: true, url: "accion" })),
-  paysRenewal: vi.fn(async () => false),
-  paymentOptions: vi.fn(async () => undefined),
-  previewCoupon: vi.fn(async () => undefined),
-  cancelRenewal: vi.fn(async () => undefined),
-}))
-vi.mock("@/lib/api/session", () => ({ apiOn: () => state.on, activeHouseholdId: () => "h1" }))
+vi.mock("@/lib/api/session", () => ({ activeHouseholdId: () => "h1" }))
 vi.mock("@/lib/api/client", async () => ({ browserApi: () => api, ...(await import("@/lib/api/unwrap")) }))
 
 const res = (status: number, body: unknown) => ({ status, body, headers: new Headers() })
 
 describe("features/planes/api", () => {
-  beforeEach(() => { vi.clearAllMocks(); state.on = false })
+  beforeEach(() => { vi.clearAllMocks() })
 
-  it("apagado llama a la Server Action de siempre", async () => {
-    const actions = await import("./actions")
-    const { startCheckout } = await import("./api")
-    expect(await startCheckout("wompi", "mes")).toEqual({ ok: true, url: "accion" })
-    expect(actions.startCheckout).toHaveBeenCalledWith("wompi", "mes")
-  })
-
-  it("encendido: checkout por la API; pasarela caída = { ok:false, msg }; rol = lanza", async () => {
-    state.on = true
+  it("checkout por la API; pasarela caída = { ok:false, msg }; rol = lanza", async () => {
     const { startCheckout, paysRenewal } = await import("./api")
     api.billing.checkout.mockResolvedValue(res(200, { ok: true, data: { url: "https://pago" } }))
     expect(await startCheckout("wompi", "anio", "premium", "CUPON")).toEqual({ ok: true, url: "https://pago" })

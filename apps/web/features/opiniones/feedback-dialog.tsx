@@ -29,7 +29,7 @@ export function useMyFeedback() {
   const { user } = useApp()
   return useQuery({
     queryKey: ["feedback", user.id],
-    queryFn: () => loadMyFeedback(user.id),
+    queryFn: () => loadMyFeedback(),
   })
 }
 
@@ -73,8 +73,8 @@ export function FeedbackForm({ draft, onDone, compact = false }: { draft: Feedba
     setBusy(true)
     let captura: string | null = null
     if (file) {
-      // La captura sube a tu carpeta del bucket `feedback` (por la API con el interruptor `files`).
-      try { captura = await uploadCaptura(user.id, file) }
+      // La captura sube a tu carpeta del bucket `feedback` (por la API).
+      try { captura = await uploadCaptura(file) }
       catch (e) { setBusy(false); return toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }
     }
     try {

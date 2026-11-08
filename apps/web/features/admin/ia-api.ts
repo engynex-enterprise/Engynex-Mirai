@@ -1,37 +1,34 @@
-// Consola › Uso de IA por la API (v6 F2-H-5, interruptor `admin`): /v1/admin/ai/*. Misma firma y misma forma que las
-// Server Actions de ./ia-server.ts; apagado son las de siempre. Cada cambio queda en admin_audit (lo hace la API).
-import { apiOn } from "@/lib/api/session"
-import { viaApiOr } from "@/lib/api/via"
-import * as actions from "./ia-server"
+// Consola › Uso de IA por la API: /v1/admin/ai/*. Cada cambio queda en admin_audit (lo hace la API).
+// Por privacidad nunca muestra montos ni movimientos de los hogares (ni el contenido de las preguntas).
+import type { z } from "zod"
+import type { AdminAiUsage, AiSettingsIn, PriceIn } from "@mirai/ai/server/usage-report"
 
-export type { AdminAiUsage } from "./ia-server"
+export type { AdminAiUsage } from "@mirai/ai/server/usage-report"
 
-const on = () => apiOn("admin")
-/** viaApiOr con la forma de la respuesta fijada por la acción (la versión de la API tiene que devolver lo mismo). */
-const wrap = <A extends unknown[], R>(action: (...a: A) => Promise<R>, api: (...a: A) => Promise<NoInfer<R>>) => viaApiOr(on, action, api)
 const client = () => import("@/lib/api/client")
 
-export const adminAiUsage = wrap(actions.adminAiUsage, async (dias = 30) => {
+export async function adminAiUsage(dias = 30): Promise<AdminAiUsage> {
   const { browserApi, unwrap } = await client()
-  return unwrap(await browserApi().aiAdmin.usage({ query: { dias } })) as unknown as actions.AdminAiUsage
-})
+  return unwrap(await browserApi().aiAdmin.usage({ query: { dias } })) as unknown as AdminAiUsage
+}
 
-export const adminSaveAiSettings = wrap(actions.adminSaveAiSettings, async (input) => {
+export async function adminSaveAiSettings(input: z.input<typeof AiSettingsIn>): Promise<void> {
   const { browserApi, unwrapData } = await client()
   unwrapData(await browserApi().aiAdmin.saveSettings({ body: input }))
-})
+}
 
-export const adminSetPlanAiCupo = wrap(actions.adminSetPlanAiCupo, async (planId, cupo) => {
+export async function adminSetPlanAiCupo(planId: string, cupo: number | null): Promise<void> {
   const { browserApi, unwrapData } = await client()
   unwrapData(await browserApi().aiAdmin.setPlanCupo({ params: { planId }, body: { cupo } }))
-})
+}
 
-export const adminSetModelPrice = wrap(actions.adminSetModelPrice, async (model, price) => {
+/** Precio propio de un modelo (US$ por millón de tokens); null lo quita y vuelve al de la tabla. */
+export async function adminSetModelPrice(model: string, price: z.input<typeof PriceIn> | null): Promise<void> {
   const { browserApi, unwrapData } = await client()
   unwrapData(await browserApi().aiAdmin.setModelPrice({ body: { model, price } }))
-})
+}
 
-export const adminClearAiCache = wrap(actions.adminClearAiCache, async () => {
+export async function adminClearAiCache(): Promise<number> {
   const { browserApi, unwrapData } = await client()
   return unwrapData(await browserApi().aiAdmin.clearCache()).borradas
-})
+}

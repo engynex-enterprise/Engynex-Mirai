@@ -136,7 +136,7 @@ function AdEditor({ ad, campaigns, open, onOpenChange }: { ad: Ad | Omit<Ad, "id
   const upload = async (f?: File, cb?: (url: string) => void) => {
     if (!f) return
     if (!f.type.startsWith("image/") || f.size > 2 * 1024 * 1024) return toast.error("Usa una imagen de máximo 2 MB")
-    // Bucket público `ads` (por la API con el interruptor `files`).
+    // Bucket público `ads` (por la API).
     let url: string
     try { url = await uploadAdImage(f) }
     catch (e) { return toast.error("No se pudo subir la imagen", { description: e instanceof Error ? e.message : undefined }) }

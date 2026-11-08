@@ -2,24 +2,15 @@
 
 import { useQuery } from "@/lib/query"
 import { Megaphone } from "lucide-react"
-import { readWithFallback } from "@/lib/api/book-tables"
-import { apiOn } from "@/lib/api/session"
-import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 
 type Notice = { aviso_global: string | null; aviso_tono: string | null } | null
 
-/** Modo heredado (interruptor `me` apagado): platform_settings directo con la sesión de Supabase. */
-const legacyNotice = async (): Promise<Notice> => (await createClient().from("platform_settings").select("aviso_global,aviso_tono").maybeSingle()).data
-
-/** V7-H3: GET /v1/platform/notice (público) con respaldo al modo heredado si la API no responde. */
+/** GET /v1/platform/notice (público). */
 export async function loadPlatformNotice(): Promise<Notice> {
-  if (!apiOn("me")) return legacyNotice()
-  return readWithFallback(async () => {
-    const { browserApi, unwrap } = await import("@/lib/api/client")
-    const n = unwrap(await browserApi().me.platformNotice())
-    return { aviso_global: n.aviso, aviso_tono: n.tono }
-  }, legacyNotice)
+  const { browserApi, unwrap } = await import("@/lib/api/client")
+  const n = unwrap(await browserApi().me.platformNotice())
+  return { aviso_global: n.aviso, aviso_tono: n.tono }
 }
 
 const TONE = { info: "bg-info-soft text-info", warn: "bg-warning-soft text-warning", ok: "bg-success-soft text-success" } as const
