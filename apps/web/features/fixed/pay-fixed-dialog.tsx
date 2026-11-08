@@ -38,10 +38,18 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
   const { data: methods = [] } = usePaymentMethods()
   const st = fijoStatus({ ...fixed, valor: Number(fixed.valor), payments: fixed.payments.map((p) => ({ ...p, valor: Number(p.valor) })) } as FixedExpenseIn, today)
   const opts = [...st.venc, ...(st.prox ? [st.prox] : [])]
+  // Lo que falta de un periodo: con abonos, el resto; si no, su valor (con reparto por quincena).
+  const faltaDe = (p: string) => { const o = opts.find((x) => x.per === p); return o?.parcial ? o.falta : fijoValor(fixed, p) }
   const [per, setPer] = useState(opts[0]?.per ?? "")
-  const [valor, setValor] = useState(fixed.variable ? 0 : fijoValor(fixed, opts[0]?.per ?? ""))
+  const [valor, setValor] = useState(fixed.variable && !opts[0]?.parcial ? 0 : faltaDe(opts[0]?.per ?? ""))
   // Con un valor distinto por quincena, el valor sugerido cambia con el periodo.
-  const pickPer = (p: string) => { setPer(p); if (!fixed.variable) setValor(fijoValor(fixed, p)) }
+  const pickPer = (p: string) => { setPer(p); if (!fixed.variable || opts.find((x) => x.per === p)?.parcial) setValor(faltaDe(p)) }
+  const sel = opts.find((x) => x.per === per)
+  const falta = per ? faltaDe(per) : 0
+  // Pagar menos de lo que falta: ¿abono (falta el resto) o "esta vez costó menos" (queda pagado)? En un fijo variable,
+  // sin abonos antes, lo normal es que el valor cambie: por defecto queda pagado.
+  const menos = !fixed.variable || sel?.parcial ? valor > 0 && valor < falta - 1 : false
+  const [modoMenos, setModoMenos] = useState<"abono" | "completo">("abono")
   const [fecha, setFecha] = useState(today)
   const [medio, setMedio] = useState<string | null>(fixed.payment_method_id ?? methods[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
@@ -50,12 +58,13 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
     if (!valor) return toast.error("Escribe el valor que pagaste")
     setBusy(true)
     const q = qLabel(per)
-    const { data, error } = await payFixedExpense({ p_fixed: fixed.id, p_periodo: per, p_fecha: fecha, p_valor: valor, p_medio: medio ?? undefined, p_desc_suffix: q ? ` (${q})` : "" })
+    const { data, error } = await payFixedExpense({ p_fixed: fixed.id, p_periodo: per, p_fecha: fecha, p_valor: valor, p_medio: medio ?? undefined, p_desc_suffix: q ? ` (${q})` : "", ...(menos ? { p_cierra: modoMenos === "completo" } : {}) })
     setBusy(false)
     if (error) return toast.error("No se pudo registrar el pago", { description: error.message })
-    const r = data as { ajuste: string | null; aporte: { t: string; v: number; saldo?: number; nombre?: string; ahorrado?: number; objetivo?: number } | null }
+    const r = data as { ajuste: string | null; completo?: boolean; falta?: number; aporte: { t: string; v: number; saldo?: number; nombre?: string; ahorrado?: number; objetivo?: number } | null }
     if (r.aporte?.t === "fondo") toast.success("Aporte registrado", { description: `¡Bien! Guardaste ${fmtMoney(r.aporte.v)}. Tu fondo de emergencia tiene ${fmtMoney(r.aporte.saldo)}.` })
     else if (r.aporte?.t === "meta") toast.success("Aporte registrado", { description: `¡Bien! Sumaste ${fmtMoney(r.aporte.v)} a “${r.aporte.nombre}”. Llevas ${fmtMoney(r.aporte.ahorrado)} de ${fmtMoney(r.aporte.objetivo)} (${Math.round(((r.aporte.ahorrado ?? 0) / (r.aporte.objetivo || 1)) * 100)} %).` })
+    else if (r.completo === false) toast.success("Abono registrado", { description: `${fixed.nombre}${q ? ` (${q})` : ""}: abonaste ${fmtMoney(valor)}. Faltan ${fmtMoney(r.falta ?? 0)} para este periodo.` })
     else {
       const extra = r.ajuste === "max" ? "Este pago superó tu máximo habitual; ajustamos el rango." : r.ajuste === "min" ? "Ajustamos el mínimo del rango." : ""
       toast[r.ajuste === "max" ? "warning" : "success"]("Pago registrado", { description: `${fixed.nombre}${q ? ` (${q})` : ""}: ${fmtMoney(valor)}. ${extra}` })
@@ -70,7 +79,7 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
     <FieldGroup className="pb-2">
       <FormField label="¿Qué periodo pagas?" tip={false}>
         <ChoiceCards value={per} onChange={pickPer} cols={2} items={opts.map((p) => ({
-          value: p.per, label: `${qLabel(p.per) ? qLabel(p.per) + " · " : ""}${fmtDate(p.due)}`, desc: p.due < today ? "Vencido" : "Pendiente", icon: p.due < today ? "circle-alert" : "calendar-clock",
+          value: p.per, label: `${qLabel(p.per) ? qLabel(p.per) + " · " : ""}${fmtDate(p.due)}`, desc: p.parcial ? `Abonaste ${fmtMoney(p.pagado)} · faltan ${fmtMoney(p.falta)}` : p.due < today ? "Vencido" : "Pendiente", icon: p.parcial ? "split" : p.due < today ? "circle-alert" : "calendar-clock",
         }))} />
       </FormField>
       <div className="grid gap-5 sm:grid-cols-2">
@@ -80,9 +89,17 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
         <FormField label="Fecha del pago" htmlFor="pf-fecha"><DatePicker id="pf-fecha" value={fecha} onChange={(v) => setFecha(v ?? today)} /></FormField>
         <FormField label="Medio de pago" htmlFor="pf-medio"><Combobox id="pf-medio" value={medio} onChange={setMedio} options={methodOptions(methods)} /></FormField>
       </div>
+      {menos && (
+        <FormField label={`Pagas ${fmtMoney(valor)} de ${fmtMoney(falta)}. ¿Qué pasa con el resto?`} tip={false}>
+          <ChoiceCards value={modoMenos} onChange={(v) => setModoMenos(v as typeof modoMenos)} cols={2} items={[
+            { value: "abono", label: "Es un abono", desc: `Faltan ${fmtMoney(falta - valor)}: queda pendiente en este periodo`, icon: "split", recommended: true },
+            { value: "completo", label: "Pagué todo", desc: "Esta vez costó menos: no falta nada", icon: "circle-check" },
+          ]} />
+        </FormField>
+      )}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <Button variant="ghost" onClick={() => { onOpenChange(false); onReschedule(fixed) }}>No tocaba pagar · cambiar fecha</Button>
-        <SubmitButton disabled={!(valor > 0) || !per} loading={busy} onClick={pay}>Registrar pago</SubmitButton>
+        <SubmitButton disabled={!(valor > 0) || !per} loading={busy} onClick={pay}>{menos && modoMenos === "abono" ? "Registrar abono" : "Registrar pago"}</SubmitButton>
       </div>
     </FieldGroup>
   )

@@ -182,7 +182,7 @@ const GUIDES_V5: Guide[] = [
     id: "quincena", t: "Usar la quincena", icon: "calendar-range", go: "balance", min: 3,
     s: [
       "Registra tus ingresos con sus días de pago y tus gastos fijos con el día en que los pagas.",
-      "Abre <b>Balance y quincenas</b> y entra a la pestaña de la quincena: ves lo que entra, lo que sale y lo que te queda en esa mitad del mes.",
+      "Abre <b>Balance</b> y entra a la pestaña de la quincena: ves lo que entra, lo que sale y lo que te queda en esa mitad del mes.",
       "Cambia de mes con las flechas para ver lo que viene, o abre la pestaña <b>Año</b> para ver el año completo. Filtra por módulo o por lo <b>Pendiente</b> y lo <b>Vencido</b>.",
       "En <b>Inicio</b>, la tarjeta de la quincena te dice cuánto te queda hoy.",
       "Si un gasto fijo es quincenal, puedes ponerle un valor distinto en cada quincena.",

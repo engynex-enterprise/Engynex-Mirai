@@ -100,7 +100,11 @@ async function prepareDestino() {
   const done = await query(LOCAL.dbUrl, "select to_regclass('public._mirai_migrations') is not null as ok").catch(() => [{ ok: false }])
   const base = done[0].ok ? await query(LOCAL.dbUrl, "select count(*)::int as n from public._mirai_migrations where name = 'v7/0001_baseline.sql'") : [{ n: 0 }]
   if (base[0].n === 0) dbTool(["destino", "--url", LOCAL.dbUrl])
-  else console.log("✓ base destino ya preparada")
+  else {
+    console.log("✓ base destino ya preparada")
+    // Migraciones nuevas (db/postgres/0004_* en adelante) que aún no tenga la base local.
+    dbTool(["pendientes", "--url", LOCAL.dbUrl])
+  }
   await compose(["restart", "postgrest"])
 }
 

@@ -39,7 +39,7 @@ test("ingresos: salario bruto con descuentos de nómina", async ({ page }, info)
   await expect(row.getByText(/^Bruto \$/)).toBeVisible()
   await expect(page.getByText("Ingreso mensual")).toBeVisible()
   // La tarjeta muestra lo que llega (con descuentos) y el valor antes de descuentos.
-  await expect(page.getByText("con descuentos", { exact: true })).toBeVisible()
+  await expect(page.getByText("lo que te llega", { exact: true })).toBeVisible()
   await expect(page.getByText(/^Sin descuentos/).filter({ visible: true }).first()).toBeVisible()
   await shot(page, "ingresos", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
@@ -86,7 +86,9 @@ test("ingresos flexibles: comprobante de nómina real, bono por quincena, valore
   await page.getByRole("radio", { name: "Cada quincena" }).click()
   await expect(page.getByRole("textbox", { name: "1ª quincena" })).toHaveValue("30.000")
   await page.getByRole("button", { name: "Guardar" }).click()
-  await expect(row(`Conectividad ${p}`).getByText(/^\$\s?30\.000$/).filter({ visible: true }).first()).toBeVisible()
+  // La lista muestra siempre el valor del mes y, debajo, cuánto es cada pago.
+  await expect(row(`Conectividad ${p}`).getByText(/^\$\s?60\.000$/).filter({ visible: true }).first()).toBeVisible()
+  await expect(row(`Conectividad ${p}`).getByText(/al mes · \$\s?30\.000 cada quincena/).filter({ visible: true }).first()).toBeVisible()
 
   // Auxilio que cambia: $200.000 en la 1ª y $50.000 en la 2ª, con días propios (las cajitas se ajustan a mano).
   await nuevo("Bono o auxilio", `Auxilio ${p}`, "No, me llega completo")
@@ -110,6 +112,7 @@ test("ingresos flexibles: comprobante de nómina real, bono por quincena, valore
   await expect(page.getByRole("textbox", { name: "Cada día" })).toHaveValue("100.000")
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(row(`Jornal ${p}`).getByText("Cada día (22 días al mes)", { exact: false })).toBeVisible()
+  await expect(row(`Jornal ${p}`).getByText(/^\$\s?2\.200\.000$/).filter({ visible: true }).first()).toBeVisible()
 
   // Al editar, el formulario recuerda el tipo y el reparto.
   await aux.click()

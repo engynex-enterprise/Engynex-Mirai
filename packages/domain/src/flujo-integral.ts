@@ -25,11 +25,11 @@ import { addMonths, fdate, iso, lastDay, parseDate, toDay } from "./dates"
 import { cuentaEnVariable, gastoYaContado } from "./balance"
 import { deudaTarjeta, tarjetaFlujoMes } from "./cards"
 import { ahorroApartado, type GoalMovIn, type LibroCuentas } from "./cuentas"
-import { fijoPeriods } from "./fixed"
+import { fijoPeriods, pagoPeriodo } from "./fixed"
 import { inv } from "./investments"
 import { loanEngine, loanName } from "./loans"
 import { loanTipo, tipoDef, type LoanTipo } from "./loan-tipos"
-import { conv } from "./money"
+import { conv, formatCOP as fmtCOP } from "./money"
 import { catIcon } from "./quincena"
 import { fijoValor, incomePagos } from "./reparto"
 import { gastoDeCobro, subOcc } from "./subscriptions"
@@ -189,11 +189,13 @@ export interface FlujoIntegral extends Periodo {
     sale: number
     /** Ahorro neto: aportes, fondo e inversiones menos lo que sacaste del fondo. */
     ahorro: number
-    /** entra − sale − ahorro. */
+    /** entra − sale − ahorro (sin préstamos: lo que te sobra de verdad). */
     queda: number
+    /** Plata en mano: `queda` + lo que te prestaron − lo que prestaste. */
+    caja: number
     /** Intereses dentro de las cuotas y pagos de tarjeta. */
     intereses: number
-    /** Préstamos que te dieron (ya están en `entra`) y que hiciste (ya están en `gasto`): plata prestada, no ingreso ni consumo. */
+    /** Préstamos que te dieron y que hiciste: plata prestada, no ingreso ni consumo (NO están en `entra` ni en `gasto`). */
     credEntra: number
     credSale: number
     pendienteEntra: number
@@ -213,6 +215,10 @@ export interface FlujoIntegral extends Periodo {
   disp: number
   gastado: number
   nGastos: number
+  /** Gasto contra el presupuesto (categorías variables): lo registrado + lo comprado con tarjeta (la base de porGastar). */
+  gastadoPres: number
+  /** Compras con tarjeta del periodo: aún no salen de tu cuenta, pero la tarjeta te las cobrará. */
+  conTarjetaPer: number
   presupuesto: number
   porGastar: number
 }
@@ -292,20 +298,29 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
   // 3. Gastos fijos y aportes programados (metas y fondo de emergencia).
   for (const f of b.fixedExpenses) {
     const ini = f.inicio ? isoOf(f.inicio) : ""
-    const desde = f.desde ? `${f.desde.slice(0, 7)}-01` : ""
+    // Sin "desde" ni "inicio" (fijos viejos): desde el mes en que se registró, como los ingresos (no salen vencidos
+    // los meses antes de usar Mirai).
+    const desde = f.desde ? `${f.desde.slice(0, 7)}-01` : ini ? "" : monthStart(raw(f).created_at)
     const aporte = !!f.link_type
     const cur = raw(f).currency
     for (const [y, m] of meses)
       for (const p of fijoPeriods(f, y, m, today)) {
         if ((ini && p.due < ini) || (desde && p.due < desde)) continue
-        const pg = f.payments.find((x) => x.periodo === p.per)
-        const fecha = pg?.fecha ? isoOf(pg.fecha) : p.due
-        push({
-          id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha, estado: conRegistro(fecha, !!pg), v: pg ? +pg.valor : conv(fijoValor(f, p.per), cur, trm),
-          ...(aporte
-            ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas" }
-            : { modulo: "fijos" as const, clase: "gasto" as const, n: f.nombre, s: "Gasto fijo", icon: catIcon(b.categories, f.category_id), cat: f.category_id ? catName(f.category_id) : "Gastos fijos", catId: f.category_id ?? null, href: "/fijos" }),
-        })
+        // Abonos: lo pagado sale como hecho (en la fecha del último pago) y, si falta, lo que falta sale aparte
+        // (programado o vencido). La moto: $70.000 la quincena, pagaste $40.000 → $40.000 hecho y $30.000 por pagar.
+        const PP = pagoPeriodo(f, p.per, f.payments)
+        const ult = PP.pagos.reduce<string>((a, x) => (x.fecha && isoOf(x.fecha) > a ? isoOf(x.fecha) : a), "")
+        const tipo = aporte
+          ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas" }
+          : { modulo: "fijos" as const, clase: "gasto" as const, n: f.nombre, s: "Gasto fijo", icon: catIcon(b.categories, f.category_id), cat: f.category_id ? catName(f.category_id) : "Gastos fijos", catId: f.category_id ?? null, href: "/fijos" }
+        if (PP.pagos.length) {
+          const fecha = ult || p.due
+          push({ id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha, estado: "hecho", v: PP.pagado, ...tipo, ...(PP.parcial ? { s: `${tipo.s} · abono` } : {}) })
+          if (PP.parcial && PP.falta > 0.5)
+            push({ id: `fijo:${f.id}:${p.per}:falta`, dir: "sale", fecha: p.due, estado: conRegistro(p.due, false), v: conv(PP.falta, cur, trm), ...tipo, s: `Falta de ${f.nombre} (ya abonaste ${fmtCOP(PP.pagado)})` })
+        } else {
+          push({ id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha: p.due, estado: conRegistro(p.due, false), v: conv(fijoValor(f, p.per), cur, trm), ...tipo })
+        }
       }
   }
 
@@ -445,8 +460,10 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
   const ent = movs.filter((x) => x.dir === "entra")
   const sal = movs.filter((x) => x.dir === "sale")
   const sum = (l: Mov[]) => l.reduce((a, x) => a + x.v, 0)
-  const entra = sum(ent.filter((x) => x.clase !== "ahorro"))
-  const gasto = sum(sal.filter((x) => x.clase === "gasto" || x.clase === "credito"))
+  // Préstamos que te dieron o que hiciste: plata prestada, no ingreso ni consumo. Van aparte (credEntra/credSale) para
+  // que "te sobra" no cuente como tuya la plata de un crédito (igual que el Dashboard).
+  const entra = sum(ent.filter((x) => x.clase !== "ahorro" && x.clase !== "credito"))
+  const gasto = sum(sal.filter((x) => x.clase === "gasto"))
   const deuda = sum(sal.filter((x) => x.clase === "deuda"))
   const ahorro = sum(sal.filter((x) => x.clase === "ahorro")) - sum(ent.filter((x) => x.clase === "ahorro"))
   const pend = (l: Mov[]) => sum(l.filter((x) => x.estado === "programado" || x.estado === "estimado"))
@@ -470,6 +487,9 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
 
   const queda = entra - gasto - deuda - ahorro
   const gastado = contados.reduce((a, g) => a + conv(+g.valor, g.currency, trm), 0)
+  const fcAll = fixedCategoryIds(b.fixedExpenses)
+  const gastadoPres = [...contados, ...conTarjeta].filter((g) => cuentaEnVariable(g, b.categories, b.fixedExpenses, fcAll)).reduce((a, g) => a + conv(+g.valor, g.currency, trm), 0)
+  const conTarjetaPer = conTarjeta.reduce((a, g) => a + conv(+g.valor, g.currency, trm), 0)
   return {
     ...P,
     momento: P.b < hoy ? "pasado" : P.a > hoy ? "futuro" : "actual",
@@ -477,10 +497,11 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     tot: {
       entra, gasto, deuda, sale: gasto + deuda, ahorro, queda, intereses: sal.reduce((a, x) => a + (x.interes ?? 0), 0),
       credEntra: sum(ent.filter((x) => x.clase === "credito")), credSale: sum(sal.filter((x) => x.clase === "credito")),
+      caja: queda + sum(ent.filter((x) => x.clase === "credito")) - sum(sal.filter((x) => x.clase === "credito")),
       pendienteEntra: pend(ent), pendienteSale: pend(sal), vencidoEntra: venc(ent), vencidoSale: venc(sal), nVencidos: movs.filter((x) => x.estado === "vencido").length,
     },
     porModulo, porCategoria, sinValor,
-    E: entra, Sa: gasto + deuda + ahorro, disp: queda, gastado, nGastos: contados.length, presupuesto, porGastar,
+    E: entra, Sa: gasto + deuda + ahorro, disp: queda, gastado, nGastos: contados.length, gastadoPres, conTarjetaPer, presupuesto, porGastar,
   }
 }
 
@@ -573,9 +594,12 @@ export function estadoIntegral(b: BookData, today: DateInput, X: ExtrasIntegral 
   // Impuestos ya causados que vencen en los próximos 12 meses, si no hay ya una deuda de impuestos registrada a mano.
   const fin = iso(addMonths(toDay(today), 12))
   let impuestos = 0
+  // Deudas de impuestos escritas a mano (PUC 2408): con el mismo impuesto en el nombre, no se suma el del calendario.
+  const impManual = b.liabilities.filter((p) => String((p as { cod?: string }).cod ?? "") === "2408").map((p) => norm((p as { nombre?: string }).nombre ?? ""))
   for (const c of b.calendarEvents as CalRow[]) {
     if (c.tipo !== "egreso" || !esImpuestoCausado(c)) continue
     const kw = c.titulo.match(PALABRA_IMP)?.[0]
+    if (impManual.length && (!kw || impManual.some((n) => n.includes(norm(kw)) || n === "" || /impuesto/.test(n) && !PALABRA_IMP.test(n)))) continue
     if (kw && b.fixedExpenses.some((f) => norm(f.nombre).includes(norm(kw)))) continue
     const fecha = calOcc(c, hoy, fin)[0]
     if (!fecha) continue

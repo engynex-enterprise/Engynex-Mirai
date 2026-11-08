@@ -16,7 +16,7 @@ describe("providerNextPayments", () => {
   })
   it("entre gasto fijo y suscripción gana la fecha más cercana; convierte la moneda", () => {
     const m = providerNextPayments(
-      [fijo({ provider_id: "p1", payments: [{ periodo: "2026-10", fecha: "2026-10-05", valor: 1 }] })],
+      [fijo({ provider_id: "p1", payments: [{ periodo: "2026-10", fecha: "2026-10-05", valor: 1, cierra: true }] })],
       [{ id: "s", nombre: "Nube", provider_id: "p1", valor: 10, currency: "USD", proximo: "2026-11-03", activa: true }], HOY, { USD: 4000 })
     expect(m.get("p1")).toMatchObject({ fecha: "2026-11-03", valor: 40000, origen: "suscripcion", nombre: "Nube" })
   })

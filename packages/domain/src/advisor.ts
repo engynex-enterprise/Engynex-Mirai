@@ -67,7 +67,7 @@ const LIMITES: Record<Estricto, [number, number, number, number]> = { prudente: 
 /** Reglas base (analizar de la v4). `cfg.usura` en % E.A. */
 export function analizar(b: BookData, d: { tipo: string; valor: number; cuotas: number; forma?: string; modoInt?: string; tasa?: number; cuotaV?: number; contactoId?: string }, cfg: { estricto?: string; usura: number }, today: DateInput): Analisis {
   const trm = b.settings.trm
-  const ing = ingresoMensual(b.incomes, trm), fij = fijosMes(b.fixedExpenses), cuo = cuotasMes(b.loans, "pagar", today), subs = subsMes(b.subscriptions, trm)
+  const ing = ingresoMensual(b.incomes, trm), fij = fijosMes(b.fixedExpenses, trm), cuo = cuotasMes(b.loans, "pagar", today), subs = subsMes(b.subscriptions, trm)
   const varr = gastoVariableReal(b.expenses, b.categories, b.fixedExpenses, today)
   const libre = ing - fij - cuo - subs - varr, liq = liquidez(b.assets, b.investments, trm, today), bas = gastosBasicos(b, today) || 1
   const valor = +d.valor || 0, n = Math.max(1, +d.cuotas || 1)

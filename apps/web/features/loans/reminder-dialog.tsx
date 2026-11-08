@@ -32,7 +32,8 @@ export function cobroMsg(e: LoanEngine, concepto: string, contacto: string, yo: 
   const fecha = cu[0] ? fmtDate(cu[0].fecha, { long: true }) : ""
   const venc = e.vencidas.length > 0
   const conc = concepto ? ` del préstamo "${concepto}"` : ""
-  const saldo = fmtMoney(e.saldo)
+  // Para saldar hoy: capital + intereses de las cuotas vencidas (no solo el capital).
+  const saldo = fmtMoney(e.paraSaldar)
   if (tono === "amable") return `Hola ${n}, ¿cómo estás? Te escribo para recordarte la cuota${conc}: ${tot}${venc ? `, que tenía fecha del ${fecha}` : `, para el ${fecha}`}. Quedan pendientes ${saldo} en total. Cualquier cosa me cuentas. ¡Gracias! ${yo.split(" ")[0]}`
   if (tono === "directo") return `Hola ${n}. Te recuerdo el pago${conc} por ${tot} (${venc ? "venció el" : "vence el"} ${fecha}). Saldo pendiente: ${saldo}. ¿Me confirmas cuándo me lo puedes transferir? Gracias.`
   return `Hola ${n}. El pago${conc} por ${tot} está atrasado desde el ${fecha}${e.mora ? ` (${e.mora} días)` : ""}. Necesito que lo pongamos al día lo antes posible. Saldo total pendiente: ${saldo}. Por favor respóndeme hoy con la fecha de pago.`

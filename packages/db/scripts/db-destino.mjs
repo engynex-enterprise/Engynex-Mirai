@@ -176,6 +176,15 @@ export async function destino(url, o = {}) {
   await reload(url)
 }
 
+/** Solo las migraciones nuevas (0004_* en adelante) que falten: lo que corre el stack local en cada arranque. */
+export async function pendientes(url) {
+  const done = await applied(url)
+  const faltan = readdirSync(DIR).filter((f) => /^\d{4}_.+\.sql$/.test(f) && f >= "0004" && !done.has(`v7/${f}`)).sort()
+  for (const f of faltan) await runSql(url, `v7/${f}`, readFileSync(join(DIR, f), "utf8"))
+  if (faltan.length) await reload(url)
+  else console.log("✓ sin migraciones pendientes")
+}
+
 /** Corte (scripts/migrate/dump-restore.sh), paso 1: compat + auth de Better Auth, antes de la línea base por secciones. */
 export async function preparar(url) {
   authDrift()
@@ -328,6 +337,7 @@ async function main() {
   else if (cmd === "destino") await destino(url, { seed: !flag("--no-seed") })
   else if (cmd === "baseline") await baseline(url)
   else if (cmd === "preparar") await preparar(url)
+  else if (cmd === "pendientes") await pendientes(url)
   else if (cmd === "cierre") await cierre(url)
   else if (cmd === "diff") {
     const r = await diff(url)

@@ -489,3 +489,36 @@ html.touch *::-webkit-scrollbar { display: none; }
 @media (max-width: 767px) { html { scroll-padding-top: calc(env(safe-area-inset-top) + 3.75rem); } }
 .mobile-topbar:not([data-scrolled]) { pointer-events: none; }
 .mobile-topbar:not([data-scrolled]) :is(button, a) { pointer-events: auto; }
+
+/* ───────────── Menú lateral plegado: riel de íconos al estilo de Facebook (components/app/app-sidebar.tsx) ─────────────
+   72 px de ancho, botones de 48 px centrados, el activo con fondo verde suave y una rayita a la izquierda, círculos para
+   Buscar, el ojo y Agregar, y los grupos abren un menú flotante (GroupFlyout). */
+[data-slot="sidebar"][data-collapsible="icon"] :is([data-slot="sidebar-header"], [data-slot="sidebar-content"], [data-slot="sidebar-footer"]) { align-items: center; }
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-group"] { padding-inline: 0; align-items: center; }
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu"] { align-items: center; gap: .25rem; }
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu-item"] { display: flex; justify-content: center; width: 100%; }
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu-button"] {
+  width: 3rem !important; height: 3rem !important; padding: 0 !important; justify-content: center; border-radius: .875rem; gap: 0;
+}
+/* Los textos se ocultan a la vista pero no al lector de pantalla (el botón conserva su nombre: "Notificaciones", "Agregar"…). */
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu-button"] > :not(:first-child) {
+  position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important;
+  overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important;
+}
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu-button"][data-active="true"] { background: var(--brand-soft); color: var(--foreground); }
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu-button"][data-active="true"]::before {
+  content: ""; position: absolute; left: 0; top: 25%; height: 50%; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand);
+}
+/* Buscar y Agregar: círculos (Agregar con el degradado de la marca, como el + de la barra del celular). */
+[data-slot="sidebar"][data-collapsible="icon"] [data-rail="pill"] { width: 2.75rem !important; height: 2.75rem !important; border-radius: 9999px; }
+[data-slot="sidebar"][data-collapsible="icon"] [data-rail="add"] {
+  width: 2.75rem !important; height: 2.75rem !important; border-radius: 9999px; background-image: linear-gradient(135deg, #9EDB4E, #3F7A1E);
+  box-shadow: 0 4px 12px rgba(42,127,20,.35);
+}
+[data-slot="sidebar"][data-collapsible="icon"] [data-rail="add"] svg { width: 1.375rem; height: 1.375rem; }
+/* La fila de Buscar + ojo y la del selector + contraer quedan una debajo de otra, centradas. */
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-header"] [data-slot="sidebar-menu-item"].flex { flex-direction: column; gap: .375rem; }
+/* Selector de libro y avatar: solo el logo / la foto, centrados. */
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-menu-button"][data-size="lg"] { width: 3rem !important; height: 3rem !important; }
+/* Sin barra de desplazamiento visible en el riel. */
+[data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-content"] { scrollbar-width: none; }

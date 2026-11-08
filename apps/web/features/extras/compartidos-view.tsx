@@ -32,7 +32,7 @@ import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { apiDeleteRow, apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { balancesGrupo } from "@/lib/domain"
-import { fmtDate, todayISO } from "@/lib/format"
+import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { useCategories } from "@/features/catalogs/hooks"
 import { useLast, useOpenKey } from "@/components/mirai/dialog-state"
@@ -152,6 +152,50 @@ const SORTS: ListSort<GroupExpense>[] = [
   { value: "menor", label: "Menor valor", by: (a, b) => Number(a.valor) - Number(b.valor) },
 ]
 
+/** "Rosa le pagó a Juan": todo lo que debe o un abono. No es gasto del grupo, solo salda (tipo "pago"). */
+function SettleDialog({ pago, onOpenChange }: { pago: { group: Group; de: string; a: string; v: number } | null; onOpenChange: (o: boolean) => void }) {
+  return (
+    <ResponsiveDialog open={!!pago} onOpenChange={onOpenChange} title={pago ? `${pago.de} le paga a ${pago.a}` : ""} description="Registra lo que se pagaron para saldar. Puede ser todo o una parte (un abono).">
+      {pago && <SettleBody key={`${pago.de}>${pago.a}`} pago={pago} onOpenChange={onOpenChange} />}
+    </ResponsiveDialog>
+  )
+}
+
+function SettleBody({ pago, onOpenChange }: { pago: { group: Group; de: string; a: string; v: number }; onOpenChange: (o: boolean) => void }) {
+  const bookId = useBookId()
+  const qc = useQueryClient()
+  const today = todayISO()
+  const [valor, setValor] = useState(Math.round(pago.v))
+  const [fecha, setFecha] = useState(today)
+  const [busy, setBusy] = useState(false)
+  const abono = valor > 0 && valor < pago.v - 1
+  const submit = async () => {
+    if (!(valor > 0) || busy) return
+    setBusy(true)
+    const fila = { group_id: pago.group.id, descripcion: `Pago de ${pago.de} a ${pago.a}`, valor, paga: pago.de, entre: [pago.a], fecha, tipo: "pago" as const }
+    const { error } = await apiInsertRow(bookId, "shared_group_expenses", fila)
+    setBusy(false)
+    if (error) return toast.error("No se pudo registrar el pago", { description: error.message })
+    toast.success(abono ? "Abono registrado" : "Pago registrado", { description: abono ? `${pago.de} todavía le debe ${fmtMoney(pago.v - valor)} a ${pago.a}.` : `${pago.de} y ${pago.a} quedaron a paz y salvo.` })
+    invalidateBook(qc, bookId, "shared_group_expenses")
+    onOpenChange(false)
+  }
+  return (
+    <FieldGroup className="pb-2">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField label="¿Cuánto pagó?" htmlFor="st-v" required hint={abono ? `Es un abono: le quedará debiendo ${fmtMoney(pago.v - valor)}.` : `Debe ${fmtMoney(pago.v)} en total.`}>
+          <MoneyInput id="st-v" value={valor} onChange={setValor} />
+        </FormField>
+        <FormField label="Fecha" htmlFor="st-f"><DatePicker id="st-f" value={fecha} onChange={(v) => setFecha(v ?? today)} /></FormField>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <SubmitButton disabled={!(valor > 0)} loading={busy} onClick={submit}>{abono ? "Registrar abono" : "Registrar pago"}</SubmitButton>
+      </div>
+    </FieldGroup>
+  )
+}
+
 export function CompartidosView() {
   const bookId = useBookId()
   const canEdit = useCanEdit()
@@ -163,13 +207,16 @@ export function CompartidosView() {
   const delE = useSoftDelete("shared_group_expenses", "Gasto eliminado")
   const [sel, setSel] = useState<string | null>(null)
   const [adding, setAdding] = useState<Group | null>(null)
+  const [pagando, setPagando] = useState<{ group: Group; de: string; a: string; v: number } | null>(null)
   const [persona, setPersona] = useState("")
   const g = groups.find((x) => x.id === sel) ?? groups[0]
   const gg = g ? gastos.filter((x) => x.group_id === g.id) : []
   const c = useListControls(gg, { text: (x) => `${x.descripcion} ${x.paga}`, sorts: SORTS })
   if (isPending) return <PageSkeleton kpis={3} />
   const B = g ? balancesGrupo(g.personas, gg.map((x) => ({ valor: Number(x.valor), paga: x.paga, entre: x.entre }))) : null
-  const total = gg.reduce((a, x) => a + Number(x.valor), 0)
+  // Los pagos entre personas (saldar) mueven quién debe, pero no son gasto del grupo.
+  const soloGastos = gg.filter((x) => x.tipo !== "pago")
+  const total = soloGastos.reduce((a, x) => a + Number(x.valor), 0)
   const nueva = persona.trim()
   const puedeAgregar = !!g && !!nueva && !g.personas.some((p) => p.toLowerCase() === nueva.toLowerCase())
   const addPersona = async () => {
@@ -188,7 +235,7 @@ export function CompartidosView() {
         <>
           {groups.length > 1 && <Segmented value={g.id} onChange={setSel} items={groups.map((x) => ({ value: x.id, label: x.nombre, icon: "split" }))} />}
           <KpiGrid className="xl:grid-cols-3">
-            <Kpi icon="receipt" tone="red" label="Gastado en total" value={<Money value={total} />} sub={`${gg.length} ${gg.length === 1 ? "gasto" : "gastos"} en ${g.nombre}`} />
+            <Kpi icon="receipt" tone="red" label="Gastado en total" value={<Money value={total} />} sub={`${soloGastos.length} ${soloGastos.length === 1 ? "gasto" : "gastos"} en ${g.nombre}`} />
             <Kpi icon="split" tone="blue" label="Le toca a cada uno" value={<Money value={total / (g.personas.length || 1)} />} sub="Si se divide parejo" />
             <Kpi icon="users" tone="violet" label="Personas" value={g.personas.length} sub={g.personas.slice(0, 3).join(", ") + (g.personas.length > 3 ? "…" : "")} />
           </KpiGrid>
@@ -199,6 +246,7 @@ export function CompartidosView() {
                   {B.tr.map((t, i) => (
                     <li key={i} className="flex flex-wrap items-center gap-2 rounded-lg bg-muted p-3 text-sm">
                       <b>{t.de}</b><ArrowRight className="size-4" aria-label="le paga a" /><b>{t.a}</b><Money value={t.v} className="ml-auto font-bold" />
+                      {canEdit && <Button size="sm" variant="outline" onClick={() => setPagando({ group: g, ...t })}>Registrar pago</Button>}
                     </li>
                   ))}
                 </ul>
@@ -234,8 +282,9 @@ export function CompartidosView() {
                 {!c.rows.length ? <NoResults c={c} /> : (
                   <ul className="grid divide-y">{c.rows.map((x) => (
                     <li key={x.id} className="flex items-center gap-3 py-3 text-sm">
-                      <ToneIcon icon="receipt" tone="blue" size="sm" />
-                      <span className="grid min-w-0 flex-1"><b className="truncate">{x.descripcion || "Gasto"}</b><span className="text-muted-foreground">Pagó {x.paga} · entre {x.entre.length} · {fmtDate(x.fecha)}</span></span>
+                      {x.tipo === "pago"
+                        ? <><ToneIcon icon="hand-coins" tone="green" size="sm" /><span className="grid min-w-0 flex-1"><b className="truncate">{x.paga} le pagó a {x.entre[0]}</b><span className="text-muted-foreground">Pago para saldar · {fmtDate(x.fecha)}</span></span></>
+                        : <><ToneIcon icon="receipt" tone="blue" size="sm" /><span className="grid min-w-0 flex-1"><b className="truncate">{x.descripcion || "Gasto"}</b><span className="text-muted-foreground">Pagó {x.paga} · entre {x.entre.length} · {fmtDate(x.fecha)}</span></span></>}
                       <Money value={Number(x.valor)} className="font-bold" />
                       {canEdit && <IconButton icon="trash-2" destructive label={`Eliminar gasto ${x.descripcion || ""}`.trim()} onClick={() => delE.mutate(x, { onSuccess: () => invalidateBook(qc, bookId, "expenses") })} />}
                     </li>))}</ul>
@@ -247,6 +296,7 @@ export function CompartidosView() {
       )}
       <GroupDialog open={nuevo} onOpenChange={(o) => !o && setNuevo(false)} onCreated={setSel} />
       <SharedExpenseDialog group={adding} onOpenChange={(o) => !o && setAdding(null)} />
+      <SettleDialog pago={pagando} onOpenChange={(o) => !o && setPagando(null)} />
     </div>
   )
 }

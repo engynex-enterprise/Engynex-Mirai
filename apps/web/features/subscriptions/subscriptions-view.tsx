@@ -102,13 +102,13 @@ export function SubscriptionsView() {
           { id: "nombre", header: "Servicio", sort: (s) => s.nombre.toLowerCase(), csv: (s) => s.nombre },
           { id: "valor", header: "Valor", sort: (s) => conv(Number(s.valor), s.currency, trm), csv: (s) => Number(s.valor) },
           { id: "moneda", header: "Moneda", csv: (s) => s.currency },
-          { id: "mensual", header: "Al mes (tu parte)", sort: (s) => subMensual({ ...s, valor: Number(s.valor) }, trm) / Math.max(1, s.comparte), csv: (s) => Math.round(subMensual({ ...s, valor: Number(s.valor) }, trm) / Math.max(1, s.comparte)) },
+          { id: "mensual", header: "Al mes (tu parte)", sort: (s) => subMensual({ ...s, valor: Number(s.valor) }, trm), csv: (s) => Math.round(subMensual({ ...s, valor: Number(s.valor) }, trm)) },
           { id: "ciclo", header: "Cobro", csv: (s) => (s.ciclo === "anual" ? "Anual" : "Mensual") },
           { id: "medio", header: "Medio de pago", csv: (s) => methods.find((m) => m.id === s.payment_method_id)?.nombre ?? "" },
           { id: "estado", header: "Estado", csv: (s) => (s.activa ? "Activa" : "Pausada") },
         ]}
         initialSort={{ id: "proximo", dir: "asc" }}
-        total={{ value: (s) => (s.activa ? subMensual({ ...s, valor: Number(s.valor) }, trm) / Math.max(1, s.comparte) : 0), label: "tu parte al mes" }}
+        total={{ value: (s) => (s.activa ? subMensual({ ...s, valor: Number(s.valor) }, trm) : 0), label: "tu parte al mes" }}
         search={{ placeholder: "Buscar suscripción", text: (s) => `${s.nombre} ${methods.find((m) => m.id === s.payment_method_id)?.nombre ?? ""} ${providers.find((p) => p.id === s.provider_id)?.nombre ?? ""}` }}
         views={[
           { id: "todas", label: "Todas" },
@@ -125,7 +125,7 @@ export function SubscriptionsView() {
         ]}
         emptyState={<EmptyState iso="suscripciones" title="Sin suscripciones registradas" description="Agrega lo que se cobra solo para que no te lleguen cobros olvidados." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar suscripción</Button>} />}
         item={(s) => {
-          const anual = (subMensual({ ...s, valor: Number(s.valor) }, trm) * 12) / Math.max(1, s.comparte)
+          const anual = subMensual({ ...s, valor: Number(s.valor) }, trm) * 12 // subMensual ya es tu parte
           const due = s.activa && s.proximo ? dueState(s.proximo, today, anticipo) : null
           return (
             <ListRow key={s.id} icon="repeat" media={<EntityLogo name={s.nombre} src={s.logo_path} provider={providers.find((p) => p.id === s.provider_id)} icon="repeat" seed={s.nombre} />} title={s.nombre}

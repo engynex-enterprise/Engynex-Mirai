@@ -36,7 +36,9 @@ for (const hoy of HOYS)
         const h = hormigas(b, hoy)
         const v4 = sc.plain("hormigas()")
         expect(h.mes.map((g) => g.id)).toEqual(v4.mes.map((g: { id: string }) => g.id))
-        expectClose({ totalMes: h.totalMes, meses: h.meses, proy: h.proy, anual: h.anual, over: h.over }, { totalMes: v4.totalMes, meses: v4.meses, proy: v4.proy, anual: v4.anual, over: v4.over })
+        // Lo registrado es igual a la v4. La proyección ya no es la lineal de la v4 (inflaba lo de pocos días): proyectarMes.
+        expectClose({ totalMes: h.totalMes, meses: h.meses }, { totalMes: v4.totalMes, meses: v4.meses })
+        expect(h.proy).toBeGreaterThanOrEqual(h.totalMes)
         // porCat: la v4 usa el nombre de la categoría y la v5 el id.
         const porNombre = Object.fromEntries(Object.entries(h.porCat).map(([id, v]) => [b.categories.find((c) => c.id === id)?.nombre ?? "", v]))
         for (const [cat, v] of Object.entries(v4.porCat as Record<string, { n: number; v: number }>)) expectClose(porNombre[b.categories.find((c) => c.nombre.toLowerCase() === cat.toLowerCase())?.nombre ?? ""], v)

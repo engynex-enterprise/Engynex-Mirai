@@ -31,7 +31,7 @@ import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import {
   CASA_EMPENO, FRECS, SISTEMAS, addPeriod, TASA_EMPENO, TIPOS_CREDITO, camposLoan, faltantesLoan, findContact, findEntity, histPlan, loanEngine, norm, normProv, previewLoan,
-  rateFromCuota, sistemaDe,
+  mensualDeEA, rateFromCuota, sistemaDe,
   textosLoan, tipoDef, tipoDefaults, tiposDe,
   type Campos, type HistMode, type InteresModo, type LoanTipo, type PagoModo, type Sistema, type TextosLoan,
 } from "@/lib/domain"
@@ -249,7 +249,8 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const params = (() => {
     const n = unico ? 1 : Math.max(1, Math.round(+plazo || 1))
     let t = 0
-    if (intEf === "tasa") { const e = num(ea); t = e && C?.ea ? (sis === "simple" ? e / 12 : (Math.pow(1 + e / 100, 1 / 12) - 1) * 100) : num(tasa) }
+    // E.A. → mensual siempre con la fórmula compuesta (mensualDeEA): si no, 26,82 % E.A. se guardaba como 2,235 % mensual.
+    if (intEf === "tasa") { const e = num(ea); t = e && C?.ea ? mensualDeEA(e) : num(tasa) }
     else if (intEf === "cuota") t = rateFromCuota(financiado, cuotaV, n, frecEf)
     return { monto: financiado, plazo: n, frec: frecEf, tasa: +t.toFixed(4), sistema: sis, inicio: inicioEf, extra: C?.extra ? extra : 0, vence: unico ? vence : null, primera: primeraEf }
   })()
@@ -316,7 +317,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
     for (const p of previos) await apiInsertRow(bookId, "loan_payments", p)
     if (pdf && verPdf) {
       const e = loanEngine({ ...params, payments: histPays.map((p) => ({ ...p, valor: p.valor ?? 0 })) }, today)
-      await descargarAcuerdo({ kind, hoy: today, user, contact: ctRow, nombre: quienNombre || "Otra persona", monto: financiado, concepto: conceptoF, inicio: inicioEf, plazo: params.plazo, frec: params.frec, sistema: params.sistema, tasa: params.tasa, e })
+      await descargarAcuerdo({ kind, hoy: today, user, contact: ctRow, nombre: quienNombre || "Otra persona", monto: financiado, concepto: conceptoF, inicio: inicioEf, plazo: params.plazo, frec: params.frec, sistema: params.sistema, tasa: params.tasa, e, usura: Number(cfg?.usura ?? 0) || undefined })
         .catch(() => toast.error("No se pudo generar el acuerdo en PDF", { description: "Descárgalo desde el detalle con “Acuerdo de pago (PDF)”." }))
     }
     setBusy(false)

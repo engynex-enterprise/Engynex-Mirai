@@ -1,7 +1,7 @@
 // Deudas y préstamos (F2-D-7) con las reglas de features/loans/loan-form.tsx y pay-loan-dialog.tsx:
 // - crear por tipo, con QUIÉN presta como registro escogible sin duplicar (RegistrosService); si solo llega el nombre
 //   (`acreedor`), la misma regla de la migración 20261103002000_deudas_acreedor_registro.sql;
-// - pagar N cuotas (los valores del plan de loanEngine) o abonar (a plazo o a cuota; no más que el saldo).
+// - pagar N cuotas (los valores del plan de loanEngine), parte de la cuota que sigue, o abonar (a plazo o a cuota; no más que el saldo).
 import { randomUUID } from "node:crypto"
 import { Injectable } from "@nestjs/common"
 import type { z } from "zod"
@@ -91,9 +91,12 @@ export class LoansService {
     const e0 = loanEngine(loan, today)
     if (e0.done || e0.saldo <= 0 || !e0.plan.length) throw DomainError.conflict(LOAN_DONE)
     const base = { book_id: w.bookId, created_by: w.userId, loan_id: loanId, fecha: b.fecha, payment_method_id: b.payment_method_id ?? null, ...(b.nota?.trim() ? { nota: b.nota.trim() } : {}) }
+    // Parte de la cuota: una fila "cuota" por el valor pagado (el motor la toma como parte de la cuota que sigue).
     const rows: Rec[] = "cuotas" in b
       ? e0.plan.slice(0, b.cuotas).map((p) => ({ ...base, id: randomUUID(), tipo: "cuota", valor: p.valor }))
-      : [{ ...base, id: randomUUID(), tipo: "abono", valor: Math.min(b.abono, e0.saldo), modo: b.modo ?? (L.sistema === "americano" ? "cuota" : "plazo") }]
+      : "parcial" in b
+        ? [{ ...base, id: randomUUID(), tipo: "cuota", valor: Math.min(b.parcial, e0.paraSaldar) }]
+        : [{ ...base, id: randomUUID(), tipo: "abono", valor: Math.min(b.abono, e0.saldo), modo: b.modo ?? (L.sistema === "americano" ? "cuota" : "plazo") }]
     const pagos = await store.insert(w.scope, "loan_payments", rows)
     const e1 = loanEngine({ ...(loan as object), payments: [...pays, ...rows.map((r) => ({ ...r, valor: num(r.valor) }))] } as never, today)
     w.changed("loan_payments", String(rows[0].id), "INSERT")

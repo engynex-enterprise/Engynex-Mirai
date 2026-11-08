@@ -51,8 +51,8 @@ export function vistaDashboard(book: BookData, today: string, X: ExtrasIntegral,
   const cats = F.porCategoria.slice(0, 8).map((c) => ({ cat: c.cat, v: Math.round(c.v) }))
   const otras = F.porCategoria.slice(8).reduce((a, c) => a + c.v, 0)
   if (otras > 0) cats.push({ cat: "Otras", v: Math.round(otras) })
-  // Como la tarjeta de totales: sin préstamos que te dieron o hiciste (plata prestada, no ingreso ni gasto).
-  const totales = { entra: F.tot.entra - F.tot.credEntra, sale: F.tot.sale - F.tot.credSale, queda: F.tot.queda - F.tot.credEntra + F.tot.credSale }
+  // F.tot ya viene sin préstamos que te dieron o hiciste (plata prestada, no ingreso ni gasto).
+  const totales = { entra: F.tot.entra, sale: F.tot.sale, queda: F.tot.queda }
   return { periodo: P, flujo: F, estado: E, serie: S, totales, compromisos: comp, capacidad: cap, deudas: deu, vencidos, proximos, impuestos, sinValor, decisiones: dec, patrimonio: pat, categorias: cats, metas: metasAvance(book, today) }
 }
 export type VistaDashboard = ReturnType<typeof vistaDashboard>

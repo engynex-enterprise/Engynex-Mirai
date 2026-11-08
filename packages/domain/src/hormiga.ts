@@ -31,11 +31,14 @@ export const KW: Record<string, string> = {
   Inversión: "\\bcdt\\b|inversion|fiducia|acciones",
 }
 
-/** Palabras típicas de gasto hormiga. */
-export const HKW = /tinto|cafe|gaseosa|snack|paquete|dulce|chicle|helado|galleta|mecato|empanada|pandebono|bunuelo|domicilio|rappi|propina|cigarr|chocolatina|golosina|loteria|chance|antojo|cerveza|jugo|agua botella|retiro|cuota de manejo|recarga|uber|taxi/
+/**
+ * Palabras típicas de gasto hormiga, como palabra completa ("tintorería" no es un tinto). "retiro" y "cuota de manejo"
+ * son las comisiones del banco (pequeñas y evitables); sacar efectivo no es un gasto y no se registra como tal.
+ */
+export const HKW = /\b(tintos?|cafes?|gaseosas?|snacks?|paquetes?|dulces?|chicles?|helados?|galletas?|mecato|empanadas?|pandebonos?|bunuelos?|domicilios?|rappi|propinas?|cigarr\w*|chocolatinas?|golosinas?|loteria|chance|antojos?|cervezas?|jugos?|agua botella|retiros?|cuota de manejo|recargas?|uber|taxi)\b/
 
-/** Categorías que nunca son hormiga (necesidades básicas). */
-const NO_HORMIGA = ["Vivienda", "Servicios públicos", "Educación", "Salud"]
+/** Categorías que nunca son hormiga (necesidades básicas y suscripciones, que son un cobro fijo). */
+const NO_HORMIGA = ["Vivienda", "Servicios públicos", "Educación", "Salud", "Suscripciones"]
 
 const catByName = (cats: CategoryIn[], n: string) => cats.find((c) => c.nombre.toLowerCase() === String(n || "").toLowerCase())
 

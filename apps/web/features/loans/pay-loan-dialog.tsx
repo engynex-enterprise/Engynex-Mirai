@@ -38,7 +38,7 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
   const today = todayISO()
   const isC = loan.kind === "cobrar"
   const e0 = loanEngine(loan, today)
-  const [tipo, setTipo] = useState<"cuota" | "abono">("cuota")
+  const [tipo, setTipo] = useState<"cuota" | "parcial" | "abono">("cuota")
   const [ncuotas, setN] = useState("1")
   const [valor, setValor] = useState(0)
   const [fecha, setFecha] = useState(today)
@@ -65,6 +65,9 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
     if (k >= 1 && Math.abs(r.valor - k * cuota) <= Math.max(1000, cuota * 0.01)) {
       setTipo("cuota"); setN(String(Math.min(k, e0.plan.length)))
       setOcr({ busy: false, msg: `Pago de ${fmtMoney(r.valor)}${r.fecha ? ` del ${fmtDate(r.fecha)}` : ""}: coincide con ${k} cuota${k === 1 ? "" : "s"} completa${k === 1 ? "" : "s"}.` })
+    } else if (cuota && r.valor < cuota) {
+      setTipo("parcial"); setValor(r.valor)
+      setOcr({ busy: false, msg: `Pago de ${fmtMoney(r.valor)}${r.fecha ? ` del ${fmtDate(r.fecha)}` : ""}: es menos que la cuota (${fmtMoney(cuota)}), así que lo registramos como parte de la cuota. Puedes cambiarlo.` })
     } else {
       setTipo("abono"); setValor(r.valor)
       setOcr({ busy: false, msg: `Pago de ${fmtMoney(r.valor)}${r.fecha ? ` del ${fmtDate(r.fecha)}` : ""}. No coincide con la cuota (${fmtMoney(cuota)}), así que lo registramos como abono. Puedes cambiarlo.` })
@@ -74,19 +77,22 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
   const n = Math.max(1, Math.min(+ncuotas || 1, e0.plan.length))
 
   const sim = tipo === "cuota"
-    ? e0.plan.slice(0, n).map(() => ({ fecha, tipo: "cuota" as const, valor: 0 }))
+    ? e0.plan.slice(0, n).map((q) => ({ fecha, tipo: "cuota" as const, valor: q.valor }))
+    : tipo === "parcial" ? (valor > 0 ? [{ fecha, tipo: "cuota" as const, valor: Math.min(valor, e0.paraSaldar) }] : [])
     : valor > 0 ? [{ fecha, tipo: "abono" as const, valor: Math.min(valor, e0.saldo), modo }] : []
   const e1 = loanEngine({ ...loan, payments: [...loan.payments, ...sim] }, today)
   const paid = e1.pagado - e0.pagado
 
   const submit = async () => {
-    if (tipo === "abono" && !valor) return toast.error("Escribe el valor del abono")
+    if (tipo !== "cuota" && !valor) return toast.error(tipo === "parcial" ? "Escribe cuánto pagó de la cuota" : "Escribe el valor del abono")
     setBusy(true)
-    const { error } = await payLoanApi(loan.id, tipo === "cuota" ? { cuotas: n, fecha, payment_method_id: medio } : { abono: Math.min(valor, e0.saldo), modo, fecha, payment_method_id: medio })
+    const { error } = await payLoanApi(loan.id, tipo === "cuota" ? { cuotas: n, fecha, payment_method_id: medio }
+      : tipo === "parcial" ? { parcial: Math.min(valor, e0.paraSaldar), fecha, payment_method_id: medio }
+      : { abono: Math.min(valor, e0.saldo), modo, fecha, payment_method_id: medio })
     setBusy(false)
     if (error) return toast.error("No se pudo registrar", { description: error.message })
     kickAutomations()
-    toast.success(tipo === "cuota" ? (n > 1 ? `${n} cuotas registradas` : "Cuota registrada") : "Abono registrado", { description: e1.done ? "¡Queda saldado!" : `${isC ? "Te debe" : "Debes"} ${fmtMoney(e1.saldo)}.` })
+    toast.success(tipo === "cuota" ? (n > 1 ? `${n} cuotas registradas` : "Cuota registrada") : tipo === "parcial" ? "Parte de la cuota registrada" : "Abono registrado", { description: e1.done ? "¡Queda saldado!" : tipo === "parcial" && e1.next ? `De la cuota del ${fmtDate(e1.next.fecha)} falta ${fmtMoney(e1.next.valor)}.` : `${isC ? "Te debe" : "Debes"} ${fmtMoney(e1.paraSaldar)}.` })
     invalidateBook(qc, bookId, "loans"); invalidateBook(qc, bookId, "loan_payments")
     onOpenChange(false)
   }
@@ -101,11 +107,16 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
         {ocr.msg && <p className="w-full text-sm">{ocr.msg}</p>}
       </div>
       <p className="rounded-lg bg-muted p-3 text-sm">{isC ? "Te debe" : "Debes"} <b><Money value={e0.saldo} /></b>{e0.next && <> · próxima cuota <b><Money value={e0.next.valor} /></b> el {fmtDate(e0.next.fecha)}</>}</p>
-      <ChoiceCards value={tipo} onChange={(v) => setTipo(v as typeof tipo)} items={[
+      <ChoiceCards cols={e0.next ? 3 : 2} value={tipo} onChange={(v) => setTipo(v as typeof tipo)} items={[
         { value: "cuota", label: "Cuota completa", desc: "El valor de la cuota del plan", icon: "calendar-check" },
-        { value: "abono", label: "Un abono", desc: "Un valor diferente a la cuota", icon: "piggy-bank" },
+        ...(e0.next ? [{ value: "parcial", label: "Parte de la cuota", desc: `Pagó solo una parte de los ${fmtMoney(e0.next.valor)}`, icon: "split" }] : []),
+        { value: "abono", label: "Un abono a la deuda", desc: "Plata extra que baja lo que se debe", icon: "piggy-bank" },
       ]} />
-      {tipo === "cuota" ? (
+      {tipo === "parcial" ? (
+        <FormField label="¿Cuánto pagó de la cuota?" htmlFor="pl-p" required hint={e0.next ? `La cuota del ${fmtDate(e0.next.fecha)} es de ${fmtMoney(e0.next.valor)}. Lo que falte sigue pendiente en esa cuota.` : undefined}>
+          <MoneyInput id="pl-p" value={valor} onChange={setValor} />
+        </FormField>
+      ) : tipo === "cuota" ? (
         maxN > 1 && <FormField label="¿Cuántas cuotas?"><Segmented value={ncuotas} onChange={setN} items={Array.from({ length: maxN }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))} /></FormField>
       ) : (
         <>
@@ -129,7 +140,7 @@ function Body({ loan, onOpenChange }: { loan: LoanIn & { id: string }; onOpenCha
       {sim.length > 0 && (
         <div className="rounded-lg border-l-4 border-lime bg-brand-soft p-3 text-sm" aria-live="polite">
           <p>Quedará así: <b><Money value={e1.saldo} /></b></p>
-          <p className="text-muted-foreground">{tipo === "cuota" ? `Se registran ${fmtMoney(paid)}.` : `Abono de ${fmtMoney(Math.min(valor, e0.saldo))}.`} {e1.done ? "¡Queda saldado!" : `Faltarán ${e1.plan.length} cuotas de ${fmtMoney(e1.plan[0]?.valor ?? 0)}.`}</p>
+          <p className="text-muted-foreground">{tipo === "cuota" ? `Se registran ${fmtMoney(paid)}.` : tipo === "parcial" ? `Se registran ${fmtMoney(paid)} como parte de la cuota.` : `Abono de ${fmtMoney(Math.min(valor, e0.saldo))}.`} {e1.done ? "¡Queda saldado!" : `Faltarán ${e1.plan.length} cuotas de ${fmtMoney(e1.plan[0]?.valor ?? 0)}.`}</p>
         </div>
       )}
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={tipo === "abono" && !(valor > 0)} loading={busy} onClick={submit}>Registrar pago</SubmitButton></div>

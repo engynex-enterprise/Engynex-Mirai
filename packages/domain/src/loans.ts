@@ -38,6 +38,14 @@ export function mesesUnico(inicio: string | undefined, vence: string | null | un
 }
 
 /** Tasa de interés de cada periodo (fracción, no %). */
+/**
+ * Tasa efectiva anual (fracción) de una tasa mensual en %: (1 + m)^12 − 1. Una sola fórmula en el formulario, el detalle,
+ * el acuerdo en PDF y el Dashboard (el interés se paga cada mes, también en interés simple).
+ */
+export const eaDeMensual = (tasaMensualPct: number): number => ((+tasaMensualPct || 0) > 0 ? Math.pow(1 + (+tasaMensualPct || 0) / 100, 12) - 1 : 0)
+/** Tasa mensual en % equivalente a una E.A. en %. */
+export const mensualDeEA = (eaPct: number): number => ((+eaPct || 0) > 0 ? (Math.pow(1 + (+eaPct || 0) / 100, 1 / 12) - 1) * 100 : 0)
+
 export function periodRate(L: LoanRate): number {
   const im = (+L.tasa || 0) / 100
   if (L.sistema === "sin" || !im) return 0
@@ -70,7 +78,10 @@ export const annuity = (S: number, i: number, n: number): number => (n <= 0 ? S 
 export interface CuotaRow {
   n: number
   fecha: string
+  /** Lo que falta de la cuota (si ya se abonó una parte, sin esa parte). */
   valor: number
+  /** Lo que ya se abonó a esta cuota (pago parcial). */
+  abonado?: number
   int: number
   cap: number
   extra: number
@@ -80,6 +91,8 @@ export interface CuotaRow {
 export type HistRow =
   | { id?: string; tipo: "cuota"; n: number; fecha: string; prog: string; valor: number; int: number; cap: number; extra: number; saldo: number }
   | { id?: string; tipo: "abono"; fecha: string; valor: number; int: 0; cap: number; extra: 0; saldo: number; modo?: string | null }
+  /** Parte de una cuota: abona a la cuota `n` (no la completa todavía). */
+  | { id?: string; tipo: "parcial"; n: number; fecha: string; prog: string; valor: number; int: 0; cap: 0; extra: 0; saldo: number }
 
 export interface LoanEngine {
   /** Tasa por periodo. */
@@ -103,6 +116,10 @@ export interface LoanEngine {
   done: boolean
   progreso: number
   extraFut: number
+  /** Intereses (y cargos) de las cuotas ya vencidas sin pagar: también se deben hoy. */
+  intVencido: number
+  /** Para saldar hoy: el capital que falta + los intereses vencidos (sin intereses futuros). */
+  paraSaldar: number
 }
 
 type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null; primera?: string | null }
@@ -137,13 +154,34 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
   const hist: HistRow[] = []
   let intPag = 0
   let pagado = 0
+  // Lo abonado a la cuota que sigue (pagos de cuota por menos de su valor). Lo que sobra de un pago pasa a la siguiente.
+  let credito = 0
   const pagos = L.payments.map((p, ix) => ({ ...p, ix })).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.ix - b.ix)
   for (const p of pagos) {
     if (p.tipo === "cuota") {
-      const q = next()
-      if (!q) continue
-      S -= q.cap; k++; nRem--; intPag += q.int; pagado += q.valor
-      hist.push({ id: p.id, tipo: "cuota", n: k, fecha: iso(parseDate(p.fecha)), prog: iso(fechaCuota(L, k)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+      let q = next()
+      if (!q || S <= 0.5) continue
+      // Valor 0 (registros viejos) = la cuota exacta. Menos que lo que falta de la cuota = solo una parte de ella.
+      let v = +p.valor > 0 ? +p.valor : Math.max(0, q.valor - credito)
+      if (credito + v < q.valor - 1) {
+        credito += v; pagado += v
+        hist.push({ id: p.id, tipo: "parcial", n: k + 1, fecha: iso(parseDate(p.fecha)), prog: iso(fechaCuota(L, k + 1)), valor: v, int: 0, cap: 0, extra: 0, saldo: Math.max(S, 0) })
+        continue
+      }
+      // Completa la cuota (y si sobra, completa las siguientes o queda abonado a la que sigue).
+      let primera = true
+      while (q && S > 0.5 && credito + v >= q.valor - 1) {
+        const usa = Math.max(0, q.valor - credito)
+        v -= usa
+        credito = 0
+        S -= q.cap; k++; nRem--; intPag += q.int; pagado += usa
+        hist.push({ id: primera ? p.id : undefined, tipo: "cuota", n: k, fecha: iso(parseDate(p.fecha)), prog: iso(fechaCuota(L, k)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+        primera = false
+        // Un pago de cuota exacto (lo normal) no reparte el redondeo de centavos a la siguiente.
+        if (v <= 1) { v = 0; break }
+        q = next()
+      }
+      if (v > 0 && S > 0.5) { credito += v; pagado += v; hist.push({ id: undefined, tipo: "parcial", n: k + 1, fecha: iso(parseDate(p.fecha)), prog: iso(fechaCuota(L, k + 1)), valor: v, int: 0, cap: 0, extra: 0, saldo: Math.max(S, 0) }) }
     } else {
       const v = Math.min(+p.valor || 0, S)
       if (v <= 0) continue
@@ -165,7 +203,9 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
     while (S > 0.5 && nRem > 0 && plan.length < 1200) {
       const q = next()!
       j++; S -= q.cap; nRem--
-      plan.push({ n: j, fecha: iso(fechaCuota(L, j)), valor: q.valor, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0) })
+      // La primera cuota pendiente descuenta lo que ya se abonó a ella.
+      const ab = plan.length === 0 ? Math.min(credito, q.valor) : 0
+      plan.push({ n: j, fecha: iso(fechaCuota(L, j)), valor: q.valor - ab, int: q.int, cap: q.cap, extra, saldo: Math.max(S, 0), ...(ab > 0 ? { abonado: ab } : {}) })
     }
     ;({ S, nRem, k, C, capF, base } = sv)
   }
@@ -183,6 +223,8 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
     done: saldo <= 0.5,
     progreso: L.monto ? 1 - saldo / L.monto : 1,
     extraFut,
+    intVencido: vencidas.reduce((a, r) => a + r.int + r.extra, 0),
+    paraSaldar: saldo + vencidas.reduce((a, r) => a + r.int + r.extra, 0),
   }
 }
 
@@ -206,7 +248,7 @@ export function previewLoan(p: LoanPreviewInput, today: DateInput) {
   const e = loanEngine(L, today)
   const first = e.plan[0]
   const last = e.plan[e.plan.length - 1]
-  const ea = L.sistema === "simple" ? ((+L.tasa || 0) * 12) / 100 : Math.pow(1 + (+L.tasa || 0) / 100, 12) - 1
+  const ea = L.sistema === "sin" ? 0 : eaDeMensual(+L.tasa)
   return {
     cuota: first ? first.valor : 0,
     cuotaFin: last ? last.valor : 0,

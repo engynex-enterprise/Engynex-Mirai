@@ -59,7 +59,7 @@ export function indicadores(b: BookData, today: DateInput): Indicador[] {
   const r4 = T.A ? T.P / T.A : 0
   add({ k: "¿Qué parte de lo que tienes es deuda?", v: pct(r4), r: r4, st: r4 < 0.4 ? "ok" : r4 < 0.6 ? "warn" : "bad", meta: "Lo sano es menos del 40%", d: `Debes ${$(T.P)} y tienes bienes por ${$(T.A)}.`, max: 1, icon: "scale" }, [[hayAct, "tus bienes y cuentas (lo que tienes)", "balance"]])
   const r5 = ing ? H.proy / ing : 0
-  add({ k: "Gastos hormiga", v: pct(r5), r: r5, st: r5 < 0.03 ? "ok" : r5 < 0.06 ? "warn" : "bad", meta: "Menos del 3% del ingreso", d: `Este mes van camino a ${$(H.proy)}.`, max: 0.1, icon: "coffee" }, [[hayIng, "tus ingresos", "ingresos"], [hayGastosCur, "los gastos de este mes", "gastos"]])
+  add({ k: "Gastos hormiga", v: pct(r5), r: r5, st: r5 < 0.03 ? "ok" : r5 < 0.06 ? "warn" : "bad", meta: "Menos del 3% del ingreso", d: H.base === "pronto" ? `Llevas ${$(H.totalMes)} este mes. Aún es pronto para proyectar el mes.` : `Llevas ${$(H.totalMes)}; ${H.base === "historial" ? "por lo que sueles gastar" : "a este ritmo"} el mes cerraría en unos ${$(H.proy)}.`, max: 0.1, icon: "coffee" }, [[hayIng, "tus ingresos", "ingresos"], [hayGastosCur, "los gastos de este mes", "gastos"]])
   const r6 = ing - gReal
   add({ k: "Dinero libre cada mes", v: $(r6), r: Math.max(r6, 0), st: r6 > ing * 0.15 ? "ok" : r6 > 0 ? "warn" : "bad", meta: "Lo que sobra después de todos tus gastos", d: "Es la plata con la que puedes ahorrar, invertir o asumir algo nuevo.", max: Math.max(ing * 0.4, 1), icon: "wallet" }, [[hayIng, "tus ingresos", "ingresos"], [hayGastosPrev, `los gastos de ${mesPrev} (al menos 5)`, "gastos"]])
   return L

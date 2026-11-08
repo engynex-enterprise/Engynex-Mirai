@@ -26,8 +26,11 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
   await expect(page.getByText("Pantalla de inicio")).toBeVisible({ timeout: 30_000 })
   if (!mobile) {
     await page.getByRole("textbox", { name: "Buscar ajuste" }).fill("tasas")
-    await expect(page.getByRole("button", { name: "Finanzas" })).toBeVisible()
-    await page.getByRole("button", { name: "Finanzas" }).click()
+    // Las pestañas son enlaces (?tab=…): funcionan aunque el JavaScript no haya arrancado.
+    const nav = page.getByRole("navigation", { name: "Secciones de ajustes" })
+    await expect(nav.getByRole("link", { name: "Finanzas" })).toBeVisible()
+    await nav.getByRole("link", { name: "Finanzas" }).click()
+    await expect(page).toHaveURL(/tab=finanzas/)
   } else await tab("finanzas")
   await expect(page.getByText("Tasa de usura (% E.A.)")).toBeVisible()
   await shot(page, "ajustes-finanzas", info.project.name)
@@ -103,7 +106,8 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
 /** La campana: en escritorio está en el menú lateral; en celular, dentro de «Menú» (barra inferior). */
 async function abrirCampana(page: import("@playwright/test").Page) {
   const bell = page.getByRole("button", { name: "Notificaciones" }).first()
-  if (!(await bell.isVisible())) await page.getByRole("button", { name: "Menú" }).first().click()
+  // Por el ancho (isVisible no espera: con la página aún cargando parecía celular y buscaba «Menú» en escritorio).
+  if ((page.viewportSize()?.width ?? 1366) < 768) await page.getByRole("button", { name: "Menú", exact: true }).first().click()
   await bell.click()
 }
 

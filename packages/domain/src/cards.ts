@@ -17,41 +17,85 @@ export function cortesDesde(t: Pick<CreditCardIn, "corte">, fecha: string, hasta
   return n
 }
 
+const dia = (y: number, m: number, d: number) => new Date(y, m, Math.min(d, lastDay(y, m)))
+const corteDia = (t: Pick<CreditCardIn, "corte">) => +t.corte || 25
+const pagoDia = (t: { pago?: number | null }) => +(t.pago ?? 0) || 10
+
+/**
+ * Corte cuya factura se paga en el mes `m` (base 0) de `y`: si el día de pago va después del de corte, el corte de ese
+ * mismo mes (corte 5 → pago 20); si no, el del mes anterior (corte 25 → pago 10 del mes siguiente).
+ */
+export function cortePagadoEnMes(t: Pick<CreditCardIn, "corte"> & { pago?: number | null }, y: number, m: number): Date {
+  return pagoDia(t) > corteDia(t) ? dia(y, m, corteDia(t)) : dia(y, m - 1, corteDia(t))
+}
+
+/** Fecha límite de pago en el mes `m` de `y`. */
+export const fechaPagoMes = (t: { pago?: number | null }, y: number, m: number) => dia(y, m, pagoDia(t))
+
+/** Último corte cuya fecha de pago ya llegó a `hasta` (lo pagado hasta ese día, si pagaste a tiempo). */
+function ultimoCortePagado(t: Pick<CreditCardIn, "corte"> & { pago?: number | null }, hasta: Date): Date {
+  const y = hasta.getFullYear(), m = hasta.getMonth()
+  return hasta >= fechaPagoMes(t, y, m) ? cortePagadoEnMes(t, y, m) : cortePagadoEnMes(t, y, m - 1)
+}
+
 export interface PurchaseState {
   /** Valor de cada cuota. */
   cuota: number
   /** Número de cuotas. */
   n: number
-  /** Cuotas ya facturadas. */
+  /** Cuotas ya pagadas (su fecha de pago ya pasó). */
   k: number
+  /** Cuotas ya facturadas (cortes después de la compra). */
+  fact: number
   saldo: number
   /** Intereses totales de la compra. */
   int: number
   pendiente: boolean
 }
 
-/** Estado de una compra a cuotas a una fecha. Una sola cuota no causa intereses. */
-export function compraEstado(t: Pick<CreditCardIn, "corte" | "tasa">, c: CardPurchaseIn, hasta: DateInput): PurchaseState {
+/**
+ * Estado de una compra a cuotas a una fecha. La cuota j se cobra en el j-ésimo corte después de la compra y se paga en
+ * la fecha de pago siguiente: el saldo baja ese día, no el día del corte. Una sola cuota no causa intereses.
+ */
+export function compraEstado(t: Pick<CreditCardIn, "corte" | "tasa"> & { pago?: number | null }, c: CardPurchaseIn, hasta: DateInput): PurchaseState {
   const n = Math.max(1, +c.cuotas || 1)
   const i = n > 1 ? (+t.tasa || 0) / 100 : 0
   const cuota = annuity(+c.valor, i, n)
-  const k = c.pagada ? n : Math.min(cortesDesde(t, c.fecha, toDay(hasta)), n)
+  const h = toDay(hasta)
+  // Antes de la compra no hay nada que deber.
+  if (!c.pagada && iso(h) < String(c.fecha).slice(0, 10)) return { cuota, n, k: 0, fact: 0, saldo: 0, int: cuota * n - c.valor, pendiente: false }
+  const fact = c.pagada ? n : Math.min(cortesDesde(t, c.fecha, h), n)
+  const k = c.pagada ? n : Math.min(cortesDesde(t, c.fecha, ultimoCortePagado(t, h)), n)
   let saldo = +c.valor
   for (let j = 0; j < k; j++) {
     const int = saldo * i
     saldo = Math.max(0, saldo - (cuota - int))
   }
   if (c.pagada) saldo = 0
-  return { cuota, n, k, saldo, int: cuota * n - c.valor, pendiente: k < n && !c.pagada }
+  return { cuota, n, k, fact, saldo, int: cuota * n - c.valor, pendiente: k < n && !c.pagada }
 }
 
-/** Pago del mes según el plan de cuotas, sin mirar pagos registrados (tarjetaPagoMes de la v4). */
-export function tarjetaCuotaMes(t: Pick<CreditCardIn, "corte" | "tasa" | "purchases">, today: DateInput, offset = 0): number {
+/** Cuota de la compra que se cobra en la factura del corte `corte` (0 si no le toca) y su parte de intereses. */
+function cuotaEnCorte(t: Pick<CreditCardIn, "corte" | "tasa">, c: CardPurchaseIn, corte: Date): { cuota: number; interes: number } {
+  if (c.pagada) return { cuota: 0, interes: 0 }
+  const n = Math.max(1, +c.cuotas || 1)
+  const j = cortesDesde(t, c.fecha, corte)
+  if (j < 1 || j > n) return { cuota: 0, interes: 0 }
+  const i = n > 1 ? (+t.tasa || 0) / 100 : 0
+  const cuota = annuity(+c.valor, i, n)
+  let saldo = +c.valor
+  for (let x = 1; x < j; x++) saldo = Math.max(0, saldo - (cuota - saldo * i))
+  return { cuota, interes: saldo * i }
+}
+
+/**
+ * Pago de la tarjeta en el mes de hoy + `offset`, según el plan de cuotas (sin mirar pagos registrados): la factura del
+ * corte que se paga ese mes, con la cuota que le toca a cada compra. No depende del día del mes en que se mire.
+ */
+export function tarjetaCuotaMes(t: Pick<CreditCardIn, "corte" | "tasa" | "purchases"> & { pago?: number | null }, today: DateInput, offset = 0): number {
   const ref = addMonths(toDay(today), offset)
-  return (t.purchases || []).reduce((a, c) => {
-    const e = compraEstado(t, c, ref)
-    return a + (e.pendiente ? e.cuota : 0)
-  }, 0)
+  const corte = cortePagadoEnMes(t, ref.getFullYear(), ref.getMonth())
+  return (t.purchases || []).reduce((a, c) => a + cuotaEnCorte(t, c, corte).cuota, 0)
 }
 
 // ——— Pagos reales de la tarjeta (tabla card_payments) ———
@@ -74,7 +118,7 @@ export interface CardPaymentIn {
 }
 /** Tarjeta con sus pagos registrados (opcionales: sin pagos todo se calcula como en la v4). `lib/book-data.ts` los deja en `pagos`. */
 type ConPagos = { payments?: CardPaymentIn[] | null; pagos?: CardPaymentIn[] | null }
-export type CardConPagos = Pick<CreditCardIn, "corte" | "tasa" | "purchases"> & { id?: string } & ConPagos
+export type CardConPagos = Pick<CreditCardIn, "corte" | "tasa" | "purchases"> & { id?: string; pago?: number | null } & ConPagos
 
 const isoDay = (d: DateInput) => iso(toDay(d))
 const pagosDe = (t: ConPagos) => (t.payments ?? t.pagos ?? []).filter((p) => !p.deleted_at && +p.valor > 0)
@@ -103,8 +147,14 @@ export function ajusteTarjeta(t: CardConPagos, hasta: DateInput): number {
     if (f < x.ref) x.ref = f
     porMes.set(k, x)
   }
+  // Si la fecha de pago de ese mes ya llegó, el saldo base ya descontó su cuota: cuenta la diferencia. Si pagaste antes de
+  // la fecha límite, el saldo base aún no la descuenta: baja la deuda completo.
+  const hd = toDay(hasta)
   let aj = 0
-  for (const { v, ref } of porMes.values()) aj += v - tarjetaCuotaMes(t, ref)
+  for (const { v, ref } of porMes.values()) {
+    const r = toDay(ref)
+    aj += fechaPagoMes(t, r.getFullYear(), r.getMonth()) <= hd ? v - tarjetaCuotaMes(t, ref) : v
+  }
   return aj
 }
 
@@ -145,8 +195,8 @@ export function tarjetaFlujoMes(t: CardConPagos, y: number, m: number, today: Da
   const hoy = toDay(today)
   const off = (y - hoy.getFullYear()) * 12 + (m - hoy.getMonth())
   const ref = addMonths(hoy, off)
-  const i = (+t.tasa || 0) / 100
-  const interes = (t.purchases || []).reduce((a, c) => { const e = compraEstado(t, c, ref); return a + (e.pendiente && e.n > 1 ? e.saldo * i : 0) }, 0)
+  const corte = cortePagadoEnMes(t, ref.getFullYear(), ref.getMonth())
+  const interes = (t.purchases || []).reduce((a, c) => a + cuotaEnCorte(t, c, corte).interes, 0)
   const pagos = pagosTarjetaMes(t, y, m)
   return { pagos, estimado: pagos.length ? 0 : tarjetaPagoMes(t, today, off), interes }
 }

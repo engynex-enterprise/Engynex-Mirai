@@ -12,22 +12,25 @@ const editable = (el: Element | null) =>
   !!el && ((el as HTMLElement).isContentEditable || el.tagName === "TEXTAREA" || el.tagName === "SELECT" ||
     (el.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "reset", "range", "color", "file"].includes((el as HTMLInputElement).type)))
 
-/** Tablet (768–1199 px): el menú lateral queda en íconos, como en el iPad; al pasar a pantalla grande vuelve a abrirse. */
+/**
+ * Tablet (768–1199 px): el menú lateral queda en íconos, como en el iPad; al pasar a pantalla grande vuelve a abrirse.
+ * Solo actúa al abrir y al cambiar de tamaño (si la persona lo abre a mano en la tablet, se respeta).
+ */
 function useTabletRail() {
   const { setOpen, open } = useSidebar()
   const auto = useRef(false)
-  const openRef = useRef(open)
-  useEffect(() => { openRef.current = open }, [open])
+  const st = useRef({ setOpen, open })
+  useEffect(() => { st.current = { setOpen, open } }, [setOpen, open])
   useEffect(() => {
     const mq = matchMedia("(min-width: 768px) and (max-width: 1199px)")
     const apply = () => {
-      if (mq.matches && openRef.current) { auto.current = true; setOpen(false) }
-      else if (!mq.matches && auto.current && innerWidth >= 1200) { auto.current = false; setOpen(true) }
+      if (mq.matches && st.current.open) { auto.current = true; st.current.setOpen(false) }
+      else if (!mq.matches && auto.current && innerWidth >= 1200) { auto.current = false; st.current.setOpen(true) }
     }
     apply()
     mq.addEventListener("change", apply)
     return () => mq.removeEventListener("change", apply)
-  }, [setOpen])
+  }, [])
 }
 
 /**

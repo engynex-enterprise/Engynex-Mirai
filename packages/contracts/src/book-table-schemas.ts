@@ -80,6 +80,8 @@ export const BOOK_TABLE_SCHEMAS = {
   expenses: z.strictObject({
     cat_src: z.enum(["regla", "historial", "palabras", "palabra", "ia", "manual"]).nullable().optional(),
     category_id: Uuid.nullable().optional(),
+    /** Persona a la que se le pagó (db/postgres/0004_gasto_pagado_a.sql); un negocio o empresa va en provider_id. */
+    contact_id: Uuid.nullable().optional(),
     currency: Txt(500).optional(),
     /** expenses_deducible_check (20261103003600_deducibles.sql) = DEDUCIBLES de @mirai/domain/renta. */
     deducible: z.enum(["salud", "vivienda", "educacion", "dependiente"]).nullable().optional(),
@@ -147,6 +149,8 @@ export const BOOK_TABLE_SCHEMAS = {
     vmin: Money.nullable().optional(),
   }),
   fixed_expense_payments: z.strictObject({
+    /** true: deja el periodo pagado; false: abono (falta el resto). db/postgres/0005_abonos_fijos.sql */
+    cierra: z.boolean().nullable().optional(),
     fecha: IsoDate.optional(),
     fixed_expense_id: Uuid,
     payment_method_id: Uuid.nullable().optional(),
@@ -290,6 +294,8 @@ export const BOOK_TABLE_SCHEMAS = {
     fecha: IsoDate.optional(),
     group_id: Uuid,
     paga: Txt(500),
+    /** "pago": una persona le pagó a otra para saldar (no es gasto del grupo). db/postgres/0005_abonos_fijos.sql */
+    tipo: z.enum(["gasto", "pago"]).optional(),
     valor: Money.optional(),
   }),
   assets: z.strictObject({

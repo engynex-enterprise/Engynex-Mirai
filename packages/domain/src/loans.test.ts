@@ -85,7 +85,10 @@ describe("previewLoan y rateFromCuota", () => {
   for (const sistema of ["frances", "aleman", "simple", "americano", "sin"])
     it(`previewLoan ${sistema}`, () => {
       const p = { monto: 5000000, sistema, tasa: 1.5, frec: "mensual", plazo: 24, inicio: "2026-11-05", extra: 8000 }
-      expectClose(previewLoan(p, HOY), legacyCall(L4, "previewLoan", p))
+      // La E.A. ya no es la de la v4 (12 × tasa en interés simple; con tasa en "sin intereses"): siempre (1+m)^12−1, y 0 sin intereses.
+      const v5 = previewLoan(p, HOY), v4 = legacyCall(L4, "previewLoan", p) as { ea: number }
+      expectClose({ ...v5, ea: 0 }, { ...v4, ea: 0 })
+      expect(v5.ea).toBeCloseTo(sistema === "sin" ? 0 : Math.pow(1.015, 12) - 1, 10)
     })
   it("previewLoan sin inicio usa hoy", () => {
     const p = { monto: 1000000, sistema: "frances", tasa: 2, frec: "quincenal", plazo: 6 }

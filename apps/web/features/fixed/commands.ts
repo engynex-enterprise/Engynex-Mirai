@@ -5,7 +5,7 @@ import { command, type RpcArgs } from "@/features/book/command"
 /** pay_fixed_expense → POST /fixed/:id/pay (también el pago de antes del alta, `prev-AAAA-MM`). La API agrega sola el sufijo de la quincena. */
 export const payFixedExpense = (a: RpcArgs<"pay_fixed_expense">) =>
   command(async (c, bookId) =>
-    unwrapData(await c.fixed.pay({ params: { bookId, id: a.p_fixed }, body: { periodo: a.p_periodo, fecha: a.p_fecha, valor: a.p_valor, ...(a.p_medio ? { payment_method_id: a.p_medio } : {}) } })))
+    unwrapData(await c.fixed.pay({ params: { bookId, id: a.p_fixed }, body: { periodo: a.p_periodo, fecha: a.p_fecha, valor: a.p_valor, ...(a.p_medio ? { payment_method_id: a.p_medio } : {}), ...(a.p_cierra !== undefined ? { completo: a.p_cierra } : {}) } })))
 
 /** unpay_fixed_expense → DELETE /fixed/payments/:id. */
 export const unpayFixedExpense = (a: RpcArgs<"unpay_fixed_expense">) =>

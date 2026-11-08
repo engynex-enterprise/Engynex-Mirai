@@ -161,8 +161,8 @@ export function DashboardView() {
 
   if (isPending || !d) return <DashboardSkeleton />
   const { F, E, comp, cap, deu } = d
-  // Como en la gráfica: sin préstamos que te dieron o hiciste (plata prestada, no ingreso ni gasto).
-  const t = { ...F.tot, entra: F.tot.entra - F.tot.credEntra, sale: F.tot.sale - F.tot.credSale, queda: F.tot.queda - F.tot.credEntra + F.tot.credSale }
+  // F.tot ya viene sin préstamos que te dieron o hiciste (plata prestada, no ingreso ni gasto): la misma cifra de Balance e Inicio.
+  const t = F.tot
   const prevPat = d.pat.at(-2)?.v
   const vacio = !book!.incomes.length && !book!.expenses.length && !book!.fixedExpenses.length && !book!.loans.length && !book!.assets.length
   const salidasMod = F.porModulo.filter((g) => g.sale > 0 && g.modulo !== "presupuesto")
@@ -191,8 +191,8 @@ export function DashboardView() {
       <KpiGrid>
         <Kpi icon="scale" tone={E.pat >= 0 ? "brand" : "red"} label="Patrimonio" value={<Money value={E.pat} />} valueClassName={E.pat >= 0 ? undefined : "text-danger"}
           sub={prevPat != null ? <><Money value={E.pat - prevPat} sign /> frente al mes pasado</> : "Lo que tienes − lo que debes"} info="Si hoy vendieras todo y pagaras todas tus deudas, esto te quedaría." />
-        <Kpi icon="landmark" tone="red" label="Lo que debes" value={<Money value={deu.total} />} sub={deu.libre ? `Libre de deudas en ${fmtMonth(deu.libre.slice(0, 7))}` : deu.total ? "Sin fecha final" : "No tienes deudas"}
-          info="Saldo de tus créditos, préstamos y tarjetas. La fecha es cuando pagas la última cuota si sigues al día." />
+        <Kpi icon="landmark" tone="red" label="Lo que debes" value={<Money value={E.P} />} sub={deu.libre ? `Créditos y tarjetas: libre en ${fmtMonth(deu.libre.slice(0, 7))}` : E.P ? (deu.total ? "Créditos y tarjetas sin fecha final" : "Otras deudas e impuestos") : "No tienes deudas"}
+          info="Todo lo que debes, igual que en el Balance: créditos, préstamos, tarjetas, otras deudas e impuestos causados. La fecha es cuando pagas la última cuota de tus créditos y tarjetas si sigues al día." />
         <Kpi icon="lock" tone={comp.pct >= 0.5 ? "red" : comp.pct >= 0.4 ? "amber" : "green"} label="Compromisos fijos" value={comp.ingreso ? `${Math.round(comp.pct * 100)} %` : "—"} sub={comp.ingreso ? <>de tu ingreso (<Money value={comp.total} short /> al mes)</> : "Registra tus ingresos"}
           info="Lo que pagas sí o sí cada mes (fijos, cuotas, tarjetas y suscripciones) frente a lo que te llega. Lo sano es menos del 50 %." />
         <Kpi icon="umbrella" tone={cap.meses >= cap.metaMeses ? "green" : cap.meses >= 3 ? "amber" : "red"} label="Meses de colchón" value={cap.basicos ? cap.meses.toFixed(1).replace(".", ",") : "—"} sub={`La meta es ${cap.metaMeses} meses`}
@@ -269,8 +269,8 @@ export function DashboardView() {
         </Panel>
         <Panel title="Capacidad de ahorro y colchón" icon="piggy-bank" info="Lo que te queda al mes después de tus compromisos y de lo que sueles gastar en el día a día, y cuántos meses aguantas sin ingresos.">
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-0.5 rounded-lg bg-secondary/50 p-3"><span className="text-xs text-muted-foreground">Puedes ahorrar al mes</span><Money value={cap.libre} className={cn("text-lg font-bold", cap.libre >= 0 ? "text-success" : "text-danger")} /></div>
-            <div className="grid gap-0.5 rounded-lg bg-secondary/50 p-3"><span className="text-xs text-muted-foreground">Gastas en el día a día</span><Money value={cap.variable} className="text-lg font-bold" /></div>
+            <div className="grid gap-0.5 rounded-lg bg-secondary/50 p-3"><span className="text-xs text-muted-foreground">Puedes ahorrar al mes</span>{cap.variableBase === "sin-datos" ? <span className="text-lg font-bold text-muted-foreground">—</span> : <Money value={cap.libre} className={cn("text-lg font-bold", cap.libre >= 0 ? "text-success" : "text-danger")} />}</div>
+            <div className="grid gap-0.5 rounded-lg bg-secondary/50 p-3"><span className="text-xs text-muted-foreground">Gastas en el día a día</span>{cap.variableBase === "sin-datos" ? <span className="text-lg font-bold text-muted-foreground">—</span> : <Money value={cap.variable} className="text-lg font-bold" />}<span className="text-[11px] leading-tight text-muted-foreground">{cap.variableBase === "historial" ? "Promedio de tus meses completos" : cap.variableBase === "presupuesto" ? "Según los topes de tu presupuesto" : "Aún no: registra un mes completo de gastos"}</span></div>
           </div>
           <div className="grid gap-1.5">
             <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm"><span><b>Fondo de emergencia:</b> {cap.basicos ? `${cap.meses.toFixed(1).replace(".", ",")} de ${cap.metaMeses} meses` : "registra tus gastos básicos"}</span><Money value={cap.fondo} short className="text-muted-foreground" /></div>

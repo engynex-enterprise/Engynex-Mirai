@@ -18,7 +18,7 @@ import { invalidateBook, useSoftDelete } from "@/hooks/use-book-data"
 import { useIdParam, useNewParam } from "@/hooks/use-new-param"
 import { unpayFixedExpense } from "./commands"
 import { FFREC, fijoStatus, fijoValor, fijosMes, fixedReparto, relTime, toDay, type FixedExpenseIn, type FixedStatus } from "@/lib/domain"
-import { fmtDate, todayISO } from "@/lib/format"
+import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { DUE_HINT, daysBetween } from "@/lib/list-helpers"
 import { useBookData } from "@/features/book/use-book-data"
 import { memberName, useCategories, useMembers, usePaymentMethods, useProviders } from "@/features/catalogs/hooks"
@@ -55,7 +55,8 @@ export function FixedView() {
     return { f, st, next, estado }
   })
   const k = (() => {
-    const pend = rows.flatMap(({ f, st }) => st.periods.filter((p) => !p.pago && p.due.startsWith(mes)).map((p) => fijoValor(f, p.per))).reduce((a, b) => a + b, 0)
+    // Lo que falta del mes: periodos sin pagar completos (con abonos, solo lo que falta).
+    const pend = rows.flatMap(({ f, st }) => st.periods.filter((p) => !p.completo && p.due.startsWith(mes)).map((p) => (p.parcial ? p.falta : fijoValor(f, p.per)))).reduce((a, b) => a + b, 0)
     const pagado = rows.flatMap(({ f }) => f.payments.filter((p) => p.fecha.startsWith(mes))).reduce((a, p) => a + Number(p.valor), 0)
     const venc = rows.reduce((a, { st }) => a + st.venc.length, 0)
     return { total: fijosMes(fixed as unknown as FixedExpenseIn[]), pend, pagado, venc, pronto: rows.filter((r) => r.estado === "pronto").length }
@@ -102,7 +103,7 @@ export function FixedView() {
         search={{ placeholder: "Buscar gasto fijo", text: (r) => `${r.f.nombre} ${catOf(r.f)?.nombre ?? ""} ${provOf(r.f)?.nombre ?? r.f.proveedor ?? ""} ${FFREC[r.f.frec]}` }}
         views={[
           { id: "todos", label: "Todos" },
-          { id: "pend", label: "Pendientes este mes", match: (r) => r.st.periods.some((p) => !p.pago && p.due.startsWith(mes)) || r.st.venc.length > 0 },
+          { id: "pend", label: "Pendientes este mes", match: (r) => r.st.periods.some((p) => !p.completo && p.due.startsWith(mes)) || r.st.venc.length > 0 },
           { id: "venc", label: "Vencidos", match: (r) => r.estado === "vencido", hint: DUE_HINT.vencido },
           { id: "aldia", label: "Pagados este mes", match: (r) => r.f.payments.some((p) => p.fecha.startsWith(mes)) },
         ]}
@@ -129,6 +130,7 @@ export function FixedView() {
               badges={<>
                 {f.variable && <StatusPill tone="info" hint="El valor cambia cada mes (agua, luz, gas…). Mirai usa el promedio entre lo mínimo y lo máximo.">varía según consumo</StatusPill>}
                 {f.link_type && <StatusPill tone="estimado" hint="Aporte programado a una meta o al fondo de emergencia.">aporte</StatusPill>}
+                {next?.parcial && <StatusPill tone="warn" hint={`Abonaste ${fmtMoney(next.pagado)} a este periodo. Toca "Registrar pago" para pagar lo que falta.`}>faltan {fmtMoney(next.falta)}</StatusPill>}
                 {pill}
               </>}
               subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor, paraQuien(f, members)].filter(Boolean).join(" · ")}
@@ -159,7 +161,7 @@ export function FixedView() {
           const m = methods.find((x) => x.id === p.payment_method_id)
           return (
             <ListRow key={p.id} icon="circle-check" media={<EntityLogo name={f.nombre} provider={provOf(f)} icon="circle-check" tone="success" />} title={f.nombre}
-              subtitle={`Pagado el ${fmtDate(p.fecha)}${m ? ` · ${m.nombre}` : ""}`}
+              subtitle={`${(p as { cierra?: boolean | null }).cierra === false ? "Abono el" : "Pagado el"} ${fmtDate(p.fecha)}${m ? ` · ${m.nombre}` : ""}`}
               value={<Money value={Number(p.valor)} className="font-bold" />}
               actions={canEdit ? [{ label: "Deshacer pago", icon: "undo-2", onClick: () => unpay(p.id) }] : []} />
           )

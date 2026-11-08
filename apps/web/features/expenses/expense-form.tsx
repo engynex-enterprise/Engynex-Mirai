@@ -32,8 +32,8 @@ import {
   categoryOptions, memberOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings,
 } from "@/features/catalogs/hooks"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
-import { ProviderSelect } from "@/features/providers/provider-select"
-import { categoriaSugerida, periodoTexto, sugerirPagoFijo } from "@/lib/domain"
+import { PagarA } from "./pagar-a"
+import { categoriaSugerida, periodoTexto, sugerirPagoFijo, vecesMes } from "@/lib/domain"
 import { DEDUCIBLES } from "@/lib/domain/renta"
 import { useBookData } from "@/features/book/use-book-data"
 import { useCanEdit } from "@/components/app/app-context"
@@ -51,6 +51,7 @@ const schema = z.object({
   quien: z.string(),
   payment_method_id: z.string().nullable(),
   provider_id: z.string().nullable(),
+  contact_id: z.string().nullable(),
   usarFondo: z.boolean(),
   /** Deducción de renta a la que puede servir (expenses.deducible); null = no aplica. */
   deducible: z.string().nullable(),
@@ -91,12 +92,12 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
   const catManualRef = useRef(false)
   useEffect(() => { catManualRef.current = catManual }, [catManual])
   const [catSrc, setCatSrc] = useState<"regla" | "historial" | "palabras" | "ia" | null>(null)
-  const [aiH, setAiH] = useState<{ h: boolean; razon: string } | null>(null)
+  const [aiH, setAiH] = useState<{ h: boolean; razon: string; src: "ia" | "regla" } | null>(null)
   const [aiBusy, setAiBusy] = useState<"foto" | "cat" | null>(null)
   const [fotoMsg, setFotoMsg] = useState<string | null>(null)
   const fotoRef = useRef<HTMLInputElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const aiCache = useRef(new Map<string, { category_id: string | null; hormiga: boolean | null; razon: string }>())
+  const aiCache = useRef(new Map<string, { category_id: string | null; hormiga: boolean | null; razon: string; src?: "regla" | "ia" }>())
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const { data: book } = useBookData()
   const canEdit = useCanEdit()
@@ -108,11 +109,11 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       ? {
           descripcion: expense.descripcion, valor: Number(expense.valor), category_id: expense.category_id ?? "",
           hormigaMode: expense.hormiga_src === "manual" ? (expense.hormiga ? "si" : "no") : "auto",
-          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, usarFondo: false, deducible: expense.deducible ?? null,
+          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, contact_id: expense.contact_id ?? null, usarFondo: false, deducible: expense.deducible ?? null,
         }
       : {
           descripcion: preset?.descripcion ?? "", valor: 0, category_id: preset?.category_id || defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
-          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, usarFondo: true, deducible: null,
+          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, contact_id: null, usarFondo: true, deducible: null,
         },
   })
   const { errors, isSubmitting } = form.formState
@@ -151,7 +152,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       let r = aiCache.current.get(key)
       if (!r) {
         setAiBusy("cat")
-        const veces = history.filter((g) => (g.descripcion ?? "").trim().toLowerCase() === desc.trim().toLowerCase()).length
+        // Veces en los últimos 30 días (lo que la IA recibe como "veces al mes"), no en toda la historia.
+        const veces = vecesMes(desc, history, todayISO())
         const out = await classifyExpenses([{ i: 0, descripcion: desc, valor: Math.round(valor), veces_mes: veces }])
         setAiBusy(null)
         if (!out?.[0]) return
@@ -159,7 +161,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       }
       if (form.getValues("descripcion") !== desc) return
       if (needCat && r.category_id && !catManualRef.current) { form.setValue("category_id", r.category_id, { shouldValidate: true }); setCatSrc("ia") }
-      if (needH && r.hormiga !== null) setAiH({ h: r.hormiga, razon: r.razon })
+      if (needH && r.hormiga !== null) setAiH({ h: r.hormiga, razon: r.razon, src: r.src === "regla" ? "regla" : "ia" })
     }, 750)
   }
 
@@ -212,10 +214,12 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       book_id: bookId, descripcion: v.descripcion.trim(), valor: v.valor, category_id: v.category_id, fecha: v.fecha || todayISO(),
       member_id: v.quien === "familia" ? null : v.quien, payment_method_id: v.payment_method_id || defaults.medio || methods[0]?.id || null,
       hormiga: v.hormigaMode === "auto" ? (aiH?.h ?? false) : v.hormigaMode === "si",
-      hormiga_src: v.hormigaMode === "auto" ? (aiH ? ("ia" as const) : null) : ("manual" as const),
+      // Quién lo decidió de verdad: una regla o la IA (la ayuda del ícono lo dice así).
+      hormiga_src: v.hormigaMode === "auto" ? (aiH ? aiH.src : null) : ("manual" as const),
       hormiga_razon: v.hormigaMode === "auto" && aiH ? aiH.razon : null,
       cat_src: catManual && catSrc !== "ia" ? ("manual" as const) : catSrc,
       provider_id: v.provider_id,
+      contact_id: v.contact_id,
       deducible: v.deducible || null,
     }
     const { data, error } = expense ? await apiUpdateRow<Row<"expenses">>(bookId, "expenses", expense.id, row) : await apiInsertRow<Row<"expenses">>(bookId, "expenses", row)
@@ -289,9 +293,13 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
               <FormField label="Fecha" htmlFor="g-fecha"><Controller control={form.control} name="fecha" render={({ field }) => <DatePicker id="g-fecha" value={field.value} onChange={(v) => field.onChange(v ?? todayISO())} />} /></FormField>
               <FormField label="¿Quién gastó?" htmlFor="g-quien"><Controller control={form.control} name="quien" render={({ field }) => <Combobox id="g-quien" value={field.value} onChange={field.onChange} options={memberOptions(members)} />} /></FormField>
               <FormField label="Medio de pago" htmlFor="g-medio"><Controller control={form.control} name="payment_method_id" render={({ field }) => <Combobox id="g-medio" value={field.value} onChange={field.onChange} options={methodOptions(methods)} />} /></FormField>
-              <FormField label="Proveedor (opcional)" htmlFor="g-prov" tip="A quién le pagaste: Enel, el colegio, el Éxito… Elígelo de tu lista o escribe el nombre para agregarlo.">
-                <Controller control={form.control} name="provider_id" render={({ field }) => (
-                  <ProviderSelect id="g-prov" value={field.value} onChange={(id, p) => {
+
+            </div>
+            <FormField label="¿A quién le pagaste? (opcional)" tip="No siempre hace falta: en la gasolinera o la tienda de barrio déjalo así. Si es un negocio al que le pagas seguido (Enel, el colegio) elige Negocio o empresa; si es alguien en particular (la señora del aseo, el arrendador), Una persona.">
+              <Controller control={form.control} name="provider_id" render={({ field }) => (
+                <PagarA provider={field.value} contact={w.contact_id}
+                  onContact={(id) => form.setValue("contact_id", id)}
+                  onProvider={(id, p) => {
                     field.onChange(id)
                     // Medio de pago preferido del proveedor (solo al crear).
                     if (!expense && p?.payment_method_id) form.setValue("payment_method_id", p.payment_method_id)
@@ -299,9 +307,8 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
                     const c = categoriaSugerida(p, cats)
                     if (c && (!catManual || !form.getValues("category_id"))) { form.setValue("category_id", c, { shouldValidate: true }); setCatSrc(null) }
                   }} />
-                )} />
-              </FormField>
-            </div>
+              )} />
+            </FormField>
             <FormField label="¿Sirve para tu declaración de renta? (opcional)" htmlFor="g-deducible"
               tip="Algunos gastos bajan el impuesto de renta: la medicina prepagada, los intereses del crédito de vivienda o del ICETEX. Márcalos y Mirai los suma en Declaración de renta."
               hint={DEDUCIBLES.find((d) => d.value === w.deducible)?.help}>

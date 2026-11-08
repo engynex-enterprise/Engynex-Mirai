@@ -79,7 +79,12 @@ export type ExpenseIn = Pick<Row<"expenses">, "id" | "fecha" | "descripcion" | "
   hormiga_src?: string | null
 }
 
-export type FixedPaymentIn = Pick<Row<"fixed_expense_payments">, "periodo" | "fecha" | "valor">
+export type FixedPaymentIn = Pick<Row<"fixed_expense_payments">, "periodo" | "fecha" | "valor"> & {
+  id?: string
+  /** true: deja el periodo pagado; false: abono (falta el resto); null/undefined: pagos de antes (ver `pagoPeriodo`). */
+  cierra?: boolean | null
+  deleted_at?: string | null
+}
 
 export type FixedExpenseIn = Pick<Row<"fixed_expenses">, "id" | "nombre" | "valor" | "frec" | "dia"> & {
   /** Valor distinto en cada quincena (lib/domain/reparto.ts). */

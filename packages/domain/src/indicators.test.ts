@@ -3,20 +3,27 @@ import { expectClose, scenario } from "./__tests__/adapt"
 import { HOYS, RICO } from "./__tests__/fixtures"
 import { healthScore, indicadores } from "./indicators"
 
+/**
+ * El indicador "Gastos hormiga" usa la proyección nueva (proyectarMes: no infla lo de pocos días), distinta a la lineal de
+ * la v4: de él solo se compara el nombre, la meta y el ícono (ver proyeccion.test.ts para sus cifras).
+ */
+type Ind = { k: string; v?: unknown; r?: unknown; st?: unknown; d?: unknown }
+const sinHormiga = <T extends Ind>(I: T[]) => I.map((i) => (i.k === "Gastos hormiga" ? { ...i, v: 0, r: 0, st: "", d: "" } : i))
+
 for (const hoy of HOYS)
   describe(`indicadores() = v4 · hoy ${hoy}`, () => {
     it("sample", () => {
       const sc = scenario(hoy)
-      expectClose(indicadores(sc.book, hoy), sc.plain("indicadores()"))
+      expectClose(sinHormiga(indicadores(sc.book, hoy)), sinHormiga(sc.plain("indicadores()")))
     })
     it("sample + extras", () => {
       const sc = scenario(hoy).mutate(RICO)
-      expectClose(indicadores(sc.book, hoy), sc.plain("indicadores()"))
+      expectClose(sinHormiga(indicadores(sc.book, hoy)), sinHormiga(sc.plain("indicadores()")))
     })
     it("libro vacío (faltan datos)", () => {
       const sc = scenario(hoy, "S=normalize(defaults())")
       const I = indicadores(sc.book, hoy)
-      expectClose(I, sc.plain("indicadores()"))
+      expectClose(sinHormiga(I), sinHormiga(sc.plain("indicadores()")))
       expect(I.every((i) => !i.ok || i.falta.length === 0)).toBe(true)
       expect(healthScore(I).visible).toBe(false)
     })

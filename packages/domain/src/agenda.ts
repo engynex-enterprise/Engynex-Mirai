@@ -46,8 +46,9 @@ export function agenda(b: BookData, today: DateInput): AgendaItem[] {
   for (const f of b.fixedExpenses) {
     const st = fijoStatus(f, t)
     const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: +f.valor, dir: "pagar" as const, go: "fijos" }
-    st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due, monto: fijoValor(f, p.per) }))
-    if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due, monto: fijoValor(f, st.prox.per) })
+    // Con abonos, lo que falta del periodo (no el valor completo).
+    st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due, monto: p.parcial ? p.falta : fijoValor(f, p.per) }))
+    if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due, monto: st.prox.parcial ? st.prox.falta : fijoValor(f, st.prox.per) })
   }
   for (const L of b.loans.filter((L) => L.kind === "pagar")) {
     const e = loanEngine(L, t)
@@ -200,7 +201,7 @@ export function notifs(b: BookData, today: DateInput, o: NotifOpts = {}): Notif[
   }
   if (on("hormiga")) {
     const H = hormigas(b, t)
-    if (H.over) N.push({ id: `h:${mkey(t)}`, lvl: "warn", icon: "coffee", bg: "b-amber", t: "Los gastos hormiga se están saliendo de control", b: `Vas camino a ${$(H.proy)} este mes y tu límite es ${$(b.settings.limite)}.`, fecha: ti, go: "gastos" })
+    if (H.over) N.push({ id: `h:${mkey(t)}`, lvl: "warn", icon: "coffee", bg: "b-amber", t: H.pasado ? "Pasaste tu límite de gastos hormiga" : "Los gastos hormiga se están saliendo de control", b: H.pasado ? `Llevas ${$(H.totalMes)} este mes y tu límite es ${$(b.settings.limite)}.` : `Llevas ${$(H.totalMes)} y vas camino a ${$(H.proy)} este mes; tu límite es ${$(b.settings.limite)}.`, fecha: ti, go: "gastos" })
   }
   if (on("presupuesto")) {
     const k = mkey(t)

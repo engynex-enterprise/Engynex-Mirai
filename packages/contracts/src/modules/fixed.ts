@@ -20,12 +20,17 @@ export const PayPeriodo = z.union([Periodo, z.string().regex(/^prev-\d{4}-(0[1-9
 export const PayFixed = z.object({
   periodo: PayPeriodo,
   fecha: IsoDate,
-  /** Lo que pagaste; sin valor, el del periodo (fijoValor: reparto por quincena incluido). */
+  /** Lo que pagaste; sin valor, lo que falta del periodo (fijoValor menos los abonos). */
   valor: Positive.optional(),
+  /**
+   * ¿Con esto queda pagado el periodo? true: sí (aunque sea menos: "esta vez costó menos"); false: es un abono y falta
+   * el resto. Sin decirlo: queda pagado si cubre lo que falta (o si el fijo es de valor variable).
+   */
+  completo: z.boolean().optional(),
   /** Medio con que pagaste; sin medio, el del gasto fijo. */
   payment_method_id: Uuid.nullable().optional(),
 })
-export const PayFixedOut = z.object({ ajuste: z.string().nullable().optional(), aporte: z.unknown().optional(), valor: z.number(), periodo: z.string() }).loose()
+export const PayFixedOut = z.object({ ajuste: z.string().nullable().optional(), aporte: z.unknown().optional(), valor: z.number(), periodo: z.string(), completo: z.boolean().optional(), falta: z.number().optional() }).loose()
 export const ChargeSub = z.object({ fecha: IsoDate.optional(), valor: Positive.optional(), payment_method_id: Uuid.nullable().optional() })
 export const ChargeSubOut = z.object({ expense_id: z.string().optional(), proximo: z.string().optional() }).loose()
 

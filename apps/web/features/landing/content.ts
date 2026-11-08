@@ -58,7 +58,7 @@ export const GRUPOS: GrupoFunciones[] = [
   {
     id: "dinero", label: "Tu dinero", iso: "ingresos", intro: "Lo que entra, lo que sale y lo que te queda, sin hacer cuentas a mano.",
     items: [
-      { iso: "balance", t: "Balance y quincenas", d: "Junta las entradas y salidas de todos los módulos y te dice cuánto te queda por quincena, mes o año.", ej: "“En la 1ª quincena te quedan $310.000 después del arriendo.”" },
+      { iso: "balance", t: "Balance", d: "Junta las entradas y salidas de todos los módulos y te dice cuánto te queda por quincena, mes o año.", ej: "“En la 1ª quincena te quedan $310.000 después del arriendo.”" },
       { iso: "dashboard", t: "Dashboard", d: "Tus números en gráficas para decidir: en qué se va la plata, tu patrimonio en el tiempo, cuándo terminas tus deudas y cuántos meses aguantas sin ingresos.", ej: "Decisiones con su impacto en pesos." },
       { iso: "ingresos", t: "Ingresos y nómina", d: "Escribe tu salario y Mirai calcula salud, pensión, fondo de solidaridad y retención. Un recibo te muestra lo que llega en cada pago.", ej: "Valor distinto en cada quincena, si así te pagan." },
       { iso: "gastos", t: "Gastos del día a día", d: "Anota un gasto en segundos: la categoría se pone sola y Mirai reconoce los gastos hormiga.", ej: "“Tinto 3.500” → Café, gasto hormiga." },

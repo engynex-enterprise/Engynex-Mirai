@@ -7,7 +7,7 @@ export type HelpEntry = { t: string; i: string; p: string[]; tips?: string[] }
 export const HELP: Record<string, HelpEntry> = {
   ...(HELP_RAW as Record<string, HelpEntry>),
   balance: {
-    t: "Balance y quincenas",
+    t: "Balance",
     i: "Todo lo que entra y sale de cada módulo de Mirai (ingresos, gastos, fijos, suscripciones, tarjetas, deudas, préstamos, impuestos, mesadas y ahorro), lo que tienes y lo que debes.",
     p: [
       "Arriba ves <b>lo que tengo</b>, <b>lo que debo</b> y tu <b>patrimonio</b>: lo que te quedaría si vendieras todo y pagaras todas tus deudas. Lo que debes incluye los impuestos que ya debes aunque no hayan vencido (renta, predial, vehicular), marcados como <b>Estimado</b>.",

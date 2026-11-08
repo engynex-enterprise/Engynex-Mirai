@@ -11,12 +11,13 @@ import type { BookData } from "./types"
  * - avisos nuevos: tarjetas (t:), mesadas (ms:), compartidos (sg:) y fechas de ingreso como "te llega" (c:cal:);
  * - inversiones y metas llevan la fecha en el id (para que un vencimiento nuevo vuelva a avisar).
  * En el lado de la v4 se quitan los eventos de ingreso del calendario (allá salían como "Pago… ten listos").
+ * - el aviso de gastos hormiga (h:): la proyección ya no es la lineal de la v4 (proyectarMes; ver proyeccion.test.ts).
  */
-const V5_ONLY = /^(t|ms|sg):|^c:cal:/
+const V5_ONLY = /^(t|ms|sg|h):|^c:cal:/
 const v5Comparable = (N: Notif[]) => N.filter((n) => !V5_ONLY.test(n.id)).map((n) => (/^(i|m):/.test(n.id) ? { ...n, id: n.id.split(":").slice(0, 2).join(":") } : n))
 const v4Comparable = (N: Notif[], b: BookData) => {
   const ingreso = new Set(b.calendarEvents.filter((c) => c.tipo === "ingreso").map((c) => c.id))
-  return N.filter((n) => !(n.id.startsWith("p:cal:") && ingreso.has(n.id.split(":")[2])))
+  return N.filter((n) => !(n.id.startsWith("p:cal:") && ingreso.has(n.id.split(":")[2])) && !n.id.startsWith("h:"))
 }
 
 for (const hoy of HOYS)

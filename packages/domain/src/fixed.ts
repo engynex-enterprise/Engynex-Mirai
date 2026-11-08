@@ -51,12 +51,42 @@ export function fijoPeriods(f: FijoPeriodInput, y: number, m: number, today?: Da
 }
 
 /** Valor mensual equivalente: quincenal ×2; con paso N meses ÷N; único → 0. */
-export function fijoMensual(f: Pick<FixedExpenseIn, "frec" | "valor">): number {
-  return f.frec === "quincenal" ? f.valor * 2 : FSTEP[f.frec] ? f.valor / FSTEP[f.frec] : 0
+/** Equivalente mensual de un fijo, en pesos si se pasa la TRM (un fijo en USD o EUR se convierte). */
+export function fijoMensual(f: Pick<FixedExpenseIn, "frec" | "valor"> & { currency?: string | null }, trm?: Record<string, number> | null): number {
+  const v = trm && f.currency && f.currency !== "COP" ? f.valor * (+trm[f.currency] || 1) : f.valor
+  return f.frec === "quincenal" ? v * 2 : FSTEP[f.frec] ? v / FSTEP[f.frec] : 0
 }
 
 export interface FixedPeriodStatus extends FixedPeriod {
+  /** El primer pago del periodo (si hay). Para saber si está pagado usa `completo`. */
   pago?: FixedPaymentIn
+  /** Pagos (abonos) del periodo. */
+  pagos: FixedPaymentIn[]
+  /** Lo pagado en el periodo. */
+  pagado: number
+  /** Lo que falta del periodo (0 si está completo). */
+  falta: number
+  /** ¿Quedó pagado? */
+  completo: boolean
+  /** ¿Tiene abonos y le falta? */
+  parcial: boolean
+}
+
+/**
+ * Cómo va un periodo de un fijo con sus pagos (abonos): lo pagado, lo que falta y si quedó completo. Queda completo si
+ * un pago lo cierra (`cierra: true`, también "esta vez costó menos"), si lo pagado cubre el valor del periodo, o si el
+ * fijo es de valor variable y hay un pago que no es abono. Los pagos de antes (`cierra` vacío) por menos del valor de
+ * un fijo de valor fijo cuentan como abono: así se ve lo que falta (la moto: $70.000, pagaste $40.000 → faltan $30.000).
+ */
+export function pagoPeriodo(f: Pick<FixedExpenseIn, "frec" | "valor" | "variable"> & { reparto?: unknown }, per: string, pagos: FixedPaymentIn[]) {
+  const vivos = pagos.filter((x) => x.periodo === per && !x.deleted_at)
+  const pagado = vivos.reduce((a, x) => a + (+x.valor || 0), 0)
+  const esperado = fijoValor(f, per)
+  const completo = vivos.length > 0 && (
+    vivos.some((x) => x.cierra === true) || pagado >= esperado - 1 || (!!f.variable && vivos.some((x) => x.cierra == null))
+  )
+  const falta = completo ? 0 : Math.max(0, esperado - pagado)
+  return { pagos: vivos, pagado, falta, completo, parcial: vivos.length > 0 && !completo, esperado }
 }
 
 export interface FixedStatus {
@@ -83,12 +113,13 @@ export function fijoStatus(f: FixedExpenseIn, today: DateInput): FixedStatus {
   for (let d = new Date(start); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
     for (const p of fijoPeriods(f, d.getFullYear(), d.getMonth(), t)) {
       if (ini && p.due < ini) continue
-      const pago = f.payments.find((x) => x.periodo === p.per)
-      out.push({ ...p, pago })
+      const P = pagoPeriodo(f, p.per, f.payments)
+      out.push({ ...p, pago: P.pagos[0], pagos: P.pagos, pagado: P.pagado, falta: P.falta, completo: P.completo, parcial: P.parcial })
     }
   }
-  const venc = out.filter((p) => !p.pago && p.due < ti)
-  const prox = out.find((p) => !p.pago && p.due >= ti) || null
+  // Pendiente = sin pagar o con abonos y le falta.
+  const venc = out.filter((p) => !p.completo && p.due < ti)
+  const prox = out.find((p) => !p.completo && p.due >= ti) || null
   return { periods: out, venc, prox, mensual: fijoMensual(f) }
 }
 

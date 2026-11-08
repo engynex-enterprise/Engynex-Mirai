@@ -1,7 +1,7 @@
 // Flujo de caja proyectado a 12 meses (equivalente a `flujo()` de b_core.js de la v4).
 import { iso, MES, parseDate, toDay } from "./dates"
 import { tarjetaPagoMes } from "./cards"
-import { fijoPeriods } from "./fixed"
+import { fijoPeriods, pagoPeriodo } from "./fixed"
 import { fijoValor, incomePagos, pagosMes } from "./reparto"
 import { loanEngine } from "./loans"
 import { conv } from "./money"
@@ -57,7 +57,7 @@ export function flujo(b: BookData, today: DateInput): CashflowMonth[] {
     for (const p of planes) if (p.kind === "cobrar") for (const r of p.plan) if (inM(r.fecha)) det.cob += r.valor
     for (const p of planes) if (p.kind === "pagar") for (const r of p.plan) if (inM(r.fecha) || (k === 0 && r.fecha < ai)) det.cuo += r.valor
     for (const f of b.fixedExpenses)
-      for (const p of fijoPeriods(f, a.getFullYear(), a.getMonth(), t)) if (!f.payments.find((x) => x.periodo === p.per)) det.fij += fijoValor(f, p.per)
+      for (const p of fijoPeriods(f, a.getFullYear(), a.getMonth(), t)) { const PP = pagoPeriodo(f, p.per, f.payments); if (!PP.completo) det.fij += PP.pagos.length ? PP.falta : fijoValor(f, p.per) }
     for (const c of b.calendarEvents) if (c.tipo === "egreso" && +c.monto > 0 && calEnMes(c, a)) det.fij += +c.monto
     for (const sb of b.subscriptions) det.sub += subOcc(sb, a, bb).length * conv(sb.valor, sb.currency, s.trm)
     det.cuo += b.creditCards.reduce((q, c) => q + tarjetaPagoMes(c, t, k), 0)

@@ -105,7 +105,10 @@ export function scenario(today: string, setup = "S=sample()"): Scenario {
     plain: (src) => (activar(), L.plain(L.ev(src))),
     mutate(js: string) {
       activar()
-      L.ev(`(function(){${js}})()`)
+      // Sin tarjetas de crédito en los dos lados: desde 2026-11 el pago del mes es la factura del corte y la deuda baja
+      // en la fecha de pago (la v4 lo hacía con la fecha de hoy y bajaba el saldo en el corte). Las tarjetas se prueban
+      // aparte con casos correctos (cards.test.ts); lo demás se sigue comparando con la v4.
+      L.ev(`(function(){${js};S.tarjetas=[]})()`)
       sc.S = L.plain(L.ev("S"))
       sc.book = bookOf(sc.S)
       return sc

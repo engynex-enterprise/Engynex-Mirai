@@ -44,13 +44,15 @@ describe("dashboard", () => {
     for (const m of S) expect(m.queda).toBeCloseTo(m.entra - m.sale - m.ahorro)
     // Noviembre igual que el flujo integral del mes.
     const F = flujoIntegral(b, periodo(b, "mes", 2026, 10), HOY)
-    expect(S.at(-1)!.entra).toBeCloseTo(F.tot.entra - F.tot.credEntra)
-    expect(S.at(-1)!.sale).toBeCloseTo(F.tot.sale - F.tot.credSale)
-    // El crédito del banco (octubre) entra en el Balance, pero no es un ingreso en la serie.
+    // tot.entra/sale ya vienen sin préstamos (credEntra/credSale aparte): una sola cifra en Balance, Inicio y Dashboard.
+    expect(S.at(-1)!.entra).toBeCloseTo(F.tot.entra)
+    expect(S.at(-1)!.sale).toBeCloseTo(F.tot.sale)
+    // El crédito del banco (octubre) va aparte: no es un ingreso ni en el Balance ni en la serie.
     const oct = S.find((m) => m.k === "2026-10")!
     const Foct = flujoIntegral(b, periodo(b, "mes", 2026, 9), HOY)
     expect(Foct.tot.credEntra).toBe(6000000)
-    expect(oct.entra).toBeCloseTo(Foct.tot.entra - 6000000)
+    expect(oct.entra).toBeCloseTo(Foct.tot.entra)
+    expect(Foct.tot.caja).toBeCloseTo(Foct.tot.queda + 6000000 - Foct.tot.credSale)
   })
 
   it("compromisos y capacidad de ahorro frente al ingreso", () => {

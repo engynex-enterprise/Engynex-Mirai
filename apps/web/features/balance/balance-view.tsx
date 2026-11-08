@@ -69,7 +69,8 @@ export function BalanceView() {
     const E = estadoIntegral(book, today, X)
     const tengoP = partesEstado(E.tengo)
     const deboP = partesEstado(E.debo)
-    const C = { T: { ...E.T, P: E.P, pat: E.pat }, liquidez: E.liquidez, tengo: tengoP, debo: deboP }
+    // Las mismas cifras del KPI (activos, pasivos y patrimonio integrales): el % de deuda del hallazgo y el del KPI coinciden.
+    const C = { T: { ...E.T, A: E.A, P: E.P, pat: E.pat }, liquidez: E.liquidez, tengo: tengoP, debo: deboP }
     const sub = (x: { currency?: string | null; valor: number; cod?: string }) =>
       x.currency && x.currency !== "COP" ? `${x.currency} ${new Intl.NumberFormat("es-CO").format(x.valor)} × $${new Intl.NumberFormat("es-CO").format(trm[x.currency] ?? 0)}` : PUC[x.cod ?? ""]?.[0] ?? `PUC ${x.cod}`
     const toLine = (l: LineaEstado): Line => {

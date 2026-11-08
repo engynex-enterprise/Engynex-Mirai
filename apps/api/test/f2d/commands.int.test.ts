@@ -117,8 +117,9 @@ describe("gastos fijos y suscripciones", () => {
     expect(r.status).toBe(200)
     await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "2026-12", fecha: "2026-12-05" })
     expect(t.fx.store.rpcs.map((x) => x.args)).toEqual([
-      { p_fixed: ID.arriendo, p_periodo: "2026-11-Q1", p_fecha: "2026-11-05", p_valor: 600000, p_medio: ID.nequi, p_desc_suffix: " (1ª quincena)" },
-      { p_fixed: ID.arriendo, p_periodo: "2026-12", p_fecha: "2026-12-05", p_valor: 1200000, p_desc_suffix: "" },
+      // $600.000 de un arriendo de $1.200.000: abono (falta el resto); sin valor, el periodo completo.
+      { p_fixed: ID.arriendo, p_periodo: "2026-11-Q1", p_fecha: "2026-11-05", p_valor: 600000, p_medio: ID.nequi, p_desc_suffix: " (1ª quincena)", p_cierra: false },
+      { p_fixed: ID.arriendo, p_periodo: "2026-12", p_fecha: "2026-12-05", p_valor: 1200000, p_desc_suffix: "", p_cierra: true },
     ])
     expect(t.changes.map((c) => c.table)).toEqual(expect.arrayContaining(["fixed_expenses", "fixed_expense_payments", "expenses"]))
   })
@@ -127,7 +128,7 @@ describe("gastos fijos y suscripciones", () => {
     t.fx.store.rpcImpl.pay_fixed_expense = () => ({ ajuste: null, aporte: null })
     const r = await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "prev-2026-11", fecha: "2026-11-03", valor: 1200000 })
     expect(r.status).toBe(200)
-    expect(t.fx.store.rpcs.map((x) => x.args)).toEqual([{ p_fixed: ID.arriendo, p_periodo: "prev-2026-11", p_fecha: "2026-11-03", p_valor: 1200000, p_desc_suffix: "" }])
+    expect(t.fx.store.rpcs.map((x) => x.args)).toEqual([{ p_fixed: ID.arriendo, p_periodo: "prev-2026-11", p_fecha: "2026-11-03", p_valor: 1200000, p_desc_suffix: "", p_cierra: true }])
     expect((await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "prev-noviembre", fecha: "2026-11-03", valor: 1 })).status).toBe(400)
   })
 

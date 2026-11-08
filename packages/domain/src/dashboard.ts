@@ -1,17 +1,17 @@
 // Dashboard: números para decidir, a partir del flujo integral (lib/domain/flujo-integral.ts) y de los cálculos que
 // ya existen (totales, estrategia de deudas, hormiga, indicadores). Puro: sin React ni reloj.
 import { addMonths, iso, lastDay, MES, toDay } from "./dates"
-import { compraEstado, deudaTarjeta, tarjetaPagoMes } from "./cards"
+import { compraEstado, deudaTarjeta, tarjetaCuotaMes, tarjetaPagoMes } from "./cards"
 import { debtStrategy } from "./debt-strategy"
 import { fijoMensual } from "./fixed"
 import { estadoIntegral, flujoIntegral, type ExtrasIntegral, type Mov } from "./flujo-integral"
-import { loanEngine, loanName, FRECS } from "./loans"
+import { eaDeMensual, loanEngine, loanName } from "./loans"
 import { loanTipo, tipoDef } from "./loan-tipos"
 import { formatCOP as $ } from "./money"
 import { fondoEstado, metaPlan, type FondoRef } from "./savings"
 import type { LibroCuentas } from "./cuentas"
 import { subMensual, subsMes } from "./subscriptions"
-import { cuotasMes, gastoVariableReal, hormigas, ingresoMensual } from "./totals"
+import { cuotasMes, gastoVariable, hormigas, ingresoMensual } from "./totals"
 import type { BookData, DateInput } from "./types"
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -135,10 +135,11 @@ export interface Compromisos {
 /** Lo que pagas sí o sí cada mes (fijos, cuotas, tarjetas y suscripciones) frente a tu ingreso. */
 export function compromisos(b: BookData, today: DateInput): Compromisos {
   const ingreso = ingresoMensual(b.incomes, b.settings.trm)
-  const fijos = b.fixedExpenses.filter((f) => !f.link_type).reduce((a, f) => a + fijoMensual(f), 0)
+  const fijos = b.fixedExpenses.filter((f) => !f.link_type).reduce((a, f) => a + fijoMensual(f, b.settings.trm), 0)
   const aportes = b.fixedExpenses.filter((f) => f.link_type).reduce((a, f) => a + fijoMensual(f), 0)
   const cuotas = cuotasMes(b.loans, "pagar", today)
-  const tarjetas = b.creditCards.reduce((a, c) => a + tarjetaPagoMes(c, today), 0)
+  // El plan del mes (no lo que falta pagar): registrar el pago de la tarjeta no baja el compromiso.
+  const tarjetas = b.creditCards.reduce((a, c) => a + tarjetaCuotaMes(c, today), 0)
   const subs = subsMes(b.subscriptions, b.settings.trm)
   const total = fijos + cuotas + tarjetas + subs
   return { ingreso, fijos, cuotas, tarjetas, subs, aportes, total, pct: ingreso ? total / ingreso : 0 }
@@ -147,8 +148,10 @@ export function compromisos(b: BookData, today: DateInput): Compromisos {
 export interface Capacidad {
   ingreso: number
   compromisos: number
-  /** Lo que sueles gastar en el día a día (promedio de 3 meses o el presupuesto). */
+  /** Lo que sueles gastar en el día a día (`gastoVariable`: meses completos, el presupuesto o sin datos). */
   variable: number
+  /** De dónde sale `variable`; con "sin-datos" no se afirma cuánto puedes ahorrar. */
+  variableBase: "historial" | "presupuesto" | "sin-datos"
   /** ingreso − compromisos − variable (lo que puedes ahorrar al mes). */
   libre: number
   aportes: number
@@ -170,10 +173,11 @@ export interface Capacidad {
 export function capacidad(b: BookData, today: DateInput, C = compromisos(b, today), liq = estadoIntegral(b, today).liquidez, fund: FondoRef = (b as LibroCuentas).fund): Capacidad {
   // Sin lo que ya está en los compromisos: compras con tarjeta (van en el pago de la tarjeta), cuotas y cobros de suscripciones.
   const subs = new Set(b.subscriptions.map((x) => x.nombre.trim().toLowerCase()))
-  const variable = gastoVariableReal(b.expenses.filter((g) => { const o = (g as { origen?: string | null }).origen; return o !== "tarjeta" && o !== "prestamo" && !subs.has(g.descripcion.trim().toLowerCase()) }), b.categories, b.fixedExpenses, today)
+  const V = gastoVariable(b.expenses.filter((g) => { const o = (g as { origen?: string | null }).origen; return o !== "tarjeta" && o !== "prestamo" && !subs.has(g.descripcion.trim().toLowerCase()) }), b.categories, b.fixedExpenses, today)
+  const variable = V.valor
   const F = fondoEstado(b, today, liq, fund)
   return {
-    ingreso: C.ingreso, compromisos: C.total, variable, libre: C.ingreso - C.total - variable, aportes: C.aportes,
+    ingreso: C.ingreso, compromisos: C.total, variable, variableBase: V.base, libre: C.ingreso - C.total - variable, aportes: C.aportes,
     liquidez: liq, fondo: F.tiene, enFondo: F.enFondo, basicos: F.basicos, meses: F.meses, metaMeses: F.metaMeses, faltaFondo: F.falta,
   }
 }
@@ -208,8 +212,6 @@ export interface DeudasResumen {
   serie: { k: string; l: string; saldo: number }[]
 }
 
-/** Tasa efectiva anual a partir de la tasa por periodo. */
-const eaDe = (i: number, frec: string) => (i > 0 ? Math.pow(1 + i, 12 / (FRECS[frec]?.k || 1)) - 1 : 0)
 
 /** Todas tus deudas (Le debo y tarjetas): saldo, cuándo terminan, cuánto pagas de intereses y cómo baja el saldo. */
 export function deudas(b: BookData, today: DateInput): DeudasResumen {
@@ -224,7 +226,7 @@ export function deudas(b: BookData, today: DateInput): DeudasResumen {
     items.push({
       id: L.id ?? "", n: loanName(L as never, b.contacts, b.entities) + (L.concepto ? ` · ${L.concepto}` : ""), tipo: td?.corto ?? "Deuda", icon: td?.icon ?? "landmark",
       saldo: e.saldo, cuota: e.next?.valor ?? 0, frec: L.frec, fin: e.plan.at(-1)?.fecha ?? null, cuotasFaltan: e.plan.length,
-      interesFalta: e.plan.reduce((a, r) => a + r.int, 0), ea: eaDe(e.i, L.frec), vencidas: e.vencidas.length, href: "/le-debo",
+      interesFalta: e.plan.reduce((a, r) => a + r.int, 0), ea: L.sistema === "sin" ? 0 : eaDeMensual(+L.tasa), vencidas: e.vencidas.length, href: "/le-debo",
     })
     planes.push([{ fecha: isoOf(today), saldo: e.saldo }, ...e.plan.map((r) => ({ fecha: r.fecha, saldo: r.saldo }))])
   }
@@ -236,7 +238,7 @@ export function deudas(b: BookData, today: DateInput): DeudasResumen {
     const interes = pend.reduce((a, x) => a + Math.max(0, x.e.cuota * (x.e.n - x.e.k) - x.e.saldo), 0)
     const ult = pend.reduce((m, x) => Math.max(m, x.e.n - x.e.k), 0)
     const fin = ult ? iso(new Date(t.getFullYear(), t.getMonth() + ult, Math.min(+c.pago || 15, lastDay(t.getFullYear(), t.getMonth() + ult)))) : null
-    items.push({ id: c.id, n: `Tarjeta ${c.nombre}`, tipo: "Tarjeta", icon: "credit-card", saldo, cuota: tarjetaPagoMes(c, today), frec: "mensual", fin, cuotasFaltan: ult, interesFalta: interes, ea: eaDe((+c.tasa || 0) / 100, "mensual"), vencidas: 0, href: "/tarjetas" })
+    items.push({ id: c.id, n: `Tarjeta ${c.nombre}`, tipo: "Tarjeta", icon: "credit-card", saldo, cuota: tarjetaPagoMes(c, today), frec: "mensual", fin, cuotasFaltan: ult, interesFalta: interes, ea: eaDeMensual(+c.tasa), vencidas: 0, href: "/tarjetas" })
     cardSaldo.push((ref) => deudaTarjeta(c, ref))
   }
   items.sort((a, b) => b.saldo - a.saldo)
@@ -295,8 +297,9 @@ export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromis
 
   // Abonar extra con avalancha / bola de nieve (Salir de deudas).
   const pagar = b.loans.filter((L) => L.kind === "pagar" && loanEngine(L, today).saldo > 1)
-  if (pagar.length) {
-    const extra = Math.max(100000, mil(cap.libre > 0 ? cap.libre * 0.3 : 0))
+  // Solo si de verdad te sobra plata al mes (y lo sabemos): si no, "abona más" contradice "te faltan X al mes".
+  if (pagar.length && cap.libre > 0 && cap.variableBase !== "sin-datos") {
+    const extra = Math.max(100000, mil(cap.libre * 0.3))
     const S = debtStrategy(pagar, b.contacts, b.entities, extra, today)
     if (S) {
       const r = S[S.recomendado]
@@ -312,13 +315,15 @@ export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromis
     out.push(comp.pct >= 0.5
       ? { id: "compromisos", tono: comp.pct >= 0.7 ? "bad" : "warn", icon: "lock", titulo: `Tus compromisos fijos son el ${pctTxt(comp.pct)} de tu ingreso`, detalle: `Fijos, cuotas, tarjetas y suscripciones suman ${$(comp.total)} de ${$(comp.ingreso)} al mes. Lo sano es menos del 50 %: bajarlos a la mitad de tu ingreso te liberaría ${$(sobra)} al mes.`, impacto: sobra, impactoLabel: "al mes", href: "/fijos", accion: "Revisar mis gastos fijos" }
       : { id: "compromisos", tono: "ok", icon: "circle-check", titulo: `Tus compromisos fijos son el ${pctTxt(comp.pct)} de tu ingreso`, detalle: `Fijos, cuotas, tarjetas y suscripciones suman ${$(comp.total)} al mes. Está por debajo del 50 %, que es lo sano.`, href: "/fijos", accion: "Ver mis gastos fijos" })
-    out.push(cap.libre > 0
+    out.push(cap.variableBase === "sin-datos"
+      ? { id: "ahorro", tono: "info", icon: "piggy-bank", titulo: "Aún no sabemos cuánto puedes ahorrar al mes", detalle: `Tus compromisos suman ${$(comp.total)} de ${$(comp.ingreso)}, pero llevas poco tiempo registrando lo que gastas en el día a día. Con un mes completo de gastos (o con topes en tu presupuesto) te decimos cuánto te queda.`, href: "/presupuesto", accion: "Poner topes en mi presupuesto" }
+      : cap.libre > 0
       ? { id: "ahorro", tono: "ok", icon: "piggy-bank", titulo: `Puedes ahorrar ${$(mil(cap.libre))} al mes`, detalle: `Es lo que te queda después de tus compromisos y de lo que sueles gastar en el día a día (${$(cap.variable)}). En un año serían ${$(mil(cap.libre * 12))}: prográmalo el día que te pagan.`, impacto: cap.libre * 12, impactoLabel: "en un año", href: "/metas", accion: "Programar un ahorro" }
       : { id: "ahorro", tono: "bad", icon: "wallet", titulo: `Te faltan ${$(mil(-cap.libre))} al mes`, detalle: `Tus compromisos (${$(comp.total)}) y lo que sueles gastar en el día a día (${$(cap.variable)}) pasan tu ingreso (${$(comp.ingreso)}). Recorta gastos variables o busca bajar una cuota.`, impacto: -cap.libre, impactoLabel: "al mes", href: "/presupuesto", accion: "Ajustar mi presupuesto" })
   }
 
   if (cap.basicos > 0 && cap.meses < cap.metaMeses) {
-    const k = cap.libre > 0 ? Math.ceil(cap.faltaFondo / cap.libre) : 0
+    const k = cap.libre > 0 && cap.variableBase !== "sin-datos" ? Math.ceil(cap.faltaFondo / cap.libre) : 0
     out.push({ id: "fondo", tono: cap.meses < 3 ? "warn" : "info", icon: "umbrella", titulo: `Te faltan ${$(mil(cap.faltaFondo))} para tu fondo de emergencia`, detalle: `Hoy aguantas ${cap.meses.toFixed(1).replace(".", ",")} meses sin ingresos; la meta es ${cap.metaMeses}.${k ? ` Ahorrando ${$(mil(cap.libre))} al mes lo completas en ${k} ${k === 1 ? "mes" : "meses"}.` : ""}`, impacto: cap.faltaFondo, impactoLabel: "por ahorrar", href: "/metas", accion: "Armar mi fondo" })
   }
 
@@ -337,8 +342,11 @@ export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromis
   }
 
   const H = hormigas(b, today)
-  if (H.proy > 0 && comp.ingreso > 0 && H.proy / comp.ingreso >= 0.03)
-    out.push({ id: "hormiga", tono: H.over ? "warn" : "info", icon: "coffee", titulo: `Los gastos hormiga van para ${$(mil(H.proy))} este mes`, detalle: `Al año serían ${$(mil(H.anual))}. Bajarlos a la mitad te deja ${$(mil(H.anual / 2))} para tus metas.`, impacto: H.anual / 2, impactoLabel: "al año", href: "/gastos", accion: "Ver mis gastos hormiga" })
+  // Solo con datos suficientes (proyectarMes): con 3 gastos en los primeros días no se habla del mes ni del año.
+  if (H.base !== "pronto" && H.proy > 0 && comp.ingreso > 0 && H.proy / comp.ingreso >= 0.03) {
+    const como = H.base === "historial" ? "por lo que sueles gastar" : `a tu ritmo de los últimos ${H.dias} días`
+    out.push({ id: "hormiga", tono: H.over ? "warn" : "info", icon: "coffee", titulo: `Los gastos hormiga van para ${$(mil(H.proy))} este mes`, detalle: `Llevas ${$(H.totalMes)} en ${H.mes.length} ${H.mes.length === 1 ? "gasto" : "gastos"} y, ${como}, terminarías el mes en unos ${$(mil(H.proy))}. Si todos los meses fueran así, al año serían ${$(mil(H.anual))}: bajarlos a la mitad te deja ${$(mil(H.anual / 2))} para tus metas.`, impacto: H.anual / 2, impactoLabel: "al año", href: "/gastos", accion: "Ver mis gastos hormiga" })
+  }
 
   const cobrar = ctx.vencidos.filter((x) => x.dir === "entra").reduce((a, x) => a + x.v, 0)
   if (cobrar > 0)

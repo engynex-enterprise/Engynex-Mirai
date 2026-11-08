@@ -2,7 +2,7 @@
 import { fshort, iso, lastDay, parseDate } from "./dates"
 import { fijoValor, incomePagos } from "./reparto"
 import { tarjetaPagoMes } from "./cards"
-import { fijoPeriods } from "./fixed"
+import { fijoPeriods, pagoPeriodo } from "./fixed"
 import { loanCal, loanEngine, loanName } from "./loans"
 import { conv } from "./money"
 import { subOcc } from "./subscriptions"
@@ -83,8 +83,10 @@ export function quincena(b: BookData, y: number, m: number, which: QuincenaWhich
   for (const f of b.fixedExpenses)
     for (const p of fijoPeriods(f, y, m, today))
       if (inR(p.due)) {
-        const pg = f.payments.find((x) => x.periodo === p.per)
-        sal.push({ icon: catIcon(b.categories, f.category_id), n: f.nombre, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: pg ? +pg.valor : fijoValor(f, p.per), fecha: p.due, paid: !!pg })
+        // Abonos (pagoPeriodo): lo pagado y, si falta, lo que falta como otra línea sin pagar.
+        const PP = pagoPeriodo(f, p.per, f.payments)
+        sal.push({ icon: catIcon(b.categories, f.category_id), n: f.nombre, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: PP.pagos.length ? PP.pagado : fijoValor(f, p.per), fecha: p.due, paid: PP.pagos.length > 0 })
+        if (PP.parcial && PP.falta > 0.5) sal.push({ icon: catIcon(b.categories, f.category_id), n: `${f.nombre} (falta)`, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: PP.falta, fecha: p.due, paid: false })
       }
   for (const L of pagar)
     for (const r of loanCal(loanEngine(L, today)))

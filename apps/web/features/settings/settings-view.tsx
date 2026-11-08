@@ -112,10 +112,11 @@ export function SettingsView() {
                 {list.filter((t) => t[3] === g).map((t) => {
                   const on = t[0] === cur[0]
                   return (
-                    <button key={t[0]} type="button" onClick={() => setTab(t[0])} aria-current={on ? "page" : undefined} title={t[4]}
+                    // Enlace real (?tab=…): cambia al instante con la app cargada y, si el JavaScript no arrancó, igual abre la pestaña.
+                    <a key={t[0]} href={`/ajustes?tab=${t[0]}`} onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); void setTab(t[0]); window.scrollTo({ top: 0, behavior: "smooth" }) }} aria-current={on ? "page" : undefined} title={t[4]}
                       className={cn("flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring", on && "bg-nav-active font-semibold text-nav-active-foreground hover:bg-nav-active")}>
                       <Icon name={t[2]} className="size-4 shrink-0" /><span className="min-w-0 truncate">{t[1]}</span>
-                    </button>
+                    </a>
                   )
                 })}
               </div>

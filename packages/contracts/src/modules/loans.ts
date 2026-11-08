@@ -85,6 +85,8 @@ export const LoanSaved = z.object({ loan: Row, registro: Registro.nullable(), pa
 export const LoanPayment = z.union([
   z.object({ cuotas: z.number().int().min(1, "Mínimo 1 cuota").max(60), fecha: IsoDate, payment_method_id: Uuid.nullable().optional(), nota: Note.optional() }),
   z.object({ abono: Positive, modo: z.enum(["plazo", "cuota"]).optional(), fecha: IsoDate, payment_method_id: Uuid.nullable().optional(), nota: Note.optional() }),
+  /** Parte de la cuota que sigue (no la completa): queda abonada a esa cuota y deja de contar como atrasada por ese valor. */
+  z.object({ parcial: Positive, fecha: IsoDate, payment_method_id: Uuid.nullable().optional(), nota: Note.optional() }),
 ])
 export const LoanPaid = z.object({ pagos: z.array(Row), saldo: z.number(), saldado: z.boolean() })
 

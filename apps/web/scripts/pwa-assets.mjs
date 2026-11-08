@@ -94,7 +94,7 @@ const row = (x, y, w, [k, a, b, v], s = 1) => `${isoAt(k, x, y, 34 * s)}${t(x + 
 function wide(kind) {
   const W = 1280, H = 800
   const menu = ["inicio", "dashboard", "balance", "gastos", "ingresos", "le-debo", "me-deben", "metas", "recordatorios"]
-  const labels = { inicio: "Inicio", dashboard: "Dashboard", balance: "Balance y quincenas", gastos: "Gastos", ingresos: "Ingresos", "le-debo": "Le debo", "me-deben": "Me deben", metas: "Metas", recordatorios: "Próximos pagos" }
+  const labels = { inicio: "Inicio", dashboard: "Dashboard", balance: "Balance", gastos: "Gastos", ingresos: "Ingresos", "le-debo": "Le debo", "me-deben": "Me deben", metas: "Metas", recordatorios: "Próximos pagos" }
   const active = kind === "balance" ? "balance" : "inicio"
   let side = `<rect width="260" height="${H}" fill="#fff" fill-opacity=".55"/>${isoAt("mirai", 20, 18, 34)}${t(62, 42, 20, "Mirai", { w: 700, c: C.navy })}
     ${pill(20, 70, 220, 40, "#E4E6EB")}${t(40, 95, 14, "Buscar en Mirai", { c: C.muted })}${pill(20, 120, 220, 40, C.brand)}${t(130, 145, 15, "+ Agregar", { w: 700, c: "#fff", a: "middle" })}`
@@ -118,7 +118,7 @@ function wide(kind) {
     main += card(880, 406, 360, 360, t(902, 442, 18, "En qué se va la plata", { w: 700 }) + arcs + t(1000, 586, 13, "Este mes", { a: "middle", c: C.muted }) + t(1000, 608, 20, money(2310450), { a: "middle", w: 700 })
       + [["Mercado 34 %", "#2A7F14"], ["Vivienda 22 %", "#1F2B4B"], ["Transporte 16 %", "#9EDB4E"]].map(([l, c], i) => `<circle cx="${908 + i * 112}" cy="726" r="5" fill="${c}"/>` + t(918 + i * 112, 730, 12, l, { c: C.muted })).join(""))
   } else {
-    main += t(300, 64, 28, "Balance y quincenas", { w: 700 }) + t(300, 90, 15, "Todo lo que entra y sale, sin contar nada dos veces", { c: C.muted })
+    main += t(300, 64, 28, "Balance", { w: 700 }) + t(300, 90, 15, "Todo lo que entra y sale, sin contar nada dos veces", { c: C.muted })
     ;[["Lo que entra", 4200000, C.brand], ["Lo que sale", 3180000, C.expense], ["Lo que ahorras", 420000, C.navy], ["Te queda", 600000, C.brand]].forEach(([l, v, c], i) => {
       const x = 300 + i * 237
       main += card(x, 112, 222, 96, t(x + 18, 146, 14, l, { c: C.muted }) + t(x + 18, 180, 24, money(v), { w: 700, c }))

@@ -789,14 +789,14 @@ isOneToOne: false
                   ]
                 },"expenses": {
                   Row: {
-                    "aporte": Json | null,"book_id": string,"cat_src": string | null,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deducible": string | null,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"member_ids": (string)[] | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"provider_id": string | null,"sub_proximo": string | null,"subscription_id": string | null,"updated_at": string,"valor": number
+                    "aporte": Json | null,"book_id": string,"cat_src": string | null,"category_id": string | null,"contact_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deducible": string | null,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"member_ids": (string)[] | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"provider_id": string | null,"sub_proximo": string | null,"subscription_id": string | null,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "aporte"?: Json | null,"book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
+                    "aporte"?: Json | null,"book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "aporte"?: Json | null,"book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
+                    "aporte"?: Json | null,"book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -929,14 +929,14 @@ isOneToOne: false
                   ]
                 },"fixed_expense_payments": {
                   Row: {
-                    "book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"expense_id": string | null,"fecha": string,"fixed_expense_id": string,"id": string,"payment_method_id": string | null,"periodo": string,"updated_at": string,"valor": number
+                    "book_id": string,"cierra": boolean | null,"created_at": string,"created_by": string | null,"deleted_at": string | null,"expense_id": string | null,"fecha": string,"fixed_expense_id": string,"id": string,"payment_method_id": string | null,"periodo": string,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"expense_id"?: string | null,"fecha"?: string,"fixed_expense_id": string,"id"?: string,"payment_method_id"?: string | null,"periodo": string,"updated_at"?: string,"valor"?: number
+                    "book_id": string,"cierra"?: boolean | null,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"expense_id"?: string | null,"fecha"?: string,"fixed_expense_id": string,"id"?: string,"payment_method_id"?: string | null,"periodo": string,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"expense_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string,"id"?: string,"payment_method_id"?: string | null,"periodo"?: string,"updated_at"?: string,"valor"?: number
+                    "book_id"?: string,"cierra"?: boolean | null,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"expense_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string,"id"?: string,"payment_method_id"?: string | null,"periodo"?: string,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -2063,14 +2063,14 @@ isOneToOne: false
                   ]
                 },"shared_group_expenses": {
                   Row: {
-                    "book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"descripcion": string,"entre": (string)[],"expense_id": string | null,"fecha": string,"group_id": string,"id": string,"paga": string,"updated_at": string,"valor": number
+                    "book_id": string,"created_at": string,"created_by": string | null,"deleted_at": string | null,"descripcion": string,"entre": (string)[],"expense_id": string | null,"fecha": string,"group_id": string,"id": string,"paga": string,"tipo": string,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"entre"?: (string)[],"expense_id"?: string | null,"fecha"?: string,"group_id": string,"id"?: string,"paga": string,"updated_at"?: string,"valor"?: number
+                    "book_id": string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"entre"?: (string)[],"expense_id"?: string | null,"fecha"?: string,"group_id": string,"id"?: string,"paga": string,"tipo"?: string,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"entre"?: (string)[],"expense_id"?: string | null,"fecha"?: string,"group_id"?: string,"id"?: string,"paga"?: string,"updated_at"?: string,"valor"?: number
+                    "book_id"?: string,"created_at"?: string,"created_by"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"entre"?: (string)[],"expense_id"?: string | null,"fecha"?: string,"group_id"?: string,"id"?: string,"paga"?: string,"tipo"?: string,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -2479,7 +2479,7 @@ isOneToOne: false
 { Args: { "p_card": string,"p_fecha"?: string,"p_medio"?: string,"p_nota"?: string,"p_tipo"?: string,"p_valor": number }; Returns: Json
                            },
 "pay_fixed_expense":
-{ Args: { "p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json
+{ Args: { "p_cierra"?: boolean,"p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json
                            },
 "pay_subscription":
 { Args: { "p_fecha"?: string,"p_medio"?: string,"p_sub": string,"p_valor"?: number }; Returns: Json

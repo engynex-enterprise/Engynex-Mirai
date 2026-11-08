@@ -11,7 +11,7 @@ export const NAV: NavSection[] = [
     sec: "Finanzas",
     entries: [
       { g: "dinero", label: "Mi dinero", icon: "wallet", iso: "ingresos", items: [
-        leaf("balance", "Balance y quincenas", "scale"), leaf("ingresos", "Ingresos", "arrow-down-to-line"),
+        leaf("balance", "Balance", "scale"), leaf("ingresos", "Ingresos", "arrow-down-to-line"),
         { ...leaf("gastos", "Gastos", "receipt"), alias: ["fijos", "suscripciones", "tarjetas"] },
         leaf("proveedores", "Proveedores", "store"),
         leaf("correo", "Correo del banco", "mail"), leaf("importar", "Importar extractos", "file-up"),

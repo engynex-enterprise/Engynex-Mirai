@@ -18,7 +18,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { initials } from "@/components/app/app-sidebar"
 import { useCanEdit } from "@/components/app/app-context"
 import { useIdParam, useNewParam } from "@/hooks/use-new-param"
-import { cuotasMes, esTipo, loanEngine, norm, loanName, loanStatus, loanTipo, loanTitulo, tipoDef, tiposDe, type LoanTipo, type Prenda } from "@/lib/domain"
+import { cuotasDelMes, cuotasMes, esTipo, loanEngine, norm, loanName, loanStatus, loanTipo, loanTitulo, tipoDef, tiposDe, type LoanTipo, type Prenda } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
@@ -116,8 +116,9 @@ export function LoansView({ kind }: { kind: LoanKind }) {
         actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> {isC ? "Nuevo préstamo" : "Nueva deuda"}</Button>} />
       <KpiGrid cols={3}>
         <Kpi icon={isC ? "hand-coins" : "landmark"} tone={isC ? "income" : "expense"} label={isC ? "Total que te deben" : "Total que debes"} value={<Money value={total} />} sub={`${list.length} ${isC ? "préstamo" : "deuda"}${list.length === 1 ? "" : "s"}`} />
-        <Kpi icon="calendar-clock" tone="amber" label="Cuotas al mes" value={<Money value={cuotasMes(book.loans, kind, today)} />} sub={isC ? "Lo que deberías recibir" : "Lo que debes pagar"} />
-        <Kpi icon="circle-alert" tone={atrasados ? "red" : "green"} label="Atrasados" value={atrasados} valueClassName={atrasados ? "text-danger" : "text-success"} sub={atrasados ? (isC ? "Personas con pagos atrasados" : "Deudas en mora") : "Ninguno"} />
+        <Kpi icon="calendar-clock" tone="amber" label="Cuotas de este mes" value={<Money value={cuotasDelMes(book.loans, kind, today)} />} sub={<>{isC ? "Lo que te toca recibir" : "Lo que te toca pagar"} · al mes en promedio <Money value={cuotasMes(book.loans, kind, today)} short /></>}
+          info="Este mes: las cuotas que el plan de cada préstamo pone en este mes (un pago único solo cuenta el mes en que vence). En promedio: lo que pesan al mes, repartiendo los pagos únicos entre los meses que faltan." />
+        <Kpi icon="circle-alert" tone={atrasados ? "red" : "green"} label="Atrasados" value={atrasados} valueClassName={atrasados ? "text-danger" : "text-success"} sub={atrasados ? (isC ? "Préstamos con pagos atrasados" : "Deudas en mora") : "Ninguno"} />
       </KpiGrid>
       {!list.length ? (
         <Card className="shadow-card ring-0"><EmptyState iso={isC ? "me-deben" : "le-debo"} title={isC ? "Aún no registras préstamos" : "Aún no registras deudas"}

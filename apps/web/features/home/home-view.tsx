@@ -19,7 +19,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useApp } from "@/components/app/app-context"
 import { useShell } from "@/components/app/shell-store"
 import { UserAvatar } from "@/components/mirai/user-avatar"
-import { agenda, cuotasMes, days, hormigas, loanEngine, loanName, notifs, parseDate, type AgendaItem } from "@/lib/domain"
+import { agenda, cuotasDelMes, days, hormigas, loanEngine, loanName, notifs, parseDate, type AgendaItem } from "@/lib/domain"
 import { estadoIntegral, flujoIntegral, periodo } from "@/lib/domain/flujo-integral"
 import { useIntegralExtras } from "@/features/balance/use-integral"
 import { edad, fmtDate, fmtShort, monthName, todayISO } from "@/lib/format"
@@ -117,15 +117,16 @@ export function HomeView() {
     const H = hormigas(book, today)
     const ag = agenda(book, today).filter((x) => x.d <= 15).slice(0, 6)
     const N = notifs(book, today).slice(0, 4)
-    const loans = book.loans.map((L) => { const e = loanEngine(L, today); return { L, e, prog: e.pagado / Math.max(1, e.pagado + e.saldo) } }).filter((x) => x.e.saldo > 1)
+    const loans = book.loans.map((L) => { const e = loanEngine(L, today); return { L, e, prog: e.progreso } }).filter((x) => x.e.saldo > 1)
     const cats = new Map(book.categories.map((c) => [c.id, c]))
     const feed = [
       ...book.expenses.map((g) => ({ k: "g" as const, id: g.id, fecha: g.fecha, t: g.descripcion, v: +g.valor, who: g.member_id ?? null, cat: cats.get(g.category_id ?? "") })),
       ...book.extraIncomes.map((x) => ({ k: "i" as const, id: x.id ?? x.descripcion, fecha: x.fecha, t: x.descripcion, v: +x.valor, who: null, cat: undefined })),
     ].filter((x) => x.fecha <= today).sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 6)
-    const next = agenda(book, today).find((x) => x.d >= 0 && x.dir === "pagar")
+    // El próximo pago con monto (una fecha del calendario sin valor no se muestra como "$0").
+    const next = agenda(book, today).find((x) => x.d >= 0 && x.dir === "pagar" && +x.monto > 0)
     const goal = book.goals.filter((g) => +g.objetivo > 0).sort((a, b) => +b.ahorrado / +b.objetivo - +a.ahorrado / +a.objetivo)[0]
-    return { T, q, which, H, ag, N, loans, feed, next, goal, cuotas: cuotasMes(book.loans, "pagar", today), mesName: monthName(m) }
+    return { T, q, which, H, ag, N, loans, feed, next, goal, cuotas: cuotasDelMes(book.loans, "pagar", today), mesName: monthName(m) }
   }, [book, today, X])
 
   if (isPending || !d || !book) return <PageSkeleton kpis={4} />
@@ -210,8 +211,8 @@ export function HomeView() {
             <Story href="/balance" bg="bg-[linear-gradient(160deg,#5AA9FF,#1B5FA8_60%,#1F2B4B)]" iso="inicio" label="Lo que tienes menos lo que debes" value={<Money value={d.T.pat} />} sub="Patrimonio neto" />
             <StoryAd />
             {d.next && <Story href={`/${d.next.go}`} bg="bg-[linear-gradient(160deg,#FFD36B,#E08A00_60%,#B4500A)]" iso="recordatorios" label={`Próximo pago · ${d.next.lbl.toLowerCase()}`} value={<Money value={d.next.monto} />} sub={d.next.titulo} />}
-            <Story href="/gastos" bg={d.H.over ? "bg-[linear-gradient(160deg,#FF8A9B,#D0243F_70%)]" : "bg-[linear-gradient(160deg,#C4A6FF,#7A4BE0_60%,#3B2A8F)]"} iso="gastos" label="Gastos hormiga este mes" value={<Money value={d.H.totalMes} />} sub={d.H.over ? "Por encima de tu límite" : "Dentro de tu límite"} />
-            <Story href="/le-debo" bg="bg-[linear-gradient(160deg,#4FC3D6,#13778F_60%,#1F2B4B)]" iso="le-debo" label="Cuotas de deudas al mes" value={<Money value={d.cuotas} />} sub={`Te deben ${fmtShort(d.T.xc)} en total`} />
+            <Story href="/gastos" bg={d.H.over ? "bg-[linear-gradient(160deg,#FF8A9B,#D0243F_70%)]" : "bg-[linear-gradient(160deg,#C4A6FF,#7A4BE0_60%,#3B2A8F)]"} iso="gastos" label="Gastos hormiga este mes" value={<Money value={d.H.totalMes} />} sub={d.H.pasado ? "Pasaste tu límite" : d.H.over ? "Vas camino a pasarte" : `${d.H.mes.length} gasto${d.H.mes.length === 1 ? "" : "s"} · dentro de tu límite`} />
+            <Story href="/le-debo" bg="bg-[linear-gradient(160deg,#4FC3D6,#13778F_60%,#1F2B4B)]" iso="le-debo" label="Cuotas de deudas este mes" value={<Money value={d.cuotas} />} sub={`Te deben ${fmtShort(d.T.xc)} en total`} />
             {d.goal && <Story href="/metas" bg="bg-[linear-gradient(160deg,#FFB3C1,#F0506E_60%,#A51E43)]" iso="metas" label={d.goal.nombre} value={`${Math.min(100, Math.round((+d.goal.ahorrado / +d.goal.objetivo) * 100))} %`} sub="de tu meta" />}
           </div>
 

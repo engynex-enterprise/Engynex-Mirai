@@ -1,8 +1,9 @@
 // Balance v5: los gastos registrados dentro de las quincenas, la composición de lo que tienes y lo que debes,
 // y hallazgos en palabras simples. Se apoya en `quincena()` y `totales()` (paridad con la v4) sin cambiarlos.
 import { conv, formatCOP as $ } from "./money"
+import { fondoEstado, type FondoRef } from "./savings"
 import { catIcon, quincena, type FlowItem, type Quincena, type QuincenaWhich } from "./quincena"
-import { fixedCategoryIds, gastosBasicos, liquidez, totales, variableMes, type Totales } from "./totals"
+import { fixedCategoryIds, liquidez, totales, variableMes, type Totales } from "./totals"
 import type { BookData, CategoryIn, DateInput, ExpenseIn, FixedExpenseIn } from "./types"
 
 /** Gasto con los campos que trae la fila de la base (origen: manual, tarjeta, prestamo…). */
@@ -132,7 +133,7 @@ export function composicion(b: BookData, today: DateInput): Composicion {
 }
 
 /** Lo que miran los hallazgos del mes (lo tienen `QuincenaBalance` y `FlujoIntegral`). */
-export type MesResumen = Pick<QuincenaBalance, "E" | "Sa" | "disp" | "presupuesto" | "porGastar" | "gastado" | "nGastos">
+export type MesResumen = Pick<QuincenaBalance, "E" | "Sa" | "disp" | "presupuesto" | "porGastar" | "gastado" | "nGastos"> & { gastadoPres?: number; conTarjetaPer?: number }
 
 export interface HallazgoBalance {
   id: string
@@ -159,22 +160,25 @@ export function hallazgosBalance(b: BookData, today: DateInput, mes: MesResumen,
   if (T.pat < 0) out.push({ id: "pat-neg", tono: "bad", icon: "triangle-alert", titulo: "Debes más de lo que tienes", detalle: `Te faltan ${$(-T.pat)} para cubrir todas tus deudas con lo que tienes. Empieza por la deuda más cara.`, href: "/estrategia", accion: "Ver cómo salir de deudas" })
   else if (T.A > 0 && T.P / T.A >= 0.4) out.push({ id: "deuda-alta", tono: "warn", icon: "scale", titulo: `El ${Math.round((T.P / T.A) * 100)} % de lo que tienes es deuda`, detalle: "Lo sano es menos del 40 %. Abonar a capital baja ese número más rápido que solo pagar la cuota.", href: "/le-debo", accion: "Ver mis deudas" })
   else if (T.P > 0) out.push({ id: "deuda-ok", tono: "ok", icon: "scale", titulo: `Solo el ${Math.max(1, Math.round((T.P / Math.max(1, T.A)) * 100))} % de lo que tienes es deuda`, detalle: "Está por debajo del 40 %, que es lo sano. Sigue así." })
-  const bas = gastosBasicos(b, today)
+  // La misma cuenta del Dashboard y Metas (fondoEstado): con el fondo activo, su saldo; si no, tu dinero disponible.
+  const FE = fondoEstado(b, today, C.liquidez, (b as { fund?: FondoRef }).fund)
+  const bas = FE.basicos
   if (bas > 0) {
-    const meses = C.liquidez / bas
-    const meta = +b.settings.emerg_meta || 6
-    if (C.liquidez <= 0) out.push({ id: "sin-liquidez", tono: "warn", icon: "umbrella", titulo: "No registras dinero disponible", detalle: "Agrega tus cuentas bancarias y tu efectivo para saber cuántos meses aguantarías si dejaras de recibir ingresos.", accion: "Agregar cuenta" })
+    const meses = FE.meses
+    const meta = FE.metaMeses
+    if (FE.tiene <= 0) out.push({ id: "sin-liquidez", tono: "warn", icon: "umbrella", titulo: FE.enFondo ? "Tu fondo de emergencia está en cero" : "No registras dinero disponible", detalle: FE.enFondo ? "Aparta algo cada quincena en tu fondo de emergencia para los imprevistos." : "Agrega tus cuentas bancarias y tu efectivo para saber cuántos meses aguantarías si dejaras de recibir ingresos.", accion: FE.enFondo ? undefined : "Agregar cuenta" })
     else out.push({
       id: "respaldo", tono: meses >= meta ? "ok" : meses >= 3 ? "warn" : "bad", icon: "umbrella",
-      titulo: `Tu dinero disponible alcanza para ${meses >= 10 ? Math.round(meses) : meses.toFixed(1).replace(".", ",")} ${meses >= 0.95 && meses < 1.05 ? "mes" : "meses"}`,
-      detalle: `Tienes ${$(C.liquidez)} en cuentas y ahorros, y tus gastos básicos son ${$(bas)} al mes. La meta es ${meta} meses.`,
+      titulo: `${FE.enFondo ? "Tu fondo de emergencia" : "Tu dinero disponible"} alcanza para ${meses >= 10 ? Math.round(meses) : meses.toFixed(1).replace(".", ",")} ${meses >= 0.95 && meses < 1.05 ? "mes" : "meses"}`,
+      detalle: `Tienes ${$(FE.tiene)} ${FE.enFondo ? "en tu fondo" : "en cuentas y ahorros"}, y tus gastos básicos son ${$(bas)} al mes. La meta es ${meta} meses.`,
       href: meses < meta ? "/metas" : undefined, accion: meses < meta ? "Armar mi fondo de emergencia" : undefined,
     })
   }
   if (mes.E > 0 || mes.Sa > 0) {
     if (mes.disp < 0) out.push({ id: "mes-falta", tono: "bad", icon: "wallet", titulo: "Este mes sale más de lo que entra", detalle: `Te faltan ${$(-mes.disp)} para cubrir todo lo del mes. Revisa qué gasto puedes mover o recortar.`, href: "/gastos", accion: "Ver mis gastos" })
-    else if (mes.presupuesto > 0 && mes.porGastar === 0 && mes.gastado > mes.presupuesto) out.push({ id: "presu", tono: "warn", icon: "shopping-cart", titulo: "Ya pasaste tu presupuesto del mes", detalle: `Llevas ${$(mes.gastado)} en gastos y tu presupuesto variable es ${$(mes.presupuesto)}.`, href: "/presupuesto", accion: "Ver mi presupuesto" })
-    else out.push({ id: "mes-ok", tono: "ok", icon: "wallet", titulo: `Este mes te sobran ${$(mes.disp)}`, detalle: mes.nGastos ? `Ya cuenta tus ${mes.nGastos} gasto${mes.nGastos === 1 ? "" : "s"} registrado${mes.nGastos === 1 ? "" : "s"} (${$(mes.gastado)}). Llévalo a una meta antes de que se gaste.` : "Llévalo a una meta o a tu fondo de emergencia antes de que se gaste.", href: "/metas", accion: "Ir a mis metas" })
+    // Contra el presupuesto cuenta también lo comprado con tarjeta (la misma base de "por gastar").
+    else if (mes.presupuesto > 0 && mes.porGastar === 0 && (mes.gastadoPres ?? mes.gastado) > mes.presupuesto) out.push({ id: "presu", tono: "warn", icon: "shopping-cart", titulo: "Ya pasaste tu presupuesto del mes", detalle: `Llevas ${$(mes.gastadoPres ?? mes.gastado)} en gastos${mes.conTarjetaPer ? ` (incluye ${$(mes.conTarjetaPer)} con tarjeta)` : ""} y tu presupuesto variable es ${$(mes.presupuesto)}.`, href: "/presupuesto", accion: "Ver mi presupuesto" })
+    else out.push({ id: "mes-ok", tono: "ok", icon: "wallet", titulo: `Este mes te sobran ${$(mes.disp)}`, detalle: (mes.conTarjetaPer ? `Ojo: compraste ${$(mes.conTarjetaPer)} con tarjeta que te cobrarán en la próxima factura. ` : "") + (mes.nGastos ? `Ya cuenta tus ${mes.nGastos} gasto${mes.nGastos === 1 ? "" : "s"} registrado${mes.nGastos === 1 ? "" : "s"} (${$(mes.gastado)}). Llévalo a una meta antes de que se gaste.` : "Llévalo a una meta o a tu fondo de emergencia antes de que se gaste."), href: "/metas", accion: "Ir a mis metas" })
   }
   return out
 }

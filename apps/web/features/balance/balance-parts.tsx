@@ -187,8 +187,9 @@ export function MesCard({ q, ym, onMove, onDetalle, canEdit }: { q: FlujoIntegra
       )}
       <div className="grid gap-1.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-          <span><b>Gastos registrados:</b> <Money value={q.gastado} /> {q.nGastos ? <span className="text-muted-foreground">en {q.nGastos} gasto{q.nGastos === 1 ? "" : "s"}</span> : <span className="text-muted-foreground">(aún ninguno)</span>}</span>
-          {q.presupuesto > 0 && <span className="text-muted-foreground">de <Money value={q.presupuesto} /> de presupuesto</span>}
+          {q.presupuesto > 0
+            ? <span><b>Gastado en tu presupuesto:</b> <Money value={q.gastadoPres} /> <span className="text-muted-foreground">de <Money value={q.presupuesto} />{q.conTarjetaPer > 0 ? <> (incluye <Money value={q.conTarjetaPer} /> con tarjeta)</> : null}</span></span>
+            : <span><b>Gastos registrados:</b> <Money value={q.gastado} /> {q.nGastos ? <span className="text-muted-foreground">en {q.nGastos} gasto{q.nGastos === 1 ? "" : "s"}</span> : <span className="text-muted-foreground">(aún ninguno)</span>}</span>}
         </div>
         {q.presupuesto > 0 && q.momento !== "pasado" && <Progress value={usado * 100} aria-label={`Usaste el ${fmtPct(usado * 100, 0)} del presupuesto variable`} className={cn("h-2", usado >= 1 ? "[&_[data-slot=progress-indicator]]:bg-danger" : "[&_[data-slot=progress-indicator]]:bg-brand")} />}
         <p className="text-xs text-muted-foreground">{q.momento === "pasado" ? "Este mes ya terminó: cuenta solo lo que registraste." : q.porGastar > 0 ? <>Te faltan <Money value={q.porGastar} /> por gastar según tu presupuesto (ya están en «Sale»).</> : q.presupuesto > 0 ? "Ya usaste todo tu presupuesto variable del mes." : "Pon topes por categoría en Presupuesto para estimar lo que falta por gastar."}</p>

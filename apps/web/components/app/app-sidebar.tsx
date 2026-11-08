@@ -75,7 +75,7 @@ export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; ba
   return (
     <Sidebar collapsible="icon" className="border-r-sidebar-border">
       <SidebarHeader className="gap-1.5 pt-3">
-        <ModeSwitch mode="usuario" />
+        <div className="group-data-[collapsible=icon]:hidden"><ModeSwitch mode="usuario" /></div>
         <div className="flex items-center gap-1 group-data-[collapsible=icon]:flex-col">
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full"><BookSwitcher /></div>
           <Tooltip>
@@ -85,21 +85,21 @@ export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; ba
         </div>
         <SidebarMenu className="gap-1.5">
           <SidebarMenuItem className="flex items-center gap-1.5 group-data-[collapsible=icon]:flex-col">
-            <SidebarMenuButton data-tour="search" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-10 flex-1 rounded-full bg-secondary px-3 text-muted-foreground hover:bg-secondary-hover group-data-[collapsible=icon]:rounded-full">
-              <Search /> <span>Buscar en Mirai</span> <Kbd className="ml-auto bg-card">Ctrl K</Kbd>
+            <SidebarMenuButton data-tour="search" data-rail="pill" onClick={() => openSearch(true)} tooltip="Buscar (Ctrl K)" className="h-10 flex-1 rounded-full bg-secondary px-3 text-muted-foreground hover:bg-secondary-hover group-data-[collapsible=icon]:rounded-full">
+              <Search /> <span className="group-data-[collapsible=icon]:sr-only">Buscar en Mirai</span> <Kbd className="ml-auto bg-card group-data-[collapsible=icon]:hidden">Ctrl K</Kbd>
             </SidebarMenuButton>
             <PrivacyButton />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton data-tour="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-10 justify-center rounded-md bg-primary font-semibold text-primary-foreground shadow-[0_2px_6px_rgba(42,127,20,.3)] hover:bg-primary-hover hover:text-primary-foreground active:bg-primary-hover active:text-primary-foreground group-data-[collapsible=icon]:rounded-full">
-              <CirclePlus /> <span className="flex-none group-data-[collapsible=icon]:hidden">Agregar</span> <Kbd className="ml-auto bg-white/20 text-inherit group-data-[collapsible=icon]:hidden">N</Kbd>
+            <SidebarMenuButton data-tour="add" data-rail="add" onClick={() => openAdd(true)} tooltip="Agregar (N)" className="h-10 justify-center rounded-md bg-primary font-semibold text-primary-foreground shadow-[0_2px_6px_rgba(42,127,20,.3)] hover:bg-primary-hover hover:text-primary-foreground active:bg-primary-hover active:text-primary-foreground group-data-[collapsible=icon]:rounded-full">
+              <CirclePlus /> <span className="flex-none group-data-[collapsible=icon]:sr-only">Agregar</span> <Kbd className="ml-auto bg-white/20 text-inherit group-data-[collapsible=icon]:hidden">N</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton data-tour="bell" onClick={() => openBell(true)} tooltip="Notificaciones">
-              <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card group-data-[collapsible=icon]:size-7"><IsoIcon k="notificaciones" size={22} />{unread > 0 && <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-expense px-1 text-[10px] font-bold text-white ring-2 ring-sidebar">{unread > 9 ? "9+" : unread}</span>}</span>
+              <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card"><IsoIcon k="notificaciones" size={22} />{unread > 0 && <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-expense px-1 text-[10px] font-bold text-white ring-2 ring-sidebar">{unread > 9 ? "9+" : unread}</span>}</span>
               <span>Notificaciones</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -107,12 +107,15 @@ export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; ba
       </SidebarHeader>
 
       <SidebarContent className="gap-0">
-        {NAV.map((s) => (
+        {NAV.map((s, si) => (
           <SidebarGroup key={s.sec} className="py-1">
+            {si > 0 && <span aria-hidden className="mx-auto mb-1 hidden h-px w-8 bg-sidebar-border group-data-[collapsible=icon]:block" />}
             <SidebarGroupLabel className="text-[13px]">{s.sec}</SidebarGroupLabel>
             <SidebarMenu>
               {s.entries.filter((e) => isGroup(e) || !hidden.includes(e.id)).map((e) =>
-                isGroup(e) ? (
+                isGroup(e) && collapsed ? (
+                  <GroupFlyout key={e.g} group={e} current={current} badges={badges} badge={groupBadge(e)} />
+                ) : isGroup(e) ? (
                   <Collapsible key={e.g} asChild open={!collapsed && openGroup === e.g} onOpenChange={(o) => setOpenGroup(o ? e.g : null)}>
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
@@ -158,12 +161,48 @@ export function AppSidebar(props: { live: LiveStatus; online: PresenceUser[]; ba
   )
 }
 
-/** Ícono del menú en círculo (estilo accesos de Facebook). */
-function NavIcon({ iso, icon }: { iso?: string; icon?: string }) {
+/** Ícono del menú en círculo (estilo accesos de Facebook). Con el menú plegado lleva el número de pendientes encima. */
+function NavIcon({ iso, icon, badge }: { iso?: string; icon?: string; badge?: number | string }) {
   return (
-    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card transition-transform group-hover/menu-button:scale-105 group-data-[collapsible=icon]:size-7 group-data-[active=true]/menu-button:bg-white dark:group-data-[active=true]/menu-button:bg-card">
+    <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card transition-transform group-hover/menu-button:scale-105 group-data-[active=true]/menu-button:bg-white dark:group-data-[active=true]/menu-button:bg-card">
       {iso ? <IsoIcon k={iso} size={22} /> : <Icon name={icon ?? "circle"} className="size-5! text-brand" />}
+      {badge !== undefined && badge !== 0 && (
+        <span className={cn("absolute -top-1 -right-1 hidden h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] leading-none font-bold ring-2 ring-sidebar group-data-[collapsible=icon]:grid", typeof badge === "number" ? "bg-expense text-white" : "bg-lime text-navy")}>
+          {typeof badge === "number" ? (badge > 9 ? "9+" : badge) : "•"}
+        </span>
+      )}
     </span>
+  )
+}
+
+/** Menú plegado: un grupo (Mi dinero, Préstamos…) abre sus secciones en un menú flotante a la derecha, como Facebook. */
+function GroupFlyout({ group, current, badges, badge }: { group: NavGroup; current: string; badges: Record<string, number | string>; badge: number }) {
+  const { plan } = useApp()
+  return (
+    <SidebarMenuItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuButton tooltip={group.label} isActive={group.items.some((i) => i.id === current)}>
+            <NavIcon iso={group.iso} badge={badge || undefined} />
+            <span>{group.label}</span>
+          </SidebarMenuButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" sideOffset={12} className="min-w-60 rounded-xl p-1.5">
+          <DropdownMenuLabel className="flex items-center gap-2 px-2 py-1.5 text-[13px] font-semibold"><IsoIcon k={group.iso} size={20} />{group.label}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {group.items.map((i) => (
+            <DropdownMenuItem key={i.id} asChild className={cn("h-10 rounded-lg px-2.5 text-[14px]", i.id === current && "bg-nav-active font-semibold text-nav-active-foreground")}>
+              <Link href={i.href} prefetch aria-current={i.id === current ? "page" : undefined}>
+                <span className="flex-1 truncate">{i.label}</span>
+                {!can(plan, featureOfSection(i.id)) && <PremiumMark />}
+                {badges[i.id] !== undefined && <NavBadge v={badges[i.id]} />}
+                {i.id === current && <Check className="size-4 text-brand" />}
+              </Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
   )
 }
 
@@ -209,7 +248,7 @@ function Leaf({ item, active, badge }: { item: NavLeaf; active: boolean; badge?:
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
         <Link href={item.href} prefetch>
-          {hasIso(item.id) ? <NavIcon iso={item.id} /> : <NavIcon icon={item.icon} />}
+          {hasIso(item.id) ? <NavIcon iso={item.id} badge={badge} /> : <NavIcon icon={item.icon} badge={badge} />}
           <span>{item.label}</span>
           {!can(plan, featureOfSection(item.id)) && <PremiumMark />}
         </Link>
@@ -296,7 +335,7 @@ function UserMenu() {
   const { user, household, isAdmin } = useApp()
   const openFeedback = useShell((s) => s.openFeedback)
   const openHelp = useShell((s) => s.setHelp)
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { isMobile, setOpenMobile, state } = useSidebar()
   const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
   const g = useGami()
@@ -317,7 +356,7 @@ function UserMenu() {
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-56">
+          <DropdownMenuContent side={state === "collapsed" && !isMobile ? "right" : "top"} align={state === "collapsed" && !isMobile ? "end" : "start"} sideOffset={state === "collapsed" ? 12 : 4} className="min-w-60 group-data-[state=expanded]:w-(--radix-dropdown-menu-trigger-width)">
             <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">{user.email}</DropdownMenuLabel>
             <DropdownMenuItem asChild><Link href="/perfil"><User /> Tu perfil</Link></DropdownMenuItem>
             <DropdownMenuItem asChild><Link href="/ajustes"><Settings /> Ajustes</Link></DropdownMenuItem>

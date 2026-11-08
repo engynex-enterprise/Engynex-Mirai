@@ -14,7 +14,7 @@ import { DataTable, catalogMatch, catalogOptions } from "@/components/mirai/data
 import { useCanEditRow, useCanRecord } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { incomeCuando, incomeReparto, ingresoBrutoMensual, ingresoMensual, quincena, type Deducciones, type IncomeIn } from "@/lib/domain"
+import { dedCalc, incomeCuando, incomeReparto, ingresoBrutoMensual, ingresoMensual, pagosMes, quincena, smmlvFor, uvtFor, type Deducciones, type IncomeIn, type NominaCfg, type NominaRef } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { memberName, useIncomeCategories, useMembers } from "@/features/catalogs/hooks"
@@ -32,15 +32,29 @@ const quincLine = (x: Row<"incomes">) => {
   return `1ª quincena ${fmtMoney(R.n1)} · 2ª quincena ${fmtMoney(R.n2)}${desc}`
 }
 
-/** "Bruto $X − descuentos $Y: Salud, Pensión, …" (dedLine de la v4). */
-const dedLine = (x: Row<"incomes">) => {
+/**
+ * "Bruto $X al mes − descuentos $Y: Salud, Pensión, …": los nombres salen del cálculo real (dedCalc), solo los que
+ * descuentan algo (no dice "Retención" si es $0, sí dice "Fondo de solidaridad" si aplica).
+ */
+const dedLine = (x: Row<"incomes">, ref: NominaRef) => {
   if (!x.bruto) return null
   const D = x.deducciones as Deducciones | null
-  const names = [D?.salud !== false && D?.tipo !== "otro" && "Salud", D?.pension !== false && (D?.tipo === "empleado" || D?.tipo === "independiente") && "Pensión", D?.ret !== false && D?.tipo !== "pensionado" && "Retención", ...(D?.otros ?? []).filter((o) => o.n && +(o.v ?? 0)).map((o) => o.n)].filter(Boolean)
   const R = incomeReparto(x)
-  if (x.frec === "quincenal" && R.b1 != null && R.b2 != null && R.n1 != null && R.n2 != null)
-    return `Bruto ${fmtMoney(R.b1 + R.b2)} al mes − descuentos ${fmtMoney(R.b1 + R.b2 - R.n1 - R.n2)}: ${names.join(", ")}`
-  return `Bruto ${fmtMoney(Number(x.bruto))} − descuentos ${fmtMoney(Number(x.bruto) - Number(x.valor))}: ${names.join(", ")}`
+  const quinc = x.frec === "quincenal" && R.b1 != null && R.b2 != null && R.n1 != null && R.n2 != null
+  const brutoMes = quinc ? R.b1! + R.b2! : Number(x.bruto) * (pagosMes(x) || 1)
+  const descMes = quinc ? R.b1! + R.b2! - R.n1! - R.n2! : (Number(x.bruto) - Number(x.valor)) * (pagosMes(x) || 1)
+  const names = D ? dedCalc(brutoMes, "mensual", D, ref).items.filter((i) => i.v > 0.5).map((i) => i.n) : []
+  if (descMes < 1) return null
+  return `Bruto ${fmtMoney(brutoMes)} al mes − descuentos ${fmtMoney(descMes)}${names.length ? `: ${names.join(", ")}` : ""}`
+}
+
+/** Debajo del valor al mes: cuánto es cada pago ("$1.840.000 cada quincena"), o "al mes" si se paga una vez. */
+const POR: Record<string, string> = { quincenal: "cada quincena", semanal: "cada semana", diario: "por día", anual: "una vez al año" }
+const porPago = (x: Row<"incomes">) => {
+  const R = incomeReparto(x)
+  if (x.frec === "quincenal" && R.n1 != null && R.n2 != null && R.n1 !== R.n2) return "al mes (quincenas distintas)"
+  const p = POR[x.frec]
+  return p ? `al mes · ${fmtMoney(Number(x.valor), x.currency ?? "COP")} ${p}` : "al mes"
 }
 
 export function IncomesView() {
@@ -58,6 +72,8 @@ export function IncomesView() {
   const trm = book?.settings.trm ?? {}
   /** Lo que deja el ingreso en un mes, en pesos (quincenas, semanas y monedas convertidas). */
   const mensualDe = (x: Row<"incomes">) => ingresoMensual([x as unknown as IncomeIn], trm)
+  const year = Number(today.slice(0, 4))
+  const ref: NominaRef = { smmlv: smmlvFor(year, book?.settings.smmlv as Record<string, number>), uvt: uvtFor(year, book?.settings.uvt as Record<string, number>), fsp: ((book?.settings as { nomina?: NominaCfg } | undefined)?.nomina ?? {}).fsp }
 
   const k = useMemo(() => {
     if (!book) return null
@@ -72,7 +88,7 @@ export function IncomesView() {
         actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar ingreso</Button>} />
       <KpiGrid cols={3}>
         <Kpi icon="wallet" tone="income" label="Ingreso mensual" loading={isPending}
-          value={<>{<Money value={k?.mes} />} <span className="text-[12px] font-medium text-muted-foreground">con descuentos</span></>} valueClassName="text-success"
+          value={<>{<Money value={k?.mes} />} <span className="text-[12px] font-medium text-muted-foreground">lo que te llega</span></>} valueClassName="text-success"
           sub={k && k.bruto - k.mes >= 1
             ? <>Sin descuentos <Money value={k.bruto} className="font-semibold text-foreground" /> · descuentos <Money value={k.bruto - k.mes} /></>
             : `${incomes.length} fuente${incomes.length === 1 ? "" : "s"} · sin descuentos de nómina`} />
@@ -110,10 +126,9 @@ export function IncomesView() {
             <ListRow key={x.id} icon={cat?.icon ?? "coins"} media={<EntityLogo icon={cat?.icon ?? "coins"} tone="success" name={x.concepto} />} title={x.concepto}
               badges={x.bruto ? <StatusPill tone="estimado" hint="Es lo que te llega a la cuenta después de los descuentos de nómina (salud, pensión, retención).">neto</StatusPill> : null}
               subtitle={[cat?.nombre, incomeCuando(x), memberName(x.member_id, members)].filter(Boolean).join(" · ")}
-              extra={quincLine(x) || dedLine(x) ? <>{quincLine(x) && <span className="block">{quincLine(x)}</span>}{dedLine(x) && <span className="block">{dedLine(x)}</span>}</> : null}
-              value={quincLine(x)
-                ? <span className="grid text-right"><Money value={Number(incomeReparto(x).n1) + Number(incomeReparto(x).n2)} currency={x.currency} className="font-bold text-success" /><span className="text-xs text-muted-foreground">al mes</span></span>
-                : <Money value={Number(x.valor)} currency={x.currency} className="font-bold text-success" />}
+              extra={quincLine(x) || dedLine(x, ref) ? <>{quincLine(x) && <span className="block">{quincLine(x)}</span>}{dedLine(x, ref) && <span className="block">{dedLine(x, ref)}</span>}</> : null}
+              // Siempre "al mes" (lo que te llega en el mes) y, debajo, cuánto es cada pago: así cuadra con el total de arriba.
+              value={<span className="grid text-right"><Money value={mensualDe(x)} className="font-bold text-success" /><span className="text-xs text-muted-foreground">{porPago(x)}</span></span>}
               onClick={canRow(x) ? () => setEditing(x) : undefined}
               actions={canRow(x) ? [
                 { label: `Editar ${x.concepto}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(x) },

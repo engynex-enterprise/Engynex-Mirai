@@ -9,6 +9,8 @@ export type Party = { nombre: string; doc: string; ciudad?: string; direccion?: 
 export type AgreementInput = {
   kind: "cobrar" | "pagar"; yo: Party; otro: Party; ciudad: string; hoy: string
   monto: number; concepto: string; inicio: string; plazo: number; frec: string; sistema: string; tasa: number; ea: number; e: LoanEngine
+  /** Tasa de usura vigente (% E.A.): si la tasa la supera, el acuerdo no puede decir que no la supera. */
+  usura?: number
 }
 
 const s = StyleSheet.create({
@@ -45,9 +47,9 @@ function Agreement(d: AgreementInput) {
         <Text style={s.title}>ACUERDO DE PAGO Y PAGARÉ</Text>
         <Text style={s.p}>En {d.ciudad || "__________"}, a los {day} días del mes de {monthName(m)} de {y}, comparecen: {party(acreedor)}, en adelante EL ACREEDOR; y {party(deudor)}, en adelante EL DEUDOR, quienes acuerdan lo siguiente:</Text>
         <Text style={s.p}><Text style={s.b}>PRIMERA. Objeto. </Text>EL DEUDOR declara que recibió de EL ACREEDOR, a título de préstamo, la suma de {fmtMoney(d.monto)} ({numLetras(d.monto).toUpperCase()} PESOS M/CTE){d.concepto ? `, destinada a ${d.concepto}` : ""}, el día {fmtDate(d.inicio, { long: true })}.</Text>
-        <Text style={s.p}><Text style={s.b}>SEGUNDA. Forma de pago. </Text>EL DEUDOR pagará la suma prestada en {d.plazo} cuotas de periodicidad {per}, según el plan de pagos anexo, mediante el sistema de “{sis.n}” ({sis.t}).</Text>
+        <Text style={s.p}><Text style={s.b}>SEGUNDA. Forma de pago. </Text>{d.frec === "unico" ? `EL DEUDOR pagará la suma prestada en un solo pago el ${fmtDate(d.e.plan.at(-1)?.fecha ?? d.inicio, { long: true })}, según el plan de pagos anexo.` : `EL DEUDOR pagará la suma prestada en ${d.plazo} ${d.plazo === 1 ? "cuota" : "cuotas"} de periodicidad ${per}, según el plan de pagos anexo, mediante el sistema de “${sis.n}” (${sis.t}).`}</Text>
         <Text style={s.p}><Text style={s.b}>TERCERA. Intereses. </Text>{d.tasa > 0
-          ? `El préstamo causa un interés remuneratorio del ${fmtPct(d.tasa, 2)} mensual, equivalente a ${fmtPct(d.ea * 100, 2)} efectivo anual, sin superar la tasa máxima legal vigente. En caso de mora se causarán intereses moratorios a la tasa máxima permitida por la ley.`
+          ? `El préstamo causa un interés remuneratorio del ${fmtPct(d.tasa, 2)} mensual, equivalente a ${fmtPct(d.ea * 100, 2)} efectivo anual${d.usura && d.ea * 100 <= d.usura ? ", sin superar la tasa máxima legal vigente" : ""}. Si en algún momento la tasa pactada superara la tasa máxima legal, se aplicará esta última. En caso de mora se causarán intereses moratorios a la tasa máxima permitida por la ley.`
           : "El préstamo NO causa intereses remuneratorios. En caso de mora se causarán intereses moratorios a la tasa máxima permitida por la ley."}</Text>
         <Text style={s.p}><Text style={s.b}>CUARTA. Pagos anticipados y cláusula aceleratoria. </Text>EL DEUDOR podrá pagar anticipadamente, total o parcialmente, sin penalidad. El incumplimiento en el pago de dos (2) o más cuotas faculta a EL ACREEDOR para declarar vencido el plazo y exigir el pago inmediato del saldo total.</Text>
         <Text style={s.p}><Text style={s.b}>QUINTA. Mérito ejecutivo. </Text>Este documento presta mérito ejecutivo. Se firma en dos ejemplares del mismo tenor, uno para cada parte.</Text>

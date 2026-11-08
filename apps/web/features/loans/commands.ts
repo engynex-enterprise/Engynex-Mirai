@@ -7,6 +7,8 @@ import { activeBookId } from "@/lib/api/session"
 export type LoanPay =
   | { cuotas: number; fecha: string; payment_method_id: string | null }
   | { abono: number; modo: "plazo" | "cuota"; fecha: string; payment_method_id: string | null }
+  /** Parte de la cuota que sigue. */
+  | { parcial: number; fecha: string; payment_method_id: string | null }
 
 export async function payLoanApi(loanId: string, body: LoanPay) {
   const { browserApi } = await import("@/lib/api/client")

@@ -91,7 +91,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
   const acuerdo = async () => {
     await descargarAcuerdo({
       kind: isC ? "cobrar" : "pagar", hoy: today, user, contact, nombre: nm,
-      monto: Number(loan.monto), concepto: loan.concepto, inicio: loan.inicio, plazo: loan.plazo, frec: loan.frec, sistema: loan.sistema, tasa: Number(loan.tasa), e,
+      monto: Number(loan.monto), concepto: loan.concepto, inicio: loan.inicio, plazo: loan.plazo, frec: loan.frec, sistema: loan.sistema, tasa: Number(loan.tasa), e, usura: Number(cfg?.usura ?? 0) || undefined,
     })
     toast.success("Acuerdo de pago listo", { description: "Revísalo con la otra persona antes de firmarlo." })
   }
@@ -187,7 +187,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
               {e.done ? (isC ? "El préstamo está pagado: ya debes devolver el objeto." : "Ya pagaste todo: puedes recoger tu objeto.")
                 : d == null ? "Sin fecha límite registrada."
                 : d < 0 ? <>La fecha límite pasó hace {-d} días.{!isC && " Comunícate ya con la casa de empeño: podrías perder el objeto."}</>
-                : <>Quedan <b>{d} días</b> (hasta el {fmtDate(pr.limite!)}).{!isC && <> Para recuperarlo debes pagar {fmtMoney(e.saldo)}{loan.sistema === "americano" && e.plan.length > 1 ? " o al menos los intereses para refrendar (extender el plazo)" : ""}. Si no pagas a tiempo puedes perder el objeto.</>}</>}</p>
+                : <>Quedan <b>{d} días</b> (hasta el {fmtDate(pr.limite!)}).{!isC && <> Para recuperarlo debes pagar {fmtMoney(e.paraSaldar)}{loan.sistema === "americano" && e.plan.length > 1 ? " o al menos los intereses para refrendar (extender el plazo)" : ""}. Si no pagas a tiempo puedes perder el objeto.</>}</>}</p>
           </div>
         )
       })()}
@@ -228,7 +228,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
       )}
 
       <div className="grid grid-cols-2 gap-2.5 @3xl:grid-cols-4">
-        {([[isC ? "Prestaste" : "Te prestaron", Number(loan.monto), fmtDate(loan.inicio)], [isC ? "Te debe hoy" : "Debes hoy", e.saldo, "de capital, sin intereses futuros"],
+        {([[isC ? "Prestaste" : "Te prestaron", Number(loan.monto), fmtDate(loan.inicio)], [isC ? "Te debe hoy" : "Debes hoy", e.paraSaldar, e.intVencido > 0.5 ? `${fmtShort(e.saldo)} de capital + ${fmtShort(e.intVencido)} de intereses vencidos` : "de capital, sin intereses futuros"],
           [isC ? "Te ha pagado" : "Has pagado", e.pagado, `${e.k} de ${totalCuotas} cuotas`], [isC ? "Ganarás en intereses" : "Pagarás en intereses", e.intTotal, `en total ${isC ? "recibirás" : "pagarás"} ${fmtShort(e.totalPagar)}`]] as const).map(([l, v, sub]) => (
           <div key={l} className="grid min-w-0 content-start gap-0.5 rounded-lg bg-muted p-3">
             <p className="truncate text-xs text-muted-foreground">{l}</p>
@@ -299,9 +299,9 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
             <ul className="grid divide-y">
               {[...e.hist].reverse().map((h, i) => (
                 <li key={i} className="flex items-center gap-3 py-3">
-                  <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", h.tipo === "abono" ? "bg-info-soft text-info" : "bg-success-soft text-success")}><Icon name={h.tipo === "abono" ? "piggy-bank" : "circle-check"} className="size-4" /></span>
+                  <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", h.tipo === "abono" ? "bg-info-soft text-info" : h.tipo === "parcial" ? "bg-warning-soft text-warning" : "bg-success-soft text-success")}><Icon name={h.tipo === "abono" ? "piggy-bank" : h.tipo === "parcial" ? "split" : "circle-check"} className="size-4" /></span>
                   <div className="grid min-w-0 flex-1 text-sm">
-                    <b className="break-words">{h.tipo === "abono" ? `Abono a la deuda · ${h.modo === "cuota" ? "para bajar la cuota" : "para terminar antes"}` : `Cuota ${(h as { n: number }).n} completa`}</b>
+                    <b className="break-words">{h.tipo === "abono" ? `Abono a la deuda · ${h.modo === "cuota" ? "para bajar la cuota" : "para terminar antes"}` : h.tipo === "parcial" ? `Parte de la cuota ${h.n}` : `Cuota ${h.n} completa`}</b>
                     <span className="text-muted-foreground">{fmtDate(h.fecha)}{h.tipo === "cuota" && ` · interés ${fmtMoney(h.int)} + abono ${fmtMoney(h.cap)}`} · quedó en {fmtMoney(h.saldo)}</span>
                   </div>
                   <div className="grid shrink-0 justify-items-end gap-1">
