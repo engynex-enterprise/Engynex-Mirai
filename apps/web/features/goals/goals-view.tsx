@@ -20,8 +20,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { createClient } from "@/utils/supabase/client"
-import { apiDeleteRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiDeleteRow } from "@/lib/api/book-rows"
 import { goalContribute, updateFund } from "./commands"
 import { aporteFondoSugerido, fijoStatus, imprevistos, liquidez, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
 import { fondoEstado } from "@/lib/domain/savings"
@@ -118,7 +117,7 @@ export function GoalsView() {
     toast.success("¡Bien! Abono registrado", {
       description: `Llevas ${fmtMoney(Number(r.ahorrado))} de ${fmtMoney(Number(r.objetivo))}.`,
       action: { label: "Deshacer", onClick: async () => {
-        const { error: e2 } = rowsViaApi("goal_movements") ? await apiDeleteRow(bookId, "goal_movements", r.id) : await createClient().from("goal_movements").update({ deleted_at: new Date().toISOString() }).eq("id", r.id)
+        const { error: e2 } = await apiDeleteRow(bookId, "goal_movements", r.id)
         if (e2) return toast.error("No se pudo deshacer", { description: e2.message })
         refrescar()
         toast.success("Listo, quitamos el abono")

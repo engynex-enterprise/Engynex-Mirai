@@ -20,8 +20,7 @@ import { DatePicker } from "@/components/mirai/date-picker"
 import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
-import { createClient } from "@/utils/supabase/client"
-import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { payFixedExpense } from "./commands"
 import { FFREC, FSTEP, categoriaSugerida, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
@@ -130,16 +129,14 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
     }
     const desde = step && v.prox ? v.prox.slice(0, 7) : today.slice(0, 7)
     const inicio = step && v.prox ? v.prox : today
-    const api = rowsViaApi("fixed_expenses")
     if (fixed) {
       const reanc = (step && v.prox && fijoProxIso(toIn(fixed), today) !== v.prox) || fixed.frec !== v.frec
       const patch = { ...o, ...(reanc ? { desde, inicio } : {}) }
-      const { error } = api ? await apiUpdateRow(bookId, "fixed_expenses", fixed.id, patch) : await createClient().from("fixed_expenses").update(patch).eq("id", fixed.id)
+      const { error } = await apiUpdateRow(bookId, "fixed_expenses", fixed.id, patch)
       if (error) return toast.error("No se pudo guardar", { description: error.message })
       toast.success("Gasto fijo actualizado", { description: `Cambios guardados en ${o.nombre}.` })
     } else {
-      const { data: nf, error } = api ? await apiInsertRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", { ...o, desde, inicio })
-        : await createClient().from("fixed_expenses").insert({ ...o, book_id: bookId, desde, inicio }).select().single()
+      const { data: nf, error } = await apiInsertRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", { ...o, desde, inicio })
       if (error || !nf) return toast.error("No se pudo guardar", { description: error?.message })
       // ¿Ya lo pagó este mes?
       const [y, m] = today.split("-").map(Number)

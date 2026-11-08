@@ -25,8 +25,7 @@ import { UserAvatar } from "@/components/mirai/user-avatar"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { apiInsertRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { useMembers } from "@/features/catalogs/hooks"
@@ -45,14 +44,14 @@ function KidCard({ m, a, movs, canEdit }: { m: Row<"family_members">; a: Row<"al
   const refresh = () => { invalidateBook(qc, bookId, "allowances"); invalidateBook(qc, bookId, "allowance_movements") }
   const ensure = async () => {
     if (a) return a.id
-    const { data, error } = rowsViaApi("allowances") ? await apiInsertRow<{ id: string }>(bookId, "allowances", { member_id: m.id }) : await createClient().from("allowances").insert({ book_id: bookId, member_id: m.id }).select("id").single()
+    const { data, error } = await apiInsertRow<{ id: string }>(bookId, "allowances", { member_id: m.id })
     if (error || !data) throw new Error(error?.message)
     return data.id
   }
   const upd = async (p: Partial<Row<"allowances">>) => {
     try {
       const id = await ensure()
-      const { error } = rowsViaApi("allowances") ? await apiUpdateRow(bookId, "allowances", id, p) : await createClient().from("allowances").update(p).eq("id", id)
+      const { error } = await apiUpdateRow(bookId, "allowances", id, p)
       if (error) throw new Error(error.message)
       refresh()
     } catch (e) { toast.error("No se pudo guardar", { description: (e as Error).message }) }
@@ -63,7 +62,7 @@ function KidCard({ m, a, movs, canEdit }: { m: Row<"family_members">; a: Row<"al
     try {
       const id = await ensure()
       const movimiento = { allowance_id: id, fecha: todayISO(), descripcion: d || (signo > 0 ? "Mesada" : "Gasto"), valor: signo * Math.abs(v) }
-      const { error } = rowsViaApi("allowance_movements") ? await apiInsertRow(bookId, "allowance_movements", movimiento) : await createClient().from("allowance_movements").insert({ book_id: bookId, ...movimiento })
+      const { error } = await apiInsertRow(bookId, "allowance_movements", movimiento)
       if (error) throw new Error(error.message)
       toast.success(signo > 0 ? "Mesada entregada" : "Gasto anotado")
       if (signo < 0) { setDesc(""); setValor(0) }

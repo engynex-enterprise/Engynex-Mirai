@@ -17,8 +17,7 @@ import { DataTable, catalogMatch, catalogOptions } from "@/components/mirai/data
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { createClient } from "@/utils/supabase/client"
-import { apiDeleteRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiDeleteRow } from "@/lib/api/book-rows"
 import { paySubscription } from "@/features/fixed/commands"
 import { conv, detectSubs, iso, subMensual, subsMes } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
@@ -64,7 +63,7 @@ export function SubscriptionsView() {
     toast.success("Cobro registrado", {
       description: `Quedó en tus gastos. Próximo cobro: ${r.proximo ? fmtDate(r.proximo) : "—"}.`,
       action: r.expense_id ? { label: "Deshacer", onClick: async () => {
-        const { error: e } = rowsViaApi("expenses") ? await apiDeleteRow(bookId, "expenses", r.expense_id!) : await createClient().from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", r.expense_id!)
+        const { error: e } = await apiDeleteRow(bookId, "expenses", r.expense_id!)
         if (e) return toast.error("No se pudo deshacer", { description: e.message })
         refresh(); toast("Cobro deshecho", { description: `El próximo cobro vuelve a ser el ${s.proximo ? fmtDate(s.proximo) : "anterior"}.` })
       } } : undefined,

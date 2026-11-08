@@ -29,8 +29,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton"
 import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook, useSave, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
-import { createClient } from "@/utils/supabase/client"
-import { apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiUpdateRow } from "@/lib/api/book-rows"
 import { conv, inv, type InvestmentIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, fmtPct, todayISO } from "@/lib/format"
 import INVT_RAW from "@/lib/data/legacy-invt.json"
@@ -121,8 +120,7 @@ export function InvestmentsView() {
   const vale = rows.reduce((a, r) => a + conv(r.v.valor, r.x.currency, trm), 0)
   const prox = rows.filter((r) => r.v.venc && r.v.venc >= today).sort((a, b) => a.v.venc!.localeCompare(b.v.venc!))[0]
   const setActual = async (id: string, v: number) => {
-    if (rowsViaApi("investments")) await apiUpdateRow(bookId, "investments", id, { actual: v })
-    else await createClient().from("investments").update({ actual: v }).eq("id", id)
+    await apiUpdateRow(bookId, "investments", id, { actual: v })
     invalidateBook(qc, bookId, "investments")
   }
   const sv = (() => { const c = sim.c, t = +sim.t.replace(",", ".") / 100, d = +sim.d; const b = c * (Math.pow(1 + t, d / 365) - 1); return { final: c + b * 0.96, gan: b * 0.96, ret: b * 0.04 } })()

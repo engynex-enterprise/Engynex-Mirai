@@ -9,8 +9,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { useApp, useCanRecord } from "@/components/app/app-context"
 import { invalidateBook, useList } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { apiDeleteRow, apiInsertRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiDeleteRow, apiInsertRow } from "@/lib/api/book-rows"
 import { localCat, localHormiga } from "@/lib/domain"
 import { fmtMoney } from "@/lib/format"
 import { parseEntry } from "./parse-entry"
@@ -45,14 +44,12 @@ export function QuickEntry() {
     // "…por Nequi", "en efectivo": el medio del catálogo que nombra la frase (mueve la cuenta ligada a ese medio).
     const payment_method_id = medioEnTexto(text, methods)?.id ?? null
     if (p.tipo === "ingreso") {
-      const api = rowsViaApi("extra_incomes")
       const ingreso = { fecha: p.fecha, descripcion: p.descripcion, valor: p.valor, payment_method_id }
-      const { data, error } = api ? await apiInsertRow<{ id: string }>(book.id, "extra_incomes", ingreso) : await createClient().from("extra_incomes").insert({ book_id: book.id, ...ingreso }).select("id").single()
+      const { data, error } = await apiInsertRow<{ id: string }>(book.id, "extra_incomes", ingreso)
       setBusy(false)
       if (error || !data) return toast.error("No se pudo registrar", { description: error?.message })
       const deshacer = async () => {
-        if (api) await apiDeleteRow(book.id, "extra_incomes", data.id)
-        else await createClient().from("extra_incomes").update({ deleted_at: new Date().toISOString() }).eq("id", data.id)
+        await apiDeleteRow(book.id, "extra_incomes", data.id)
         invalidateBook(qc, book.id, "extra_incomes")
       }
       toast.success("Ingreso registrado", { description: `${p.descripcion}: ${fmtMoney(p.valor)}`, action: { label: "Deshacer", onClick: deshacer } })
@@ -67,17 +64,15 @@ export function QuickEntry() {
         if (hit?.category_id) cat = { category_id: hit.category_id, src: hit.src === "ia" ? "ia" : cat?.src ?? "regla" }
       }
       const category_id = cat?.category_id ?? p.category_id ?? cats.find((c) => c.nombre === "Otros")?.id ?? null
-      const api = rowsViaApi("expenses")
       const gasto = { fecha: p.fecha, descripcion: p.descripcion, valor: p.valor, category_id, cat_src: cat?.src ?? (p.category_id ? "ia" : null), origen: "voz", hormiga: false, payment_method_id }
-      const { data, error } = api ? await apiInsertRow<{ id: string }>(book.id, "expenses", gasto) : await createClient().from("expenses").insert({ book_id: book.id, ...gasto }).select("id").single()
+      const { data, error } = await apiInsertRow<{ id: string }>(book.id, "expenses", gasto)
       setBusy(false)
       if (error || !data) return toast.error("No se pudo registrar", { description: error?.message })
       const h = localHormiga({ descripcion: p.descripcion, valor: p.valor, category_id, fixed_expense_id: null } as never, cats, Number(cfg?.umbral ?? 25000))
       toast.success(h ? "Gasto hormiga registrado" : "Gasto registrado", {
         description: `${p.descripcion}: ${fmtMoney(p.valor)} · ${cats.find((c) => c.id === category_id)?.nombre ?? "Otros"}`,
         action: { label: "Deshacer", onClick: async () => {
-          if (api) await apiDeleteRow(book.id, "expenses", data.id)
-          else await createClient().from("expenses").update({ deleted_at: new Date().toISOString() }).eq("id", data.id)
+          await apiDeleteRow(book.id, "expenses", data.id)
           invalidateBook(qc, book.id, "expenses")
         } },
       })

@@ -18,8 +18,7 @@ import { FormSkeleton } from "@/components/skeletons/form-skeleton"
 import { SubmitButton } from "@/components/mirai/submit-button"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useList, useSave } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { apiDeleteRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiDeleteRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { addCardPurchase, payCreditCard } from "./commands"
 import { annuity, deudaTarjeta, localCat, tarjetaPagoMes, type CardConPagos } from "@/lib/domain"
 import { fmtMoney, todayISO } from "@/lib/format"
@@ -111,7 +110,7 @@ function PurchaseBody({ card, purchase, onOpenChange }: { card: Row<"credit_card
     if (purchase) {
       // La base lleva el cambio al gasto enlazado (valor, fecha, categoría y descripción).
       const patch = { descripcion: desc.trim(), valor, fecha, cuotas: n, category_id: category }
-      const { error } = rowsViaApi("card_purchases") ? await apiUpdateRow(bookId, "card_purchases", purchase.id, patch) : await createClient().from("card_purchases").update(patch).eq("id", purchase.id)
+      const { error } = await apiUpdateRow(bookId, "card_purchases", purchase.id, patch)
       setBusy(false)
       if (error) return toast.error("No se pudo guardar la compra", { description: error.message })
       toast.success("Compra actualizada", { description: purchase.expense_id ? "También quedó así en tus gastos." : undefined })
@@ -198,8 +197,7 @@ function PayCardBody({ card, onOpenChange }: { card: CardPagable; onOpenChange: 
     toast.success(tipo === "total" ? "¡Tarjeta al día!" : "Pago registrado", {
       description: `${fmtMoney(valor)} a ${card.nombre}.`,
       action: id ? { label: "Deshacer", onClick: async () => {
-        if (rowsViaApi("card_payments")) await apiDeleteRow(bookId, "card_payments", id)
-        else await createClient().from("card_payments").update({ deleted_at: new Date().toISOString() }).eq("id", id)
+        await apiDeleteRow(bookId, "card_payments", id)
         refresh(); toast("Pago deshecho")
       } } : undefined,
     })

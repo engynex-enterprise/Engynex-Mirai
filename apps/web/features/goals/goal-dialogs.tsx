@@ -15,8 +15,7 @@ import { Combobox } from "@/components/mirai/combobox"
 import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook, useSave } from "@/hooks/use-book-data"
-import { createClient } from "@/utils/supabase/client"
-import { apiDeleteRow, apiInsertRow, apiRestoreRow, apiUpdateRow, rowsViaApi } from "@/lib/api/book-rows"
+import { apiDeleteRow, apiInsertRow, apiRestoreRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { fundSave, fundUse, updateFund } from "./commands"
 import { aporteSugerido, fijoProxIso, type PayDays } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
@@ -157,11 +156,7 @@ function AporteBody({ target, existing, payDays, sugerencia, onOpenChange }: { t
     }
     const changed = existing && (existing.frec !== row.frec || existing.dia !== row.dia || existing.dia2 !== row.dia2)
     const patch = existing ? { ...row, ...(changed ? { desde: today.slice(0, 7), inicio: today } : {}) } : { ...row, desde: today.slice(0, 7), inicio: today }
-    const { data, error } = rowsViaApi("fixed_expenses")
-      ? existing ? await apiUpdateRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", existing.id, patch) : await apiInsertRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", patch)
-      : existing
-        ? await createClient().from("fixed_expenses").update(patch).eq("id", existing.id).select().single()
-        : await createClient().from("fixed_expenses").insert({ ...patch, book_id: bookId }).select().single()
+    const { data, error } = existing ? await apiUpdateRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", existing.id, patch) : await apiInsertRow<Row<"fixed_expenses">>(bookId, "fixed_expenses", patch)
     if (!error && target.t === "fondo") await updateFund(bookId, { activo: true })
     setBusy(false)
     if (error || !data) return toast.error("No se pudo guardar", { description: error?.message })
@@ -172,12 +167,9 @@ function AporteBody({ target, existing, payDays, sugerencia, onOpenChange }: { t
   }
   const quitar = async () => {
     if (!existing) return
-    const api = rowsViaApi("fixed_expenses")
-    if (api) await apiDeleteRow(bookId, "fixed_expenses", existing.id)
-    else await createClient().from("fixed_expenses").update({ deleted_at: new Date().toISOString() }).eq("id", existing.id)
+    await apiDeleteRow(bookId, "fixed_expenses", existing.id)
     const deshacer = async () => {
-      if (api) await apiRestoreRow(bookId, "fixed_expenses", existing.id)
-      else await createClient().from("fixed_expenses").update({ deleted_at: null }).eq("id", existing.id)
+      await apiRestoreRow(bookId, "fixed_expenses", existing.id)
       refresh(qc, bookId)
     }
     toast("El aporte programado se quitó", { description: "Lo que ya ahorraste se mantiene.", action: { label: "Deshacer", onClick: deshacer } })

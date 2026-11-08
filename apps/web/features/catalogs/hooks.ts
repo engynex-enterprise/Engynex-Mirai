@@ -2,14 +2,11 @@
 
 import { brandFor } from "@/lib/brands"
 import { useQuery } from "@/lib/query"
-import { createClient } from "@/utils/supabase/client"
 import { useApp, useBookId } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
 import type { Option } from "@/components/mirai/combobox"
 import type { Row } from "@/lib/supabase/tables"
 import { entityIcon } from "@/lib/domain/registros"
-import { apiOn } from "@/lib/api/session"
-import { readWithFallback } from "@/lib/api/book-tables"
 import { fetchBookSettings } from "@/features/settings/prefs"
 
 const GRUPO = { n: "Necesidad", g: "Gusto", a: "Ahorro" } as const
@@ -27,34 +24,21 @@ export function useSettings() {
   const bookId = useBookId()
   return useQuery({
     queryKey: ["b", bookId, "book_settings"],
-    // V7-H2: GET /v1/books/:b/settings con el interruptor `books` (apagado: Supabase directo).
+    // GET /v1/books/:b/settings.
     queryFn: () => fetchBookSettings(bookId),
   })
 }
 
-/** Integrantes vivos del hogar. V7-H2: GET /v1/households/:h/family con el interruptor `households` (apagado: Supabase). */
+/** Integrantes vivos del hogar: GET /v1/households/:h/family. */
 export async function fetchMembers(householdId: string): Promise<Row<"family_members">[]> {
-  const legacy = async () => {
-    const { data, error } = await createClient().from("family_members").select("*").eq("household_id", householdId).is("deleted_at", null).order("sort").order("created_at")
-    if (error) throw new Error(error.message)
-    return data
-  }
-  if (!apiOn("households")) return legacy()
-  return readWithFallback(async () => {
-    const { browserApi, unwrap } = await import("@/lib/api/client")
-    return unwrap(await browserApi().households.family({ params: { householdId } }))
-  }, legacy)
+  const { browserApi, unwrap } = await import("@/lib/api/client")
+  return unwrap(await browserApi().households.family({ params: { householdId } }))
 }
 
 /** Cambia el cupo o los datos de dependiente de un integrante. Lanza Error con el mensaje para la persona. */
 export async function patchMember(householdId: string, id: string, patch: Partial<Pick<Row<"family_members">, "cupo" | "doc" | "dep_de" | "dep_rel" | "nacimiento" | "estudia" | "sin_ingresos" | "discapacidad">>): Promise<void> {
-  if (apiOn("households")) {
-    const { browserApi, unwrapData } = await import("@/lib/api/client")
-    unwrapData(await browserApi().households.patchFamily({ params: { householdId, familyId: id }, body: patch }))
-    return
-  }
-  const { error } = await createClient().from("family_members").update(patch).eq("id", id)
-  if (error) throw new Error(error.message)
+  const { browserApi, unwrapData } = await import("@/lib/api/client")
+  unwrapData(await browserApi().households.patchFamily({ params: { householdId, familyId: id }, body: patch }))
 }
 
 /** Integrantes de la familia (por hogar). */
