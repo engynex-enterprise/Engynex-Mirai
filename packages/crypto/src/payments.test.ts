@@ -5,7 +5,7 @@ import { mercadoPagoVerify, wompiIntegrity, wompiVerifyEvent } from "./payments"
 describe("Wompi", () => {
   it("firma de integridad: SHA-256 de referencia + centavos + moneda + secreto", () => {
     // Ejemplo de la documentación de Wompi (widget y checkout web).
-    const sig = wompiIntegrity("sk8-438k4-xmxm392-sn2m", 2490000, "COP", "prod_integrity_Z5mMke9x0k8gpErbDqwrJXMqsI6SFli6")
+    const sig = wompiIntegrity("sk8-438k4-xmxm392-sn2m", 2490000, "COP", "prod_integrity_Z5mMke9x0k8gpErbDqwrJXMqsI6SFli6") // secretos:ok: llave de ejemplo pública de la documentación de Wompi
     expect(sig).toBe(createHash("sha256").update("sk8-438k4-xmxm392-sn2m2490000COPprod_integrity_Z5mMke9x0k8gpErbDqwrJXMqsI6SFli6").digest("hex"))
     expect(sig).toMatch(/^[a-f0-9]{64}$/)
   })

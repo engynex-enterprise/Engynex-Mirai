@@ -30,3 +30,5 @@ Mirai: finanzas personales y familiares para Colombia, en español, para persona
 8. Cálculos nuevos o portados: en `packages/domain/src/` con prueba Vitest; si existían en la v4, compáralos contra el bundle (`packages/domain/src/__tests__/legacy.ts`). El dominio no importa nada de `apps/web`.
 9. Archivos `"use server"` solo exportan funciones async y llaman a la API (`serverApi()`); la validación y los permisos viven en la API (contrato zod en `packages/contracts`).
 10. pnpm es estricto: cada paquete declara en su `package.json` lo que importa. Tablas nuevas en vivo: `packages/contracts/src/live.ts` + publicación (migración).
+11. Cifras: toda cifra sale de `packages/domain` y da lo mismo en todas las pantallas; préstamos fuera de "te sobra", tarjeta por corte, no se proyecta sin datos (`proyectarMes`), abonos con `pagoPeriodo`. Detalle y lista de chequeo: `.agents/rules/cifras.md`.
+12. Antes de cada commit corre la revisión de secretos (`pnpm secretos`; el hook de git `.githooks/pre-commit` la hace solo). Subir a producción: `.agents/workflows/deploy-vps.md`; migraciones: `.agents/workflows/migracion.md`.

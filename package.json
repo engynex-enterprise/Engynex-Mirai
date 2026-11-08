@@ -28,7 +28,9 @@
     "local:test": "node infra/local/stack.mjs test",
     "db:destino": "node packages/db/scripts/db-destino.mjs",
     "migrate:ensayo": "node --experimental-strip-types --no-warnings scripts/migrate/ensayo.ts",
-    "db:migrate:vps": "node infra/servidor/migrar.mjs"
+    "db:migrate:vps": "node infra/servidor/migrar.mjs",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "secretos": "node scripts/revisar-secretos.mjs --todo"
   },
   "prettier": "@mirai/config/prettier",
   "devDependencies": {

@@ -1,3 +1,5 @@
+> **Histórico (hasta 2026-11-07).** Mirai ya no usa Vercel ni Supabase. Para subir a producción: `deploy-vps.md`.
+
 # Despliegue en Vercel + Supabase
 
 El proyecto de Vercel apunta a la carpeta **`server/`** (Root Directory = `server`).

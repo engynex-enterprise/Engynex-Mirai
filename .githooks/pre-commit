@@ -1,0 +1,4 @@
+#!/bin/sh
+# Antes de cada commit (en cualquier IDE o agente): que no se suban secretos. Se activa con `pnpm install`
+# (script "prepare": git config core.hooksPath .githooks). Falso positivo: `secretos:ok` en la línea.
+exec node "$(git rev-parse --show-toplevel)/scripts/revisar-secretos.mjs"

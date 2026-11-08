@@ -1,5 +1,12 @@
 ---
-description: Cierra una versión (APP_VER, RELEASES, FAQ, CHANGELOG)
-argument-hint: "<versión, ej. 4.1>"
+description: Cierra una versión (APP_VER, novedades y FAQ del centro de ayuda)
+argument-hint: "<versión, ej. 5.6>"
 ---
-Sigue `.agents/workflows/release.md` para la versión $ARGUMENTS. Revisa `git log` desde la última versión para no olvidar cambios. Escribe las notas para el usuario final, en español simple. Al final corre `npm test` y `node scripts/changelog.js`.
+Versión $ARGUMENTS:
+1. Revisa `git log` desde la última versión para no olvidar cambios.
+2. En `apps/web/lib/content/ayuda.ts`: sube `APP_VER` y agrega el `Release` nuevo (`v`, fecha, título, `items` con
+   `new`/`imp`/`fix`) escrito para el usuario final, en español simple y con ejemplos en pesos cuando ayude. Las versiones
+   anteriores no se tocan. Actualiza las preguntas frecuentes que cambien.
+3. Anota el resumen técnico en `docs/HISTORIAL.md`.
+4. Pide al subagente `ux-simple` que revise los textos. Corre `pnpm test` y `pnpm e2e:local -- ayuda` (o la batería si cambió algo más).
+5. Para publicar: `/deploy`.
