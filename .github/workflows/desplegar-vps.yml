@@ -57,7 +57,8 @@ jobs:
         run: |
           set -euo pipefail
           api() { curl -fsS --retry 3 -H "x-api-key: $DOKPLOY_API_KEY" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" -H "content-type: application/json" "$@"; }
-          antes=$(api "${DOKPLOY_URL%/}/api/deployment.allByCompose?composeId=$COMPOSE_ID" | jq 'length')
+          # Dokploy guarda un número fijo de registros: se compara la fecha del último, no cuántos hay.
+          antes=$(api "${DOKPLOY_URL%/}/api/deployment.allByCompose?composeId=$COMPOSE_ID" | jq -r 'map(.createdAt) | max // ""')
           echo "antes=$antes" >> "$GITHUB_ENV"
           api -X POST "${DOKPLOY_URL%/}/api/compose.deploy" -d "{\"composeId\":\"$COMPOSE_ID\",\"title\":\"GitHub ${GITHUB_SHA::7}\",\"description\":\"CI en verde (${GITHUB_REF_NAME})\"}" > /dev/null
           echo "Despliegue pedido."
@@ -70,8 +71,9 @@ jobs:
           for _ in $(seq 1 210); do
             sleep 10
             lista=$(api "${DOKPLOY_URL%/}/api/deployment.allByCompose?composeId=$COMPOSE_ID")
-            [ "$(echo "$lista" | jq 'length')" -gt "$antes" ] || continue
-            estado=$(echo "$lista" | jq -r 'sort_by(.createdAt) | last | .status')
+            ultimo=$(echo "$lista" | jq -c 'sort_by(.createdAt) | last')
+            [ "$(echo "$ultimo" | jq -r '.createdAt')" \> "$antes" ] || continue
+            estado=$(echo "$ultimo" | jq -r '.status')
             echo "$(date +%H:%M:%S) $estado"
             case "$estado" in
               done) exit 0 ;;
