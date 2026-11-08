@@ -116,7 +116,7 @@ function PushDevice() {
   )
 }
 
-/** Google Calendar: Mirai lleva tus pagos y cobros y los mantiene al día cada mañana (lib/google-calendar.ts). */
+/** Google Calendar: Mirai lleva tus pagos y cobros y los mantiene al día cada mañana (la sincronización corre en la API). */
 function GoogleCalendarSection({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   const qc = useQueryClient()
   const { data: st } = useQuery({ queryKey: ["gcal-status"], queryFn: () => calendarStatus(), staleTime: 60_000 })
