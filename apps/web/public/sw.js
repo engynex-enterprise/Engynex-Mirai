@@ -9,7 +9,7 @@
 //
 // Al cambiar este archivo sube VERSION: la app muestra "Hay una versión nueva · Actualizar" y el nuevo service worker
 // espera a que la persona toque Actualizar (mensaje SKIP_WAITING) para no cambiarle la app mientras escribe.
-const VERSION = "5.6-offline-2"
+const VERSION = "5.6-offline-3"
 const STATIC = `mirai-static-${VERSION}`
 const SHELL = `mirai-shell-${VERSION}`
 // Sin versión: las páginas guardadas sobreviven a una actualización del service worker.
@@ -90,16 +90,22 @@ async function putPage(url, res) {
 /** Navegación: a la red (datos al día) y se guarda la página; sin conexión, la guardada o la página offline. */
 async function navigate(event) {
   const url = new URL(event.request.url)
-  try {
-    const pre = await event.preloadResponse
-    const res = pre || await fetch(event.request)
-    if (cacheablePage(url, res)) event.waitUntil(putPage(url, res.clone()).catch(() => {}))
-    return res
-  } catch {
+  const fallback = async () => {
     const saved = await caches.match(pageKey(url.href), { cacheName: PAGES })
     if (saved) return saved
     const off = await caches.match(OFFLINE)
     return off || new Response("<h1>Sin conexión</h1><p>Vuelve a intentarlo cuando tengas internet.</p>", { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } })
+  }
+  try {
+    const pre = await event.preloadResponse
+    const res = pre || await fetch(event.request)
+    // El servidor caído o reiniciando (502/503/504 del balanceador, 520–527 de Cloudflare): en vez de la página de error
+    // del proveedor, la copia guardada o la pantalla de Mirai ("Mirai no responde").
+    if (res.status >= 502 && res.status <= 599) return fallback()
+    if (cacheablePage(url, res)) event.waitUntil(putPage(url, res.clone()).catch(() => {}))
+    return res
+  } catch {
+    return fallback()
   }
 }
 
