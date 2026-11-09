@@ -35,6 +35,8 @@ export interface AgendaItem {
   lbl: string
   /** Nota del evento del calendario (se usa como texto del aviso cuando no tiene monto). */
   nota?: string
+  /** Días de anticipo propios de este ítem (gasto fijo); sin él, el del libro. */
+  aviso?: number
 }
 
 /** Pagos y cobros: vencidos y próximos (fijos ≤ 45 días, cuotas, tarjetas, suscripciones, calendario ≤ 45 días). */
@@ -45,7 +47,7 @@ export function agenda(b: BookData, today: DateInput): AgendaItem[] {
   const items: Omit<AgendaItem, "d" | "st" | "lbl">[] = []
   for (const f of b.fixedExpenses) {
     const st = fijoStatus(f, t)
-    const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: +f.valor, dir: "pagar" as const, go: "fijos" }
+    const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: +f.valor, dir: "pagar" as const, go: "fijos", ...(f.aviso == null ? {} : { aviso: +f.aviso }) }
     // Con abonos, lo que falta del periodo (no el valor completo).
     st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due, monto: p.parcial ? p.falta : fijoValor(f, p.per) }))
     if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due, monto: st.prox.parcial ? st.prox.falta : fijoValor(f, st.prox.per) })
@@ -181,8 +183,10 @@ export function notifs(b: BookData, today: DateInput, o: NotifOpts = {}): Notif[
   const ti = iso(t)
   const nf: NotifFlags = { ...(b.settings.notif ?? {}), ...(o.notif ?? {}) }
   const on = (k: keyof NotifFlags) => avisoOn(nf, k)
-  const A = +b.settings.anticipo || 5
+  const Ag = +b.settings.anticipo || 5
   for (const x of agenda(b, t)) {
+    // Un gasto fijo puede tener sus propios días de aviso (el predial 15, el arriendo 5).
+    const A = x.aviso ?? Ag
     // Fechas de ingreso del calendario (prima, cesantías…): te llega, no "ten listos".
     if (x.k === "cal" && x.dir === "cobrar") {
       if (!on("cobros") || x.d > A) continue

@@ -205,3 +205,22 @@ describe("ids con fecha (inversiones y metas) e interruptor de empeños", () => 
     expect(notifs(b, HOY, { notif: { empenos: false } }).some((n) => n.id.startsWith("pr:"))).toBe(false)
   })
 })
+
+describe("aviso propio del gasto fijo", () => {
+  // `mes` es 1-indexado (ene = 1): mes 7 = julio, para que el 20 de julio quede a 12 días del 8 de julio.
+  const fijo = (extra: object) => ({ id: "f1", nombre: "Predial", valor: 400_000, frec: "anual", dia: 20, mes: 7, desde: "2026-01", payments: [], ...extra })
+
+  it("avisa con los días del gasto aunque el libro diga otra cosa", () => {
+    // El libro (`libro()`) avisa 5 días antes; el predial, 15. Faltan 12 días: solo debe avisar el que tiene aviso propio.
+    const conPropio = libro({ fixedExpenses: [fijo({ aviso: 15 }) as never] })
+    const sinPropio = libro({ fixedExpenses: [fijo({}) as never] })
+    const hoy = "2026-07-08"
+    expect(notifs(conPropio, hoy).some((n) => n.t.includes("Predial"))).toBe(true)
+    expect(notifs(sinPropio, hoy).some((n) => n.t.includes("Predial"))).toBe(false)
+  })
+
+  it("agenda marca el aviso del fijo en el ítem", () => {
+    const b = libro({ fixedExpenses: [fijo({ aviso: 15 }) as never] })
+    expect(agenda(b, "2026-07-08").find((x) => x.k === "fijo")?.aviso).toBe(15)
+  })
+})
