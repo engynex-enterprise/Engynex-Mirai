@@ -71,7 +71,11 @@ export const ProfilePatch = z.object({
   direccion: Direccion,
   ocupacion: Txt(80),
   trabajo: Txt(80),
-  portada: Txt(30).regex(/^[a-z0-9-]*$/, "Portada inválida"),
+  /** Color (`verde`), escena ilustrada (`art:<clave>`) o la foto subida al bucket avatars (https). */
+  portada: z.union([
+    z.string().regex(/^(art:)?[a-z0-9-]{0,40}$/, "Portada inválida"),
+    z.url({ protocol: /^https$/, error: "La portada debe ser un enlace https" }).max(1000),
+  ]),
   riesgo: z.enum(["conservador", "moderado", "arriesgado"], { error: "Perfil de riesgo inválido" }),
   /** Datos para cobrar (lista de @mirai/domain/cobros). */
   cobro: z.array(Json).max(30, "Máximo 30 formas de cobro"),

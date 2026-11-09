@@ -144,8 +144,14 @@ export interface SugerenciaFijo {
   /** Periodo pendiente ('YYYY-MM', 'YYYY-MM-Q1'…) y su fecha de pago. */
   per: string
   due: string
-  /** Valor esperado del periodo. */
+  /** Lo que falta del periodo (su valor, o el resto si ya tiene abonos). */
   valor: number
+  /** Lo ya abonado al periodo (0 si no tiene abonos). */
+  abonado: number
+  /** ¿Con este gasto queda pagado el periodo? Sin abonos antes, sí; con abonos, solo si cubre lo que falta. */
+  completo: boolean
+  /** El periodo ya está pagado (solo con `incluirPagados`: el gasto estaría contado dos veces). */
+  yaPagado: boolean
 }
 
 type GastoSuelto = { descripcion: string; valor: number; fecha: string; provider_id?: string | null; fixed_expense_id?: string | null; origen?: string | null }
@@ -155,12 +161,13 @@ type FijoSug = FixedExpenseIn & { provider_id?: string | null; vmin?: number | n
  * ¿El gasto suelto que acabas de guardar es el pago de un gasto fijo que está pendiente? (p. ej. el arriendo que llegó
  * por el correo del banco). Coincide si:
  * - el fijo tiene el mismo proveedor, o su nombre y la descripción comparten una palabra (Arriendo ↔ "Pago arriendo"), y
- * - el valor se parece (±15 % del valor del periodo o dentro del rango si es variable), y
- * - hay un periodo sin pago con fecha a 40 días o menos de la del gasto.
+ * - el valor se parece (±15 % de lo que falta del periodo o dentro del rango si es variable), y
+ * - hay un periodo sin pagar con fecha a 40 días o menos de la del gasto (también uno con abonos: se compara con lo
+ *   que falta, p. ej. la moto de $70.000 con $40.000 abonados acepta un gasto de $30.000).
  * Nunca para aportes a metas (`link_type`) ni para gastos que ya están enlazados (fijo, tarjeta, préstamo, compartido).
  * Devuelve el periodo pendiente más cercano en fecha (o `null`).
  */
-export function sugerirPagoFijo(g: GastoSuelto, fijos: FijoSug[], today: DateInput = g.fecha): SugerenciaFijo | null {
+export function sugerirPagoFijo(g: GastoSuelto, fijos: FijoSug[], today: DateInput = g.fecha, opts: { incluirPagados?: boolean } = {}): SugerenciaFijo | null {
   if (g.fixed_expense_id || (g.origen && !["manual", "correo", "importar", "ocr", "voz"].includes(g.origen)) || !(+g.valor > 0)) return null
   const pg = new Set(palabras(g.descripcion))
   const f0 = parseDate(g.fecha)
@@ -173,14 +180,19 @@ export function sugerirPagoFijo(g: GastoSuelto, fijos: FijoSug[], today: DateInp
       const d = new Date(f0.getFullYear(), f0.getMonth() + k, 1)
       for (const p of fijoPeriods(f, d.getFullYear(), d.getMonth(), today)) {
         if (f.inicio && p.due < iso(parseDate(f.inicio))) continue
-        if (f.payments.some((x) => x.periodo === p.per)) continue
+        // Un periodo con abonos sigue abierto: lo que se compara es lo que FALTA, no el valor completo.
+        const PP = pagoPeriodo(f, p.per, f.payments)
+        if (PP.completo && !opts.incluirPagados) continue
         const dist = Math.abs(parseDate(p.due).getTime() - f0.getTime()) / 864e5
         if (dist > 40) continue
-        const esperado = fijoValor(f, p.per)
+        const esperado = PP.parcial ? PP.falta : fijoValor(f, p.per)
         const v = +g.valor
-        const okValor = f.variable && +(f.vmin ?? 0) > 0 ? v >= +(f.vmin ?? 0) * 0.85 && v <= +(f.vmax ?? 0) * 1.15 : Math.abs(v - esperado) <= Math.max(1000, esperado * 0.15)
+        // Con abonos no se usa el rango del fijo variable: lo que falta es una cifra exacta.
+        const okValor = f.variable && +(f.vmin ?? 0) > 0 && !PP.parcial
+          ? v >= +(f.vmin ?? 0) * 0.85 && v <= +(f.vmax ?? 0) * 1.15
+          : Math.abs(v - esperado) <= Math.max(1000, esperado * 0.15)
         if (!okValor) continue
-        if (!best || dist < best.dist) best = { fixed: f, per: p.per, due: p.due, valor: esperado, dist }
+        if (!best || dist < best.dist) best = { fixed: f, per: p.per, due: p.due, valor: esperado, abonado: PP.pagado, completo: !PP.parcial || v >= esperado - 1, yaPagado: PP.completo, dist }
       }
     }
   }

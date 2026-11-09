@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { catId, expenseOf, rulesOf, scenario } from "./__tests__/adapt"
 import { RICO } from "./__tests__/fixtures"
-import { isHormiga, localCat, localHormiga, norm, vecesMes } from "./hormiga"
+import { isHormiga, localCat, localHormiga, norm, repeticiones, vecesDe, vecesMes } from "./hormiga"
+import { hormigas } from "./totals"
 
 const HOY = "2026-10-31"
 const sc = scenario(HOY).mutate(RICO + "S.cfg.reglas.push({k:'farmacia',cat:'Categoría borrada'});")
@@ -49,4 +50,40 @@ describe("localHormiga / isHormiga = v4 (todos los gastos del ejemplo + casos)",
 describe("norm y vecesMes", () => {
   it("norm quita tildes y espacios", () => expect(norm("  Café   Juan  VALDÉZ ")).toBe(sc.ev("norm('  Café   Juan  VALDÉZ ')")))
   it.each(["Tinto y pandebono", "Mercado quincenal", "Nada"])("vecesMes(%s)", (d) => expect(vecesMes(d, b.expenses, HOY)).toBe(sc.ev(`vecesMes(${JSON.stringify(d)})`)))
+})
+
+describe("regla de los gastos que se repiten", () => {
+  const cats = [
+    { id: "c-g", nombre: "Restaurantes", icon: "utensils", tope: 0, grupo: "g" as const },
+    { id: "c-n", nombre: "Mercado", icon: "shopping-cart", tope: 0, grupo: "n" as const },
+  ]
+  const g = (o: Record<string, unknown> = {}) => ({ descripcion: "Almuerzo oficina", valor: 35000, category_id: "c-g", fixed_expense_id: null, ...o }) as never
+
+  it("un gasto de gusto por encima del umbral es hormiga si se repite 3 veces o más en 30 días", () => {
+    expect(localHormiga(g(), cats, 25000)).toBe(false)
+    expect(localHormiga(g(), cats, 25000, 2)).toBe(false)
+    expect(localHormiga(g(), cats, 25000, 3)).toBe(true)
+  })
+  it("una necesidad no se vuelve hormiga por repetirse", () => {
+    expect(localHormiga(g({ category_id: "c-n" }), cats, 25000, 8)).toBe(false)
+  })
+  it("sin categoría también cuenta, pero nunca por encima del doble del umbral", () => {
+    expect(localHormiga(g({ category_id: null }), cats, 25000, 3)).toBe(true)
+    expect(localHormiga(g({ valor: 60000 }), cats, 25000, 9)).toBe(false)
+  })
+  it("repeticiones cuenta por descripción (sin tildes ni mayúsculas) en los últimos 30 días", () => {
+    const l = [
+      { fecha: "2026-11-02", descripcion: "Almuerzo Oficina" }, { fecha: "2026-11-09", descripcion: "almuerzo oficina" },
+      { fecha: "2026-11-16", descripcion: "  ALMUERZO   OFICINA " }, { fecha: "2026-09-01", descripcion: "Almuerzo oficina" },
+    ]
+    const r = repeticiones(l, "2026-11-20")
+    expect(vecesDe(r, "Almuerzo oficina")).toBe(3)
+    expect(vecesDe(r, "Otra cosa")).toBe(0)
+  })
+  it("hormigas() aplica la regla: tres almuerzos de $35.000 cuentan como hormiga", () => {
+    const expenses = ["2026-11-02", "2026-11-09", "2026-11-16"].map((fecha, i) => ({ id: `a${i}`, fecha, descripcion: "Almuerzo oficina", valor: 35000, category_id: "c-g" })) as never[]
+    const H = hormigas({ expenses, categories: cats, settings: { umbral: 25000, limite: 200000 } }, "2026-11-20")
+    expect(H.mes).toHaveLength(3)
+    expect(H.totalMes).toBe(105000)
+  })
 })

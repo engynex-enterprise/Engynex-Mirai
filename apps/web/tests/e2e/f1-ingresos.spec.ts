@@ -6,12 +6,17 @@ test("ingresos: salario bruto con descuentos de nómina", async ({ page }, info)
   await login(page)
   await page.goto("/ingresos?nuevo=1")
   const concepto = `Salario ${info.project.name}`
-  // Paso a paso: nada viene marcado y cada pregunta aparece al responder la anterior.
-  await expect(page.getByRole("radio", { name: "Salario" })).not.toBeChecked()
-  // Guardar empieza inactivo: se activa cuando el formulario está completo.
-  await expect(page.getByRole("button", { name: "Guardar" })).toBeDisabled()
+  // Primer paso: SOLO los tipos de ingreso, agrupados por familia. Nada de campos ni de botón Guardar.
+  await expect(page.getByRole("heading", { name: "¿Qué tipo de ingreso es?" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Guardar" })).toHaveCount(0)
   await expect(page.getByRole("textbox", { name: "Concepto" })).toHaveCount(0)
-  await page.getByRole("radio", { name: "Salario" }).click()
+  await expect(page.getByRole("radio", { name: "Salario", exact: true })).not.toBeChecked()
+  await expect(page.getByRole("radio", { name: "Horas extras y recargos" })).toBeVisible()
+  await expect(page.getByRole("radio", { name: "Pensión" })).toBeVisible()
+  await shot(page, "ingreso-tipos", info.project.name)
+  await page.getByRole("radio", { name: "Salario", exact: true }).click()
+  // Con el tipo escogido aparecen sus campos; Guardar sigue inactivo hasta que haya un valor.
+  await expect(page.getByRole("button", { name: "Guardar" })).toBeDisabled()
   await page.getByRole("textbox", { name: "Concepto" }).fill(concepto)
   await expect(page.getByRole("textbox", { name: /¿Cuánto/ })).toHaveCount(0)
   await page.getByRole("radio", { name: "Sí, me descuentan" }).click()
@@ -34,13 +39,14 @@ test("ingresos: salario bruto con descuentos de nómina", async ({ page }, info)
   await expect(page.getByRole("textbox", { name: "Concepto" })).toHaveValue(concepto)
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText(/1ª quincena te llegan .* y 2ª quincena .*descuentos del mes/)).toBeVisible()
-  const row = page.locator("#main li", { hasText: concepto })
+  const row = page.locator("#main li", { hasText: concepto }).first()
   await expect(row.getByText("neto")).toBeVisible()
   await expect(row.getByText(/^Bruto \$/)).toBeVisible()
-  await expect(page.getByText("Ingreso mensual")).toBeVisible()
-  // La tarjeta muestra lo que llega (con descuentos) y el valor antes de descuentos.
-  await expect(page.getByText("lo que te llega", { exact: true })).toBeVisible()
-  await expect(page.getByText(/^Sin descuentos/).filter({ visible: true }).first()).toBeVisible()
+  // Las tarjetas de arriba se arman con las frecuencias reales: con un salario quincenal salen las dos quincenas.
+  await expect(page.getByText("Te llega al mes").first()).toBeVisible()
+  await expect(page.getByText(/^De .* antes de descuentos/).first()).toBeVisible()
+  await expect(page.getByText(/1ª quincena \(1–\d+\)/).first()).toBeVisible()
+  await expect(page.getByText(/2ª quincena \(\d+–fin\)/).first()).toBeVisible()
   await shot(page, "ingresos", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
 })
@@ -114,9 +120,15 @@ test("ingresos flexibles: comprobante de nómina real, bono por quincena, valore
   await expect(row(`Jornal ${p}`).getByText("Cada día (22 días al mes)", { exact: false })).toBeVisible()
   await expect(row(`Jornal ${p}`).getByText(/^\$\s?2\.200\.000$/).filter({ visible: true }).first()).toBeVisible()
 
-  // Al editar, el formulario recuerda el tipo y el reparto.
+  // Al editar se entra directo al formulario, con el tipo ya escogido y el reparto que tenía.
   await aux.click()
+  const dlg = page.getByRole("dialog")
+  await expect(dlg.getByText("Bono o auxilio").first()).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "1ª quincena" })).toHaveValue("200.000")
+  // "Cambiar" vuelve a la lista de tipos, con el suyo marcado; al tocarlo se regresa al formulario.
+  await dlg.getByRole("button", { name: "Cambiar" }).click()
   await expect(page.getByRole("radio", { name: "Bono o auxilio" })).toBeChecked()
+  await page.getByRole("radio", { name: "Bono o auxilio" }).click()
   await expect(page.getByRole("textbox", { name: "1ª quincena" })).toHaveValue("200.000")
   await page.getByRole("button", { name: "Cancelar" }).click()
   await shot(page, "ingresos-quincenas", p)
@@ -147,5 +159,40 @@ test("ajustes de nómina: procedimiento de retención por defecto y tabla del fo
   await page.getByRole("combobox").filter({ hasText: "Procedimiento 2 (% fijo)" }).click()
   await page.getByRole("option", { name: "Procedimiento 1 (tabla)" }).click()
   await expect(page.getByRole("spinbutton", { name: "Porcentaje del procedimiento 2" })).toHaveCount(0)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+// Ingresos extra: la plata que llega una sola vez (una venta, un regalo). Antes solo se veía en el Balance y no había
+// dónde corregirla; ahora tiene su lista en Ingresos.
+test("ingresos extra: agregar, ver en la lista, editar y eliminar", async ({ page }, info) => {
+  const errs = watchErrors(page)
+  await login(page)
+  const desc = `Venta bici ${info.project.name} ${Date.now() % 100000}`
+  await page.goto("/ingresos")
+  await expect(page.getByText("Ingresos extra", { exact: true }).first()).toBeVisible({ timeout: 30_000 })
+  await page.getByRole("button", { name: "Agregar ingreso extra" }).first().click()
+  const dlg = page.getByRole("dialog")
+  await dlg.getByRole("textbox", { name: "¿De qué fue?" }).fill(desc)
+  await dlg.getByRole("textbox", { name: "¿Cuánto recibiste?" }).fill("350000")
+  await shot(page, "ingreso-extra-form", info.project.name)
+  await dlg.getByRole("button", { name: "Agregar ingreso extra" }).click()
+  await expect(page.getByText("Ingreso extra agregado").first()).toBeVisible({ timeout: 20_000 })
+  const row = page.locator("#main li", { hasText: desc }).filter({ visible: true }).first()
+  await expect(row.getByText(/\$\s?350\.000/).filter({ visible: true }).first()).toBeVisible()
+  await expect(page.getByText(/Este mes llevas .* en ingresos extra/)).toBeVisible()
+
+  // Editar: cambia el valor y la lista lo refleja.
+  await row.click()
+  await dlg.getByRole("textbox", { name: "¿Cuánto recibiste?" }).fill("400000")
+  await dlg.getByRole("button", { name: "Guardar cambios" }).click()
+  await expect(page.getByText("Ingreso extra actualizado").first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator("#main li", { hasText: desc }).filter({ visible: true }).first().getByText(/\$\s?400\.000/).filter({ visible: true }).first()).toBeVisible()
+  await shot(page, "ingresos-extra", info.project.name)
+
+  // Eliminar
+  const fila = page.locator("#main li", { hasText: desc }).filter({ visible: true }).first()
+  if (info.project.name === "movil") { await fila.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: `Eliminar ${desc}` }).click() }
+  else await fila.getByRole("button", { name: `Eliminar ${desc}` }).click()
+  await expect(page.getByText("Ingreso extra eliminado").first()).toBeVisible({ timeout: 20_000 })
   expect(errs, errs.join("\n")).toEqual([])
 })

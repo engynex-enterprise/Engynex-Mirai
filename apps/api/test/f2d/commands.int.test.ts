@@ -95,7 +95,8 @@ describe("enlaces de gastos (link-fixed, unlink-fixed, use-fund)", () => {
     expect((await t.call("POST", `${B}/expenses/${ID.gastoOwner}/link-fixed`, "editor", body)).status).toBe(200)
     expect((await t.call("POST", `${B}/expenses/${ID.gastoOwner}/unlink-fixed`, "editor")).status).toBe(200)
     expect(t.fx.store.rpcs.map((r) => [r.fn, r.args])).toEqual([
-      ["link_expense_fixed", { p_expense: ID.gastoOwner, p_fixed: ID.arriendo, p_periodo: "2026-11" }],
+      // `p_cierra`: con el periodo sin abonos, el gasto lo deja pagado (abonos en 0007_abonos_suscripciones.sql).
+      ["link_expense_fixed", { p_expense: ID.gastoOwner, p_fixed: ID.arriendo, p_periodo: "2026-11", p_cierra: true }],
       ["unlink_expense_fixed", { p_expense: ID.gastoOwner }],
     ])
     expect((await t.call("POST", `${B}/expenses/${ID.gastoOwner}/link-fixed`, "editor", { fixedId: ID.arriendo, periodo: "noviembre" })).status).toBe(400)
@@ -160,7 +161,7 @@ describe("gastos fijos y suscripciones", () => {
     expect(data(c)).toMatchObject({ expense_id: uid(701), proximo: "2026-12-02" })
     expect(t.fx.store.rpcs.map((x) => [x.fn, x.args])).toEqual([
       ["unpay_fixed_expense", { p_payment: ID.pagoArriendo }],
-      ["pay_subscription", { p_sub: ID.sub, p_fecha: today, p_valor: 26900 }],
+      ["pay_subscription", { p_sub: ID.sub, p_fecha: today, p_valor: 26900, p_parcial: false }],
     ])
   })
 })

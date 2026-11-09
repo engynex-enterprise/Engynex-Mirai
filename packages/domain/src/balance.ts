@@ -157,7 +157,13 @@ export function hallazgosBalance(b: BookData, today: DateInput, mes: MesResumen,
     out.push({ id: "vacio", tono: "info", icon: "wallet", titulo: "Empieza por tus cuentas", detalle: "Agrega cuánta plata tienes hoy en tus cuentas y en efectivo. Así Mirai calcula tu patrimonio y cuánto aguantas sin ingresos.", accion: "Agregar cuenta" })
     return out
   }
-  if (T.pat < 0) out.push({ id: "pat-neg", tono: "bad", icon: "triangle-alert", titulo: "Debes más de lo que tienes", detalle: `Te faltan ${$(-T.pat)} para cubrir todas tus deudas con lo que tienes. Empieza por la deuda más cara.`, href: "/estrategia", accion: "Ver cómo salir de deudas" })
+  if (T.pat < 0) out.push({
+    id: "pat-neg", tono: "bad", icon: "triangle-alert", titulo: "Debes más de lo que tienes",
+    // Dos cuentas distintas que no se contradicen: esta mira TODO lo que tienes y debes hoy; la del mes mira solo
+    // lo que entra y sale en estos 30 días. Se dice en el mismo mensaje para que no parezcan opuestas.
+    detalle: `Sumando todo lo que tienes y todo lo que debes, te faltan ${$(-T.pat)}. Es la foto de hoy, no la del mes: ${mes.disp > 0 ? `aunque este mes te sobren ${$(mes.disp)}, la deuda sigue ahí hasta que le abones.` : "por eso también hay que mirar lo que entra y sale cada mes."} Empieza por la deuda más cara.`,
+    href: "/estrategia", accion: "Ver cómo salir de deudas",
+  })
   else if (T.A > 0 && T.P / T.A >= 0.4) out.push({ id: "deuda-alta", tono: "warn", icon: "scale", titulo: `El ${Math.round((T.P / T.A) * 100)} % de lo que tienes es deuda`, detalle: "Lo sano es menos del 40 %. Abonar a capital baja ese número más rápido que solo pagar la cuota.", href: "/le-debo", accion: "Ver mis deudas" })
   else if (T.P > 0) out.push({ id: "deuda-ok", tono: "ok", icon: "scale", titulo: `Solo el ${Math.max(1, Math.round((T.P / Math.max(1, T.A)) * 100))} % de lo que tienes es deuda`, detalle: "Está por debajo del 40 %, que es lo sano. Sigue así." })
   // La misma cuenta del Dashboard y Metas (fondoEstado): con el fondo activo, su saldo; si no, tu dinero disponible.
@@ -178,7 +184,19 @@ export function hallazgosBalance(b: BookData, today: DateInput, mes: MesResumen,
     if (mes.disp < 0) out.push({ id: "mes-falta", tono: "bad", icon: "wallet", titulo: "Este mes sale más de lo que entra", detalle: `Te faltan ${$(-mes.disp)} para cubrir todo lo del mes. Revisa qué gasto puedes mover o recortar.`, href: "/gastos", accion: "Ver mis gastos" })
     // Contra el presupuesto cuenta también lo comprado con tarjeta (la misma base de "por gastar").
     else if (mes.presupuesto > 0 && mes.porGastar === 0 && (mes.gastadoPres ?? mes.gastado) > mes.presupuesto) out.push({ id: "presu", tono: "warn", icon: "shopping-cart", titulo: "Ya pasaste tu presupuesto del mes", detalle: `Llevas ${$(mes.gastadoPres ?? mes.gastado)} en gastos${mes.conTarjetaPer ? ` (incluye ${$(mes.conTarjetaPer)} con tarjeta)` : ""} y tu presupuesto variable es ${$(mes.presupuesto)}.`, href: "/presupuesto", accion: "Ver mi presupuesto" })
-    else out.push({ id: "mes-ok", tono: "ok", icon: "wallet", titulo: `Este mes te sobran ${$(mes.disp)}`, detalle: (mes.conTarjetaPer ? `Ojo: compraste ${$(mes.conTarjetaPer)} con tarjeta que te cobrarán en la próxima factura. ` : "") + (mes.nGastos ? `Ya cuenta tus ${mes.nGastos} gasto${mes.nGastos === 1 ? "" : "s"} registrado${mes.nGastos === 1 ? "" : "s"} (${$(mes.gastado)}). Llévalo a una meta antes de que se gaste.` : "Llévalo a una meta o a tu fondo de emergencia antes de que se gaste."), href: "/metas", accion: "Ir a mis metas" })
+    else {
+      // Con patrimonio negativo, lo que sobra en el mes va a la deuda, no a una meta: así los dos mensajes
+      // de la tarjeta dicen lo mismo en vez de contradecirse.
+      const aDeuda = T.pat < 0
+      const yaCuenta = mes.nGastos ? `Ya cuenta tus ${mes.nGastos} gasto${mes.nGastos === 1 ? "" : "s"} registrado${mes.nGastos === 1 ? "" : "s"} (${$(mes.gastado)}).` : ""
+      out.push({
+        id: "mes-ok", tono: "ok", icon: "wallet", titulo: `Este mes te sobran ${$(mes.disp)}`,
+        detalle: (mes.conTarjetaPer ? `Ojo: compraste ${$(mes.conTarjetaPer)} con tarjeta que te cobrarán en la próxima factura. ` : "") + [yaCuenta,
+          aDeuda ? "Como debes más de lo que tienes, abónalo a la deuda más cara: es lo que más te ahorra en intereses." : "Llévalo a una meta o a tu fondo de emergencia antes de que se gaste.",
+        ].filter(Boolean).join(" "),
+        href: aDeuda ? "/estrategia" : "/metas", accion: aDeuda ? "Abonar a mis deudas" : "Ir a mis metas",
+      })
+    }
   }
   return out
 }

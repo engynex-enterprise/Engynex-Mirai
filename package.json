@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "node infra/local/e2e-local.mjs --serve --dev",
+    "mirai": "tsx --tsconfig packages/cli/tsconfig.json packages/cli/src/main.tsx",
     "dev:web": "turbo run dev --filter=web",
     "build": "turbo run build",
     "start": "pnpm --filter web start",
@@ -37,6 +38,7 @@
     "@mirai/config": "workspace:*",
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",
+    "tsx": "^4.23.15",
     "turbo": "^2.11.10"
   }
 }

@@ -43,7 +43,7 @@ export const BookSettings = z.object({
   book_id: z.string(), meta: z.string(), umbral: z.number(), limite: z.number(), trm: z.unknown(), trm_auto: z.boolean(), pct: z.unknown(), emerg_meta: z.number(),
   anticipo: z.number(), usura: z.number(), usura_auto: z.boolean(), corte_q: z.number(), alerta_pres: z.number(), estricto: z.string(), defaults: z.unknown(),
   notif: z.unknown(), ia: z.unknown(), relaciones: z.array(z.string()), apps: z.unknown(), setup: z.unknown(), uvt: z.unknown(), smmlv: z.unknown(), gami: z.boolean(),
-  nomina: z.unknown(), updated_at: z.string(),
+  nomina: z.unknown(), meta_cfg: z.unknown(), updated_at: z.string(),
 })
 export type BookSettings = z.infer<typeof BookSettings>
 
@@ -73,6 +73,8 @@ export const BookSettingsPatch = z.object({
   gami: z.boolean(),
   /** Ajustes de nómina del libro (NominaCfg de @mirai/domain/payroll). */
   nomina: JsonObj,
+  /** Tu meta financiera principal: tipo, monto, fecha, meta de ahorro enlazada y pasos (MetaCfg de @mirai/domain/meta). */
+  meta_cfg: JsonObj,
 }).partial().refine((p) => Object.keys(p).length > 0, "No hay nada para guardar")
 export type BookSettingsPatch = z.infer<typeof BookSettingsPatch>
 

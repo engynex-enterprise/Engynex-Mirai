@@ -21,6 +21,9 @@
     mes. Ahora: "Llevas $50.000. Pronto podremos decirte cuánto sería al mes".
 - Hormiga: Inicio, Gastos, Indicadores y Avisos usan **`hormigas(b, today, mesVer?)`**, nada propio. Las palabras
   clave (`HKW`) van por palabra completa (`\b`): "tinto" no marca "tintorería". Suscripciones están en `NO_HORMIGA`.
+  Lo que **se repite** también es hormiga: el mismo gasto 3+ veces en 30 días (`REPITE_HORMIGA`, `repeticiones()`,
+  `vecesDe()`), siempre que no pase el doble del umbral y no sea una necesidad (grupo `n`).
+  - Ejemplo: tres almuerzos de $35.000 con umbral $25.000 → $105.000 al mes que antes no se veían.
 - "Gasto del día a día": `gastoVariable` (meses completos → si no, presupuesto → si no, `"sin-datos"`). Con
   `"sin-datos"` **no** se afirma "puedes ahorrar $X"; se dice qué falta registrar.
 - Capacidad de ahorro/pago: con `variableBase`, no con el gasto parcial del mes en curso.
@@ -48,9 +51,31 @@
   - Vencidos, próximos y agenda usan `!completo` y muestran lo que **falta**, no el valor completo.
 - **Compartidos:** `shared_group_expenses.tipo` = `'gasto'` | `'pago'`. Los pagos entre personas saldan y no son gasto.
 - **Tarjetas:** los pagos menores al total ya bajaban la deuda (no cambia).
-- Pendiente conocido: suscripciones sin abonos; `link_expense_fixed` no reparte un abono parcial.
+- **Suscripciones:** un cobro se puede pagar en partes. `expenses.sub_parcial` marca el abono: la suscripción **no**
+  pasa al siguiente cobro (`proximo` no se mueve) y el flujo muestra lo abonado y lo que falta
+  (`sub:id:mes` y `sub:id:mes:falta`), igual que un fijo. `gastosDeCobro` (plural) empareja TODOS los gastos de ese
+  cobro. Cuando un abono lo completa, la base lo cierra sola y pasa al siguiente cobro.
+  - Ejemplo: gimnasio de $50.000, abonas $20.000 → "Abonaste $20.000 · faltan $30.000"; con los $30.000 pasa a diciembre.
+- **Enlazar un gasto con un fijo** (`link_expense_fixed`, `sugerirPagoFijo`): si el periodo ya tiene abonos, se compara
+  con lo que **falta** y el gasto entra como un abono más (`p_cierra`); sin abonos antes, el enlace cierra el periodo
+  como siempre. Un periodo ya cerrado no se puede enlazar.
 
-## 6. Otras reglas
+## 6. Desgloses que cuadran y plata contada dos veces
+- **Un desglose siempre suma su total.** "Lo que sale, por módulo" (Dashboard) usa `salidasPorModulo(F)`: solo
+  consumo y deudas (`saleFlujo` = `gasto` + `deuda`), que es exactamente `tot.sale`. El ahorro y los préstamos que
+  hiciste salen de la cuenta pero **no** están en "Sale", así que tampoco en ese desglose.
+- Las columnas del Balance explican su total con `porClase(movs)`: ingresos / te pagan / te prestaron / sacaste del
+  ahorro, y gastos / deudas / ahorras / prestaste. Por eso el total de "Salidas" puede ser mayor que el KPI "Sale".
+- **Lo que la persona registró dos veces no se descuenta solo: se avisa.** `posiblesDobles(b, a, b, today)` encuentra
+  los gastos sueltos que parecen el pago de un gasto fijo que el flujo ya cuenta (pagado o pendiente) y la app ofrece
+  enlazarlos (decisión "dobles" del Dashboard y aviso del Balance). Adivinar cuál sobra sería inventar una cifra.
+- **Ahorro apartado dudoso:** `ahorroApartado(b, fondoMovs?)` marca como `dudoso` lo guardado en una meta o en el
+  fondo sin decir de qué cuenta salió cuando hay cuentas que llevan su saldo solas (el saldo no bajó y además suma
+  como ahorro): `estadoIntegral` lo expone en `apartadoDudoso`/`dudosas` y el Balance lo avisa.
+- **Pagos de tarjeta registrados a mano:** reemplazan la estimación del mes en el flujo. `pagosTarjetaRegistrados`
+  los compara con la cuota del mes para avisar si la deuda baja más rápido o más despacio.
+
+## 7. Otras reglas
 - Gastos básicos sin aportes a metas/fondo (`link_type`). Fijos en USD/EUR se convierten (`fijoMensual(f, trm)`, `fijosMes(fixed, trm)`).
 - "Meses que aguantas" = `fondoEstado` en todas partes.
 - Ingresos: el valor se muestra **al mes** (`pagosMes(x)`, nunca `FREC`) con lo que llega en cada pago aparte
@@ -58,7 +83,7 @@
 - Suscripciones compartidas se dividen **una** vez.
 - Impuestos registrados a mano (2408) no se suman otra vez con los del calendario.
 
-## 7. Lista de chequeo al tocar una cifra
+## 8. Lista de chequeo al tocar una cifra
 1. ¿La cifra sale de una función de `packages/domain` y la vista solo la formatea (`formatCOP`, `data-money`)?
 2. ¿Aparece en otra pantalla? Búscala (`rg "nombreDeLaFuncion" apps/web/features`) y confirma que usan la misma función.
 3. ¿El mensaje afirma algo ("vas a gastar", "puedes ahorrar", "te sobra")? Solo si la función devolvió datos

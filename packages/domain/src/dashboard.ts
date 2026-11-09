@@ -2,7 +2,9 @@
 // ya existen (totales, estrategia de deudas, hormiga, indicadores). Puro: sin React ni reloj.
 import { addMonths, iso, lastDay, MES, toDay } from "./dates"
 import { compraEstado, deudaTarjeta, tarjetaCuotaMes, tarjetaPagoMes } from "./cards"
+import type { MetaEstado } from "./meta"
 import { debtStrategy } from "./debt-strategy"
+import { posiblesDobles, totalDobles } from "./dobles"
 import { fijoMensual } from "./fixed"
 import { estadoIntegral, flujoIntegral, type ExtrasIntegral, type Mov } from "./flujo-integral"
 import { eaDeMensual, loanEngine, loanName } from "./loans"
@@ -281,7 +283,7 @@ export interface Decision {
  * ingreso, cuánto puedes ahorrar, el fondo de emergencia, impuestos que vienen, suscripciones, hormiga y cobros.
  * `proximos` son los movimientos de los próximos meses (flujo integral) para los impuestos.
  */
-export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromisos; cap: Capacidad; deu: DeudasResumen; vencidos: Mov[]; proximos: Mov[] }): Decision[] {
+export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromisos; cap: Capacidad; deu: DeudasResumen; vencidos: Mov[]; proximos: Mov[]; /** Tu meta principal (Perfil): sube lo que te acerca a ella. */ meta?: MetaEstado | null }): Decision[] {
   const { comp, cap, deu } = ctx
   const out: Decision[] = []
   const hoy = isoOf(today)
@@ -350,10 +352,44 @@ export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromis
     out.push({ id: "hormiga", tono: H.over ? "warn" : "info", icon: "coffee", titulo: `Los gastos hormiga van para ${$(mil(H.proy))} este mes`, detalle: `Llevas ${$(H.totalMes)} en ${H.mes.length} ${H.mes.length === 1 ? "gasto" : "gastos"} y, ${como}, terminarías el mes en unos ${$(mil(H.proy))}. Si todos los meses fueran así, al año serían ${$(mil(H.anual))}: bajarlos a la mitad te deja ${$(mil(H.anual / 2))} para tus metas.`, impacto: H.anual / 2, impactoLabel: "al año", href: "/gastos", accion: "Ver mis gastos hormiga" })
   }
 
+  // Plata contada dos veces: un gasto suelto que es el mismo pago de un gasto fijo (este mes y el pasado). No se
+  // descuenta solo (sería adivinar): se avisa para que la persona lo enlace con un toque.
+  const t0 = toDay(today)
+  const dob = posiblesDobles(b, iso(new Date(t0.getFullYear(), t0.getMonth() - 1, 1)), iso(new Date(t0.getFullYear(), t0.getMonth() + 1, 0)), today)
+  if (dob.length) {
+    const sobra = totalDobles(dob)
+    const uno = dob.length === 1
+    out.push({
+      id: "dobles", tono: "warn", icon: "copy", titulo: `${uno ? "Un gasto" : `${dob.length} gastos`} que parece${uno ? "" : "n"} estar contado${uno ? "" : "s"} dos veces`,
+      detalle: `${uno ? `“${dob[0].descripcion}” (${$(dob[0].v)}) se parece al pago de tu gasto fijo “${dob[0].fixed.nombre}”` : `Se parecen al pago de un gasto fijo que ya cuenta por su lado (${dob.map((x) => x.fixed.nombre).filter((n, i, l) => l.indexOf(n) === i).slice(0, 3).join(", ")})`}: por eso ${$(sobra)} salen dos veces en tus cuentas. Si es el mismo pago, enlázalo desde Gastos y la cifra queda bien.`,
+      impacto: sobra, impactoLabel: "contados de más", href: "/gastos", accion: "Revisar esos gastos",
+    })
+  }
+
   const cobrar = ctx.vencidos.filter((x) => x.dir === "entra").reduce((a, x) => a + x.v, 0)
   if (cobrar > 0)
     out.push({ id: "cobrar", tono: "warn", icon: "hand-coins", titulo: `Te deben ${$(cobrar)} en cuotas atrasadas`, detalle: "Recuérdale a quien te debe: desde Me deben le envías el cobro por WhatsApp con tus datos para pagarte.", impacto: cobrar, impactoLabel: "por cobrar", href: "/me-deben", accion: "Cobrar" })
 
   const rank = { bad: 0, warn: 1, info: 2, ok: 3 }
-  return out.sort((a, c) => rank[a.tono] - rank[c.tono] || (c.impacto ?? 0) - (a.impacto ?? 0))
+  const orden = out.sort((a, c) => rank[a.tono] - rank[c.tono] || (c.impacto ?? 0) - (a.impacto ?? 0))
+
+  // Tu meta principal manda: lo que te acerca a ella va primero (después de lo urgente: atrasos y dobles).
+  const M = ctx.meta
+  if (!M || M.lograda) return orden
+  const prefiere: Record<string, string[]> = {
+    deudas: ["deuda-cara", "abono", "compromisos"],
+    fondo: ["fondo", "ahorro", "hormiga"],
+  }
+  const ids = prefiere[M.def.tipo] ?? ["ahorro", "hormiga", "subs"]
+  const urgente = orden.filter((d) => d.tono === "bad")
+  const suyas = orden.filter((d) => d.tono !== "bad" && ids.includes(d.id))
+  const resto = orden.filter((d) => d.tono !== "bad" && !ids.includes(d.id))
+  const meta: Decision = {
+    id: "meta", tono: "info", icon: M.def.icon, titulo: M.lograda ? `Lograste tu meta: ${M.titulo}` : `Tu meta: ${M.titulo}`,
+    detalle: M.objetivo > 0
+      ? `Vas en el ${Math.round(M.progreso * 100)} %: llevas ${$(M.llevas)} de ${$(M.objetivo)}${M.mensual ? ` y separando ${$(mil(M.mensual))} al mes llegas ${M.meses === 1 ? "el otro mes" : `en ${M.meses} meses`}` : ""}.${M.siguiente ? ` Lo que sigue: ${M.siguiente.t.toLowerCase()}.` : ""}`
+      : `Ponle un monto y una fecha a tu meta para saber cuánto separar cada mes.${M.siguiente ? ` Lo que sigue: ${M.siguiente.t.toLowerCase()}.` : ""}`,
+    impacto: M.falta || undefined, impactoLabel: M.falta ? "te falta" : undefined, href: "/perfil#meta", accion: "Ver mi meta",
+  }
+  return [...urgente, meta, ...suyas, ...resto]
 }

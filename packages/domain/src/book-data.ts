@@ -73,6 +73,7 @@ export function assembleBook(p: BookParts, today: string = hoyBogota()): LoadedB
     umbral: num(s.umbral), limite: num(s.limite), trm: s.trm as Record<string, number>, pct: s.pct as SettingsIn["pct"],
     emerg_meta: s.emerg_meta, anticipo: s.anticipo, corte_q: s.corte_q, alerta_pres: s.alerta_pres,
     notif: s.notif as SettingsIn["notif"], uvt: s.uvt as Record<string, number>, smmlv: s.smmlv as Record<string, number>, nomina: (s.nomina ?? {}) as SettingsIn["nomina"],
+    meta: String(s.meta ?? ""), meta_cfg: s.meta_cfg ?? null,
   }
   const f = (p.emergency_funds ?? [])[0]
   return conSaldos({

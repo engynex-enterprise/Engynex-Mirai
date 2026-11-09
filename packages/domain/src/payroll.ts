@@ -113,6 +113,11 @@ const pila = (v: number) => Math.ceil(v / 100 - 1e-9) * 100
 /** Configuración de descuentos guardada en `incomes.deducciones`. */
 export interface Deducciones {
   tipo?: "empleado" | "independiente" | "pensionado" | "otro"
+  /**
+   * Parte del pago que NO va a la base de salud y pensión pero sí cuenta para la retención: el auxilio de transporte
+   * (Ley 15/1959 y Decreto 780/2016; DIAN Concepto 39293/2003). Valor del mes.
+   */
+  noIbc?: number
   salud?: boolean
   pension?: boolean
   fsp?: boolean
@@ -152,6 +157,16 @@ const pc = (x: unknown) => String(x).replace(".", ",")
  * Descuentos de un pago (`bruto` es el valor del periodo: quincena, mes…). Los topes se calculan
  * con el equivalente mensual. Devuelve el neto (lo que llega a la cuenta) y el detalle.
  */
+/**
+ * Salud que se le descuenta a una mesada de pensión: 4 % si es de un salario mínimo, 10 % hasta tres salarios y 12 %
+ * de ahí en adelante (art. 78 Ley 2294/2023, Res. 1271/2023 de MinSalud).
+ */
+export function saludPensionado(mesadaMes: number, smmlv: number): 4 | 10 | 12 {
+  const m = +mesadaMes || 0
+  if (m <= smmlv + 1) return 4
+  return m <= 3 * smmlv + 1 ? 10 : 12
+}
+
 export function dedCalc(bruto: number, frec: string, D: Deducciones | null | undefined, ref: NominaRef): DedResult {
   if (!D || !bruto) return { neto: bruto || 0, items: [], total: 0 }
   const k = ({ quincenal: 2, semanal: 52 / 12, anual: 1 / 12 } as Record<string, number>)[frec] || 1
@@ -165,13 +180,15 @@ export function dedCalc(bruto: number, frec: string, D: Deducciones | null | und
   if (t === "empleado") {
     const sp = +(D.saludP ?? 0) || 4
     const pp = +(D.pensionP ?? 0) || 4
-    const s = D.salud !== false ? ap((M * sp) / 100) : 0
-    const p = D.pension !== false ? ap((M * pp) / 100) : 0
-    const fp = D.fsp !== false ? fspPct(M, ref.smmlv, ref.fsp) : 0
-    const f = ap((M * fp) / 100)
-    add("Salud", s, `${pc(sp)}% del salario`)
-    add("Pensión", p, `${pc(pp)}% del salario`)
-    add("Fondo de solidaridad pensional", f, `${pc(fp)}% (ganas ${(M / ref.smmlv).toFixed(1).replace(".", ",")} salarios mínimos)`)
+    // El auxilio de transporte (y lo que no sea salario) no paga salud ni pensión, pero sí cuenta para la retención.
+    const ibc = Math.max(0, M - Math.max(0, +(D.noIbc ?? 0) || 0))
+    const s = D.salud !== false ? ap((ibc * sp) / 100) : 0
+    const p = D.pension !== false ? ap((ibc * pp) / 100) : 0
+    const fp = D.fsp !== false ? fspPct(ibc, ref.smmlv, ref.fsp) : 0
+    const f = ap((ibc * fp) / 100)
+    add("Salud", s, `${pc(sp)}% del salario${ibc !== M ? " (sin el auxilio de transporte)" : ""}`)
+    add("Pensión", p, `${pc(pp)}% del salario${ibc !== M ? " (sin el auxilio de transporte)" : ""}`)
+    add("Fondo de solidaridad pensional", f, `${pc(fp)}% (ganas ${(ibc / ref.smmlv).toFixed(1).replace(".", ",")} salarios mínimos)`)
     if (D.ret !== false) {
       const rv = +(D.retV ?? 0) || 0
       const r = D.retModo === "manual" ? rv * (D.mes ? 1 : k) : D.retModo === "pct" ? (M * rv) / 100 : D.retModo === "proc2" ? retProc2(M, s + p + f, rv, ref.uvt) : retEmpleado(M, s + p + f, ref.uvt)
@@ -195,8 +212,13 @@ export function dedCalc(bruto: number, frec: string, D: Deducciones | null | und
     if (D.ret !== false && +(D.retV ?? 0))
       add("Retención en la fuente", D.retModo === "manual" ? +(D.retV ?? 0) * (D.mes ? 1 : k) : (M * +(D.retV ?? 0)) / 100, D.retModo === "manual" ? "valor fijo" : `${pc(D.retV)}% de lo facturado`)
   } else if (t === "pensionado") {
-    const sp = +(D.saludP ?? 0) || 12
+    // Salud del pensionado por tramos (art. 78 Ley 2294/2023 y Res. 1271/2023 de MinSalud): 4 % hasta 1 SMMLV,
+    // 10 % hasta 3 y 12 % de ahí en adelante. Antes era 12 % para todos (así lo hacía la v4).
+    const sp = +(D.saludP ?? 0) || saludPensionado(M, ref.smmlv)
     if (D.salud !== false) add("Salud", ap((M * sp) / 100), `${pc(sp)}% de la mesada`)
+    // Aporte de solidaridad de los pensionados (art. 8 par. Ley 797/2003): 1 % sobre 10 SMMLV y 2 % sobre 20.
+    const sol = M > 20 * ref.smmlv ? 2 : M > 10 * ref.smmlv ? 1 : 0
+    if (sol && D.fsp !== false) add("Aporte de solidaridad", ap((M * sol) / 100), `${pc(sol)}% de la mesada`)
   }
   for (const o of D.otros || []) if (o && o.n && +(o.v ?? 0)) it.push({ n: o.n, v: o.pct ? (bruto * +(o.v ?? 0)) / 100 : +(o.v ?? 0), h: o.pct ? `${o.v}%` : "valor fijo" })
   const total = it.reduce((a, x) => a + x.v, 0)

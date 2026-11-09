@@ -5,23 +5,71 @@ import { iso, lastDay } from "./dates"
 import { dedCalc, type DedItem, type Deducciones, type NominaRef } from "./payroll"
 import type { FixedExpenseIn, IncomeIn } from "./types"
 
-export type TipoIngreso = "salario" | "bono" | "comisiones" | "prima" | "honorarios" | "pension" | "arriendo" | "negocio" | "inversiones" | "otro"
+export type TipoIngreso =
+  // Con contrato de trabajo
+  | "salario" | "extras" | "comisiones" | "bono" | "prima" | "vacaciones" | "liquidacion" | "aprendiz"
+  // Por tu cuenta
+  | "honorarios" | "negocio" | "plataformas"
+  // Pensión y ayudas
+  | "pension" | "subsidio"
+  // Rentas y capital
+  | "arriendo" | "dividendos" | "inversiones"
+  // De una sola vez
+  | "venta" | "regalo" | "otro"
+
+/** Familias del selector del formulario (en ese orden). */
+export type GrupoIngreso = "trabajo" | "cuenta-propia" | "pension" | "capital" | "una-vez"
+export const GRUPOS_INGRESO: { id: GrupoIngreso; label: string; desc: string }[] = [
+  { id: "trabajo", label: "Trabajo con contrato", desc: "Lo que te paga una empresa como empleado" },
+  { id: "cuenta-propia", label: "Por tu cuenta", desc: "Trabajas por tu cuenta o tienes tu negocio" },
+  { id: "pension", label: "Pensión y ayudas", desc: "Mesada de pensión y subsidios" },
+  { id: "capital", label: "Rentas y capital", desc: "Plata que te produce lo que tienes" },
+  { id: "una-vez", label: "De una sola vez", desc: "Plata que te llega una vez, no todos los meses" },
+]
 
 /**
  * Tipos de ingreso: qué descuentos de ley le aplican (`ded`, el tipo de `Deducciones`), la frecuencia habitual y la
  * categoría de ingreso con la que se guarda (la primera que exista en el libro; si no hay, se crea con `cat[0]`).
  */
-export const TIPOS_INGRESO: { value: TipoIngreso; label: string; desc: string; icon: string; ded: NonNullable<Deducciones["tipo"]>; frec: string; cat: string[]; re: RegExp }[] = [
-  { value: "salario", label: "Salario", desc: "Tu sueldo como empleado con contrato", icon: "briefcase", ded: "empleado", frec: "quincenal", cat: ["Salario"], re: /salari|sueldo|n[oó]mina/i },
-  { value: "bono", label: "Bono o auxilio", desc: "Alimentación, conectividad, transporte…", icon: "gift", ded: "otro", frec: "quincenal", cat: ["Bonos y auxilios"], re: /bono|auxilio|apoyo/i },
-  { value: "comisiones", label: "Comisiones", desc: "Por ventas o metas cumplidas", icon: "badge-percent", ded: "empleado", frec: "mensual", cat: ["Comisiones"], re: /comisi/i },
-  { value: "prima", label: "Prima o pago extra", desc: "Prima de servicios, bonificación del año…", icon: "party-popper", ded: "otro", frec: "anual", cat: ["Primas y bonificaciones"], re: /prima|bonifica/i },
-  { value: "honorarios", label: "Honorarios", desc: "Independiente o prestación de servicios", icon: "file-text", ded: "independiente", frec: "mensual", cat: ["Honorarios"], re: /honorario|independiente|servicios/i },
-  { value: "pension", label: "Pensión", desc: "Tu mesada de pensionado", icon: "armchair", ded: "pensionado", frec: "mensual", cat: ["Pensión"], re: /pensi[oó]n|mesada/i },
-  { value: "arriendo", label: "Arriendo", desc: "Lo que te pagan por un inmueble", icon: "house", ded: "otro", frec: "mensual", cat: ["Arriendos"], re: /arriendo|alquiler/i },
-  { value: "negocio", label: "Negocio propio", desc: "Ventas o ganancias de tu negocio", icon: "store", ded: "otro", frec: "mensual", cat: ["Negocio propio"], re: /negocio|ventas/i },
-  { value: "inversiones", label: "Intereses o inversiones", desc: "CDT, cuentas de ahorro, dividendos…", icon: "trending-up", ded: "otro", frec: "mensual", cat: ["Intereses y rendimientos"], re: /inter[eé]s|rendimiento|inversi|dividendo|cdt/i },
-  { value: "otro", label: "Otro ingreso", desc: "Cualquier otro dinero que recibas", icon: "coins", ded: "otro", frec: "mensual", cat: ["Otros ingresos"], re: /otro/i },
+/** Color del tipo en el selector (tonos de components/mirai/tone-icon.tsx). */
+export type TonoIngreso = "green" | "violet" | "amber" | "blue" | "navy" | "brand" | "red" | "gray"
+
+export const TIPOS_INGRESO: {
+  value: TipoIngreso; label: string; desc: string; icon: string; tone: TonoIngreso; grupo: GrupoIngreso
+  /** Tipo de descuentos de ley que le corresponde (`Deducciones.tipo`). */
+  ded: NonNullable<Deducciones["tipo"]>
+  /** Entra a la base de salud y pensión (IBC). Falso en bonos ocasionales, vacaciones compensadas o liquidación. */
+  ibc: boolean
+  /** Cómo le retienen en la fuente, para explicarlo en palabras simples. */
+  ret: "383" | "indep" | "pension" | "arriendo" | "dividendos" | "rendimientos" | "liquidacion" | "no"
+  /** Aviso propio del tipo (por ejemplo, que la prima legal ya se proyecta sola). */
+  nota?: string
+  frec: string; cat: string[]; re: RegExp
+}[] = [
+  // ── Trabajo con contrato ──
+  { value: "salario", label: "Salario", desc: "Tu sueldo como empleado con contrato", tone: "green", icon: "briefcase", grupo: "trabajo", ded: "empleado", ibc: true, ret: "383", frec: "quincenal", cat: ["Salario"], re: /salari|sueldo|n[oó]mina/i },
+  { value: "extras", label: "Horas extras y recargos", desc: "Extras, nocturnos, dominicales y festivos", tone: "green", icon: "clock", grupo: "trabajo", ded: "empleado", ibc: true, ret: "383", nota: "Son salario: les descuentan salud y pensión. Si cambian cada mes, escribe un promedio.", frec: "mensual", cat: ["Horas extras y recargos"], re: /extra|recargo|nocturn|dominical|festivo/i },
+  { value: "comisiones", label: "Comisiones", desc: "Por ventas o metas cumplidas", tone: "amber", icon: "badge-percent", grupo: "trabajo", ded: "empleado", ibc: true, ret: "383", frec: "mensual", cat: ["Comisiones"], re: /comisi/i },
+  { value: "bono", label: "Bono o auxilio", desc: "Alimentación, conectividad, transporte…", tone: "violet", icon: "gift", grupo: "trabajo", ded: "otro", ibc: false, ret: "383", nota: "Los auxilios y los bonos ocasionales no llevan salud ni pensión, pero sí cuentan para la retención.", frec: "quincenal", cat: ["Bonos y auxilios"], re: /bono|auxilio|apoyo/i },
+  { value: "prima", label: "Prima o pago extra", desc: "Prima extralegal o bonificación del año", tone: "amber", icon: "party-popper", grupo: "trabajo", ded: "otro", ibc: false, ret: "383", nota: "La prima legal (junio y diciembre), las cesantías y sus intereses ya los proyecta Mirai con tu salario: míralos en Primas. Registra aquí solo las primas o bonos que tu empresa da aparte.", frec: "anual", cat: ["Primas y bonificaciones"], re: /prima|bonifica/i },
+  { value: "vacaciones", label: "Vacaciones en dinero", desc: "Las que te pagan en vez de descansarlas", tone: "blue", icon: "palmtree", grupo: "trabajo", ded: "otro", ibc: false, ret: "383", nota: "Las vacaciones pagadas en dinero no llevan salud ni pensión (Consejo de Estado, 2023), pero sí cuentan para la retención.", frec: "anual", cat: ["Vacaciones"], re: /vacacion/i },
+  { value: "liquidacion", label: "Liquidación o indemnización", desc: "Lo que te pagan al salir del trabajo", tone: "red", icon: "file-minus", grupo: "trabajo", ded: "otro", ibc: false, ret: "liquidacion", nota: "No lleva salud ni pensión. Si tu sueldo era de más de 204 UVT al mes, a la indemnización le retienen el 20 %.", frec: "anual", cat: ["Liquidación"], re: /liquidaci|indemniza/i },
+  { value: "aprendiz", label: "Apoyo de aprendiz (SENA)", desc: "Lo que recibes en tu práctica", tone: "blue", icon: "graduation-cap", grupo: "trabajo", ded: "empleado", ibc: true, ret: "no", nota: "En la etapa productiva te descuentan salud y pensión (4 % cada una). En la lectiva, la empresa paga la salud.", frec: "mensual", cat: ["Apoyo de sostenimiento"], re: /aprendiz|sena|practicante/i },
+  // ── Por tu cuenta ──
+  { value: "honorarios", label: "Honorarios", desc: "Prestación de servicios o contrato por obra", tone: "blue", icon: "file-text", grupo: "cuenta-propia", ded: "independiente", ibc: true, ret: "indep", nota: "Tú pagas tu salud (12,5 %) y tu pensión (16 %) sobre el 40 % del contrato, sin el IVA.", frec: "mensual", cat: ["Honorarios"], re: /honorario|independiente|servicios/i },
+  { value: "negocio", label: "Negocio propio", desc: "Ventas o ganancias de tu negocio", tone: "blue", icon: "store", grupo: "cuenta-propia", ded: "independiente", ibc: true, ret: "indep", nota: "Tus aportes se calculan sobre el 40 % de lo que te queda después de los costos.", frec: "mensual", cat: ["Negocio propio"], re: /negocio|ventas/i },
+  { value: "plataformas", label: "Apps y domicilios", desc: "Rappi, Uber, DiDi, inDrive…", tone: "amber", icon: "bike", grupo: "cuenta-propia", ded: "independiente", ibc: true, ret: "indep", nota: "Desde 2026 la plataforma paga una parte de tus aportes y la ARL. Revisa cuánto te descuentan en la app.", frec: "semanal", cat: ["Apps y domicilios"], re: /rappi|uber|didi|indriver?|plataforma|domicilio/i },
+  // ── Pensión y ayudas ──
+  { value: "pension", label: "Pensión", desc: "Tu mesada de pensionado", tone: "navy", icon: "armchair", grupo: "pension", ded: "pensionado", ibc: false, ret: "pension", nota: "De la mesada solo te descuentan salud: 4 % si es de un salario mínimo, 10 % hasta tres y 12 % de ahí en adelante.", frec: "mensual", cat: ["Pensión"], re: /pensi[oó]n|mesada/i },
+  { value: "subsidio", label: "Subsidio o ayuda", desc: "Renta Ciudadana, Jóvenes en Acción, caja de compensación…", tone: "green", icon: "hand-heart", grupo: "pension", ded: "otro", ibc: false, ret: "no", nota: "Los subsidios del Estado y el subsidio familiar de la caja no pagan impuesto de renta.", frec: "mensual", cat: ["Subsidios y ayudas"], re: /subsidio|ayuda|renta ciudadana|j[oó]venes en acci/i },
+  // ── Rentas y capital ──
+  { value: "arriendo", label: "Arriendo", desc: "Lo que te pagan por un inmueble", tone: "brand", icon: "house", grupo: "capital", ded: "otro", ibc: false, ret: "arriendo", nota: "Si quien te paga es una empresa, te retiene el 3,5 %.", frec: "mensual", cat: ["Arriendos"], re: /arriendo|alquiler/i },
+  { value: "dividendos", label: "Dividendos", desc: "Utilidades de una empresa en la que tienes parte", tone: "violet", icon: "chart-pie", grupo: "capital", ded: "otro", ibc: false, ret: "dividendos", nota: "No te retienen hasta 1.090 UVT al año; del exceso te retienen el 15 %.", frec: "anual", cat: ["Dividendos"], re: /dividendo|utilidad|participaci/i },
+  { value: "inversiones", label: "Intereses de ahorros o CDT", desc: "Lo que te paga el banco por tu plata", tone: "violet", icon: "trending-up", grupo: "capital", ded: "otro", ibc: false, ret: "rendimientos", nota: "Al CDT y a los títulos de renta fija les retienen el 4 %; a los demás rendimientos, el 7 %.", frec: "mensual", cat: ["Intereses y rendimientos"], re: /inter[eé]s|rendimiento|inversi|cdt/i },
+  // ── De una sola vez ──
+  { value: "venta", label: "Venta de algo tuyo", desc: "Carro, moto, casa o cosas usadas", tone: "gray", icon: "tag", grupo: "una-vez", ded: "otro", ibc: false, ret: "no", nota: "Si lo tenías hace dos años o más y lo vendes por más de lo que costó, esa ganancia paga el 15 %.", frec: "anual", cat: ["Ventas de bienes"], re: /venta|vend[ií]/i },
+  { value: "regalo", label: "Regalo o herencia", desc: "Plata que te dieron o heredaste", tone: "red", icon: "heart-handshake", grupo: "una-vez", ded: "otro", ibc: false, ret: "no", nota: "Las herencias y los regalos grandes pagan el 15 % como ganancia ocasional, con partes exentas. Consúltalo con tu contador.", frec: "anual", cat: ["Regalos y herencias"], re: /regalo|herencia|donaci/i },
+  { value: "otro", label: "Otro ingreso", desc: "Cualquier otro dinero que recibas", tone: "gray", icon: "coins", grupo: "una-vez", ded: "otro", ibc: false, ret: "no", frec: "mensual", cat: ["Otros ingresos"], re: /otro/i },
 ]
 
 /** Tipo de un ingreso: el guardado o, en ingresos de antes, el que sugiere su categoría o concepto. */

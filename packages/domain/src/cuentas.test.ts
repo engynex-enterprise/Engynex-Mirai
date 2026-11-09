@@ -189,3 +189,43 @@ describe("mediosSugeridos", () => {
     expect(mediosSugeridos("Cuenta de ahorros", medios)).toEqual([])
   })
 })
+
+describe("ahorro apartado que puede estar contado dos veces", () => {
+  const meta = { id: "g1", nombre: "Viaje", objetivo: 3000000, ahorrado: 300000, fecha: "2027-06-01" }
+
+  it("guardar sin decir de qué cuenta salió deja la plata contada dos veces: se avisa", () => {
+    const b = libro({ goals: [meta], goalMovements: [{ id: "m1", goal_id: "g1", tipo: "abono", valor: 300000, fecha: "2026-11-05" }] })
+    const A = ahorroApartado(b)
+    expect(A.total).toBe(300000)
+    expect(A.dudoso).toBe(300000)
+    expect(A.lineas[0].dudoso).toBe(300000)
+    // El saldo de la cuenta viva no bajó (no se sabe de dónde salió) y la meta suma aparte.
+    expect(estadoIntegral(b, HOY).apartadoDudoso).toBe(300000)
+    expect(estadoIntegral(b, HOY).dudosas).toEqual([{ k: "goal:g1", n: "Viaje", v: 300000 }])
+  })
+
+  it("con el medio de pago la cuenta baja y no hay nada dudoso", () => {
+    const b = libro({ goals: [meta], goalMovements: [{ id: "m1", goal_id: "g1", tipo: "abono", valor: 300000, fecha: "2026-11-05", payment_method_id: "m-nequi" }] })
+    expect(ahorroApartado(b).dudoso).toBe(0)
+    expect(estadoIntegral(conSaldos(b, HOY), HOY).apartadoDudoso).toBe(0)
+  })
+
+  it("si dices en qué cuenta está la meta, no suma como ahorro apartado (ni es dudosa)", () => {
+    const b = libro({ goals: [{ ...meta, asset_id: "a-nequi" } as never], goalMovements: [{ id: "m1", goal_id: "g1", tipo: "abono", valor: 300000, fecha: "2026-11-05" }] })
+    const A = ahorroApartado(b)
+    expect(A.total).toBe(0)
+    expect(A.dudoso).toBe(0)
+  })
+
+  it("sin cuentas que lleven su saldo solas no se avisa nada (el saldo lo escribe la persona)", () => {
+    const b = libro({ assets: [{ id: "a-banco", cod: "1110", nombre: "Bancolombia", valor: 2000000, currency: "COP" } as never], goals: [meta], goalMovements: [{ id: "m1", goal_id: "g1", tipo: "abono", valor: 300000, fecha: "2026-11-05" }] })
+    expect(ahorroApartado(b).dudoso).toBe(0)
+  })
+
+  it("un retiro no cuenta como dudoso, y el aporte programado (ya salió como gasto fijo) tampoco", () => {
+    const b = libro({ goals: [meta], goalMovements: [{ id: "m1", goal_id: "g1", tipo: "retiro", valor: 100000, fecha: "2026-11-05" }], fund: { activo: true, saldo: 400000 } })
+    expect(ahorroApartado(b).dudoso).toBe(0)
+    expect(ahorroApartado(b, [{ tipo: "guardar", valor: 400000, fecha: "2026-11-06", expense_id: "e1" }]).dudoso).toBe(0)
+    expect(ahorroApartado(b, [{ tipo: "guardar", valor: 400000, fecha: "2026-11-06" }]).dudoso).toBe(400000)
+  })
+})

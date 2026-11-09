@@ -68,9 +68,23 @@ describe("dedCalc = v4", () => {
           const bruto = frec === "quincenal" ? s / 2 : frec === "semanal" ? (s * 12) / 52 : frec === "anual" ? s * 12 : s
           // Independientes por encima de 25 SMMLV de IBC: la v5 aplica el tope legal (la v4 no). Ver NOTAS.md.
           if (D.tipo === "independiente" && (s * (+(D.ibcP ?? 0) || 40)) / 100 > 25 * ref.smmlv) continue
+          // Pensionados sin un % escrito a mano: la v4 cobraba 12 % a todos; la v5 aplica la escala 4/10/12 y el
+          // aporte de solidaridad (ver NOTAS.md). La paridad solo se exige donde el % sí coincide.
+          if (D.tipo === "pensionado" && (!D.saludP || s > 10 * ref.smmlv)) continue
           expectClose(dedCalc(bruto, frec, D, ref), legacyCall(sc.L, "dedCalc", bruto, frec, D))
         }
       })
+  it("pensión: la salud va por tramos (4 %, 10 % y 12 %) y suma solidaridad en mesadas altas", () => {
+    const salud = (mesada: number) => dedCalc(mesada, "mensual", { tipo: "pensionado" }, ref).items.find((x) => x.n === "Salud")!.v
+    expect(salud(ref.smmlv)).toBe(Math.round(ref.smmlv * 0.04))
+    expect(salud(2 * ref.smmlv)).toBe(Math.round(2 * ref.smmlv * 0.1))
+    expect(salud(5 * ref.smmlv)).toBe(Math.round(5 * ref.smmlv * 0.12))
+    const alta = dedCalc(12 * ref.smmlv, "mensual", { tipo: "pensionado" }, ref)
+    expect(alta.items.find((x) => x.n === "Aporte de solidaridad")?.v).toBe(Math.round(12 * ref.smmlv * 0.01))
+    expect(dedCalc(21 * ref.smmlv, "mensual", { tipo: "pensionado" }, ref).items.find((x) => x.n === "Aporte de solidaridad")?.v).toBe(Math.round(21 * ref.smmlv * 0.02))
+    // Con un porcentaje escrito a mano manda ese.
+    expect(dedCalc(5 * ref.smmlv, "mensual", { tipo: "pensionado", saludP: 4 }, ref).items.find((x) => x.n === "Salud")!.v).toBe(Math.round(5 * ref.smmlv * 0.04))
+  })
   it("independiente: el IBC no pasa de 25 SMMLV", () => {
     const r = dedCalc(200_000_000, "mensual", { tipo: "independiente", ret: false, arl: false, fsp: false }, ref)
     const salud = r.items.find((x) => x.n === "Salud")!.v
@@ -79,5 +93,25 @@ describe("dedCalc = v4", () => {
   it("sin configuración o sin valor devuelve el bruto", () => {
     expect(dedCalc(1000, "mensual", null, ref)).toEqual({ neto: 1000, items: [], total: 0 })
     expect(dedCalc(0, "mensual", { tipo: "empleado" }, ref)).toEqual({ neto: 0, items: [], total: 0 })
+  })
+})
+
+describe("auxilio de transporte (no va a salud ni pensión, sí a la retención)", () => {
+  const smmlv = ref.smmlv
+  it("baja la base de salud y pensión, pero no la de la retención", () => {
+    const sueldo = 2 * smmlv, aux = 249_095
+    const sin = dedCalc(sueldo + aux, "mensual", { tipo: "empleado" }, ref)
+    const con = dedCalc(sueldo + aux, "mensual", { tipo: "empleado", noIbc: aux }, ref)
+    const salud = (r: ReturnType<typeof dedCalc>) => r.items.find((x) => x.n === "Salud")!.v
+    expect(salud(con)).toBeLessThan(salud(sin))
+    expect(salud(con)).toBe(Math.round(sueldo * 0.04))
+    expect(con.items.find((x) => x.n === "Salud")!.h).toMatch(/sin el auxilio/)
+    // Con estos valores no hay retención, así que el neto sube justo lo que bajan los aportes.
+    expect(con.neto).toBeGreaterThan(sin.neto)
+  })
+  it("sin el campo todo queda igual que antes", () => {
+    const a = dedCalc(5_000_000, "mensual", { tipo: "empleado" }, ref)
+    const b = dedCalc(5_000_000, "mensual", { tipo: "empleado", noIbc: 0 }, ref)
+    expect(b).toEqual(a)
   })
 })

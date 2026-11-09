@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, Copy, MessageCircle, Send, Share2 } from "lucide-react"
+import { useQuery } from "@/lib/query"
+import { ChevronDown, Copy, Mail, MessageCircle, Send, Share2 } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -18,7 +19,7 @@ import { useAccess } from "@/components/app/app-context"
 import { assignableRoles, type AccessRole } from "@/lib/household/roles"
 import { deliverySummary, normalizeDest, type LastResult } from "@/lib/household/invites"
 import { cn } from "@/lib/utils"
-import { invitePerson, markInvitationShared, resendInvitation } from "./api"
+import { invitePerson, loadInviteChannels, markInvitationShared, resendInvitation } from "./api"
 import { parentescoOptions } from "./member-dialog"
 import { RoleMatrix, RolePicker } from "./roles-ui"
 import type { HouseholdPeople, InviteResult, Share } from "./types"
@@ -67,6 +68,7 @@ export function AddPersonDialog({ data, preset, onClose, onOnlyAdd, onDone }: {
   const [modo, setModo] = useState("invitar")
   const [nombre, setNombre] = useState(preset?.nombre ?? "")
   const [parentesco, setParentesco] = useState(preset?.parentesco ?? "")
+  const [canal, setCanal] = useState<"email" | "whatsapp">("email")
   const [destino, setDestino] = useState("")
   const [rol, setRol] = useState<AccessRole>("editor")
   const [familyId, setFamilyId] = useState<string>(preset?.familyId ?? "nueva")
@@ -75,10 +77,20 @@ export function AddPersonDialog({ data, preset, onClose, onOnlyAdd, onDone }: {
   const [done, setDone] = useState<InviteResult | null>(null)
   const [destErr, setDestErr] = useState<string | null>(null)
   const sinCuenta = data?.sinCuenta ?? []
+  // Por dónde puede enviar Mirai (correo activo y plantilla de WhatsApp aprobada).
+  const { data: canales } = useQuery({ queryKey: ["invite-channels"], queryFn: loadInviteChannels, staleTime: 5 * 60_000 })
+  const dest = destino.trim() ? normalizeDest(destino) : null
+  const canalDelDestino = dest && !("error" in dest) ? (dest.kind === "email" ? "email" : "whatsapp") : null
+  const cruzado = canalDelDestino && canalDelDestino !== canal
+  const envia = canal === "email"
+    ? canales?.email ? "Mirai le manda el correo con el enlace." : "Ahora mismo no podemos mandar correos. Te damos el enlace para que se lo pases tú."
+    : canales?.whatsapp ? "Mirai le manda el WhatsApp con el enlace." : "Te abrimos tu WhatsApp con el mensaje escrito: solo escoges el contacto y envías."
 
   const submit = async (extra: { familyId?: string; nueva?: boolean } = {}) => {
     const d = normalizeDest(destino)
     if ("error" in d) return setDestErr(d.error)
+    if (d.kind === "email" && canal === "whatsapp") return setDestErr("Escribe un celular para enviarla por WhatsApp (o cambia a Correo).")
+    if (d.kind === "tel" && canal === "email") return setDestErr("Escribe un correo para enviarla por correo (o cambia a WhatsApp).")
     setBusy(true); setIssue(null)
     const fid = extra.familyId ?? (familyId !== "nueva" ? familyId : null)
     const r = await invitePerson({ destino, nombre: nombre || null, parentesco: parentesco || null, access: rol as Exclude<AccessRole, "owner">, familyId: fid, nueva: extra.nueva })
@@ -125,8 +137,24 @@ export function AddPersonDialog({ data, preset, onClose, onOnlyAdd, onDone }: {
             </Notice>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="Correo o celular" htmlFor="inv-dest" required tip="Le enviamos la invitación ahí. Con celular, la envías desde tu WhatsApp (o Mirai la envía si está configurado)." error={destErr ?? undefined}>
-              <Input id="inv-dest" className="h-11" inputMode="email" autoComplete="off" placeholder="ana@gmail.com o 315 123 4567" value={destino} onChange={(e) => { setDestino(e.target.value); setDestErr(null); setIssue(null) }} autoFocus />
+            <FormField label="¿Cómo le mandamos la invitación?" htmlFor="inv-dest" required tip="Por correo le llega de una. Por WhatsApp, si podemos la mandamos nosotros; si no, te abrimos tu WhatsApp con el mensaje ya escrito y solo le das enviar." error={destErr ?? undefined}>
+              <div className="grid gap-2">
+                <div role="radiogroup" aria-label="Canal de la invitación" className="grid grid-cols-2 gap-2">
+                  {([["email", "Correo", <Mail key="m" className="size-4" />], ["whatsapp", "WhatsApp", <MessageCircle key="w" className="size-4" />]] as const).map(([v, l, icon]) => (
+                    <button key={v} type="button" role="radio" aria-checked={canal === v} onClick={() => { setCanal(v); setDestino(""); setDestErr(null); setIssue(null) }}
+                      className={cn("flex h-10 items-center justify-center gap-2 rounded-lg border text-[15px] font-semibold transition-colors",
+                        canal === v ? "border-primary bg-brand-soft text-foreground" : "hover:bg-hover")}>
+                      {icon} {l}
+                    </button>
+                  ))}
+                </div>
+                <Input id="inv-dest" className="h-11" inputMode={canal === "email" ? "email" : "tel"} autoComplete="off"
+                  placeholder={canal === "email" ? "ana@gmail.com" : "315 123 4567"}
+                  value={destino} onChange={(e) => { setDestino(e.target.value); setDestErr(null); setIssue(null) }} autoFocus />
+                <p className={cn("text-[13px]", cruzado ? "text-warning" : "text-muted-foreground")}>
+                  {cruzado ? (canal === "email" ? "Eso parece un celular: cambia a WhatsApp o escribe un correo." : "Eso parece un correo: cambia a Correo o escribe un celular.") : destino.trim() ? envia : ""}
+                </p>
+              </div>
             </FormField>
             <FormField label="Nombre" htmlFor="inv-nombre" tip="Así aparece en tu hogar mientras acepta." hint="Opcional">
               <Input id="inv-nombre" className="h-11" placeholder="Ej. Ana" maxLength={60} value={nombre} disabled={!!preset} onChange={(e) => { setNombre(e.target.value); setIssue(null) }} />

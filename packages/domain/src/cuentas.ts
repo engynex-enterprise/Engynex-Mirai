@@ -226,22 +226,60 @@ export function conSaldos<T extends LibroCuentas>(b: T, today: DateInput): T {
   }
 }
 
-export interface LineaAhorro { k: string; n: string; s: string; v: number; icon: string; href: string }
+export interface LineaAhorro {
+  k: string
+  n: string
+  s: string
+  v: number
+  icon: string
+  href: string
+  /**
+   * Parte de esta línea que puede estar contada dos veces: lo que guardaste sin decir de qué cuenta salió, teniendo
+   * cuentas que llevan su saldo solas (el saldo de la cuenta no bajó y además suma aquí).
+   */
+  dudoso?: number
+}
+
+/** Movimiento del fondo de emergencia (`fund_movements`) con lo que hace falta para saber de dónde salió la plata. */
+export type FondoMovIn = { tipo: string; valor: number | string; fecha: string; payment_method_id?: string | null; expense_id?: string | null }
+
+export interface AhorroApartado {
+  lineas: LineaAhorro[]
+  total: number
+  /** Suma de lo dudoso de todas las líneas: plata que puede estar contada dos veces en tu patrimonio. */
+  dudoso: number
+}
 
 /**
  * Ahorro apartado: lo que llevas en tus metas y en tu fondo de emergencia que NO está dentro de una de tus cuentas
  * (alcancía, un bolsillo o un CDT que no registraste). Si dijiste "esta plata está en la cuenta X", ya suma en esa
  * cuenta y no se cuenta otra vez.
+ *
+ * `dudoso`: si tienes cuentas que llevan su saldo solas y guardaste sin decir de qué cuenta salió (ni en qué cuenta
+ * está la meta), esa plata sigue dentro del saldo de la cuenta y además suma aquí: se cuenta dos veces. No se
+ * descuenta sola (Mirai no adivina de dónde salió): la app lo avisa para que digas en qué cuenta está.
+ * `fondoMovs`: movimientos del fondo (`fund_movements`), para la misma cuenta del fondo de emergencia.
  */
-export function ahorroApartado(b: LibroCuentas): { lineas: LineaAhorro[]; total: number } {
+export function ahorroApartado(b: LibroCuentas, fondoMovs?: FondoMovIn[]): AhorroApartado {
   const lineas: LineaAhorro[] = []
+  const hayVivas = (b.assets as CuentaRow[]).some((a) => a.id && a.saldo_base != null && a.saldo_base !== "")
+  /** Lo guardado sin medio de pago (no bajó ninguna cuenta), hasta el saldo de la línea. */
+  const sinOrigen = (movs: { tipo: string; valor: number | string; payment_method_id?: string | null }[], saldo: number) =>
+    !hayVivas ? 0 : Math.min(saldo, movs.filter((m) => m.tipo !== "retiro" && m.tipo !== "usar" && !m.payment_method_id).reduce((a, m) => a + num(m.valor), 0))
   for (const g of b.goals as RawGoal[]) {
     const v = num(g.ahorrado)
-    if (v > 0 && !g.asset_id) lineas.push({ k: `goal:${g.id}`, n: g.nombre, s: "Meta de ahorro", v, icon: "target", href: "/metas" })
+    if (!(v > 0) || g.asset_id) continue
+    const dudoso = sinOrigen((b.goalMovements ?? []).filter((m) => m.goal_id === g.id), v)
+    lineas.push({ k: `goal:${g.id}`, n: g.nombre, s: "Meta de ahorro", v, icon: "target", href: "/metas", ...(dudoso > 0 ? { dudoso } : {}) })
   }
   const f = b.fund
-  if (f?.activo && num(f.saldo) > 0 && !f.asset_id) lineas.push({ k: "fondo", n: "Fondo de emergencia", s: "Ahorro para imprevistos", v: num(f.saldo), icon: "umbrella", href: "/metas" })
-  return { lineas, total: lineas.reduce((a, l) => a + l.v, 0) }
+  if (f?.activo && num(f.saldo) > 0 && !f.asset_id) {
+    const v = num(f.saldo)
+    // Un aporte programado ya salió como el pago de su gasto fijo (tiene `expense_id`): ese no se cuenta dos veces.
+    const dudoso = sinOrigen((fondoMovs ?? []).filter((m) => !m.expense_id), v)
+    lineas.push({ k: "fondo", n: "Fondo de emergencia", s: "Ahorro para imprevistos", v, icon: "umbrella", href: "/metas", ...(dudoso > 0 ? { dudoso } : {}) })
+  }
+  return { lineas, total: lineas.reduce((a, l) => a + l.v, 0), dudoso: lineas.reduce((a, l) => a + (l.dudoso ?? 0), 0) }
 }
 
 const normTxt = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim()

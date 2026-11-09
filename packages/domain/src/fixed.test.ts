@@ -98,3 +98,25 @@ describe("periodoTexto", () => {
     expect(periodoTexto("U")).toBe("")
   })
 })
+
+describe("sugerirPagoFijo con abonos: enlazar el gasto que paga lo que falta", () => {
+  // La moto: $70.000 la quincena. Ya abonaste $40.000 y registras un gasto suelto de $30.000.
+  const moto = {
+    id: "f9", nombre: "Cuota moto", valor: 70000, frec: "mensual", dia: 10,
+    payments: [{ id: "p1", periodo: "2026-11", fecha: "2026-11-08", valor: 40000, cierra: false }],
+  }
+  const resto = { descripcion: "Pago moto", valor: 30000, fecha: "2026-11-10" }
+
+  it("propone el mismo periodo y el valor que falta", () => {
+    expect(sugerirPagoFijo(resto, [moto as never])).toMatchObject({ per: "2026-11", valor: 30000, abonado: 40000, completo: true, yaPagado: false })
+  })
+  it("un abono más pequeño también coincide y no cierra el periodo", () => {
+    expect(sugerirPagoFijo({ ...resto, valor: 10000 }, [moto as never])).toBeNull()
+    expect(sugerirPagoFijo({ ...resto, valor: 29000 }, [moto as never])).toMatchObject({ valor: 30000, completo: false })
+  })
+  it("si el periodo quedó cerrado ya no se propone (solo con incluirPagados, para avisar el doble conteo)", () => {
+    const cerrado = { ...moto, payments: [{ id: "p1", periodo: "2026-11", fecha: "2026-11-08", valor: 70000, cierra: true }] }
+    expect(sugerirPagoFijo({ ...resto, valor: 70000 }, [cerrado as never])?.per).not.toBe("2026-11")
+    expect(sugerirPagoFijo({ ...resto, valor: 70000 }, [cerrado as never], resto.fecha, { incluirPagados: true })).toMatchObject({ per: "2026-11", yaPagado: true })
+  })
+})

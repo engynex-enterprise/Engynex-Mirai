@@ -71,3 +71,39 @@ describe("flujo integral con cobros de suscripción enlazados", () => {
     expect(F.movs.find((x) => x.id === "exp:g2")).toBeUndefined()
   })
 })
+
+describe("un cobro de suscripción pagado en abonos", () => {
+  // El cobro del 5 de noviembre: la suscripción NO pasó al siguiente (`proximo` sigue ahí) porque fue un abono.
+  const enAbonos = { id: "s1", nombre: "Netflix", valor: 44900, ciclo: "mensual", proximo: "2026-11-05", comparte: 1, currency: "COP" } as never
+  const abono = (id: string, valor: number, fecha: string) =>
+    ({ id, fecha, descripcion: "Netflix (abono)", valor, category_id: "c-sub", subscription_id: "s1", sub_proximo: "2026-11-05" }) as never
+
+  it("salen los abonos como hechos y lo que falta aparte", () => {
+    const F = flujoIntegral(libro({ subscriptions: [enAbonos], expenses: [abono("g1", 20000, "2026-11-05")] }), NOV, HOY)
+    const sub = F.movs.filter((x) => x.modulo === "suscripciones")
+    expect(sub).toHaveLength(2)
+    expect(sub[0]).toMatchObject({ id: "sub:s1:2026-11", v: 20000, estado: "hecho", s: "Suscripción · abono" })
+    expect(sub[1]).toMatchObject({ id: "sub:s1:2026-11:falta", v: 24900, estado: "vencido" })
+    // Sale una sola vez el valor del cobro: lo abonado + lo que falta.
+    expect(F.tot.gasto).toBe(44900)
+  })
+
+  it("con varios abonos que completan el cobro no queda nada por pagar", () => {
+    const b = libro({ subscriptions: [enAbonos], expenses: [abono("g1", 20000, "2026-11-05"), abono("g2", 24900, "2026-11-09")] })
+    const F = flujoIntegral(b, NOV, HOY)
+    const sub = F.movs.filter((x) => x.modulo === "suscripciones")
+    expect(sub.map((x) => x.v)).toEqual([20000, 24900])
+    expect(sub.every((x) => x.estado === "hecho")).toBe(true)
+    expect(F.tot.gasto).toBe(44900)
+    // Y ninguno de los dos gastos sale además como gasto del día a día.
+    expect(F.movs.filter((x) => x.modulo === "gastos")).toHaveLength(0)
+  })
+
+  it("si la suscripción ya pasó al siguiente cobro, lo registrado es el cobro completo (aunque sea menos)", () => {
+    const paso = { ...(enAbonos as Record<string, unknown>), proximo: "2026-12-05" } as never
+    const F = flujoIntegral(libro({ subscriptions: [paso], expenses: [abono("g1", 20000, "2026-11-05")] }), NOV, HOY)
+    const sub = F.movs.filter((x) => x.modulo === "suscripciones")
+    expect(sub).toHaveLength(1)
+    expect(sub[0]).toMatchObject({ v: 20000, s: "Suscripción · ya se cobró" })
+  })
+})

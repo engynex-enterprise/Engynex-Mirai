@@ -62,6 +62,11 @@ export class HouseholdsController {
     return tsRestHandler(c.makeOwner, async ({ params, body }) => ok(await this.svc.makeOwner(params.householdId, body.userId)))
   }
 
+  @TsRestHandler(c.inviteChannels)
+  inviteChannels() {
+    return tsRestHandler(c.inviteChannels, async ({ params }) => ({ status: 200 as const, body: await this.svc.inviteChannels(params.householdId) }))
+  }
+
   @TsRestHandler(c.invite)
   @Idempotent()
   invite() {

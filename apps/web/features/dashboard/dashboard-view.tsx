@@ -18,7 +18,8 @@ import { DashboardSkeleton } from "@/components/skeletons/dashboard-skeleton"
 import { useList } from "@/hooks/use-book-data"
 import { addDays, addMonths, iso, lastDay, toDay } from "@/lib/domain"
 import { capacidad, compromisos, decisiones, deudas, metasAvance, serieMeses, type Decision } from "@/lib/domain/dashboard"
-import { MODULOS, estadoIntegral, flujoIntegral, type Mov, type Periodo } from "@/lib/domain/flujo-integral"
+import { metaEstado, parseMetaCfg } from "@mirai/domain/meta"
+import { MODULOS, estadoIntegral, flujoIntegral, salidasPorModulo, type Mov, type Periodo } from "@/lib/domain/flujo-integral"
 import { fmtDate, fmtMonth, monthName, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
@@ -149,7 +150,7 @@ export function DashboardView() {
     const proximos = R.movs.filter((x) => x.fecha >= today && x.fecha <= en30 && x.estado !== "hecho" && x.modulo !== "presupuesto")
     const impuestos = R.movs.filter((x) => x.modulo === "impuestos" && x.fecha >= today)
     const sinValor = R.sinValor.filter((x) => x.fecha >= today)
-    const dec = decisiones(book, today, { comp, cap, deu, vencidos, proximos: R.movs })
+    const dec = decisiones(book, today, { comp, cap, deu, vencidos, proximos: R.movs, meta: metaEstado(parseMetaCfg(book.settings.meta_cfg), String(book.settings.meta ?? ""), book, today) })
     const mes = today.slice(0, 7)
     const pat = [...snaps.filter((s) => s.mes !== mes).map((s) => ({ mes: s.mes, v: +s.patrimonio })), { mes, v: E.pat }].sort((a, b) => a.mes.localeCompare(b.mes)).slice(-12)
       .map((s) => ({ l: `${monthName(+s.mes.slice(5, 7), false)}${s.mes.slice(5, 7) === "01" ? " " + s.mes.slice(2, 4) : ""}`, v: s.v }))
@@ -165,8 +166,9 @@ export function DashboardView() {
   const t = F.tot
   const prevPat = d.pat.at(-2)?.v
   const vacio = !book!.incomes.length && !book!.expenses.length && !book!.fixedExpenses.length && !book!.loans.length && !book!.assets.length
-  const salidasMod = F.porModulo.filter((g) => g.sale > 0 && g.modulo !== "presupuesto")
-  const totSal = salidasMod.reduce((a, g) => a + g.sale, 0)
+  // El desglose cuadra con el KPI "Sale": solo consumo y deudas (el ahorro y lo que prestaste no están en "Sale").
+  const salidasMod = salidasPorModulo(F)
+  const totSal = salidasMod.reduce((a, g) => a + g.v, 0)
   const proximos = [...d.vencidos.filter((x) => x.fecha < today), ...d.proximos].slice(0, 10)
 
   return (
@@ -219,9 +221,11 @@ export function DashboardView() {
             </>
           ) : <p className="text-sm text-muted-foreground">Sin gastos en este periodo.</p>}
         </Panel>
-        <Panel title="Lo que sale, por módulo" icon="layers" info="Todo lo que sale en el periodo según de dónde viene: gastos del día a día, fijos, suscripciones, tarjetas, deudas, impuestos, mesadas y ahorro.">
-          {salidasMod.length ? <Apilada total={totSal} aria={`Salidas por módulo: ${salidasMod.map((g) => `${g.label} ${Math.round((g.sale / (totSal || 1)) * 100)} %`).join(", ")}`}
-            items={salidasMod.sort((a, b) => b.sale - a.sale).map((g, i) => ({ k: g.modulo, label: g.label, v: g.sale, cls: VIZ_BG[Math.min(i, VIZ_BG.length - 1)], href: g.href }))} />
+        <Panel title="Lo que sale, por módulo" icon="layers"
+          info="De dónde sale cada peso de «Sale»: gastos del día a día, fijos, suscripciones, tarjetas, deudas, impuestos, mesadas y lo que falta por gastar según tu presupuesto. Suma exactamente lo mismo que el KPI «Sale»: el ahorro y los préstamos que hiciste no están ahí (no son gastos)."
+          description={<>Suma <Money value={totSal} />, lo mismo que «Sale».{t.ahorro > 0 ? <> Aparte apartaste <Money value={t.ahorro} /> para tu ahorro.</> : null}</>}>
+          {salidasMod.length ? <Apilada total={totSal} aria={`Salidas por módulo: ${salidasMod.map((g) => `${g.label} ${Math.round(g.pct * 100)} %`).join(", ")}`}
+            items={salidasMod.map((g, i) => ({ k: g.modulo, label: g.label, v: g.v, cls: VIZ_BG[Math.min(i, VIZ_BG.length - 1)], href: g.href }))} />
             : <p className="text-sm text-muted-foreground">Nada sale en este periodo.</p>}
         </Panel>
       </div>

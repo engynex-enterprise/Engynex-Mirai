@@ -20,19 +20,20 @@ import { useCanEdit } from "@/components/app/app-context"
 import { useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { hallazgosBalance } from "@/lib/domain/balance"
-import { ESTADOS, GRUPOS, MODULOS, estadoIntegral, flujoIntegral, partesEstado, periodo, snapshotMes, type LineaEstado, type Modulo, type Mov } from "@/lib/domain/flujo-integral"
+import { ESTADOS, GRUPOS, MODULOS, cuentaTMes, estadoIntegral, flujoIntegral, pagosTarjetaRegistrados, partesEstado, periodo, periodosDelLibro, snapshotMes, type LineaEstado, type Modulo, type Mov } from "@/lib/domain/flujo-integral"
+import { posiblesDobles } from "@/lib/domain/dobles"
 import type { SaldoCuenta } from "@/lib/domain/cuentas"
-import { fmtDate, todayISO } from "@/lib/format"
+import { fmtDate, fmtMonth, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
 import { AssetForm, PUC, type AssetEdit } from "./asset-form"
-import { ComposicionCard, EstadosLeyenda, FlujoColumna, HallazgosBalance, MesCard, MonthNav, TColumn, type Line } from "./balance-parts"
+import { ComposicionCard, CuentaTMesCard, EstadosLeyenda, FlujoColumna, HallazgosBalance, MesCard, MonthNav, TColumn, type Line } from "./balance-parts"
 import { useIntegralExtras } from "./use-integral"
 import { PatrimonioCard } from "@/features/patrimonio/patrimonio-card"
 import { saveFile } from "@/lib/pwa/save-file"
 
-type Tab = "general" | "q1" | "q2" | "mes" | "anio"
+type Tab = "general" | "semana" | "q1" | "q2" | "mes" | "semestre" | "anio"
 type Filtro = "todo" | "pendiente" | "vencido" | "hecho"
 
 /** Descarga un CSV (separado por ; y con BOM para que Excel lea las tildes). */
@@ -42,7 +43,9 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
     .then((r) => { if (r === "descargado") toast.success("Balance exportado", { description: "Ábrelo con Excel o Google Sheets." }) })
 }
 
-const PERIODO: Record<Exclude<Tab, "general">, string> = { q1: "1ª quincena", q2: "2ª quincena", mes: "Mes completo", anio: "Año" }
+const PERIODO: Record<Exclude<Tab, "general">, string> = { semana: "Esta semana", q1: "1ª quincena", q2: "2ª quincena", mes: "Mes completo", semestre: "Semestre", anio: "Año" }
+/** Ícono de cada periodo en el selector. */
+const ICONO_PERIODO: Record<string, string> = { semana: "calendar-days", q1: "calendar", q2: "calendar", mes: "calendar-days", semestre: "calendar-range", anio: "calendar-range" }
 const ORDEN_GRUPO = Object.keys(GRUPOS)
 const FILTROS: Record<Filtro, (x: Mov) => boolean> = {
   todo: () => true, pendiente: (x) => x.estado === "programado" || x.estado === "estimado", vencido: (x) => x.estado === "vencido", hecho: (x) => x.estado === "hecho",
@@ -52,12 +55,14 @@ export function BalanceView() {
   const canEdit = useCanEdit()
   const today = todayISO()
   const [tabRaw, setTab] = useQueryState("tab", parseAsString.withDefault("general"))
-  const tab = (["general", "q1", "q2", "mes", "anio"].includes(tabRaw) ? tabRaw : "general") as Tab
+  const tab = (["general", "semana", "q1", "q2", "mes", "semestre", "anio"].includes(tabRaw) ? tabRaw : "general") as Tab
   const [modRaw, setMod] = useQueryState("modulo", parseAsString.withDefault("todos"))
   const [filtro, setFiltro] = useState<Filtro>("todo")
   const [nuevo, setNuevo] = useNewParam()
   const [edit, setEdit] = useState<AssetEdit | null>(null)
   const [ym, setYm] = useState(today.slice(0, 7))
+  // Día de referencia de la semana que se está viendo (la navegación por semanas se mueve de 7 en 7).
+  const [dia, setDia] = useState(today)
   const { data: book, isPending } = useBookData()
   const X = useIntegralExtras(book, today)
   const delA = useSoftDelete("assets", "Eliminado")
@@ -82,24 +87,46 @@ export function BalanceView() {
     const byGrupo = (a: LineaEstado, b: LineaEstado) => ORDEN_GRUPO.indexOf(a.grupo) - ORDEN_GRUPO.indexOf(b.grupo) || b.v - a.v
     const act = [...E.tengo].sort(byGrupo).map(toLine)
     const pas = [...E.debo].sort(byGrupo).map(toLine)
-    const [y, m] = ym.split("-").map(Number)
-    const P = periodo(book, tab === "general" ? "mes" : tab, y, m - 1)
+    const [py, pm, pd] = (tab === "semana" ? dia : `${ym}-01`).split("-").map(Number)
+    const P = periodo(book, tab === "general" ? "mes" : tab, py, pm - 1, pd)
     const F = flujoIntegral(book, P, today, X)
     const [ty, tm] = today.split("-").map(Number)
     const mesHoy = P.tipo === "mes" && ym === today.slice(0, 7) ? F : flujoIntegral(book, periodo(book, "mes", ty, tm - 1), today, X)
     const H = hallazgosBalance(book, today, mesHoy, C)
     const vivas = book.assets.filter((a) => (a as { cuenta?: SaldoCuenta }).cuenta?.vivo).length
     const manuales = book.assets.filter((a) => /^11/.test(String(a.cod)) && !(a as { cuenta?: SaldoCuenta }).cuenta?.vivo).length
-    return { E, C, act, pas, F, H, snap: snapshotMes(book, today, X), vivas, manuales }
-  }, [book, today, tab, ym, X])
+    // Avisos del periodo: pagos de tarjeta registrados a mano y plata que puede estar contada dos veces.
+    const tarjetas = pagosTarjetaRegistrados(book, P, today)
+    const dobles = posiblesDobles(book, P.a, P.b, today)
+    // "tu meta Viaje", "tu fondo de emergencia" o "2 de tus metas": para el aviso de la plata contada dos veces.
+    const d = E.dudosas
+    const dudosasTxt = d.length === 1 ? (d[0].k === "fondo" ? "tu fondo de emergencia" : `tu meta “${d[0].n}”`) : `${d.length} de tus metas`
+    // La cuenta T del Balance es la del periodo que se está viendo (en "general", la del mes).
+    const TMes = cuentaTMes(F)
+    // El mismo periodo del mes pasado, para comparar en "Tu mes".
+    const antes = new Date(py, pm - 2, 1)
+    const prev = tab === "general" || tab === "mes" ? flujoIntegral(book, periodo(book, "mes", antes.getFullYear(), antes.getMonth()), today, X) : null
+    return { E, C, act, pas, F, TMes, prev, H, snap: snapshotMes(book, today, X), vivas, manuales, tarjetas, dobles, dudosasTxt }
+  }, [book, today, tab, ym, dia, X])
 
   if (isPending || !data) return <PageSkeleton kpis={3} />
   const { E, C, F } = data
   const t = F.tot
-  const step = tab === "anio" ? 12 : 1
-  const move = (d: number) => { const [y, m] = ym.split("-").map(Number); const x = new Date(y, m - 1 + d * step, 1); setYm(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`) }
+  const step = tab === "anio" ? 12 : tab === "semestre" ? 6 : 1
+  const move = (d: number) => {
+    if (tab === "semana") {
+      const x = new Date(`${dia}T12:00:00`)
+      x.setDate(x.getDate() + d * 7)
+      setDia(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`)
+      return
+    }
+    const [y, m] = ym.split("-").map(Number)
+    const x = new Date(y, m - 1 + d * step, 1)
+    setYm(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`)
+  }
   const del = (l: Line) => (l.table === "assets" ? delA : delP).mutate(l.row as never)
   const onEdit = (l: Line) => l.row && l.table && setEdit({ table: l.table, row: { ...(l.row as AssetEdit["row"]), valor: Number(l.row.valor) } })
+  const periodos = periodosDelLibro(book!)
   const mod = (modRaw in MODULOS ? modRaw : "todos") as Modulo | "todos"
   const vis = F.movs.filter((x) => (mod === "todos" || x.modulo === mod) && FILTROS[filtro](x))
 
@@ -130,9 +157,11 @@ export function BalanceView() {
       <PageHeader id="balance" description="Todo lo que entra y sale de cada módulo (ingresos, gastos, fijos, tarjetas, deudas, impuestos, ahorro…), lo que tienes y lo que debes."
         actions={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar cuenta o bien</Button>} />
       <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Los periodos salen de cómo te pagan: sin ingresos quincenales no aparecen las quincenas, y con pagos
+            semanales o anuales aparecen la semana y el semestre. */}
         <Segmented value={tab} onChange={setTab} items={[
-          { value: "general", label: "Lo que tengo y lo que debo", icon: "scale" }, { value: "q1", label: "1ª quincena", icon: "calendar" },
-          { value: "q2", label: "2ª quincena", icon: "calendar" }, { value: "mes", label: "Mes completo", icon: "calendar-days" }, { value: "anio", label: "Año", icon: "calendar-range" },
+          { value: "general", label: "Lo que tengo y lo que debo", icon: "scale" },
+          ...periodos.map((x) => ({ value: x.tipo, label: x.label, icon: ICONO_PERIODO[x.tipo] ?? "calendar" })),
         ]} />
         <Button variant="outline" size="sm" onClick={exportar}><Download /> Exportar</Button>
       </div>
@@ -154,8 +183,17 @@ export function BalanceView() {
             {E.impuestos > 0 && <> Lo que debes incluye <Money value={E.impuestos} /> de impuestos que vienen (estimados).</>}
           </p>
 
+          {E.apartadoDudoso > 0 && (
+            <Notice tone="warn" title="Puede que estés contando dos veces una parte de tu ahorro"
+              action={<Button asChild size="sm" variant="outline"><Link href="/metas">Decir en qué cuenta está</Link></Button>}>
+              <span data-money>
+                Guardaste <Money value={E.apartadoDudoso} /> en {data.dudosasTxt} sin decir de qué cuenta salió, así que esa plata sigue sumando
+                en el saldo de tus cuentas y además como ahorro apartado. Dinos en qué cuenta está (o de dónde salió) y tu patrimonio queda exacto.
+              </span>
+            </Notice>
+          )}
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-            <MesCard q={F} ym={ym} onMove={move} onDetalle={() => setTab("mes")} canEdit={canEdit} />
+            <MesCard q={F} prev={data.prev} ym={ym} onMove={move} onDetalle={() => setTab("mes")} canEdit={canEdit} />
             <HallazgosBalance list={data.H} onAgregar={() => setNuevo(true)} />
           </div>
 
@@ -164,9 +202,13 @@ export function BalanceView() {
             <PatrimonioCard activos={data.snap.activos} deudas={data.snap.deudas} />
           </div>
 
+          {/* Primero la cuenta del mes (lo que entra contra lo que hay que pagar), que es lo que se decide día a día. */}
+          <CuentaTMesCard T={data.TMes} titulo={`${fmtMonth(ym)}`} onModulo={(m) => { setMod(m); setTab("mes") }} />
+
           <Card className="shadow-card ring-0">
             <CardContent className="grid gap-6">
-              <SectionTitle icon="scale" info="La cuenta T pone a un lado lo que tienes (activos) y al otro lo que debes (pasivos), con cada cuenta, inversión, préstamo, tarjeta e impuesto. Toca una cuenta tuya para actualizar su valor; lo demás se calcula solo desde su sección.">Cuenta T: el detalle</SectionTitle>
+              <SectionTitle icon="landmark" info="Esto NO es del mes: es la foto de hoy. A un lado todo lo que tienes (cuentas, ahorros, bienes, inversiones y lo que te deben) y al otro todo lo que debes (créditos, tarjetas e impuestos). Toca una cuenta tuya para actualizar su valor; lo demás se calcula solo desde su sección.">Tu patrimonio hoy</SectionTitle>
+              <p className="-mt-3 text-sm text-muted-foreground">Lo que tienes y lo que debes en total, sin importar el mes. Lo del periodo está en la tarjeta de arriba.</p>
               <div className="grid gap-8 md:grid-cols-2">
                 <TColumn title="Lo que tengo" sub="Activos · Debe" lines={data.act} total={E.A} empty="Agrega tus cuentas, efectivo y bienes." onDelete={del} onEdit={onEdit} canEdit={canEdit} />
                 <TColumn title="Lo que debo" sub="Pasivos · Haber" lines={data.pas} total={E.P} empty="Sin deudas registradas." onDelete={del} onEdit={onEdit} canEdit={canEdit} />
@@ -200,6 +242,33 @@ export function BalanceView() {
               info="Entra − sale − ahorras. Si es positivo, puedes llevarlo a una meta antes de que se gaste." />
           </KpiGrid>
           {F.momento === "pasado" && <Notice tone="info" title="Este periodo ya terminó">Cuenta lo que registraste y lo que ya pasó; ya no se estima lo que faltaba por gastar.</Notice>}
+          {data.tarjetas.length > 0 && (
+            <Notice tone="info" title={data.tarjetas.length === 1 ? `Registraste el pago de la tarjeta ${data.tarjetas[0].nombre}` : `Registraste ${data.tarjetas.length} pagos de tarjeta`}
+              action={<Button asChild size="sm" variant="outline"><Link href="/tarjetas">Ver mis tarjetas</Link></Button>}>
+              <span data-money>
+                En «Sale» va lo que de verdad pagaste, no la cuota estimada del mes.{" "}
+                {data.tarjetas.map((x) => (
+                  <span key={`${x.id}-${x.mes}`}>
+                    {x.nombre}: pagaste <b><Money value={x.pagado} /></b>
+                    {x.cuota > 0 && Math.abs(x.dif) > 1
+                      ? x.dif > 0
+                        ? <> y la cuota del mes era <Money value={x.cuota} />, así que <Money value={x.dif} /> fueron a bajar la deuda más rápido. </>
+                        : <> y la cuota del mes era <Money value={x.cuota} />: te faltaron <Money value={-x.dif} />, así que la deuda baja más despacio y te cobran intereses. </>
+                      : ". "}
+                  </span>
+                ))}
+              </span>
+            </Notice>
+          )}
+          {data.dobles.length > 0 && (
+            <Notice tone="warn" title={data.dobles.length === 1 ? "Un gasto puede estar contado dos veces" : `${data.dobles.length} gastos pueden estar contados dos veces`}
+              action={<Button asChild size="sm" variant="outline"><Link href="/gastos">Revisar en Gastos</Link></Button>}>
+              <span data-money>
+                {data.dobles.map((x) => `“${x.descripcion}” se parece al pago de tu gasto fijo “${x.fixed.nombre}”`).join("; ")}.{" "}
+                Si es el mismo pago, enlázalo desde Gastos: así sale una sola vez y «Sale» baja <Money value={data.dobles.reduce((a, x) => a + x.v, 0)} />.
+              </span>
+            </Notice>
+          )}
           {(t.vencidoSale > 0 || t.vencidoEntra > 0 || t.pendienteSale > 0 || t.pendienteEntra > 0) && (
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-money>
               {[
@@ -229,8 +298,8 @@ export function BalanceView() {
           </div>
           <Card className="shadow-card ring-0">
             <CardContent className="grid gap-8 md:grid-cols-2">
-              <FlujoColumna title="Entradas" sub="Debe · lo que te llega" movs={vis.filter((x) => x.dir === "entra")} abiertos={tab !== "anio"} empty="Sin entradas con este filtro. Registra tus ingresos en Mi dinero › Ingresos." />
-              <FlujoColumna title="Salidas" sub="Haber · lo que pagas y ahorras" movs={vis.filter((x) => x.dir === "sale")} abiertos={tab !== "anio"} empty="Sin salidas con este filtro." />
+              <FlujoColumna title="Entradas" sub="Debe · lo que te llega" dir="entra" movs={vis.filter((x) => x.dir === "entra")} abiertos={tab !== "anio"} empty="Sin entradas con este filtro. Registra tus ingresos en Mi dinero › Ingresos." />
+              <FlujoColumna title="Salidas" sub="Haber · lo que pagas y ahorras" dir="sale" movs={vis.filter((x) => x.dir === "sale")} abiertos={tab !== "anio"} empty="Sin salidas con este filtro." />
             </CardContent>
           </Card>
           {F.sinValor.length > 0 && (

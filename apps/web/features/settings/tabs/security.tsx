@@ -67,8 +67,8 @@ export function SeguridadTab() {
   return (
     <SettingStack>
       <SettingSection icon="key-round" title="Contraseña y formas de entrar" desc="Crea o cambia tu contraseña, conecta o quita tu cuenta de Google y cambia tu correo.">
-        <SettingRow title="Cuentas conectadas" desc="Están en tu perfil, en la tarjeta Cuentas conectadas.">
-          <Button variant="outline" asChild><Link href="/perfil#cuentas"><KeyRound /> Ir a Cuentas conectadas</Link></Button>
+        <SettingRow title="Cómo entras a Mirai" desc="Están en tu perfil, en la tarjeta Cómo entras a Mirai.">
+          <Button variant="outline" asChild><Link href="/perfil#cuentas"><KeyRound /> Ver cómo entras</Link></Button>
         </SettingRow>
       </SettingSection>
       <SettingSection icon="shield-check" title="Verificación en dos pasos" desc="Además de tu contraseña te pedimos un código de tu celular. Así nadie entra aunque sepa tu contraseña.">

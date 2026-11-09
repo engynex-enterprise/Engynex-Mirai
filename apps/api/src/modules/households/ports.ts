@@ -19,7 +19,11 @@ export type TransferMail = { householdId: string; userId: string; de: string; pa
  * inyección). Mientras tanto `NoChannelMessenger` responde como la web cuando no hay ningún correo configurado:
  * la invitación queda creada y la persona la comparte con el enlace o desde su WhatsApp.
  */
+export type InviteChannels = { email: boolean; whatsapp: boolean; motivoWhatsApp?: string }
+
 export abstract class HouseholdMessenger {
+  /** Por dónde puede enviar Mirai (la web muestra el resto de opciones para compartir). */
+  abstract channels(householdId: string): Promise<InviteChannels>
   abstract inviteEmail(m: InviteMsg, to: string): Promise<ChannelResult>
   abstract inviteWhatsApp(m: InviteMsg, phone: string): Promise<ChannelResult>
   abstract transferEmail(m: TransferMail, to: string | null | undefined): Promise<"enviado" | "prueba" | "sin_correo" | "fallo">
@@ -27,6 +31,9 @@ export abstract class HouseholdMessenger {
 
 @Injectable()
 export class NoChannelMessenger extends HouseholdMessenger {
+  async channels(): Promise<InviteChannels> {
+    return { email: false, whatsapp: false, motivoWhatsApp: "Mirai aún no envía invitaciones por WhatsApp." }
+  }
   async inviteEmail(_m: InviteMsg, to: string): Promise<ChannelResult> {
     const at = new Date().toISOString()
     if (isTestEmail(to)) return { ok: true, at, via: "prueba", provider: "prueba" }

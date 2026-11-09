@@ -6,6 +6,7 @@ import type { BookData } from "./types"
 import { addDays, addMonths, iso, lastDay, toDay } from "./dates"
 import { hallazgosBalance, type HallazgoBalance } from "./balance"
 import { capacidad, compromisos, decisiones, deudas, metasAvance, serieMeses } from "./dashboard"
+import { metaEstado, parseMetaCfg } from "./meta"
 import { estadoIntegral, flujoIntegral, partesEstado, periodo, snapshotMes, type ExtrasIntegral, type Periodo } from "./flujo-integral"
 import type { SaldoCuenta } from "./cuentas"
 
@@ -45,7 +46,7 @@ export function vistaDashboard(book: BookData, today: string, X: ExtrasIntegral,
   const proximos = R.movs.filter((x) => x.fecha >= today && x.fecha <= en30 && x.estado !== "hecho" && x.modulo !== "presupuesto")
   const impuestos = R.movs.filter((x) => x.modulo === "impuestos" && x.fecha >= today)
   const sinValor = R.sinValor.filter((x) => x.fecha >= today)
-  const dec = decisiones(book, today, { comp, cap, deu, vencidos, proximos: R.movs })
+  const dec = decisiones(book, today, { comp, cap, deu, vencidos, proximos: R.movs, meta: metaEstado(parseMetaCfg((book.settings as { meta_cfg?: unknown }).meta_cfg), String((book.settings as { meta?: string }).meta ?? ""), book, today) })
   const mes = today.slice(0, 7)
   const pat = [...snaps.filter((s) => s.mes !== mes).map((s) => ({ mes: s.mes, v: +s.patrimonio })), { mes, v: E.pat }].sort((a, b) => a.mes.localeCompare(b.mes)).slice(-12)
   const cats = F.porCategoria.slice(0, 8).map((c) => ({ cat: c.cat, v: Math.round(c.v) }))

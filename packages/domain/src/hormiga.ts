@@ -93,12 +93,17 @@ export function localCat(desc: string, ctx: LocalCatContext): { category_id: str
 
 type HormigaExpense = Pick<ExpenseIn, "descripcion" | "valor" | "category_id" | "fixed_expense_id">
 
+/** Veces que se repite el mismo gasto en 30 días para que cuente como hormiga aunque pase el umbral. */
+export const REPITE_HORMIGA = 3
+
 /**
- * Regla local de gasto hormiga (`umbral` = valor máximo de un gasto hormiga):
+ * Regla local de gasto hormiga (`umbral` = valor máximo de un gasto hormiga; `repite` = veces que ese mismo gasto
+ * aparece en los últimos 30 días, ver `repeticiones`):
  * fijo → no · valor > 2×umbral → no · ahorro o necesidad básica → no · palabra hormiga → sí ·
- * valor ≤ umbral en categoría de gusto → sí · valor ≤ umbral sin categoría → sí.
+ * se repite 3+ veces al mes y no es una necesidad → sí · valor ≤ umbral en categoría de gusto → sí ·
+ * valor ≤ umbral sin categoría → sí.
  */
-export function localHormiga(g: HormigaExpense, categories: CategoryIn[], umbral: number): boolean {
+export function localHormiga(g: HormigaExpense, categories: CategoryIn[], umbral: number, repite = 0): boolean {
   if (g.fixed_expense_id) return false
   const v = +g.valor || 0
   const c = g.category_id ? categories.find((x) => x.id === g.category_id) : undefined
@@ -106,18 +111,21 @@ export function localHormiga(g: HormigaExpense, categories: CategoryIn[], umbral
   if (v > umbral * 2) return false
   if (c && (c.grupo === "a" || NO_HORMIGA.includes(c.nombre))) return false
   if (HKW.test(d)) return true
+  // Lo que se repite: el mismo gasto pequeño varias veces al mes suma como hormiga aunque solo no lo parezca
+  // (tres almuerzos de $35.000 con umbral $25.000 son $105.000 al mes). Las necesidades no entran.
+  if (repite >= REPITE_HORMIGA && (!c || c.grupo === "g")) return true
   if (v <= umbral && c && c.grupo === "g") return true
   return v <= umbral && !c
 }
 
 /**
  * ¿Es gasto hormiga? Un fijo nunca. Si ya hay una decisión guardada (`hormiga_src` manual, ia o regla)
- * manda `hormiga`; si no, la regla local.
+ * manda `hormiga`; si no, la regla local. `repite`: ver `localHormiga`.
  */
-export function isHormiga(g: HormigaExpense & Pick<ExpenseIn, "hormiga" | "hormiga_src">, categories: CategoryIn[], umbral: number): boolean {
+export function isHormiga(g: HormigaExpense & Pick<ExpenseIn, "hormiga" | "hormiga_src">, categories: CategoryIn[], umbral: number, repite = 0): boolean {
   if (!g || g.fixed_expense_id) return false
   if (g.hormiga_src && typeof g.hormiga === "boolean") return g.hormiga
-  return localHormiga(g, categories, umbral)
+  return localHormiga(g, categories, umbral, repite)
 }
 
 /** Cuántas veces aparece la misma descripción en los últimos 30 días. */
@@ -126,3 +134,22 @@ export function vecesMes(desc: string, expenses: Pick<ExpenseIn, "fecha" | "desc
   const lim = iso(addDays(toDay(today), -30))
   return expenses.filter((g) => g.fecha >= lim && norm(g.descripcion) === d).length
 }
+
+/**
+ * Cuántas veces se repite cada gasto (por descripción, sin tildes ni mayúsculas) en los 30 días anteriores a `today`.
+ * Se calcula una sola vez y se le pasa a `isHormiga`/`localHormiga` para la regla de los gastos que se repiten.
+ */
+export function repeticiones(expenses: Pick<ExpenseIn, "fecha" | "descripcion">[], today: DateInput): Map<string, number> {
+  const lim = iso(addDays(toDay(today), -30))
+  const hoy = iso(toDay(today))
+  const m = new Map<string, number>()
+  for (const g of expenses) {
+    if (g.fecha < lim || g.fecha > hoy) continue
+    const k = norm(g.descripcion)
+    if (k) m.set(k, (m.get(k) ?? 0) + 1)
+  }
+  return m
+}
+
+/** Las veces que se repite un gasto según el mapa de `repeticiones` (0 si no está). */
+export const vecesDe = (m: Map<string, number> | undefined, desc: string): number => m?.get(norm(desc)) ?? 0

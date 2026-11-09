@@ -3,7 +3,7 @@
 import { addMonths, iso, lastDay, MES, mkey, parseDate, toDay } from "./dates"
 import { tarjetasDeuda } from "./cards"
 import { fijoMensual } from "./fixed"
-import { isHormiga } from "./hormiga"
+import { isHormiga, repeticiones, vecesDe } from "./hormiga"
 import { inv } from "./investments"
 import { cuotaMensual, FMES, loanEngine } from "./loans"
 import { conv } from "./money"
@@ -229,7 +229,9 @@ export function hormigas<T extends ExpenseIn>(b: { expenses: T[]; categories: Ca
   // `mesVer` (AAAA-MM): el resumen de otro mes (Gastos deja elegir el mes); por defecto, el actual.
   const t = mesVer && mesVer !== mkey(hoy) ? new Date(+mesVer.slice(0, 4), +mesVer.slice(5, 7) - 1, 1) : hoy
   const k = mkey(t)
-  const small = b.expenses.filter((g) => isHormiga(g, b.categories, b.settings.umbral))
+  // Las veces que se repite cada gasto (regla de los que se repiten): se calcula una vez para toda la lista.
+  const rep = repeticiones(b.expenses, t)
+  const small = b.expenses.filter((g) => isHormiga(g, b.categories, b.settings.umbral, vecesDe(rep, g.descripcion)))
   const mes = small.filter((g) => g.fecha.startsWith(k))
   const porCat: Record<string, { n: number; v: number }> = {}
   mes.forEach((g) => {

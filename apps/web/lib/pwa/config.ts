@@ -70,3 +70,11 @@ export const PROTOCOL_ACTION = "/abrir"
 
 /** Página sin conexión (public/offline.html, la guarda el service worker al instalarse). */
 export const OFFLINE_URL = "/offline.html"
+
+/** "No ver más este mensaje" en el aviso de instalar: queda en este navegador y no se borra al cerrar sesión. */
+export const INSTALL_DISMISS_KEY = "mirai-instalar-descartado"
+/**
+ * Marca de que el modal de instalar ya salió en esta sesión (sessionStorage, guarda el id de la persona). Se borra al
+ * cerrar sesión para que vuelva a salir cuando alguien entre de nuevo.
+ */
+export const INSTALL_SESSION_KEY = "mirai-instalar-sesion"

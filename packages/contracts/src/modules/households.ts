@@ -106,6 +106,10 @@ export type InvitePerson = z.infer<typeof InvitePerson>
  * Invitación creada o reenviada. Los casos que en la web devolvían `code` llegan como error con `details.reason`:
  * "miembro" | "pendiente" (+ invitationId) | "mismo_nombre" (+ familyId) → 409; "limite" → 402; "espera" → 429.
  */
+/** Por dónde puede enviar Mirai la invitación (lo demás lo comparte la persona). */
+export const InviteChannels = z.object({ email: z.boolean(), whatsapp: z.boolean(), motivoWhatsApp: z.string().optional() })
+export type InviteChannels = z.infer<typeof InviteChannels>
+
 export const Invited = z.object({ invitationId: z.string(), share: Share, delivery: LastResult, msg: z.string() })
 
 export const ChangeRole = z.object({ access: AssignableRole })
@@ -182,6 +186,7 @@ export const householdsContract = c.router(
     linkPerson: { method: "POST", path: `${H}/people/:userId/link`, pathParams: PersonParams, body: LinkPerson, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(Msg) }, summary: "Une a una persona con cuenta con el integrante sin cuenta que la representaba" },
     makeOwner: { method: "POST", path: `${H}/owner`, pathParams: HouseholdParams, body: MakeOwner, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(Msg) }, summary: "Pasa el hogar directamente (transfer_household)" },
 
+    inviteChannels: { method: "GET", path: `${H}/invitations/channels`, pathParams: HouseholdParams, responses: { ...HOUSEHOLD_ERRORS, 200: InviteChannels }, summary: "Por dónde puede enviar Mirai la invitación (correo y WhatsApp)" },
     invite: { method: "POST", path: `${H}/invitations`, pathParams: HouseholdParams, body: InvitePerson, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(Invited) }, summary: "Invita por correo o celular, sin duplicados y con el límite del plan (acepta Idempotency-Key)" },
     resendInvitation: { method: "POST", path: `${H}/invitations/:invitationId/resend`, pathParams: InvitationParams, body: c.noBody(), responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(Invited) }, summary: "Reenvía (1 cada 10 minutos y 5 al día); si venció la renueva 7 días" },
     shareInvitation: { method: "GET", path: `${H}/invitations/:invitationId/share`, pathParams: InvitationParams, responses: { ...HOUSEHOLD_ERRORS, 200: ApiOk(z.object({ share: Share })) }, summary: "Enlace, texto y wa.me de una invitación pendiente" },

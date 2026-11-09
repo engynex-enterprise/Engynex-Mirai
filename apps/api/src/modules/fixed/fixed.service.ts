@@ -58,12 +58,17 @@ export class FixedService {
     return { id: String(p.id) }
   }
 
-  /** POST …/subscriptions/:id/charge (pay_subscription, "Ya se cobró"). */
+  /**
+   * POST …/subscriptions/:id/charge (pay_subscription, "Ya se cobró"). Con `parcial` es un abono: la base registra el
+   * gasto, deja el cobro pendiente con lo que falta y no pasa al siguiente (si el abono completa el cobro, sí pasa).
+   */
   async charge(subId: string, b: z.output<typeof ChargeSub>) {
     this.w.requireRole("editor", "planear")
     await this.w.rowOf("subscriptions", subId, { alive: true, msg: SUB_NOT_FOUND })
     await this.w.assertRefs("expenses", { payment_method_id: b.payment_method_id })
-    const r = (await this.store.rpc(this.w.scope, "pay_subscription", { p_sub: subId, p_fecha: b.fecha, p_valor: b.valor, p_medio: b.payment_method_id ?? undefined })) as Rec | null
+    const r = (await this.store.rpc(this.w.scope, "pay_subscription", {
+      p_sub: subId, p_fecha: b.fecha, p_valor: b.valor, p_medio: b.payment_method_id ?? undefined, p_parcial: b.parcial ?? false,
+    })) as Rec | null
     this.w.changed("subscriptions", subId, "UPDATE", ["expenses"])
     return r ?? {}
   }

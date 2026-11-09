@@ -113,7 +113,9 @@ export function HomeView() {
     const T = { ...E.T, pat: E.pat }
     const F = flujoIntegral(book, periodo(book, which, y, m - 1), today, X)
     const item = (x: (typeof F.movs)[number]) => ({ icon: x.icon, n: x.n, v: x.v, paid: x.estado === "hecho" && !x.supuesto })
-    const q = { E: F.tot.entra, Sa: F.tot.sale + F.tot.ahorro, disp: F.tot.queda, ent: F.ent.map(item), sal: F.sal.map(item) }
+    // "Sale" es lo que se gasta y se paga; lo que apartas para ahorro va aparte (sigue siendo tuyo) aunque también
+    // salga de la cuenta. Las dos cifras juntas explican "te queda" (entra − sale − ahorras).
+    const q = { E: F.tot.entra, Sa: F.tot.sale, aho: F.tot.ahorro, disp: F.tot.queda, ent: F.ent.map(item), sal: F.sal.map(item) }
     const H = hormigas(book, today)
     const ag = agenda(book, today).filter((x) => x.d <= 15).slice(0, 6)
     const N = notifs(book, today).slice(0, 4)
@@ -207,7 +209,7 @@ export function HomeView() {
 
           {/* Historias */}
           <div className="no-scrollbar -mx-3 flex snap-x gap-2.5 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
-            <Story href={`/balance?tab=${d.which}`} bg={d.q.disp >= 0 ? "bg-[linear-gradient(160deg,#9EDB4E,#2A7F14_60%,#13778F)]" : "bg-[linear-gradient(160deg,#FF8A9B,#D0243F)]"} iso="balance" label="Te queda esta quincena" value={<Money value={d.q.disp} />} sub={`Entra ${fmtShort(d.q.E)} · sale ${fmtShort(d.q.Sa)}`} />
+            <Story href={`/balance?tab=${d.which}`} bg={d.q.disp >= 0 ? "bg-[linear-gradient(160deg,#9EDB4E,#2A7F14_60%,#13778F)]" : "bg-[linear-gradient(160deg,#FF8A9B,#D0243F)]"} iso="balance" label="Te queda esta quincena" value={<Money value={d.q.disp} />} sub={`Entra ${fmtShort(d.q.E)} · sale ${fmtShort(d.q.Sa)}${d.q.aho > 0 ? ` · ahorras ${fmtShort(d.q.aho)}` : ""}`} />
             <Story href="/balance" bg="bg-[linear-gradient(160deg,#5AA9FF,#1B5FA8_60%,#1F2B4B)]" iso="inicio" label="Lo que tienes menos lo que debes" value={<Money value={d.T.pat} />} sub="Patrimonio neto" />
             <StoryAd />
             {d.next && <Story href={`/${d.next.go}`} bg="bg-[linear-gradient(160deg,#FFD36B,#E08A00_60%,#B4500A)]" iso="recordatorios" label={`Próximo pago · ${d.next.lbl.toLowerCase()}`} value={<Money value={d.next.monto} />} sub={d.next.titulo} />}
@@ -226,7 +228,7 @@ export function HomeView() {
               {d.which === "q1" ? "Primera" : "Segunda"} quincena de {d.mesName}
             </SectionTitle>
             <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
-              {([["Entra", d.q.ent, "text-success"], ["Sale", d.q.sal, "text-danger"]] as const).map(([t, list, c]) => (
+              {([["Entra", d.q.ent, "text-success"], [d.q.aho > 0 ? "Sale y ahorras" : "Sale", d.q.sal, "text-danger"]] as const).map(([t, list, c]) => (
                 <div key={t} className="grid content-start gap-0.5">
                   <p className="pb-1 text-[13px] font-bold tracking-wide text-muted-foreground uppercase">{t}</p>
                   {!list.length ? <p className="py-2 text-sm text-muted-foreground">{t === "Entra" ? "Sin entradas." : "Sin salidas."}</p> : list.slice(0, 5).map((x, i) => (

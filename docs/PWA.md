@@ -14,7 +14,7 @@ regenerar las imágenes.
 | Página offline | `public/offline.html` | Autocontenida (sin archivos externos), clara/oscura, se recarga sola al volver la señal. |
 | Raíz | `features/pwa/pwa-root.tsx` (en `app/layout.tsx`) | Registra el SW, aviso "Hay una versión nueva · Actualizar", navega al tocar una notificación o un acceso directo con la app abierta (`launchQueue`), archivos abiertos con Mirai, color de la barra según el tema escogido, quita `?source=pwa`. |
 | Bordes | `features/pwa/title-bar.tsx` | Franja de la barra de estado en iPhone y barra de título propia en escritorio (Window Controls Overlay). |
-| Shell | `features/pwa/pwa-shell.tsx` (en `components/app/app-shell.tsx`) | Número en el ícono (avisos sin leer), barra de carga superior, deslizar para actualizar, aviso e instrucciones de instalación. |
+| Shell | `features/pwa/pwa-shell.tsx` (en `components/app/app-shell.tsx`) | Número en el ícono (avisos sin leer), barra de carga superior, deslizar para actualizar, modal e instrucciones de instalación. |
 | Ajustes | `features/pwa/app-tab.tsx` (Ajustes › Mirai como app, `?tab=app`) | Instalar, accesos directos, buscar actualizaciones, liberar espacio. |
 | Plataforma | `lib/pwa/platform.ts` | Detecta iPhone/Android/escritorio y marca `<html class="standalone ios">` antes de pintar. |
 | Estilos | `app/globals.css` › "PWA" | Zonas seguras (`env(safe-area-inset-*)`), sin rebote, sin resaltado al tocar, `user-select` en la interfaz, barra de título, transición entre secciones. |
@@ -58,6 +58,18 @@ y aguantan que Android los recorte en círculo. Cada vista abre el formulario co
 | Deslizar para actualizar | Sí (propio de Mirai) | Sí (propio de Mirai) | No aplica | No aplica |
 | Guardar PDF/Excel/CSV | Abre la hoja Compartir (Guardar en Archivos, WhatsApp…) en vez de descargar (una descarga en iOS instalado deja a la persona sin botón para volver) | Hoja Compartir en la app instalada; descarga en el navegador | Descarga normal | Descarga normal |
 | Transición entre secciones | Safari 18+ | Chrome 111+ | Chrome/Edge 111+ | Safari 18+ |
+
+## Cuándo le ofrecemos instalar
+
+`features/pwa/install.tsx › InstallPrompt` abre un modal con tres salidas: **Instalar ahora** (el diálogo del sistema si
+hay `beforeinstallprompt`; si no, las instrucciones ilustradas), **Instalar después** y **No ver más este mensaje**.
+
+- Sale **cada vez que la persona entra** (una vez por sesión del navegador): la marca va en `sessionStorage`
+  (`INSTALL_SESSION_KEY`, con el id de la persona) y se borra al cerrar sesión (`lib/auth/mirai.ts › signOut`).
+- "No ver más este mensaje" queda en `localStorage` (`INSTALL_DISMISS_KEY`) y **no** se borra al salir: es de este
+  navegador.
+- Solo aparece si Mirai no está instalado y el dispositivo puede instalar: con `beforeinstallprompt` (Android,
+  escritorio Chromium) o en Safari de iPhone. Nunca encima de otra ventana abierta (`lib/when-free.ts`).
 
 ## Service worker, sin conexión y privacidad
 

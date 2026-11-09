@@ -220,6 +220,12 @@ export class HouseholdsService {
     return `La invitación quedó lista. Envíasela a ${quien} desde tu WhatsApp o copia el enlace.`
   }
 
+  /** Por dónde puede enviar Mirai la invitación (lo muestra el formulario de invitar). */
+  async inviteChannels(householdId: string) {
+    const h = await this.access.can(householdId, "invitar")
+    return this.messenger.channels(h.household.id)
+  }
+
   /** Invita por correo o celular, sin duplicados (miembros, invitaciones pendientes e integrantes). */
   async invite(householdId: string, b: { destino: string; nombre?: string | null; parentesco?: string | null; access: AccessRole; familyId?: string | null; nueva?: boolean }) {
     const h = await this.access.can(householdId, "invitar")

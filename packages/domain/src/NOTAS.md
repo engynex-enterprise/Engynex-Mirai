@@ -59,23 +59,28 @@ sandbox de `node:vm` con "hoy" fijo y los datos de ejemplo `sample()` (familia N
    formulario de nómina pida deducciones.
 3. ~~IBC de independientes sin tope de 25 SMMLV~~ **Corregido** (verificado por `finanzas-colombia`, 31-oct-2026):
    `min(max(SMMLV, 40 % × M), 25 × SMMLV)`. La prueba de paridad omite los casos por encima del tope.
-4. **Porcentajes en 0 caen al valor por defecto** (`+D.saludP || 4`): escribir 0 % de salud o pensión vuelve
+4. ~~Salud del pensionado al 12 % para todos~~ **Corregido** (verificado por `finanzas-colombia`, 8-nov-2026):
+   la mesada paga 4 % de salud hasta 1 SMMLV, 10 % hasta 3 SMMLV y 12 % de ahí en adelante (art. 78 Ley 2294/2023 y
+   Res. 1271/2023 de MinSalud), y por encima de 10 y 20 SMMLV se agrega el aporte de solidaridad del pensionado
+   (1 % y 2 %, art. 8 par. Ley 797/2003). La v4 cobraba 12 % a todos y no tenía solidaridad: la prueba de paridad
+   omite el pensionado sin `saludP` escrito a mano y las mesadas por encima de 10 SMMLV.
+5. **Porcentajes en 0 caen al valor por defecto** (`+D.saludP || 4`): escribir 0 % de salud o pensión vuelve
    al 4 % (o 12,5 % / 16 % / 12 %). Para quitar un descuento hay que apagar su interruptor (`salud:false`).
    *Propuesta:* usar `??` y validar en el formulario.
-5. **Simulador de deudas mensual con tasas por periodo** (`sim`): cada paso es un "mes", pero usa la tasa y la
+6. **Simulador de deudas mensual con tasas por periodo** (`sim`): cada paso es un "mes", pero usa la tasa y la
    cuota por periodo del préstamo; una deuda quincenal o semanal se simula como si pagara una sola cuota al mes.
    *Propuesta:* mensualizar `i` y `c` con `FMES` (`(1+i)^FMES − 1`, `c × FMES`).
-6. **`liquidez()` no convierte inversiones de ahorro en otra moneda**, mientras `totales()` sí convierte todas.
+7. **`liquidez()` no convierte inversiones de ahorro en otra moneda**, mientras `totales()` sí convierte todas.
    *Propuesta:* usar `conv()` también en `liquidez()`.
-7. **Gastos fijos ignoran la moneda** (`fijoMensual`, `quincena`, `flujo`): la v4 no tenía moneda en los fijos;
+8. **Gastos fijos ignoran la moneda** (`fijoMensual`, `quincena`, `flujo`): la v4 no tenía moneda en los fijos;
    la v5 tiene `fixed_expenses.currency`. *Propuesta:* convertir con `conv()` cuando se habilite la moneda en la UI.
-8. **Calendario siempre anual**: `agenda()`, `quincena()` y `flujo()` repiten cada evento todos los años
+9. **Calendario siempre anual**: `agenda()`, `quincena()` y `flujo()` repiten cada evento todos los años
    (mes y día). La v5 tiene `calendar_events.anual`. *Propuesta:* respetar `anual = false` (solo el año de `fecha`).
-9. **Gasto fijo único sin fecha** usa "hoy" como fecha (como `parse('')` en la v4). *Propuesta:* exigir `fecha_unica`.
-10. **Ingresos semanales en la quincena** cuentan los **viernes** del rango sin mirar `dia`.
-11. **Plan de la prima** (`V.primas`): el reparto 40/30/20/10 se aplica al **próximo pago**, que puede ser
+10. **Gasto fijo único sin fecha** usa "hoy" como fecha (como `parse('')` en la v4). *Propuesta:* exigir `fecha_unica`.
+11. **Ingresos semanales en la quincena** cuentan los **viernes** del rango sin mirar `dia`.
+12. **Plan de la prima** (`V.primas`): el reparto 40/30/20/10 se aplica al **próximo pago**, que puede ser
     las cesantías o sus intereses (no solo la prima). `repartoPrima(monto)` recibe el monto explícito.
-12. **Moneda sin TRM** (`conv`): si el libro no tiene tasa para la moneda, el valor cuenta como 0.
+13. **Moneda sin TRM** (`conv`): si el libro no tiene tasa para la moneda, el valor cuenta como 0.
 
 ### Esquema de base de datos vs. motor de préstamos
 

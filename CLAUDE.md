@@ -18,6 +18,9 @@
 Desde la raíz (pnpm 10 con `corepack enable`; Turborepo guarda en caché build, typecheck, lint y test por paquete):
 ```bash
 pnpm install         # todo el workspace (apps/* y packages/*)
+pnpm mirai           # LA CONSOLA del monorepo: salud, stack, infraestructura, arquitectura y comandos.
+                     #   pnpm mirai --web  → lo mismo en el navegador (127.0.0.1:4700, solo loopback)
+                     #   pnpm mirai salud --json  → para scripts y agentes (código 2 si algo está en rojo)
 pnpm dev             # TODO local en Docker (base, API, tiempo real) + next dev en http://localhost:55300, cuenta demo (sin Supabase)
 pnpm dev:web         # solo next dev en :3000 (necesita MIRAI_API_URL con una API corriendo; lo normal es pnpm dev)
 pnpm db:migrate:vps  # esquema (db/postgres) a la base del VPS por túnel SSH; `-- --pendientes` solo lista lo que falta
@@ -48,6 +51,8 @@ packages/contracts/ @mirai/contracts: zod común (Uuid, Money, IsoDate, ApiError
                  BOOK_TABLE_POLICY (CRUD del libro) y un stub por módulo de la API
 packages/services/ · packages/ai/  código de servidor (avisos, Google, integraciones, IA) que corre en la API
 packages/config/ @mirai/config: tsconfig base, ESLint de paquetes, Prettier y preset de Vitest
+packages/cli/    @mirai/cli: la consola (`pnpm mirai`). Ink en la terminal y un servidor local para el navegador;
+                 la lógica en src/datos/* (pura, sin Ink ni http) la comparten las dos caras
 supabase/migrations · db/postgres · legacy/ · docs/   siguen en la raíz (supabase/migrations es la historia del esquema)
 ```
 **Re-exportaciones:** `apps/web/lib/domain/*.ts`, `lib/plans.ts`, `lib/household/roles.ts`, `lib/integrations/resolve.ts`,
@@ -121,6 +126,10 @@ En la raíz: `supabase/migrations` (SQL versionado e idempotente, fuente única 
   - Préstamos: `cuotasDelMes` (lo que toca este mes por plan) ≠ `cuotasMes` (compromiso mensual; pago único repartido, "solo intereses" = intereses). E.A. siempre `eaDeMensual` / `mensualDeEA`. "Te debe hoy" = `paraSaldar` (capital + intereses vencidos). Un pago de cuota por menos de su valor es parte de la cuota (`HistRow` "parcial", `CuotaRow.abonado`; API `pay` con `parcial`).
   - Gastos básicos sin aportes a metas/fondo (`link_type`); fijos en USD/EUR se convierten (`fijoMensual(f, trm)`). Meses que aguantas: `fondoEstado` en todas partes.
   - Gasto › "¿A quién le pagaste?": negocio (`provider_id`) o persona (`contact_id`, migración `db/postgres/0004_gasto_pagado_a.sql`) o nadie.
+  - Un desglose siempre suma su total: "Lo que sale, por módulo" usa `salidasPorModulo(F)` (solo `gasto`+`deuda` = `tot.sale`) y las columnas del Balance se explican con `porClase(movs)`.
+  - Lo que la persona registró dos veces (un gasto suelto que es el mismo pago de un fijo) no se descuenta solo: `posiblesDobles` lo encuentra y la app ofrece enlazarlo (Dashboard y Balance). Igual con el ahorro guardado sin decir de qué cuenta salió (`ahorroApartado().dudoso`, `estadoIntegral().apartadoDudoso`).
+  - Abonos en todos los pagos: fijos (`pagoPeriodo`, `cierra`), suscripciones (`expenses.sub_parcial`, `gastosDeCobro`; el cobro no pasa al siguiente hasta completarse) y al enlazar un gasto con un fijo (`link_expense_fixed` con `p_cierra`).
+  - Hormiga: también es hormiga lo que se repite 3+ veces en 30 días (`REPITE_HORMIGA`, `repeticiones()`), sin pasar el doble del umbral y si no es una necesidad.
 - **Escrituras enlazadas (comandos de la API):** compra y pago de tarjeta, pago de fijo y suscripción, aporte a meta, fondo, enlazar gasto↔fijo, pagos de deudas (`features/<x>/commands.ts` con `command()` de `features/book/command.ts`). Úsalas en vez de varias escrituras sueltas; por dentro la API llama las RPC (`add_card_purchase`, `pay_credit_card`…).
 - **Ajustes › Finanzas, Valores por defecto y Relaciones:** `features/settings/tabs/{finance,defaults,relaciones}.tsx`; cálculos en `packages/domain/src/ajustes.ts` (repartos, `cuadrarReparto`, quincenas, uso de relaciones). Los valores por defecto (`book_settings.defaults`: `cat`, `medio`, `quien`, `fijo_cat`, `fijo_medio`, `ing_quien`, `sistema`, `frec`, `plazo`) los leen los formularios de gasto, fijo, ingreso y préstamo al crear uno nuevo. `/contactos?q=` abre la lista ya filtrada.
 - **Reglas de importación:** `matchRule` (gana la palabra más larga, sin tildes) en `packages/domain/src/hormiga.ts`; uso, sugerencias y reglas desde correcciones en `reglas.ts`. Ajustes › Reglas (`features/settings/tabs/reglas.tsx`): probador, sugerencias, aplicar a gastos anteriores con Deshacer.
@@ -138,6 +147,7 @@ En la raíz: `supabase/migrations` (SQL versionado e idempotente, fuente única 
 - **Centro de ayuda:** panel en `components/app/help-sheet.tsx` + `features/ayuda/*`, contenido en `lib/content/centro-ayuda.ts`, `glosario.ts`, `ayuda.ts`, `academia.ts`.
 - **Ventanas:** `ResponsiveDialog` acepta `split` (alto fijo; el contenido maneja su desplazamiento, p. ej. formulario + recibo fijo) y `onBack` (flecha Atrás para una vista de detalle en la misma ventana, como Facebook). Los tooltips de `components/ui/tooltip.tsx` abren con un toque en pantallas táctiles.
 - **Migraciones:** aditivas (no cambiar el comportamiento de la versión publicada); lo que restrinja va detrás de un interruptor (`platform_settings`). El esquema de la base del VPS sale de `db/postgres` (`pnpm db:migrate:vps`).
+- **La consola (`pnpm mirai`, `packages/cli`):** dos caras sobre un mismo motor. Todo lo que calcula o lee vive en `src/datos/*` (puro, sin Ink ni `node:http`); `src/app.tsx` + `src/ui/*` pintan en la terminal y `src/web/*` sirve lo mismo por JSON. Una funcionalidad nueva se agrega **una sola vez en `datos/`** y aparece en las dos (hay una prueba que compara el JSON de ambas). Nunca imprime secretos: todo pasa por `taparSecretos()`. La cara web escucha **solo en 127.0.0.1** con un token por arranque y no se despliega jamás: lee el disco, Docker y SSH, por eso no puede vivir en `apps/web`. Los comandos de riesgo alto (`local:reset`, `db:migrate:vps`) exigen la confirmación **en el motor**, no en la pantalla. Desplegar no está y no debe estar: para eso es `/deploy`.
 
 ## 4. Diseño
 Microsoft 365 / Fluent + shadcn, limpieza tipo Meta. Paleta Engynex: navy `#1F2B4B`, lima `#9EDB4E`, verde `#3F7A1E`; tokens en `app/globals.css` (claro/oscuro). Isotipos propios (`lib/data/iso.json`, `<IsoIcon k="…"/>`). **Logos de terceros (Google, Netflix, Telegram, bancos…) solo para identificar un servicio, sin modificarlos, desde `lib/brands.ts` (`scripts/brand-logos.mjs`: @iconify-json/logos y simple-icons, CC0; si no hay, el ícono oficial que la entidad publica en su sitio, descargado una vez con `scripts/brand-official.mjs` a `public/brands/` — nunca enlazado a un tercero en tiempo real —; si tampoco, monograma). Los selectores (`Option.brand`) y el ⌘K muestran el logo. Nunca como decoración ni como logo de Mirai.**

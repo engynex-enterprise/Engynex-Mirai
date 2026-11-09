@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import { login, shot, watchErrors } from "./helpers"
 
 // Mirai como app instalada (docs/PWA.md): manifest, accesos directos, service worker, sin conexión, compartir y enlaces.
@@ -115,5 +115,62 @@ test("Ajustes › Mirai como app y entrada en el menú de perfil", async ({ page
     const dlg = page.getByRole("dialog", { name: "Instalar Mirai" })
     if (await dlg.isVisible().catch(() => false)) { await expect(dlg).toContainText("Mirai"); await page.keyboard.press("Escape") }
   }
+  expect(errs).toEqual([])
+})
+
+/** Avisa que este navegador puede instalar la app (Chromium de las pruebas no manda `beforeinstallprompt` solo). */
+async function ofrecerInstalar(page: Page) {
+  await page.evaluate(() => {
+    const w = window as Window & { __instalarPedido?: boolean }
+    w.__instalarPedido = false
+    const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
+    e.prompt = async () => { w.__instalarPedido = true }
+    e.userChoice = Promise.resolve({ outcome: "dismissed" })
+    dispatchEvent(e)
+  })
+}
+
+const limpiarInstalar = (page: Page) => page.evaluate(() => { sessionStorage.removeItem("mirai-instalar-sesion"); localStorage.removeItem("mirai-instalar-descartado") })
+
+test("el modal de instalar sale al entrar: instalar después y no ver más este mensaje", async ({ page }, info) => {
+  const errs = watchErrors(page)
+  await login(page)
+  await page.goto("/inicio")
+  await limpiarInstalar(page)
+  const dlg = page.getByTestId("instalar-modal")
+  // El aviso del navegador puede llegar antes de que la app monte su escucha: se reintenta.
+  await expect(async () => { await ofrecerInstalar(page); await expect(dlg).toBeVisible({ timeout: 5_000 }) }).toPass({ timeout: 30_000 })
+  await expect(dlg.getByRole("heading")).toContainText("Instala Mirai")
+  await shot(page, "pwa-instalar-modal", info.project.name)
+
+  // Instalar después: se cierra y no vuelve a salir hasta la próxima vez que entre.
+  await dlg.getByRole("button", { name: "Instalar después" }).click()
+  await expect(dlg).toBeHidden()
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Cómo funciona" })).toBeVisible({ timeout: 30_000 })
+  await ofrecerInstalar(page)
+  await expect(dlg).toBeHidden({ timeout: 8_000 })
+
+  // Al entrar de nuevo (sesión nueva) vuelve a salir; con "No ver más este mensaje" queda apagado en este navegador.
+  await page.evaluate(() => sessionStorage.removeItem("mirai-instalar-sesion"))
+  await page.reload()
+  await expect(async () => { await ofrecerInstalar(page); await expect(dlg).toBeVisible({ timeout: 5_000 }) }).toPass({ timeout: 30_000 })
+  await dlg.getByRole("button", { name: "No ver más este mensaje" }).click()
+  await expect(dlg).toBeHidden()
+  expect(await page.evaluate(() => !!localStorage.getItem("mirai-instalar-descartado"))).toBe(true)
+  await page.evaluate(() => sessionStorage.removeItem("mirai-instalar-sesion"))
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Cómo funciona" })).toBeVisible({ timeout: 30_000 })
+  await ofrecerInstalar(page)
+  await expect(dlg).toBeHidden({ timeout: 8_000 })
+
+  // Instalar ahora: le pide al navegador su diálogo de instalación.
+  await limpiarInstalar(page)
+  await page.reload()
+  await expect(async () => { await ofrecerInstalar(page); await expect(dlg).toBeVisible({ timeout: 5_000 }) }).toPass({ timeout: 30_000 })
+  await dlg.getByRole("button", { name: "Instalar ahora" }).click()
+  await expect(dlg).toBeHidden()
+  await expect.poll(() => page.evaluate(() => (window as Window & { __instalarPedido?: boolean }).__instalarPedido)).toBe(true)
+  await limpiarInstalar(page)
   expect(errs).toEqual([])
 })

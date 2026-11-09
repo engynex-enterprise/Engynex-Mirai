@@ -143,3 +143,28 @@ describe("hallazgosBalance", () => {
     expect(H(b).find((h) => h.id === "mes-falta")?.tono).toBe("bad")
   })
 })
+
+describe("los dos mensajes del balance no se contradicen", () => {
+  const b = libro()
+  const mesOk = { E: 5_000_000, Sa: 3_000_000, disp: 2_000_000, gastado: 800_000, nGastos: 11, presupuesto: 1_500_000, porGastar: 700_000, gastadoPres: 800_000, conTarjetaPer: 0 } as never
+  const C = (pat: number) => ({ T: { A: 10_000_000, P: 10_000_000 - pat, pat }, liquidez: 1_000_000, tengo: [], debo: [] }) as never
+
+  it("si debes más de lo que tienes, el sobrante del mes va a la deuda (no a una meta)", () => {
+    const h = hallazgosBalance(b, HOY, mesOk, C(-1_519_000))
+    const neg = h.find((x) => x.id === "pat-neg")!
+    const ok = h.find((x) => x.id === "mes-ok")!
+    expect(neg.detalle).toMatch(/Es la foto de hoy, no la del mes/)
+    expect(neg.detalle).toMatch(/aunque este mes te sobren/)
+    expect(ok.detalle).toMatch(/abónalo a la deuda más cara/)
+    expect(ok.href).toBe("/estrategia")
+    expect(ok.detalle).not.toMatch(/Llévalo a una meta/)
+  })
+
+  it("sin deudas por encima de lo que tienes, el sobrante sí va a una meta", () => {
+    const h = hallazgosBalance(b, HOY, mesOk, C(5_000_000))
+    const ok = h.find((x) => x.id === "mes-ok")!
+    expect(ok.detalle).toMatch(/Llévalo a una meta/)
+    expect(ok.href).toBe("/metas")
+    expect(h.some((x) => x.id === "pat-neg")).toBe(false)
+  })
+})

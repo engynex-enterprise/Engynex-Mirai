@@ -14,7 +14,10 @@ test("balance: agregar cuenta, patrimonio y quincenas", async ({ page }, info) =
   await expect(page.getByText("Lo que tengo", { exact: true }).first()).toBeVisible()
   await expect(page.getByRole("heading", { name: "Tu mes" })).toBeVisible()
   await expect(page.getByRole("heading", { name: "¿Dónde está tu plata?" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Cuenta T: el detalle" })).toBeVisible()
+  // La cuenta T es la del periodo (lo que entra contra lo que se paga); el patrimonio va en su propia tarjeta.
+  await expect(page.getByRole("heading", { name: /^Cuenta T de / })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Tu patrimonio hoy" })).toBeVisible()
+  await expect(page.getByText("Lo que se paga", { exact: true })).toBeVisible()
   // Tu mes separa lo que sale de lo que ahorras.
   await expect(page.getByText("Ahorras", { exact: true }).first()).toBeVisible()
 
@@ -32,6 +35,8 @@ test("balance: agregar cuenta, patrimonio y quincenas", async ({ page }, info) =
   await page.getByRole("button", { name: "Exportar" }).click()
   expect((await dl).suggestedFilename()).toMatch(/^balance-.*\.csv$/)
 
+  // El selector se arma con las frecuencias del libro: la QA cobra quincenal, así que están las dos quincenas.
+  await expect(page.getByRole("radio", { name: "Mes completo" })).toBeVisible()
   await page.getByRole("radio", { name: "1ª quincena" }).click()
   await expect(page.getByText("Disponible del periodo")).toBeVisible()
   // Depende de los datos del usuario QA: o hay salidas (fijos, suscripciones, gasto por gastar) o el aviso de vacío.

@@ -25,6 +25,7 @@ import { DUE_HINT, DUE_TONE, dueState, dueText } from "@/lib/list-helpers"
 import type { Row } from "@/lib/supabase/tables"
 import { useCategories, usePaymentMethods, useProviders, useSettings } from "@/features/catalogs/hooks"
 import { SubscriptionForm } from "./subscription-form"
+import { ChargeSubDialog, type CobroSub } from "./charge-sub-dialog"
 import { kickAutomations } from "@/features/automations/runner"
 
 export function SubscriptionsView() {
@@ -34,6 +35,7 @@ export function SubscriptionsView() {
   const today = todayISO()
   const [nuevo, setNuevo] = useNewParam()
   const [editing, setEditing] = useState<Row<"subscriptions"> | null>(null)
+  const [cobro, setCobro] = useState<CobroSub | null>(null)
   const { data: subs = [], isPending } = useList("subscriptions", { order: { column: "proximo" } })
   const { data: expenses = [] } = useList("expenses")
   const { data: cfg } = useSettings()
@@ -49,11 +51,23 @@ export function SubscriptionsView() {
   const sugeridas = useMemo(() => detectSubs(expenses.map((g) => ({ ...g, valor: Number(g.valor) })), subs), [expenses, subs])
 
   /**
-   * "Ya se cobró": en una sola transacción registra el gasto (en COP y solo tu parte), lo enlaza a la suscripción y
-   * avanza el próximo cobro (pay_subscription). "Deshacer" borra ese gasto y la base devuelve el próximo cobro.
+   * Lo que vale el cobro que está pendiente (en COP y solo tu parte) y lo que ya le abonaste: los gastos enlazados a
+   * esa suscripción con la fecha de ese cobro (`sub_proximo`). Con abonos, "Ya se cobró" paga solo lo que falta.
+   */
+  const cobroDe = (s: Row<"subscriptions">): CobroSub => {
+    const esperado = Math.round(conv(Number(s.valor), s.currency, trm) / Math.max(1, s.comparte))
+    const abonado = expenses.filter((g) => g.subscription_id === s.id && g.sub_proximo === s.proximo).reduce((a, g) => a + Number(g.valor), 0)
+    return { sub: s, esperado, abonado }
+  }
+
+  /**
+   * "Ya se cobró": en una sola transacción registra el gasto (en COP y solo tu parte, o lo que falte si ya abonaste),
+   * lo enlaza a la suscripción y avanza el próximo cobro (pay_subscription). "Deshacer" borra ese gasto y la base
+   * devuelve el próximo cobro.
    */
   const cobrada = async (s: Row<"subscriptions">) => {
-    const valor = Math.round(conv(Number(s.valor), s.currency, trm) / Math.max(1, s.comparte))
+    const { esperado, abonado } = cobroDe(s)
+    const valor = Math.max(1, Math.round(esperado - abonado))
     const fecha = s.proximo && s.proximo <= today ? s.proximo : today
     const { data, error } = await paySubscription({ p_sub: s.id, p_fecha: fecha, p_valor: valor })
     if (error) return toast.error("No se pudo registrar", { description: error.message })
@@ -139,6 +153,7 @@ export function SubscriptionsView() {
               onClick={canEdit ? () => setEditing(s) : undefined}
               actions={canEdit ? [
                 { label: `Ya se cobró ${s.nombre}`, tip: "Ya se cobró: registrarlo en mis gastos", icon: "circle-check", className: "text-success", onClick: () => cobrada(s) },
+                { label: `Registrar un abono a ${s.nombre}`, tip: "Pagué solo una parte (abono)", icon: "split", onClick: () => setCobro(cobroDe(s)) },
                 { label: `Editar ${s.nombre}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(s) },
                 { label: `Eliminar ${s.nombre}`, tip: "Eliminar", icon: "trash-2", onClick: () => del.mutate(s), destructive: true },
               ] : []} />
@@ -146,6 +161,7 @@ export function SubscriptionsView() {
         }}
       />
       <SubscriptionForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} sub={editing} />
+      <ChargeSubDialog cobro={cobro} onOpenChange={(o) => { if (!o) setCobro(null) }} />
     </div>
   )
 }

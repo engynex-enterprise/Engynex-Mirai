@@ -20,6 +20,3 @@ type Pwa = {
 }
 
 export const usePwa = create<Pwa>((set) => ({ deferred: null, installed: false, dialog: false, update: null, files: [], set: (p) => set(p) }))
-
-/** Preferencia "no me vuelvas a mostrar el aviso de instalar" (solo en este navegador). */
-export const INSTALL_DISMISS_KEY = "mirai-instalar-descartado"

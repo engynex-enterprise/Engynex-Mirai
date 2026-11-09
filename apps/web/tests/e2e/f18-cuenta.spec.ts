@@ -2,7 +2,7 @@ import { expect, test, type Browser, type Page, type TestInfo } from "@playwrigh
 import { login, shot, watchErrors } from "./helpers"
 import { admin, QA } from "./qa"
 
-// Tu cuenta: Perfil › Cuentas conectadas (formas de entrar, cambiar correo hasta "pendiente", cambiar cuenta de
+// Tu cuenta: Perfil › Cómo entras a Mirai (formas de entrar, cambiar correo hasta "pendiente", cambiar cuenta de
 // Google con selección de cuenta), Ajustes › Tu cuenta (hogares, sesiones, actividad) y pasar el hogar con una
 // persona de prueba que rechaza y luego acepta. Todo con correos @mirai.test: Mirai no los envía de verdad.
 
@@ -58,7 +58,7 @@ test("perfil: cuentas conectadas, método único, cambiar correo hasta pendiente
   await login(page)
 
   await page.goto("/perfil#cuentas")
-  await expect(page.getByRole("heading", { name: "Cuentas conectadas" })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole("heading", { name: "Cómo entras a Mirai" })).toBeVisible({ timeout: 30_000 })
   await card(page).scrollIntoViewIfNeeded()
   await expect(card(page).getByText("Correo de tu cuenta")).toBeVisible()
   await expect(card(page).getByText(QA.email).first()).toBeVisible()
@@ -67,8 +67,8 @@ test("perfil: cuentas conectadas, método único, cambiar correo hasta pendiente
   const pw = card(page).locator('[data-method="password"]')
   await expect(pw.getByText("Correo y contraseña")).toBeVisible()
   await expect(pw.getByRole("button", { name: "Quitar Correo y contraseña" })).toBeDisabled()
-  await expect(pw.getByText("Es tu única forma de entrar: agrega otra antes de quitarla.")).toBeVisible()
-  await expect(card(page).locator('[data-method="magic"]').getByText("Disponible")).toBeVisible()
+  await expect(pw.getByText("Es la única manera que tienes de entrar. Agrega otra antes de quitar esta.")).toBeVisible()
+  await expect(card(page).locator('[data-method="magic"]').getByText("Siempre activo")).toBeVisible()
 
   // Agregar otra forma de entrar → Google con selección de cuenta (se intercepta la ventana de Google)
   await page.route(/accounts\.google\.com/, (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<title>Google (prueba)</title><p>Google</p>" }))

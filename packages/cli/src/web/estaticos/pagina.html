@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mirai 未来 — la consola</title>
+    <link rel="icon" href="/mirai-logo.svg" />
+    <link rel="stylesheet" href="/estilo.css" />
+  </head>
+  <body data-token="{{token}}" data-version="{{version}}" data-dominio="{{dominio}}">
+    <header class="cabecera">
+      <div class="marca">
+        <img src="/mirai-logo.svg" alt="" width="40" height="40" />
+        <div>
+          <h1>Mirai <span class="kanji">未来</span></h1>
+          <p class="sutil">La consola del monorepo · v{{version}}</p>
+        </div>
+      </div>
+      <div class="cabecera-derecha">
+        <span id="resumen" class="pastilla pastilla--apagado">revisando…</span>
+        <button id="refrescar" class="boton boton--suave" title="Refrescar">Refrescar</button>
+      </div>
+    </header>
+
+    <div class="cuerpo">
+      <nav id="menu" class="menu" aria-label="Secciones"></nav>
+      <main id="contenido" class="contenido" tabindex="-1">
+        <div class="cargando">Cargando…</div>
+      </main>
+    </div>
+
+    <dialog id="confirmar" class="dialogo">
+      <form method="dialog">
+        <h2 id="confirmar-titulo"></h2>
+        <p id="confirmar-texto" class="sutil"></p>
+        <label for="confirmar-campo">Escribe <b id="confirmar-palabra"></b> para seguir</label>
+        <input id="confirmar-campo" autocomplete="off" spellcheck="false" />
+        <div class="dialogo-botones">
+          <button value="no" class="boton boton--suave">Cancelar</button>
+          <button value="si" id="confirmar-ok" class="boton boton--peligro">Correr</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/consola.js" type="module"></script>
+  </body>
+</html>

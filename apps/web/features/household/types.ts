@@ -51,6 +51,9 @@ export type HouseholdPeople = {
 
 export type Share = { url: string; text: string; wa: string }
 
+/** Por dónde puede enviar Mirai la invitación (GET /v1/households/:h/invitations/channels). */
+export type InviteChannels = { email: boolean; whatsapp: boolean; motivoWhatsApp?: string }
+
 export type InviteResult = {
   ok: boolean
   msg: string

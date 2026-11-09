@@ -31,8 +31,20 @@ export const PayFixed = z.object({
   payment_method_id: Uuid.nullable().optional(),
 })
 export const PayFixedOut = z.object({ ajuste: z.string().nullable().optional(), aporte: z.unknown().optional(), valor: z.number(), periodo: z.string(), completo: z.boolean().optional(), falta: z.number().optional() }).loose()
-export const ChargeSub = z.object({ fecha: IsoDate.optional(), valor: Positive.optional(), payment_method_id: Uuid.nullable().optional() })
-export const ChargeSubOut = z.object({ expense_id: z.string().optional(), proximo: z.string().optional() }).loose()
+export const ChargeSub = z.object({
+  fecha: IsoDate.optional(),
+  valor: Positive.optional(),
+  payment_method_id: Uuid.nullable().optional(),
+  /**
+   * true: es un abono al cobro (falta el resto y la suscripción NO pasa al siguiente cobro). Sin decirlo, o si el
+   * valor cubre lo que falta, el cobro queda pagado y la suscripción pasa al siguiente.
+   */
+  parcial: z.boolean().optional(),
+})
+export const ChargeSubOut = z.object({
+  expense_id: z.string().optional(), proximo: z.string().optional(),
+  parcial: z.boolean().optional(), abonado: z.number().optional(), falta: z.number().optional(),
+}).loose()
 
 const c = initContract()
 export const fixedContract = c.router(

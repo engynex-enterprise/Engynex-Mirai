@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { InstallBanner, InstallDialog } from "./install"
+import { InstallDialog, InstallPrompt } from "./install"
 import { NavProgress } from "./nav-progress"
 import { PullToRefresh } from "./pull-to-refresh"
 import { OfflineBar, OfflineSync } from "./offline-sync"
@@ -26,7 +26,7 @@ export function PwaShell({ unread }: { unread: number }) {
       <OfflineSync />
       <OfflineBar />
       <NativeBehaviors />
-      <InstallBanner />
+      <InstallPrompt />
       <InstallDialog />
     </>
   )

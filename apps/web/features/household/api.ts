@@ -5,7 +5,7 @@ import { ACCESS_ROLES, type AccessRole } from "@/lib/household/roles"
 import { failure, isApiError } from "@/lib/api/errors"
 import { activeHouseholdId } from "@/lib/api/session"
 import type { MiraiApi } from "@/lib/api/client"
-import type { FamilyMemberInput, HouseholdPeople, InviteInput, InviteResult, Share } from "./types"
+import type { FamilyMemberInput, HouseholdPeople, InviteChannels, InviteInput, InviteResult, Share } from "./types"
 
 const client = () => import("@/lib/api/client")
 type Res = { ok: boolean; msg: string }
@@ -36,6 +36,12 @@ export async function msgOf(run: (api: MiraiApi) => Promise<{ status: number; bo
 export const loadHouseholdPeople = async (): Promise<HouseholdPeople> => {
   const { browserApi, unwrap } = await client()
   return unwrap(await browserApi().households.people({ params: { householdId: activeHouseholdId() } })) as unknown as HouseholdPeople
+}
+
+/** Por dónde puede enviar Mirai la invitación (correo del proveedor activo y WhatsApp con plantilla aprobada). */
+export const loadInviteChannels = async (): Promise<InviteChannels> => {
+  const { browserApi, unwrap } = await client()
+  return unwrap(await browserApi().households.inviteChannels({ params: { householdId: activeHouseholdId() } })) as InviteChannels
 }
 
 export const invitePerson = async (input: InviteInput): Promise<InviteResult> => {

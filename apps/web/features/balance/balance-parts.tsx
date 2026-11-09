@@ -5,15 +5,17 @@ import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Money } from "@/components/mirai/money"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { StatusPill, type PillTone } from "@/components/mirai/status-pill"
 import { EntityLogo } from "@/components/mirai/entity-logo"
 import { IconAction } from "@/components/mirai/list-row"
 import { Icon } from "@/components/mirai/icon"
 import { IconButton } from "@/components/mirai/tip"
-import { Panel } from "@/components/mirai/panel"
+import { Panel, SectionTitle } from "@/components/mirai/panel"
+import { Card, CardContent } from "@/components/ui/card"
 import type { HallazgoBalance } from "@/lib/domain/balance"
-import { ESTADOS, MODULOS, MODULO_ORDEN, type Estado, type FlujoIntegral, type Modulo, type Mov, type ParteEstado } from "@/lib/domain/flujo-integral"
-import { fmtDate, fmtMonth, fmtPct } from "@/lib/format"
+import { type CuentaTMes, type FilaMes, ESTADOS, MODULOS, MODULO_ORDEN, porClase, type Estado, type FlujoIntegral, type Modulo, type Mov, type ParteEstado, type PorClase } from "@/lib/domain/flujo-integral"
+import { fmtDate, fmtMoney, fmtMonth, fmtPct } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 
@@ -127,17 +129,52 @@ function MovRow({ x }: { x: Mov }) {
 }
 
 /**
- * Entradas o salidas de un periodo agrupadas por módulo (Ingresos, Gastos fijos, Tarjetas, Deudas…), cada grupo con
- * su total, el reparto por categoría y un enlace a su sección. `abiertos`: si los grupos empiezan desplegados.
+ * El total de la columna explicado: de qué es cada peso. Así se ve por qué el total de "Salidas" no es el mismo
+ * número del KPI "Sale" (el ahorro sigue siendo tuyo y la plata que prestaste tampoco es un gasto).
  */
-export function FlujoColumna({ title, sub, movs, empty, abiertos = true }: { title: string; sub: string; movs: Mov[]; empty: React.ReactNode; abiertos?: boolean }) {
+function DesgloseColumna({ dir, C }: { dir: "entra" | "sale"; C: PorClase }) {
+  const partes = dir === "entra"
+    ? [
+        { k: "ingreso", l: "Ingresos y extras", v: C.ingreso, tip: "Tu sueldo, los ingresos extra y las primas del calendario.", cls: "text-success" },
+        { k: "cobro", l: "Te pagan", v: C.cobro, tip: "Cuotas y abonos de lo que te deben.", cls: "text-success" },
+        { k: "cred", l: "Te prestaron", v: C.credEntra, tip: "Plata prestada: no es tuya, por eso no cuenta en «Entra».", cls: "text-muted-foreground" },
+        { k: "aho", l: "Sacaste del ahorro", v: C.ahorroEntra, tip: "Lo que sacaste de tus metas o de tu fondo: se resta de lo que ahorras.", cls: "text-info" },
+      ]
+    : [
+        { k: "gasto", l: "Gastos", v: C.gasto, tip: "Consumo: gastos del día a día, fijos, suscripciones, impuestos y mesadas.", cls: "text-danger" },
+        { k: "deuda", l: "Deudas", v: C.deuda, tip: "Cuotas, abonos y el pago de tus tarjetas.", cls: "text-danger" },
+        { k: "aho", l: "Ahorras", v: C.ahorroSale, tip: "Metas, fondo de emergencia e inversiones: no es un gasto, sigue siendo tuyo.", cls: "text-info" },
+        { k: "cred", l: "Prestaste", v: C.credSale, tip: "Plata que prestaste: te la deben, no es un gasto.", cls: "text-muted-foreground" },
+      ]
+  const vis = partes.filter((p) => p.v > 0)
+  if (vis.length < 2) return null
+  return (
+    <ul className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-xs text-muted-foreground" data-money>
+      {vis.map((p) => (
+        <li key={p.k} title={p.tip} className="flex items-center gap-1">
+          <span>{p.l}</span><Money value={p.v} short className={cn("font-semibold", p.cls)} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Entradas o salidas de un periodo agrupadas por módulo (Ingresos, Gastos fijos, Tarjetas, Deudas…), cada grupo con
+ * su total, el reparto por categoría y un enlace a su sección. Debajo del total, de qué es cada peso (gastos, deudas,
+ * ahorro, préstamos). `abiertos`: si los grupos empiezan desplegados.
+ */
+export function FlujoColumna({ title, sub, dir, movs, empty, abiertos = true }: { title: string; sub: string; dir: "entra" | "sale"; movs: Mov[]; empty: React.ReactNode; abiertos?: boolean }) {
   const grupos = MODULO_ORDEN.map((k) => ({ k, l: movs.filter((x) => x.modulo === k) })).filter((g) => g.l.length)
-  const total = movs.reduce((a, x) => a + x.v, 0)
+  const C = porClase(movs)
   return (
     <div className="grid content-start gap-2">
-      <div className="flex items-end justify-between gap-2 border-b-[3px] border-foreground pb-2">
-        <div><p className="font-semibold">{title}</p><p className="text-xs tracking-wide text-muted-foreground uppercase">{sub}</p></div>
-        <Money value={total} className="font-bold" />
+      <div className="grid gap-0.5 border-b-[3px] border-foreground pb-2">
+        <div className="flex items-end justify-between gap-2">
+          <div><p className="font-semibold">{title}</p><p className="text-xs tracking-wide text-muted-foreground uppercase">{sub}</p></div>
+          <Money value={C.total} className="font-bold" />
+        </div>
+        <DesgloseColumna dir={dir} C={C} />
       </div>
       {!grupos.length ? <p className="py-4 text-sm text-muted-foreground">{empty}</p> : grupos.map(({ k, l }) => <ModuloGrupo key={k} k={k} l={l} abierto={abiertos} />)}
     </div>
@@ -166,19 +203,61 @@ function ModuloGrupo({ k, l, abierto }: { k: Modulo; l: Mov[]; abierto: boolean 
 }
 
 /** Tu mes: lo que entra, lo que sale, lo que ahorras y lo que queda, con el avance del presupuesto. */
-export function MesCard({ q, ym, onMove, onDetalle, canEdit }: { q: FlujoIntegral; ym: string; onMove: (d: number) => void; onDetalle: () => void; canEdit: boolean }) {
+export function MesCard({ q, prev, ym, onMove, onDetalle, canEdit }: {
+  q: FlujoIntegral; /** El mismo periodo del mes pasado, para comparar. */ prev?: FlujoIntegral | null
+  ym: string; onMove: (d: number) => void; onDetalle: () => void; canEdit: boolean
+}) {
   const usado = q.presupuesto ? Math.min(1, (q.presupuesto - q.porGastar) / q.presupuesto) : 0
   const t = q.tot
+  const base = Math.max(t.entra, t.sale + Math.max(0, t.ahorro), 1)
+  const parte = (v: number) => `${Math.max(0, Math.min(100, (v / base) * 100))}%`
+  // Comparación con el mes pasado (solo si hay con qué comparar).
+  const cmp = prev && prev.tot.entra > 0 ? { entra: (t.entra - prev.tot.entra) / prev.tot.entra, sale: prev.tot.sale > 0 ? (t.sale - prev.tot.sale) / prev.tot.sale : null } : null
+  const pct = (v: number) => `${v > 0 ? "+" : "−"}${Math.round(Math.abs(v) * 100)} %`
   return (
     <Panel title="Tu mes" icon="calendar-days" info="Todo lo que entra (ingresos, cobros, préstamos que te dieron) y todo lo que sale (gastos, fijos, suscripciones, cuotas, tarjetas, impuestos y mesadas). El ahorro va aparte porque no es gasto: sigue siendo tu plata."
       action={canEdit && <Button asChild size="sm" variant="soft"><Link href="/gastos?nuevo=1"><Icon name="plus" /> Registrar gasto</Link></Button>}>
       <MonthNav ym={ym} onMove={onMove} />
+
+      {/* Titular: la respuesta a "¿cómo voy este mes?" en una línea */}
+      <div className={cn("grid gap-1 rounded-xl p-4", t.queda >= 0 ? "bg-success-soft" : "bg-danger-soft")}>
+        <span className="text-[13px] font-medium text-muted-foreground">{q.momento === "pasado" ? "Ese mes" : q.momento === "futuro" ? "Ese mes, según lo que tienes programado," : "Este mes"} {t.queda >= 0 ? "te queda" : "te falta"}</span>
+        <Money value={Math.abs(t.queda)} className={cn("text-[30px] leading-9 font-extrabold tracking-tight", t.queda >= 0 ? "text-success" : "text-danger")} />
+        <span className="text-[13px] text-muted-foreground" data-money>
+          Entra {fmtMoney(t.entra)} · sale {fmtMoney(t.sale)}{t.ahorro > 0.5 ? ` · apartas ${fmtMoney(t.ahorro)}` : ""}
+        </span>
+      </div>
+
+      {/* Cómo se reparte lo que entra */}
+      {t.entra > 0 && (
+        <div className="grid gap-1.5">
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary" role="img" aria-label={`De lo que entra, ${Math.round((t.sale / base) * 100)} % se va en pagos`}>
+            <span className="bg-danger" style={{ width: parte(t.sale) }} />
+            {t.ahorro > 0.5 && <span className="bg-info" style={{ width: parte(t.ahorro) }} />}
+            {t.queda > 0 && <span className="bg-success" style={{ width: parte(t.queda) }} />}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-danger" />Pagos {Math.round((t.sale / base) * 100)} %</span>
+            {t.ahorro > 0.5 && <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-info" />Ahorro {Math.round((t.ahorro / base) * 100)} %</span>}
+            {t.queda > 0 && <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-success" />Te queda {Math.round((t.queda / base) * 100)} %</span>}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
         <div className="grid gap-0.5 rounded-lg bg-success-soft p-3"><span className="text-xs font-medium text-muted-foreground">Entra</span><Money value={t.entra} short className="font-bold text-success" /></div>
         <div className="grid gap-0.5 rounded-lg bg-danger-soft p-3"><span className="text-xs font-medium text-muted-foreground">Sale</span><Money value={t.sale} short className="font-bold text-danger" /></div>
         <div className="grid gap-0.5 rounded-lg bg-info-soft p-3"><span className="text-xs font-medium text-muted-foreground">Ahorras</span><Money value={t.ahorro} short className="font-bold text-info" /></div>
         <div className={cn("grid gap-0.5 rounded-lg p-3", t.queda >= 0 ? "bg-brand-soft" : "bg-danger-soft")}><span className="text-xs font-medium text-muted-foreground">{t.queda >= 0 ? "Te queda" : "Te falta"}</span><Money value={Math.abs(t.queda)} short className={cn("font-bold", t.queda >= 0 ? "text-foreground" : "text-danger")} /></div>
       </div>
+
+      {cmp && (
+        <p className="text-sm text-muted-foreground" data-money>
+          Frente al mes pasado: entra <b className={cn("text-foreground", cmp.entra > 0.005 ? "text-success" : cmp.entra < -0.005 ? "text-danger" : "")}>{pct(cmp.entra)}</b>
+          {cmp.sale !== null && <> y sale <b className={cn("text-foreground", cmp.sale > 0.005 ? "text-danger" : cmp.sale < -0.005 ? "text-success" : "")}>{pct(cmp.sale)}</b></>}.
+        </p>
+      )}
+
       {(t.vencidoSale > 0 || t.pendienteSale > 0) && (
         <p className="text-sm text-muted-foreground" data-money>
           {t.pendienteSale > 0 && <>Falta pagar <Money value={t.pendienteSale} className="font-semibold text-foreground" />. </>}
@@ -196,6 +275,7 @@ export function MesCard({ q, ym, onMove, onDetalle, canEdit }: { q: FlujoIntegra
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={onDetalle}><Icon name="list" /> Ver entradas y salidas</Button>
+        <Button asChild variant="ghost" size="sm"><Link href="/presupuesto"><Icon name="chart-pie" /> Ajustar presupuesto</Link></Button>
         <Button asChild variant="ghost" size="sm"><Link href="/dashboard"><Icon name="chart-column" /> Ver gráficas</Link></Button>
       </div>
     </Panel>
@@ -268,5 +348,70 @@ export function ComposicionCard({ tengo, debo, A, P }: { tengo: ParteEstado[]; d
         <Barra title="Lo que debo" total={P} items={debo} empty="No tienes deudas registradas. ¡Bien!" />
       </div>
     </Panel>
+  )
+}
+
+/**
+ * Cuenta T del periodo: a la izquierda todo lo que entra y a la derecha todo lo que hay que pagar en él. Solo el
+ * periodo (nada de patrimonio ni de lo que tienes ahorrado: eso es la foto de hoy y va en su propia tarjeta).
+ */
+/** Una columna de la cuenta T del periodo (lo que entra o lo que se paga), con sus filas por módulo. */
+function ColumnaMes({ title, sub, filas, total, empty, tono, onModulo }: {
+  title: string; sub: string; filas: FilaMes[]; total: number; empty: string; tono: "entra" | "sale"; onModulo?: (m: Modulo) => void
+}) {
+  return (
+    <div className="grid content-start gap-1">
+      <div className="border-b-[3px] border-foreground pb-2">
+        <p className="font-semibold">{title}</p>
+        <p className="text-xs tracking-wide text-muted-foreground uppercase">{sub}</p>
+      </div>
+      {!filas.length ? <p className="py-4 text-sm text-muted-foreground">{empty}</p> : filas.map((f) => (
+        <button key={f.modulo} type="button" onClick={() => onModulo?.(f.modulo)} disabled={!onModulo}
+          className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-hover disabled:cursor-default">
+          <ToneIcon icon={f.icon} tone={tono === "entra" ? "green" : "red"} size="sm" />
+          <span className="grid min-w-0 flex-1">
+            <span className="truncate text-[15px] font-medium">{f.label}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {f.n} {f.n === 1 ? "movimiento" : "movimientos"}
+              {f.pendiente > 0.5 && <> · falta por {tono === "entra" ? "recibir" : "pagar"} {fmtMoney(f.pendiente)}</>}
+            </span>
+          </span>
+          <span className="shrink-0 text-right">
+            <Money value={f.v} className="font-semibold tabular-nums" />
+            <span className="block text-xs text-muted-foreground tabular-nums">{Math.round(f.pct * 100)} %</span>
+          </span>
+        </button>
+      ))}
+      <div className="mt-1 flex items-center justify-between border-t-2 border-foreground pt-2">
+        <span className="font-semibold">Total</span>
+        <Money value={total} className={cn("text-[17px] font-bold tabular-nums", tono === "entra" ? "text-success" : "text-danger")} />
+      </div>
+    </div>
+  )
+}
+
+export function CuentaTMesCard({ T, titulo, onModulo }: { T: CuentaTMes; titulo: string; onModulo?: (m: Modulo) => void }) {
+  return (
+    <Card className="shadow-card ring-0">
+      <CardContent className="grid gap-6">
+        <SectionTitle icon="scale" info="Es la cuenta del periodo, no la de tu patrimonio: a la izquierda todo lo que entra (sueldo, bonos, extras, lo que te pagan) y a la derecha todo lo que hay que pagar (fijos, el día a día, cuotas, tarjetas, suscripciones e impuestos). Lo que apartas para ahorrar va aparte, y lo que tienes y lo que debes están en la tarjeta de abajo.">
+          Cuenta T de {titulo}
+        </SectionTitle>
+        <div className="grid gap-8 md:grid-cols-2">
+          <ColumnaMes title="Lo que entra" sub="Entradas del periodo" filas={T.entra} total={T.totEntra} empty="Sin entradas en este periodo." tono="entra" onModulo={onModulo} />
+          <ColumnaMes title="Lo que se paga" sub="Salidas del periodo" filas={T.sale} total={T.totSale} empty="Sin pagos en este periodo." tono="sale" onModulo={onModulo} />
+        </div>
+        <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-lg p-4", T.queda >= 0 ? "bg-success-soft" : "bg-danger-soft")}>
+          <div>
+            <p className="font-semibold">{T.queda >= 0 ? "Te queda" : "Te falta"}</p>
+            <p className="text-sm text-muted-foreground">Lo que entra − lo que se paga{T.ahorro > 0.5 ? ` · además apartas ${fmtMoney(T.ahorro)} para ahorrar` : ""}</p>
+          </div>
+          <Money value={Math.abs(T.queda)} className={cn("text-[22px] font-extrabold", T.queda >= 0 ? "text-success" : "text-danger")} />
+        </div>
+        {T.pendienteSale > 0.5 && (
+          <p className="text-sm text-muted-foreground">De lo que se paga en el periodo, <b className="text-foreground" data-money>{fmtMoney(T.pendienteSale)}</b> todavía está pendiente o vencido.</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }

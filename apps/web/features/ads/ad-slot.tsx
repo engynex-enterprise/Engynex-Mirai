@@ -12,6 +12,7 @@ import { useApp, useBookId } from "@/components/app/app-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { adSeed, goesToAdsense, type AdSlotId } from "@/lib/ads"
 import { cn } from "@/lib/utils"
+import { whenFree } from "@/lib/when-free"
 
 const ENV_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT
 const ENV_SLOT = process.env.NEXT_PUBLIC_ADSENSE_SLOT
@@ -256,22 +257,6 @@ export function AdTicker() {
       <button type="button" aria-label="Cerrar la barra de publicidad" className="grid size-6 shrink-0 place-items-center rounded-full hover:bg-white/15" onClick={() => { setClosed(true); ss.set("mirai-ticker-off", "1"); list.forEach((a) => track(a.id, "ticker", "cierre")) }}><X className="size-4" /></button>
     </div>
   )
-}
-
-/**
- * Abre una ventana de anuncio cuando no hay otra ventana abierta (dos ventanas cruzadas bloquean los clics).
- * Reintenta unos segundos; devuelve la función para cancelar.
- */
-function whenFree(open: () => void, delay: number) {
-  let t: ReturnType<typeof setTimeout>
-  let tries = 0
-  const tick = () => {
-    const busy = document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-vaul-drawer][data-state="open"]') || document.body.style.pointerEvents === "none"
-    if (busy) { if (tries++ < 40) t = setTimeout(tick, 300); return }
-    open()
-  }
-  t = setTimeout(tick, delay)
-  return () => clearTimeout(t)
 }
 
 function AdDialog({ ad, slot, open, onClose, adsense }: { ad: Ad | null; slot: AdSlotId; open: boolean; onClose: () => void; adsense?: { client: string; slot: string } | null }) {

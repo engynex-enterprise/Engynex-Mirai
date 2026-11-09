@@ -2,6 +2,7 @@
 // y cuentas conectadas. Devuelven { ok, msg } con mensajes en español (AUTH_ERRORS de @mirai/contracts).
 import { authErrorMessage } from "@mirai/contracts/modules/auth"
 import { LEGAL_VERSION } from "@/lib/legal/version"
+import { INSTALL_SESSION_KEY } from "@/lib/pwa/config"
 
 const client = async () => (await import("./client")).authClient()
 type BaErr = { code?: string; message?: string; status?: number } | null | undefined
@@ -95,6 +96,8 @@ export async function signOut(): Promise<void> {
   await c.signOut().catch(() => undefined)
   // Lo guardado para usar sin conexión (datos, cambios pendientes y páginas) es de esta persona: se borra al salir.
   await (await import("@/lib/offline/clear")).clearOfflineData().catch(() => undefined)
+  // El modal de instalar vuelve a salir cuando alguien entre de nuevo ("No ver más este mensaje" sí se respeta).
+  try { sessionStorage.removeItem(INSTALL_SESSION_KEY) } catch { /* sin almacenamiento */ }
 }
 
 export async function signOutOthers(): Promise<Done> {

@@ -52,6 +52,10 @@ export interface SettingsIn {
   smmlv?: Record<string, number>
   /** Ajustes de nómina: procedimiento de retención por defecto y tabla del FSP (lib/domain/payroll.ts). */
   nomina?: { retModo?: "auto" | "proc2"; retPct?: number; fsp?: [number, number][] }
+  /** Título de tu meta financiera principal (book_settings.meta). */
+  meta?: string
+  /** El resto de tu meta: tipo, monto, fecha, meta de ahorro enlazada y pasos (MetaCfg de ./meta). */
+  meta_cfg?: unknown
 }
 
 export type CategoryIn = Pick<Row<"categories">, "id" | "nombre" | "icon" | "tope"> & { grupo: Grupo | string }

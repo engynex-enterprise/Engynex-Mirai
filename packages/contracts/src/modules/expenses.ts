@@ -37,7 +37,15 @@ export const ExpenseInput = z.object({
 })
 export type ExpenseInput = z.input<typeof ExpenseInput>
 
-export const FixedSuggestion = z.object({ fixed_id: z.string(), nombre: z.string(), periodo: z.string(), due: z.string(), valor: z.number() })
+export const FixedSuggestion = z.object({
+  fixed_id: z.string(), nombre: z.string(), periodo: z.string(), due: z.string(),
+  /** Lo que falta del periodo (su valor, o el resto si ya tiene abonos). */
+  valor: z.number(),
+  /** Lo ya abonado a ese periodo (0 si no tiene abonos). */
+  abonado: z.number().optional(),
+  /** ¿Con este gasto queda pagado el periodo? */
+  completo: z.boolean().optional(),
+})
 export const ExpenseSaved = z.object({
   expense: Row,
   creado: z.boolean(),
@@ -54,7 +62,15 @@ export const ExpenseSaved = z.object({
 })
 export type ExpenseSaved = z.infer<typeof ExpenseSaved>
 
-export const LinkFixed = z.object({ fixedId: Uuid, periodo: Periodo })
+export const LinkFixed = z.object({
+  fixedId: Uuid,
+  periodo: Periodo,
+  /**
+   * ¿Con este gasto queda pagado el periodo? false: es un abono y falta el resto (un periodo con abonos se puede
+   * seguir enlazando). Sin decirlo, la API lo calcula: queda pagado si el gasto cubre lo que falta.
+   */
+  completo: z.boolean().optional(),
+})
 export const UseFund = z.object({ valor: Positive.optional() })
 
 const c = initContract()

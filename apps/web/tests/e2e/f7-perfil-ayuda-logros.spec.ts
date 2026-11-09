@@ -17,6 +17,34 @@ test("perfil, novedades, preguntas, manual, tour y logros", async ({ page }, inf
   await expect(page.getByText("Avatar actualizado")).toBeVisible()
   await expect(page.getByRole("img", { name: "Avatar Cohete" }).first()).toBeVisible()
   await expect(page.getByText(/Tu perfil está al \d+ %/)).toBeVisible()
+  // Portada: escenas por categoría, colores y la foto propia (aquí se escoge una escena).
+  // Se espera a que la ventana del avatar termine de cerrarse (dos ventanas cruzadas bloquean los clics).
+  await expect(picker).toBeHidden()
+  await page.getByRole("button", { name: "Cambiar portada" }).click()
+  const portada = page.getByRole("dialog", { name: "Ponle una portada a tu perfil" })
+  await expect(portada).toBeVisible()
+  await portada.getByRole("tab", { name: /Naturaleza/ }).click()
+  await portada.getByRole("radio", { name: "Playa" }).click()
+  await expect(page.getByText("Portada actualizada")).toBeVisible()
+  // Teléfono: se acomoda solo mientras se escribe
+  const tel = page.getByRole("textbox", { name: "Teléfono" })
+  await tel.fill("3001234567")
+  await expect(tel).toHaveValue("300 123 4567")
+  await tel.blur()
+  // Meta financiera: tipo, monto, fecha, avance y pasos
+  await page.getByRole("button", { name: "Escoger mi meta" }).click()
+  const metaDlg = page.getByRole("dialog", { name: "¿Cuál es tu meta?" })
+  await metaDlg.getByRole("radio", { name: /Comprar vivienda/ }).click()
+  await metaDlg.getByRole("textbox", { name: "¿Cómo la llamas?" }).fill("Cuota inicial del apartamento")
+  await metaDlg.getByRole("textbox", { name: "¿Cuánto necesitas?" }).fill("60000000")
+  await metaDlg.getByRole("button", { name: "Guardar mi meta" }).click()
+  await expect(page.getByText("Tu meta quedó lista")).toBeVisible()
+  const metaCard = page.locator("#meta")
+  await expect(metaCard.getByText("Cuota inicial del apartamento")).toBeVisible()
+  await expect(metaCard.getByText(/Te faltan/)).toBeVisible()
+  // Un paso que se marca a mano queda guardado
+  await metaCard.getByRole("checkbox", { name: /cuota inicial/i }).first().check()
+  await expect(metaCard.getByRole("checkbox", { name: /cuota inicial/i }).first()).toBeChecked()
   // Cédula → los 2 dígitos de la DIAN salen solos
   const doc = page.getByRole("textbox", { name: "Número de documento" })
   await doc.fill("1.020.345.678")

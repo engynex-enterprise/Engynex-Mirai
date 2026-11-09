@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
 import { AddressFields, emptyAddress, type Address } from "@/components/mirai/address-fields"
 import { AvatarPicker } from "@/components/mirai/avatar-picker"
+import { CoverArt } from "@/components/mirai/cover-art"
+import { CoverPicker } from "@/components/mirai/cover-picker"
 import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { Combobox } from "@/components/mirai/combobox"
 import { DatePicker } from "@/components/mirai/date-picker"
@@ -23,19 +24,19 @@ import { Money } from "@/components/mirai/money"
 import { StatusPill } from "@/components/mirai/status-pill"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { Panel, SectionTitle } from "@/components/mirai/panel"
+import { PhoneInput } from "@/components/mirai/phone-input"
 import { Tip } from "@/components/mirai/tip"
 import { PageSkeleton } from "@/components/skeletons/page-skeleton"
-import { useApp, useBookId, useCanEdit } from "@/components/app/app-context"
+import { useApp, useBookId } from "@/components/app/app-context"
 import { ingresoMensual, totales } from "@/lib/domain"
 import { digitosDian, edad, monthName, proxCumple, todayISO } from "@/lib/format"
-import { BANNER_THEMES, type BannerThemeKey } from "@/lib/content/banners"
 import { useBookData } from "@/features/book/use-book-data"
 import { useMembers, useSettings } from "@/features/catalogs/hooks"
-import { useBookSettingsSave } from "@/features/settings/prefs"
 import { useGami } from "@/features/gami/use-gami"
 import type { Row } from "@/lib/supabase/tables"
 import { normalizarCobros } from "@/lib/domain/cobros"
 import { CobroCard } from "./cobro-card"
+import { MetaCard } from "./meta-card"
 import { fetchProfile, fetchProfileCounts, updateProfile } from "./api"
 import { HouseholdPeople } from "@/features/household/people"
 import { ConnectedAccounts } from "@/features/account/connected-accounts"
@@ -47,7 +48,6 @@ const TRABAJO = [
   { value: "estudiante", label: "Estudiante", icon: "graduation-cap" }, { value: "hogar", label: "Me dedico al hogar", icon: "house" },
   { value: "buscando", label: "Buscando trabajo", icon: "search" },
 ]
-const PORTADAS: [BannerThemeKey, string][] = [["verde", "Verde"], ["menta", "Menta"], ["teal", "Turquesa"], ["cyan", "Cielo"], ["azul", "Azul"], ["navy", "Noche"], ["lavanda", "Lavanda"], ["morado", "Morado"], ["rosa", "Rosa"], ["naranja", "Naranja"], ["amarillo", "Sol"]]
 
 /** Texto que guarda al salir. */
 function Blur({ id, value, onSave, ...rest }: { id: string; value: string; onSave: (v: string) => void } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "onBlur">) {
@@ -57,36 +57,17 @@ function Blur({ id, value, onSave, ...rest }: { id: string; value: string; onSav
   return <Input id={id} className="h-11" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== value && onSave(v)} {...rest} />
 }
 
-/** Portada del perfil con el degradado elegido y figuras suaves (sin logos ni fotos). */
-function Cover({ theme, children }: { theme: BannerThemeKey; children?: React.ReactNode }) {
-  const t = BANNER_THEMES[theme] ?? BANNER_THEMES.verde
-  return (
-    <div className="banner-bg relative h-36 overflow-hidden sm:h-44" style={{ "--bn-bg": t.bg, "--bn-dark": t.dark } as React.CSSProperties}>
-      <svg viewBox="0 0 800 180" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 size-full" aria-hidden>
-        <circle cx="690" cy="40" r="120" fill={t.c} className="opacity-70 dark:opacity-20" />
-        <circle cx="690" cy="40" r="150" fill="none" stroke={t.b} strokeWidth="2" strokeDasharray="3 10" className="opacity-60 dark:opacity-30" />
-        <circle cx="120" cy="190" r="90" fill={t.c} className="opacity-50 dark:opacity-15" />
-        {Array.from({ length: 15 }).map((_, i) => <circle key={i} cx={470 + (i % 5) * 18} cy={40 + Math.floor(i / 5) * 18} r="3" fill={t.a} className="opacity-25 dark:opacity-40" />)}
-        <circle cx="600" cy="120" r="16" fill="#FFC83D" /><circle cx="600" cy="120" r="9" fill="none" stroke="#FFF1BF" strokeWidth="3.5" />
-        <path d="M760 130l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill={t.b} />
-      </svg>
-      {children}
-    </div>
-  )
-}
-
 export function ProfileView() {
   const { user } = useApp()
   const router = useRouter()
   const bookId = useBookId()
-  const canEdit = useCanEdit()
   const qc = useQueryClient()
   const { data: book } = useBookData()
   const { data: members = [] } = useMembers()
   const { data: cfg } = useSettings()
-  const saveCfg = useBookSettingsSave()
   const gami = useGami()
   const [picker, setPicker] = useState(false)
+  const [coverOpen, setCoverOpen] = useState(false)
   // Los guardados van en fila: dos seguidos (Deshacer y luego otro cambio) no se pisan en la base.
   const cola = useRef<Promise<unknown>>(Promise.resolve())
   const key = ["profile-full", user.id]
@@ -122,7 +103,6 @@ export function ProfileView() {
   const ing = ingresoMensual(book.incomes, book.settings.trm)
   const addr = { ...emptyAddress, ...((p.direccion as Address) ?? {}), ciudad: p.ciudad || (p.direccion as Address)?.ciudad || "" }
   const age = edad(p.nacimiento)
-  const portada = (p.portada || "verde") as BannerThemeKey
   const desde = `${monthName(Number(p.created_at.slice(5, 7)), false)} ${p.created_at.slice(0, 4)}`
   const cumples = [{ id: "yo", nombre: p.apodo || p.nombre.split(" ")[0] || "Tú", avatar: p.avatar_url, nacimiento: p.nacimiento }, ...members.filter((m) => !m.es_titular).map((m) => ({ id: m.id, nombre: m.nombre, avatar: m.avatar || null, nacimiento: m.nacimiento }))]
     .map((x) => ({ ...x, c: proxCumple(x.nacimiento) }))
@@ -141,13 +121,13 @@ export function ProfileView() {
     [/^\d{2}$/.test(p.digitos), p.doc_tipo === "CC" ? "Tu cédula (de ahí salen tus fechas DIAN)" : "Los 2 últimos dígitos de tu NIT (fechas DIAN)", p.doc_tipo === "CC" ? "pf-doc" : "pf-d"],
     [!!p.trabajo, "Tu situación laboral", "pf-tr"],
     [normalizarCobros(p.cobro).length > 0, "Un medio para recibir pagos", "cobro"],
-    [!!cfg?.meta, "Tu meta financiera principal", "pf-m"],
+    [!!cfg?.meta, "Tu meta financiera principal", "meta"],
   ]
   const done = checks.filter(([ok]) => ok).length
   const pct = Math.round((done / checks.length) * 100)
   const focus = (id: string) => {
     if (id === "avatar") return setPicker(true)
-    if (id === "cobro") return document.getElementById("cobro")?.scrollIntoView({ behavior: "smooth", block: "center" })
+    if (id === "cobro" || id === "meta") return document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })
     const el = document.getElementById(id) ?? document.querySelector<HTMLElement>(`[id^="${id}"]`)
     el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.focus()
   }
@@ -157,23 +137,10 @@ export function ProfileView() {
     <div className="grid gap-6">
       {/* Portada y avatar */}
       <Card className="gap-0 overflow-hidden p-0 shadow-card ring-0">
-        <Cover theme={portada}>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="absolute top-3 right-3 bg-white/80 backdrop-blur hover:bg-white dark:bg-black/30 dark:hover:bg-black/40"><Palette /> Portada</Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72">
-              <p className="text-sm font-semibold">Color de la portada</p>
-              <div className="grid grid-cols-6 gap-2" role="radiogroup" aria-label="Color de la portada">
-                {PORTADAS.map(([k, n]) => (
-                  <button key={k} type="button" role="radio" aria-checked={portada === k} aria-label={n} title={n} onClick={() => save({ portada: k }, "Portada actualizada")}
-                    className={`size-9 rounded-full ring-offset-2 ring-offset-popover outline-none focus-visible:ring-2 focus-visible:ring-ring ${portada === k ? "ring-2 ring-primary" : ""}`}
-                    style={{ background: `linear-gradient(135deg, ${BANNER_THEMES[k].c}, ${BANNER_THEMES[k].b})` }} />
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </Cover>
+        <CoverArt value={p.portada} className="h-36 sm:h-48">
+          <Button size="sm" variant="outline" onClick={() => setCoverOpen(true)}
+            className="absolute top-3 right-3 bg-white/85 backdrop-blur hover:bg-white dark:bg-black/40 dark:hover:bg-black/55"><Palette /> Cambiar portada</Button>
+        </CoverArt>
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3 px-5 pb-5 sm:px-6">
           <button type="button" onClick={() => setPicker(true)} aria-label="Cambiar avatar" className="group relative -mt-14 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring sm:-mt-16">
             <UserAvatar src={p.avatar_url} name={p.nombre || user.email} className="size-28 ring-4 ring-card sm:size-32" fallbackClassName="text-3xl" />
@@ -198,8 +165,12 @@ export function ProfileView() {
       </Card>
       <AvatarPicker open={picker} onOpenChange={setPicker} value={p.avatar_url} name={p.nombre || user.email} googlePhoto={googlePhoto} uploadFor={user.id}
         onPick={(v) => save({ avatar_url: v }, "Avatar actualizado")} />
+      <CoverPicker open={coverOpen} onOpenChange={setCoverOpen} value={p.portada} uploadFor={user.id}
+        onPick={(v) => save({ portada: v }, "Portada actualizada")} />
 
-      <section className="grid items-start gap-6 lg:grid-cols-[2fr_1fr]">
+      {/* Izquierda: tus datos y cómo te pagan. Derecha: lo que te falta, tu resumen y los cumpleaños. */}
+      <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,1fr)]">
+        <div className="grid min-w-0 gap-6">
         <Panel title="Tus datos" icon="id-card" description="Se guardan solos al salir de cada campo." className="h-auto">
           <FieldGroup>
             <div className="grid gap-5 sm:grid-cols-2">
@@ -208,7 +179,7 @@ export function ProfileView() {
               <FormField label="Fecha de nacimiento" htmlFor="pf-nac" tip="Para saludarte en tu cumpleaños y darte consejos según tu edad (pensión, ahorro)."><DatePicker id="pf-nac" quick="ninguno" years={[1920, new Date().getFullYear()]} startAt="1990-01-01" placeholder="Elige tu fecha" value={p.nacimiento} onChange={(v) => save({ nacimiento: v })} /></FormField>
               <FormField label="Situación laboral" htmlFor="pf-tr" tip="Ayuda al consejero y a la renta: un empleado, un independiente y un pensionado tienen reglas distintas."><Combobox id="pf-tr" value={p.trabajo} onChange={(v) => save({ trabajo: v })} options={TRABAJO} placeholder="Elige tu situación" /></FormField>
               <FormField label="Ocupación" htmlFor="pf-o" tip={false}><Blur id="pf-o" placeholder="Ej. Contadora, conductor, docente" value={p.ocupacion} onSave={(v) => save({ ocupacion: v })} /></FormField>
-              <FormField label="Teléfono" htmlFor="pf-t" tip={false}><Blur id="pf-t" type="tel" inputMode="tel" value={p.telefono} onSave={(v) => save({ telefono: v })} /></FormField>
+              <FormField label="Teléfono" htmlFor="pf-t" tip="Tu celular o tu fijo con indicativo. Lo usamos en los acuerdos de pago y para que te escriban si compartes un cobro."><PhoneInput id="pf-t" value={p.telefono} onSave={(v) => save({ telefono: v })} /></FormField>
             </div>
             <AddressFields idPrefix="pf" value={addr} onChange={(a) => save({ direccion: a as never, ciudad: a.ciudad })} />
             <div className="grid gap-5 sm:grid-cols-2">
@@ -226,11 +197,13 @@ export function ProfileView() {
             <FormField label="¿Cómo te sientes con el riesgo?" tip={false}>
               <ChoiceCards cols={3} value={p.riesgo} onChange={(v) => save({ riesgo: v })} items={[{ value: "conservador", label: "Conservador", desc: "Prefiero no perder", icon: "shield-check" }, { value: "moderado", label: "Moderado", desc: "Algo de riesgo", icon: "scale" }, { value: "arriesgado", label: "Arriesgado", desc: "Busco ganar más", icon: "zap" }]} />
             </FormField>
-            <FormField label="Tu meta financiera principal" htmlFor="pf-m" tip={false}><Blur id="pf-m" disabled={!canEdit} placeholder="Ej. Comprar casa en 5 años" value={cfg?.meta ?? ""} onSave={(v) => saveCfg.mutate({ meta: v })} /></FormField>
           </FieldGroup>
         </Panel>
+        <MetaCard cfg={cfg} />
+        <CobroCard nombre={p.nombre || user.email} items={normalizarCobros(p.cobro)} onChange={(items, msg) => save({ cobro: items as never }, msg ?? "Medios de pago actualizados")} />
+        </div>
 
-        <div className="grid gap-6">
+        <div className="grid min-w-0 gap-6">
           <Panel className="h-auto">
             <SectionTitle icon="circle-check" action={<span className="text-sm text-muted-foreground tabular-nums">{done} de {checks.length}</span>}>Tu perfil está al {pct} %</SectionTitle>
             <Progress value={pct} className="h-2" aria-label={`Perfil completo al ${pct} %`} />
@@ -263,8 +236,6 @@ export function ProfileView() {
             )}
           </Panel>
 
-          <ConnectedAccounts />
-
           <Panel title="Resumen" icon="chart-pie" className="h-auto">
             <div className="grid grid-cols-2 gap-2">
               {([[<Money key="i" value={ing} className="text-success" />, "Ingreso mensual"], [<Money key="p" value={T.pat} />, "Patrimonio"], [counts?.contactos ?? "—", "Contactos"], [counts?.metas ?? "—", "Metas"]] as [React.ReactNode, string][]).map(([v, l]) => <div key={l} className="rounded-lg bg-secondary/70 p-3"><p className="text-lg font-semibold tabular-nums">{v}</p><p className="text-xs text-muted-foreground">{l}</p></div>)}
@@ -281,7 +252,7 @@ export function ProfileView() {
         </div>
       </section>
 
-      <CobroCard nombre={p.nombre || user.email} items={normalizarCobros(p.cobro)} onChange={(items, msg) => save({ cobro: items as never }, msg ?? "Medios de pago actualizados")} />
+      <ConnectedAccounts />
 
       {/* Integrantes como perfiles de Netflix */}
       <Panel id="famCard" title="¿Quiénes hacen parte de tu hogar?" icon="users" className="h-auto gap-5"

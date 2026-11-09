@@ -79,20 +79,29 @@ export interface GastoCobro {
 }
 
 /**
- * El gasto que registró el cobro de la suscripción `s` en el mes `mes` ('YYYY-MM'), sin repetir los ya `usados`:
- * primero el enlazado por `subscription_id` (por el mes del cobro que pagó), y si no hay, el del mismo mes con el mismo
- * nombre o proveedor (regla 4 del flujo integral, para los cobros registrados antes de existir el enlace).
- * Un gasto enlazado a OTRA suscripción nunca se empareja por nombre. Marca el elegido en `usados`.
+ * Los gastos que registraron el cobro de la suscripción `s` del mes `mes` ('YYYY-MM'), sin repetir los ya `usados`:
+ * primero los enlazados por `subscription_id` (por el mes del cobro que pagaron) —pueden ser varios si lo pagaste en
+ * abonos—, y si no hay ninguno, el del mismo mes con el mismo nombre o proveedor (regla 4 del flujo integral, para los
+ * cobros registrados antes de existir el enlace). Un gasto enlazado a OTRA suscripción nunca se empareja por nombre.
+ * Marca los elegidos en `usados`.
  */
+export function gastosDeCobro<T extends GastoCobro>(
+  s: { id: string; nombre: string; provider_id?: string | null }, gastos: T[], mes: string, usados: Set<string>, ok: (g: T) => boolean = () => true,
+): T[] {
+  const libre = (g: T) => !usados.has(g.id) && ok(g)
+  let out = gastos.filter((x) => x.subscription_id === s.id && (x.sub_proximo ?? x.fecha).slice(0, 7) === mes && libre(x))
+  if (!out.length) {
+    const n = normTxt(s.nombre)
+    const g = gastos.find((x) => !x.subscription_id && x.fecha.slice(0, 7) === mes && libre(x) && (normTxt(x.descripcion) === n || (!!s.provider_id && x.provider_id === s.provider_id)))
+    out = g ? [g] : []
+  }
+  for (const g of out) usados.add(g.id)
+  return out.sort((a, b) => a.fecha.localeCompare(b.fecha))
+}
+
+/** El primer gasto que registró el cobro del mes (ver `gastosDeCobro`). */
 export function gastoDeCobro<T extends GastoCobro>(
   s: { id: string; nombre: string; provider_id?: string | null }, gastos: T[], mes: string, usados: Set<string>, ok: (g: T) => boolean = () => true,
 ): T | undefined {
-  const libre = (g: T) => !usados.has(g.id) && ok(g)
-  let g = gastos.find((x) => x.subscription_id === s.id && ((x.sub_proximo ?? x.fecha).slice(0, 7) === mes) && libre(x))
-  if (!g) {
-    const n = normTxt(s.nombre)
-    g = gastos.find((x) => !x.subscription_id && x.fecha.slice(0, 7) === mes && libre(x) && (normTxt(x.descripcion) === n || (!!s.provider_id && x.provider_id === s.provider_id)))
-  }
-  if (g) usados.add(g.id)
-  return g
+  return gastosDeCobro(s, gastos, mes, usados, ok)[0]
 }

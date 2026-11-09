@@ -1,14 +1,17 @@
 "use client"
 
 import { useEffect, useState, useSyncExternalStore } from "react"
-import { ArrowDown, BookOpen, Check, ChevronLeft, ChevronRight, Copy, Download, EllipsisVertical, MonitorDown, Share, SquarePlus, X } from "lucide-react"
+import { ArrowDown, Bell, BookOpen, Check, ChevronLeft, ChevronRight, Copy, Download, EllipsisVertical, MonitorDown, Rocket, Share, SquarePlus, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { toast } from "@/components/mirai/toast"
+import { useApp } from "@/components/app/app-context"
+import { INSTALL_DISMISS_KEY, INSTALL_SESSION_KEY } from "@/lib/pwa/config"
 import { installPlatform, type InstallPlatform } from "@/lib/pwa/platform"
-import { cn } from "@/lib/utils"
-import { INSTALL_DISMISS_KEY, usePwa } from "./store"
+import { whenFree } from "@/lib/when-free"
+import { usePwa } from "./store"
 
 const noop = () => () => {}
 
@@ -80,7 +83,7 @@ export function InstallDialog() {
       <div className="grid gap-4 pb-2">
         <div className="flex items-center gap-3 rounded-2xl bg-soft-gradient p-3">
           <span className="grid size-14 shrink-0 place-items-center rounded-[14px] bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#1D3F2A)] shadow-[0_6px_16px_rgba(31,43,75,.3)]"><IsoIcon k="mirai" size={38} /></span>
-          <div className="grid min-w-0 gap-0.5"><p className="font-semibold">Mirai</p><p className="text-sm text-muted-foreground">Tu futuro financiero · gratis, sin tienda de apps</p></div>
+          <div className="grid min-w-0 gap-0.5"><p className="font-semibold">Mirai</p><p className="text-sm text-muted-foreground">Tu plata organizada · gratis, sin descargar nada de la tienda</p></div>
         </div>
         {platform === "ios-inapp" && (
           <ol className="grid gap-2">
@@ -119,35 +122,67 @@ export function InstallDialog() {
   )
 }
 
+/** ¿Tocó "No ver más este mensaje" en este navegador? (sin almacenamiento, no insistimos). */
 const dismissed = () => { try { return !!localStorage.getItem(INSTALL_DISMISS_KEY) } catch { return true } }
+/** Persona a la que ya le salió el modal en esta sesión del navegador. */
+const sessionSeen = () => { try { return sessionStorage.getItem(INSTALL_SESSION_KEY) } catch { return null } }
+
+const VENTAJAS = [
+  { Icon: Rocket, t: "Lo abres de un toque", d: "Queda con su ícono, al lado de tus otras apps, y abre en pantalla completa." },
+  { Icon: Bell, t: "Te avisamos antes de que se venza", d: "La fecha límite para pagar tu tarjeta o el arriendo, aunque tengas Mirai cerrado." },
+  { Icon: WifiOff, t: "Anota aunque te quedes sin señal", d: "Lo que anotes se guarda y se sube solo cuando vuelve el internet." },
+]
 
 /**
- * Aviso "Instala Mirai" (una sola vez por navegador, descartable). Sale después de unos segundos de uso, nunca encima de
- * una ventana abierta, y no vuelve a salir si la persona lo cierra o ya instaló Mirai.
+ * Modal "Instala Mirai": sale cada vez que la persona entra (una vez por sesión), nunca encima de otra ventana abierta,
+ * y solo si este dispositivo puede instalar y Mirai no está instalado. Tres salidas: instalar ahora, instalar después
+ * (vuelve a salir la próxima vez que entre) y no ver más este mensaje (queda guardado en este navegador).
  */
-export function InstallBanner() {
+export function InstallPrompt() {
+  const { user } = useApp()
   const { platform, installed, can, install, direct } = useInstall()
-  const [show, setShow] = useState(false)
+  const [open, setOpen] = useState(false)
   useEffect(() => {
-    if (installed || !can || dismissed()) return
+    if (installed || !can || dismissed() || sessionSeen() === user.id) return
     // En Android/escritorio solo si el navegador ya dijo que se puede instalar; en iPhone, solo en Safari.
     if (!direct && platform !== "ios-safari") return
-    const t = setTimeout(() => { if (!document.querySelector("[role=dialog]")) setShow(true) }, 12_000)
-    return () => clearTimeout(t)
-  }, [installed, can, direct, platform])
-  if (!show || installed) return null
-  const hide = () => { setShow(false); try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())) } catch { /* sin almacenamiento */ } }
+    // La marca se pone al abrir: si algo lo vuelve a montar antes, no perdemos el aviso.
+    return whenFree(() => { try { sessionStorage.setItem(INSTALL_SESSION_KEY, user.id) } catch { /* sin almacenamiento */ } ; setOpen(true) }, 2500)
+  }, [installed, can, direct, platform, user.id])
+  if (installed) return null
+  const nunca = () => { try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())) } catch { /* sin almacenamiento */ } ; setOpen(false) }
   return (
-    <div role="region" aria-label="Instalar Mirai"
-      className={cn("install-banner appear fixed z-40 flex items-center gap-3 rounded-2xl bg-popover p-3 pr-2 text-popover-foreground shadow-float ring-1 ring-black/5 dark:ring-white/10",
-        "inset-x-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:left-[calc(var(--sidebar-width,16rem)+1.5rem)] md:w-[380px]")}>
-      <span className="grid size-12 shrink-0 place-items-center rounded-[12px] bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#1D3F2A)]"><IsoIcon k="mirai" size={32} /></span>
-      <div className="grid min-w-0 flex-1 gap-0.5">
-        <p className="text-[15px] leading-5 font-semibold">Instala Mirai en tu {platform === "desktop-chromium" ? "computador" : "celular"}</p>
-        <p className="text-[13px] leading-[18px] text-muted-foreground">Se abre como una app, más rápido y con accesos directos.</p>
-      </div>
-      <Button size="sm" onClick={() => { hide(); void install() }}>Instalar</Button>
-      <button type="button" aria-label="Ahora no" onClick={hide} className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-hover"><X className="size-4" /></button>
-    </div>
+    <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+      <DialogContent data-testid="instalar-modal" className="max-h-[92dvh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[520px]">
+        <div className="grid gap-4 px-6 pt-7 pb-6">
+          <div className="grid justify-items-center gap-3 text-center">
+            <span className="grid size-16 shrink-0 place-items-center rounded-[18px] bg-[linear-gradient(145deg,#2B3F6E,#1F2B4B_55%,#1D3F2A)] shadow-[0_8px_20px_rgba(31,43,75,.3)]"><IsoIcon k="mirai" size={44} /></span>
+            <DialogTitle className="text-[22px] leading-tight font-bold tracking-tight">Instala Mirai en tu {platform === "desktop-chromium" || platform === "mac-safari" ? "computador" : platform?.startsWith("ios") ? "iPhone o iPad" : "celular"}</DialogTitle>
+            <DialogDescription className="text-[15px] leading-relaxed">
+              Es la misma Mirai, con su ícono en tu pantalla de inicio. Se instala desde aquí, sin descargar nada de una tienda de apps.
+            </DialogDescription>
+          </div>
+          <ul className="grid gap-2">
+            {VENTAJAS.map(({ Icon, t, d }) => (
+              <li key={t} className="flex items-start gap-3 rounded-xl bg-secondary/50 p-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-card text-brand shadow-card"><Icon className="size-5" strokeWidth={1.8} /></span>
+                <div className="grid min-w-0 gap-0.5">
+                  <p className="text-[15px] leading-5 font-semibold">{t}</p>
+                  <p className="text-[13px] leading-[18px] text-muted-foreground">{d}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {!direct && <p className="rounded-xl bg-secondary/60 p-3 text-center text-[15px] leading-5">Tu {platform?.startsWith("ios") ? "iPhone" : "navegador"} no lo instala solo: al tocar <b>Instalar ahora</b> te mostramos los pasos con dibujos. Toma menos de un minuto.</p>}
+          <div className="grid gap-2">
+            {/* Con el diálogo del sistema hay que llamarlo en el mismo toque; las instrucciones esperan a que esta ventana cierre (dos Radix cruzados bloquean los clics). */}
+            <Button size="lg" className="h-12 w-full text-[16px]" onClick={() => { setOpen(false); if (direct) void install(); else whenFree(() => void install(), 250) }}>Instalar ahora</Button>
+            <Button size="lg" variant="outline" className="h-11 w-full" onClick={() => setOpen(false)}>Instalar después</Button>
+            <Button variant="ghost" className="h-10 w-full text-[13px] font-normal text-muted-foreground" onClick={nunca}>No ver más este mensaje</Button>
+          </div>
+          <p className="text-center text-[13px] leading-[18px] text-muted-foreground">Si tocas <b>Instalar después</b>, te lo recordamos la próxima vez que entres.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

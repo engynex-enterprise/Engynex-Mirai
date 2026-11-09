@@ -11,7 +11,8 @@
 // 3. Una cuota de préstamo registrada también como gasto (`origen="prestamo"`) no sale como gasto: sale la cuota del
 //    plan del préstamo (`loanEngine`), con su parte de intereses.
 // 4. El cobro de una suscripción registrado con "Ya se cobró" crea un gasto con el nombre de la suscripción: ese gasto
-//    se empareja con el cobro del mismo mes (por nombre o proveedor) y cuenta una vez, como cobro hecho.
+//    se empareja con el cobro del mismo mes (por nombre o proveedor) y cuenta una vez, como cobro hecho. Si el cobro se
+//    pagó en abonos (la suscripción no pasó al siguiente cobro), salen los abonos y lo que falta, como en un fijo.
 // 5. Usar el fondo de emergencia crea un gasto (cuenta como gasto) y saca plata del ahorro (entra como retiro de
 //    ahorro); guardar en el fondo con un aporte programado ya sale como el pago de ese fijo.
 // 6. Un impuesto del calendario sin valor que también es un gasto fijo (p. ej. "Predial" anual) no se estima dos veces.
@@ -23,7 +24,7 @@
 // Estados: hecho (registrado o ya pasó), programado (viene), vencido (pasó sin registrar el pago), estimado (cálculo).
 import { addMonths, fdate, iso, lastDay, parseDate, toDay } from "./dates"
 import { cuentaEnVariable, gastoYaContado } from "./balance"
-import { deudaTarjeta, tarjetaFlujoMes } from "./cards"
+import { deudaTarjeta, tarjetaCuotaMes, tarjetaFlujoMes } from "./cards"
 import { ahorroApartado, type GoalMovIn, type LibroCuentas } from "./cuentas"
 import { fijoPeriods, pagoPeriodo } from "./fixed"
 import { inv } from "./investments"
@@ -32,7 +33,7 @@ import { loanTipo, tipoDef, type LoanTipo } from "./loan-tipos"
 import { conv, formatCOP as fmtCOP } from "./money"
 import { catIcon } from "./quincena"
 import { fijoValor, incomePagos } from "./reparto"
-import { gastoDeCobro, subOcc } from "./subscriptions"
+import { gastosDeCobro, subOcc } from "./subscriptions"
 import { fixedCategoryIds, liquidez, totales, variableMes, type Totales } from "./totals"
 import type { BookData, DateInput, ExpenseIn } from "./types"
 
@@ -109,21 +110,55 @@ export interface ExtrasIntegral {
   metas?: GoalMovIn[]
 }
 
-export type PeriodoTipo = "q1" | "q2" | "mes" | "anio" | "rango"
+export type PeriodoTipo = "semana" | "q1" | "q2" | "mes" | "semestre" | "anio" | "rango"
 export interface Periodo { a: string; b: string; tipo: PeriodoTipo }
 
 const pad = (n: number) => String(n).padStart(2, "0")
 const corteDe = (b: Pick<BookData, "settings">) => Math.min(Math.max(+b.settings.corte_q || 15, 1), 27)
 
-/** Rango de un periodo: quincena, mes (m en base 0) o año, con el corte de quincena del libro. */
-export function periodo(b: Pick<BookData, "settings">, tipo: Exclude<PeriodoTipo, "rango">, y: number, m = 0): Periodo {
+/**
+ * Rango de un periodo: semana, quincena, mes (m en base 0), semestre o año, con el corte de quincena del libro.
+ * `d` (día del mes) solo se usa para la semana: devuelve la semana de lunes a domingo que contiene ese día.
+ */
+export function periodo(b: Pick<BookData, "settings">, tipo: Exclude<PeriodoTipo, "rango">, y: number, m = 0, d = 1): Periodo {
   if (tipo === "anio") return { a: `${y}-01-01`, b: `${y}-12-31`, tipo }
+  if (tipo === "semestre") {
+    const s2 = m >= 6
+    return { a: s2 ? `${y}-07-01` : `${y}-01-01`, b: s2 ? `${y}-12-31` : `${y}-06-30`, tipo }
+  }
+  if (tipo === "semana") {
+    const base = new Date(y, m, Math.max(1, d))
+    const lunes = new Date(base)
+    lunes.setDate(base.getDate() - ((base.getDay() + 6) % 7))
+    const domingo = new Date(lunes)
+    domingo.setDate(lunes.getDate() + 6)
+    return { a: iso(lunes), b: iso(domingo), tipo }
+  }
   const cq = corteDe(b)
   const ld = lastDay(y, m)
   const k = `${y}-${pad(m + 1)}`
   if (tipo === "q1") return { a: `${k}-01`, b: `${k}-${pad(cq)}`, tipo }
   if (tipo === "q2") return { a: `${k}-${pad(cq + 1)}`, b: `${k}-${pad(ld)}`, tipo }
   return { a: `${k}-01`, b: `${k}-${pad(ld)}`, tipo }
+}
+
+export type PeriodoOpcion = { tipo: Exclude<PeriodoTipo, "rango">; label: string }
+
+/**
+ * Qué periodos tiene sentido ofrecer en el Balance, según cómo le pagan y cómo paga la persona: quien cobra por
+ * semana ve la semana; quien cobra quincenal ve sus dos quincenas; quien tiene pagos semestrales o anuales (primas,
+ * impuestos, seguros) ve el semestre. El mes y el año están siempre.
+ */
+export function periodosDelLibro(b: Pick<BookData, "incomes" | "fixedExpenses" | "subscriptions" | "calendarEvents">): PeriodoOpcion[] {
+  const frecs = new Set<string>([...b.incomes.map((x) => x.frec), ...b.fixedExpenses.map((x) => x.frec)])
+  const out: PeriodoOpcion[] = []
+  if (frecs.has("semanal") || frecs.has("diario")) out.push({ tipo: "semana", label: "Esta semana" })
+  if (frecs.has("quincenal")) out.push({ tipo: "q1", label: "1ª quincena" }, { tipo: "q2", label: "2ª quincena" })
+  out.push({ tipo: "mes", label: "Mes completo" })
+  const largo = frecs.has("semestral") || frecs.has("anual") || (b.calendarEvents ?? []).length > 0 || (b.subscriptions ?? []).some((x) => x.ciclo === "anual" || x.ciclo === "semestral")
+  if (largo) out.push({ tipo: "semestre", label: "Semestre" })
+  out.push({ tipo: "anio", label: "Año" })
+  return out
 }
 
 const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim()
@@ -165,10 +200,52 @@ export interface GrupoModulo {
   icon: string
   href: string
   entra: number
+  /** TODO lo que sale del módulo (consumo, deudas, ahorro y préstamos que hiciste). */
   sale: number
+  /** Consumo del módulo (clase `gasto`). */
+  gasto: number
+  /** Cuotas, abonos y pagos de tarjeta del módulo (clase `deuda`). */
+  deuda: number
+  /** Lo que sale del módulo y cuenta en `tot.sale`: `gasto` + `deuda` (sin ahorro ni préstamos). */
+  saleFlujo: number
+  /** Ahorro neto del módulo: lo que apartaste menos lo que sacaste. */
+  ahorro: number
+  /** Préstamos que hiciste (plata prestada, no consumo). */
+  credito: number
   n: number
   /** Por categoría dentro del módulo, de mayor a menor. */
   cats: { cat: string; v: number; n: number }[]
+}
+
+/** Lo que entra y lo que sale repartido por para qué es la plata. Cada peso cae en una sola casilla. */
+export interface PorClase {
+  ingreso: number
+  cobro: number
+  /** Préstamos que te dieron. */
+  credEntra: number
+  /** Lo que sacaste de tus metas o de tu fondo. */
+  ahorroEntra: number
+  gasto: number
+  deuda: number
+  /** Lo que apartaste para metas, fondo e inversiones. */
+  ahorroSale: number
+  /** Préstamos que hiciste. */
+  credSale: number
+  /** Suma de la lista (el total de la columna). */
+  total: number
+}
+
+/**
+ * Reparte una lista de movimientos por clase: así el total de una columna del Balance se puede explicar
+ * ("de los $3.000.000 que salen, $2.100.000 son gastos, $500.000 deudas y $400.000 ahorro").
+ */
+export function porClase(movs: Mov[]): PorClase {
+  const s = (dir: Mov["dir"], c: Clase) => movs.filter((x) => x.dir === dir && x.clase === c).reduce((a, x) => a + x.v, 0)
+  return {
+    ingreso: s("entra", "ingreso"), cobro: s("entra", "cobro"), credEntra: s("entra", "credito"), ahorroEntra: s("entra", "ahorro"),
+    gasto: s("sale", "gasto"), deuda: s("sale", "deuda"), ahorroSale: s("sale", "ahorro"), credSale: s("sale", "credito"),
+    total: movs.reduce((a, x) => a + x.v, 0),
+  }
 }
 
 export interface CategoriaGasto { cat: string; catId?: string | null; icon: string; v: number; pct: number }
@@ -324,7 +401,8 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
       }
   }
 
-  // 4. Suscripciones por su día de cobro; el gasto de "Ya se cobró" del mismo mes se empareja con el cobro.
+  // 4. Suscripciones por su día de cobro; los gastos de "Ya se cobró" del mismo mes se emparejan con el cobro
+  //    (pueden ser varios: un cobro se puede pagar en abonos, como un gasto fijo).
   const usados = new Set<string>()
   const expRows = b.expenses as (ExpenseIn & Raw)[]
   for (const s of b.subscriptions) {
@@ -332,16 +410,22 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     const parte = +(s.comparte ?? 0) > 1 ? +(s.comparte as number) : 1
     const prov = raw(s).provider_id
     const sCat = raw(s).category_id
+    const prox = s.proximo ? isoOf(s.proximo) : ""
+    const esperado = conv(s.valor, s.currency, trm) / parte
     for (const [y, m] of meses) {
       const a = new Date(y, m, 1), bb = new Date(y, m, lastDay(y, m))
       for (const d of subOcc(s, a, bb)) {
         const fecha = iso(d)
         if (desde && fecha < desde) continue
-        const g = gastoDeCobro({ id: s.id, nombre: s.nombre, provider_id: prov }, expRows, ym(fecha), usados, (x) => !gastoYaContado(x))
-        if (g) usados.add(g.id)
+        const gs = gastosDeCobro({ id: s.id, nombre: s.nombre, provider_id: prov }, expRows, ym(fecha), usados, (x) => !gastoYaContado(x))
         const base = { id: `sub:${s.id}:${ym(fecha)}`, dir: "sale" as const, modulo: "suscripciones" as const, clase: "gasto" as const, n: s.nombre, icon: "repeat", cat: sCat ? catName(sCat) : "Suscripciones", catId: sCat ?? null, href: "/suscripciones" }
-        if (g) push({ ...base, fecha: g.fecha, s: "Suscripción · ya se cobró", v: conv(+g.valor, g.currency, trm), estado: "hecho" })
-        else push({ ...base, fecha, s: s.ciclo === "anual" ? "Suscripción anual" : "Suscripción", v: conv(s.valor, s.currency, trm) / parte, ...sinRegistro(fecha) })
+        if (!gs.length) { push({ ...base, fecha, s: s.ciclo === "anual" ? "Suscripción anual" : "Suscripción", v: esperado, ...sinRegistro(fecha) }); continue }
+        // El cobro quedó cerrado si la suscripción ya pasó al siguiente (`proximo` avanzó). Si no, lo registrado son
+        // abonos: cada uno sale como hecho y lo que falta sale aparte, igual que en un gasto fijo.
+        const pagado = gs.reduce((acc, g) => acc + conv(+g.valor, g.currency, trm), 0)
+        const abono = !!prox && fecha >= prox && pagado < esperado - 1
+        gs.forEach((g, ix) => push({ ...base, id: `${base.id}${ix ? `:${g.id}` : ""}`, fecha: g.fecha, s: abono ? "Suscripción · abono" : "Suscripción · ya se cobró", v: conv(+g.valor, g.currency, trm), estado: "hecho" }))
+        if (abono) push({ ...base, id: `${base.id}:falta`, fecha, s: `Falta de ${s.nombre} (ya abonaste ${fmtCOP(pagado)})`, v: esperado - pagado, ...(fecha < hoy ? { estado: "vencido" as const } : { estado: "programado" as const }) })
       }
     }
   }
@@ -474,7 +558,12 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     if (!l.length) return []
     const cats = new Map<string, { cat: string; v: number; n: number }>()
     for (const x of l) { const c = cats.get(x.cat) ?? { cat: x.cat, v: 0, n: 0 }; c.v += x.v; c.n++; cats.set(x.cat, c) }
-    return [{ modulo: k, ...MODULOS[k], entra: sum(l.filter((x) => x.dir === "entra")), sale: sum(l.filter((x) => x.dir === "sale")), n: l.length, cats: [...cats.values()].sort((p, q) => q.v - p.v) }]
+    const C = porClase(l)
+    return [{
+      modulo: k, ...MODULOS[k], entra: sum(l.filter((x) => x.dir === "entra")), sale: sum(l.filter((x) => x.dir === "sale")),
+      gasto: C.gasto, deuda: C.deuda, saleFlujo: C.gasto + C.deuda, ahorro: C.ahorroSale - C.ahorroEntra, credito: C.credSale,
+      n: l.length, cats: [...cats.values()].sort((p, q) => q.v - p.v),
+    }]
   })
 
   // Consumo por categoría (regla 2): gastos de consumo del flujo + compras con tarjeta; sin el estimado del presupuesto.
@@ -503,6 +592,57 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     porModulo, porCategoria, sinValor,
     E: entra, Sa: gasto + deuda + ahorro, disp: queda, gastado, nGastos: contados.length, gastadoPres, conTarjetaPer, presupuesto, porGastar,
   }
+}
+
+export interface PagoTarjetaMes {
+  id: string
+  nombre: string
+  /** Mes del pago ('YYYY-MM'). */
+  mes: string
+  /** Lo que registraste que pagaste ese mes. */
+  pagado: number
+  /** Lo que Mirai habría puesto en el flujo si no lo registraras (la cuota del mes de tus compras). */
+  cuota: number
+  /** pagado − cuota: positivo abonaste de más (bajas la deuda más rápido), negativo pagaste menos. */
+  dif: number
+}
+
+/**
+ * Pagos de tarjeta que registraste a mano dentro del periodo. En el Balance reemplazan la estimación del mes (sale lo
+ * que de verdad pagaste), así que conviene avisarlo: si pagaste menos que la cuota del mes la deuda baja más despacio
+ * y si pagaste de más, más rápido.
+ */
+export function pagosTarjetaRegistrados(b: Pick<BookData, "creditCards">, P: Periodo, today: DateInput): PagoTarjetaMes[] {
+  const out: PagoTarjetaMes[] = []
+  for (const t of b.creditCards) {
+    const seen = new Set<string>()
+    for (let d = parseDate(monthStart(P.a)), fin = parseDate(monthStart(P.b)); d <= fin; d = addMonths(d, 1)) {
+      const y = d.getFullYear(), m = d.getMonth()
+      const mes = `${y}-${pad(m + 1)}`
+      if (seen.has(mes)) continue
+      seen.add(mes)
+      const fm = tarjetaFlujoMes(t, y, m, today)
+      const pagos = fm.pagos.filter((p) => { const f = isoOf(p.fecha); return f >= P.a && f <= P.b })
+      if (!pagos.length) continue
+      const pagado = pagos.reduce((a, p) => a + +p.valor, 0)
+      const cuota = tarjetaCuotaMes(t, today, (y - toDay(today).getFullYear()) * 12 + (m - toDay(today).getMonth()))
+      out.push({ id: t.id, nombre: t.nombre, mes, pagado, cuota, dif: pagado - cuota })
+    }
+  }
+  return out
+}
+
+export interface ParteModulo { modulo: Modulo; label: string; icon: string; href: string; v: number; pct: number }
+
+/**
+ * De dónde sale cada peso de "Sale" (`tot.sale`), por módulo y de mayor a menor. Solo consumo y deudas: el ahorro y los
+ * préstamos que hiciste NO están en "Sale" y por eso tampoco aquí (si no, el desglose no cuadraría con el total).
+ * `incluirPresupuesto`: cuenta lo que falta por gastar según tu presupuesto (sí está en "Sale").
+ */
+export function salidasPorModulo(F: Pick<FlujoIntegral, "porModulo" | "tot">, incluirPresupuesto = true): ParteModulo[] {
+  const l = F.porModulo.filter((g) => g.saleFlujo > 0 && (incluirPresupuesto || g.modulo !== "presupuesto"))
+  const tot = l.reduce((a, g) => a + g.saleFlujo, 0)
+  return l.map((g) => ({ modulo: g.modulo, label: g.label, icon: g.icon, href: g.href, v: g.saleFlujo, pct: tot ? g.saleFlujo / tot : 0 })).sort((p, q) => q.v - p.v)
 }
 
 // ——— Lo que tienes y lo que debes ———
@@ -544,6 +684,13 @@ export interface EstadoIntegral {
   A: number
   /** Ahorro apartado (metas y fondo de emergencia que no están dentro de una de tus cuentas). */
   apartado: number
+  /**
+   * Parte del ahorro apartado que puede estar contada dos veces: guardaste sin decir de qué cuenta salió y tus
+   * cuentas llevan el saldo solas (ver `ahorroApartado`). La app lo avisa; no se descuenta solo.
+   */
+  apartadoDudoso: number
+  /** Metas y fondo con plata que puede estar contada dos veces. */
+  dudosas: { k: string; n: string; v: number }[]
   /** Lo que debo: `totales().P` + impuestos que ya debes (estimados). */
   P: number
   pat: number
@@ -567,7 +714,7 @@ export function estadoIntegral(b: BookData, today: DateInput, X: ExtrasIntegral 
     const v = conv(a.valor, a.currency, trm)
     tengo.push({ k: `asset:${a.id}`, grupo: /^11/.test(String(a.cod)) ? "dinero" : "bienes", n: a.nombre ?? "Cuenta", s: a.cuenta?.vivo ? "Se actualiza con tus movimientos" : "", icon: /^11/.test(String(a.cod)) ? "landmark" : "house", v, ref: a.id ? { table: "assets", id: a.id } : undefined })
   }
-  const ap = ahorroApartado(b as LibroCuentas)
+  const ap = ahorroApartado(b as LibroCuentas, X.fondo)
   for (const l of ap.lineas) tengo.push({ k: l.k, grupo: "ahorro", n: l.n, s: l.s, icon: l.icon, v: l.v, href: l.href })
   for (const x of b.investments) {
     const v = conv(inv(x, today).valor, x.currency, trm)
@@ -612,7 +759,11 @@ export function estadoIntegral(b: BookData, today: DateInput, X: ExtrasIntegral 
   debo.sort((p, q) => q.v - p.v)
   const P = T.P + impuestos
   const A = T.A + ap.total
-  return { T, tengo, debo, A, apartado: ap.total, P, pat: A - P, impuestos, liquidez: liquidez(b.assets, b.investments, trm, today) }
+  return {
+    T, tengo, debo, A, apartado: ap.total, apartadoDudoso: ap.dudoso,
+    dudosas: ap.lineas.filter((l) => (l.dudoso ?? 0) > 0).map((l) => ({ k: l.k, n: l.n, v: l.dudoso as number })),
+    P, pat: A - P, impuestos, liquidez: liquidez(b.assets, b.investments, trm, today),
+  }
 }
 
 /** Foto del patrimonio del mes (tabla `net_worth_snapshots`): la guarda el Balance al abrirse y el cron el día 1. */
@@ -630,4 +781,55 @@ export function partesEstado(lines: LineaEstado[]): ParteEstado[] {
   for (const l of lines) m.set(l.grupo, (m.get(l.grupo) ?? 0) + l.v)
   const tot = [...m.values()].reduce((a, v) => a + Math.max(0, v), 0)
   return [...m.entries()].filter(([, v]) => v > 0).map(([k, v]) => ({ k, label: GRUPOS[k as GrupoTengo].label, icon: GRUPOS[k as GrupoTengo].icon, href: GRUPOS[k as GrupoTengo].href, v, pct: tot ? v / tot : 0 })).sort((a, b) => b.v - a.v)
+}
+
+// ——— Cuenta T del mes (Balance) ———
+
+/** Una fila de la cuenta T del mes: un módulo con lo que entró o salió en el periodo. */
+export interface FilaMes extends ParteModulo {
+  /** Cuántos movimientos la componen. */
+  n: number
+  /** Lo que todavía no pasa (pendiente o vencido) dentro de esa fila. */
+  pendiente: number
+  /** Las categorías de adentro, de mayor a menor (para abrir la fila). */
+  cats: { cat: string; v: number; n: number }[]
+}
+
+export interface CuentaTMes extends Periodo {
+  /** Todo lo que entra en el periodo: sueldo, extras, cobros… */
+  entra: FilaMes[]
+  /** Todo lo que sale en el periodo: fijos, día a día, cuotas, tarjetas, suscripciones, impuestos… */
+  sale: FilaMes[]
+  totEntra: number
+  totSale: number
+  /** Lo que queda (entra − sale). Negativo = este mes sale más de lo que entra. */
+  queda: number
+  /** De lo que sale, lo que aún está pendiente o vencido. */
+  pendienteSale: number
+  /** Lo que apartaste para metas, fondo e inversiones en el periodo (va aparte: no es gasto ni patrimonio). */
+  ahorro: number
+}
+
+/**
+ * La cuenta T del Balance, **solo con lo del periodo**: a la izquierda todo lo que entra (sueldo, bonos, extras,
+ * cobros) y a la derecha todo lo que se debe pagar en él (fijos, gasto del día a día, cuotas, tarjetas,
+ * suscripciones, impuestos, mesadas). El patrimonio y lo que tienes ahorrado NO van aquí: eso es una foto de hoy y
+ * se muestra aparte (`estadoIntegral`). Así las dos cuentas no se mezclan.
+ */
+export function cuentaTMes(F: FlujoIntegral): CuentaTMes {
+  const fila = (g: GrupoModulo, v: number, dir: "entra" | "sale"): FilaMes => ({
+    modulo: g.modulo, label: g.label, icon: g.icon, href: g.href, v, pct: 0, n: g.n, cats: g.cats,
+    pendiente: F.movs.filter((m) => m.modulo === g.modulo && m.dir === dir && m.estado !== "hecho").reduce((a, m) => a + m.v, 0),
+  })
+  const conPct = (l: FilaMes[]) => { const t = l.reduce((a, x) => a + x.v, 0); return l.map((x) => ({ ...x, pct: t ? x.v / t : 0 })).sort((a, b) => b.v - a.v) }
+  const entra = conPct(F.porModulo.filter((g) => g.entra > 0).map((g) => fila(g, g.entra, "entra")))
+  const sale = conPct(F.porModulo.filter((g) => g.saleFlujo > 0).map((g) => fila(g, g.saleFlujo, "sale")))
+  const totEntra = entra.reduce((a, x) => a + x.v, 0)
+  const totSale = sale.reduce((a, x) => a + x.v, 0)
+  return {
+    a: F.a, b: F.b, tipo: F.tipo, entra, sale, totEntra, totSale,
+    queda: totEntra - totSale,
+    pendienteSale: sale.reduce((a, x) => a + x.pendiente, 0),
+    ahorro: F.tot.ahorro,
+  }
 }

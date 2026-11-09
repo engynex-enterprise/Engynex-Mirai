@@ -459,14 +459,14 @@ isOneToOne: false
                   ]
                 },"book_settings": {
                   Row: {
-                    "alerta_pres": number,"anticipo": number,"apps": NonNullable<Json>,"book_id": string,"corte_q": number,"defaults": NonNullable<Json>,"emerg_meta": number,"estricto": string,"gami": boolean,"ia": NonNullable<Json>,"limite": number,"meta": string,"nomina": NonNullable<Json>,"notif": NonNullable<Json>,"pct": NonNullable<Json>,"relaciones": (string)[],"setup": NonNullable<Json>,"smmlv": NonNullable<Json>,"trm": NonNullable<Json>,"trm_auto": boolean,"umbral": number,"updated_at": string,"usura": number,"usura_auto": boolean,"uvt": NonNullable<Json>
+                    "alerta_pres": number,"anticipo": number,"apps": NonNullable<Json>,"book_id": string,"corte_q": number,"defaults": NonNullable<Json>,"emerg_meta": number,"estricto": string,"gami": boolean,"ia": NonNullable<Json>,"limite": number,"meta": string,"meta_cfg": NonNullable<Json>,"nomina": NonNullable<Json>,"notif": NonNullable<Json>,"pct": NonNullable<Json>,"relaciones": (string)[],"setup": NonNullable<Json>,"smmlv": NonNullable<Json>,"trm": NonNullable<Json>,"trm_auto": boolean,"umbral": number,"updated_at": string,"usura": number,"usura_auto": boolean,"uvt": NonNullable<Json>
                   }
                   ComputedFields: never
                   Insert: {
-                    "alerta_pres"?: number,"anticipo"?: number,"apps"?: NonNullable<Json>,"book_id": string,"corte_q"?: number,"defaults"?: NonNullable<Json>,"emerg_meta"?: number,"estricto"?: string,"gami"?: boolean,"ia"?: NonNullable<Json>,"limite"?: number,"meta"?: string,"nomina"?: NonNullable<Json>,"notif"?: NonNullable<Json>,"pct"?: NonNullable<Json>,"relaciones"?: (string)[],"setup"?: NonNullable<Json>,"smmlv"?: NonNullable<Json>,"trm"?: NonNullable<Json>,"trm_auto"?: boolean,"umbral"?: number,"updated_at"?: string,"usura"?: number,"usura_auto"?: boolean,"uvt"?: NonNullable<Json>
+                    "alerta_pres"?: number,"anticipo"?: number,"apps"?: NonNullable<Json>,"book_id": string,"corte_q"?: number,"defaults"?: NonNullable<Json>,"emerg_meta"?: number,"estricto"?: string,"gami"?: boolean,"ia"?: NonNullable<Json>,"limite"?: number,"meta"?: string,"meta_cfg"?: NonNullable<Json>,"nomina"?: NonNullable<Json>,"notif"?: NonNullable<Json>,"pct"?: NonNullable<Json>,"relaciones"?: (string)[],"setup"?: NonNullable<Json>,"smmlv"?: NonNullable<Json>,"trm"?: NonNullable<Json>,"trm_auto"?: boolean,"umbral"?: number,"updated_at"?: string,"usura"?: number,"usura_auto"?: boolean,"uvt"?: NonNullable<Json>
                   }
                   Update: {
-                    "alerta_pres"?: number,"anticipo"?: number,"apps"?: NonNullable<Json>,"book_id"?: string,"corte_q"?: number,"defaults"?: NonNullable<Json>,"emerg_meta"?: number,"estricto"?: string,"gami"?: boolean,"ia"?: NonNullable<Json>,"limite"?: number,"meta"?: string,"nomina"?: NonNullable<Json>,"notif"?: NonNullable<Json>,"pct"?: NonNullable<Json>,"relaciones"?: (string)[],"setup"?: NonNullable<Json>,"smmlv"?: NonNullable<Json>,"trm"?: NonNullable<Json>,"trm_auto"?: boolean,"umbral"?: number,"updated_at"?: string,"usura"?: number,"usura_auto"?: boolean,"uvt"?: NonNullable<Json>
+                    "alerta_pres"?: number,"anticipo"?: number,"apps"?: NonNullable<Json>,"book_id"?: string,"corte_q"?: number,"defaults"?: NonNullable<Json>,"emerg_meta"?: number,"estricto"?: string,"gami"?: boolean,"ia"?: NonNullable<Json>,"limite"?: number,"meta"?: string,"meta_cfg"?: NonNullable<Json>,"nomina"?: NonNullable<Json>,"notif"?: NonNullable<Json>,"pct"?: NonNullable<Json>,"relaciones"?: (string)[],"setup"?: NonNullable<Json>,"smmlv"?: NonNullable<Json>,"trm"?: NonNullable<Json>,"trm_auto"?: boolean,"umbral"?: number,"updated_at"?: string,"usura"?: number,"usura_auto"?: boolean,"uvt"?: NonNullable<Json>
                   }
                   Relationships: [
                     {
@@ -789,14 +789,14 @@ isOneToOne: false
                   ]
                 },"expenses": {
                   Row: {
-                    "aporte": Json | null,"book_id": string,"cat_src": string | null,"category_id": string | null,"contact_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deducible": string | null,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"member_ids": (string)[] | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"provider_id": string | null,"sub_proximo": string | null,"subscription_id": string | null,"updated_at": string,"valor": number
+                    "aporte": Json | null,"book_id": string,"cat_src": string | null,"category_id": string | null,"contact_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deducible": string | null,"deleted_at": string | null,"descripcion": string,"external_id": string | null,"fecha": string,"fixed_expense_id": string | null,"fondo_valor": number,"hormiga": boolean,"hormiga_razon": string | null,"hormiga_src": string | null,"id": string,"member_id": string | null,"member_ids": (string)[] | null,"nota": string,"origen": string,"payment_method_id": string | null,"periodo": string | null,"provider_id": string | null,"sub_parcial": boolean | null,"sub_proximo": string | null,"subscription_id": string | null,"updated_at": string,"valor": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "aporte"?: Json | null,"book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
+                    "aporte"?: Json | null,"book_id": string,"cat_src"?: string | null,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_parcial"?: boolean | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Update: {
-                    "aporte"?: Json | null,"book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
+                    "aporte"?: Json | null,"book_id"?: string,"cat_src"?: string | null,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deducible"?: string | null,"deleted_at"?: string | null,"descripcion"?: string,"external_id"?: string | null,"fecha"?: string,"fixed_expense_id"?: string | null,"fondo_valor"?: number,"hormiga"?: boolean,"hormiga_razon"?: string | null,"hormiga_src"?: string | null,"id"?: string,"member_id"?: string | null,"member_ids"?: (string)[] | null,"nota"?: string,"origen"?: string,"payment_method_id"?: string | null,"periodo"?: string | null,"provider_id"?: string | null,"sub_parcial"?: boolean | null,"sub_proximo"?: string | null,"subscription_id"?: string | null,"updated_at"?: string,"valor"?: number
                   }
                   Relationships: [
                     {
@@ -2444,7 +2444,7 @@ isOneToOne: false
 { Args: { "r": string }; Returns: string
                            },
 "link_expense_fixed":
-{ Args: { "p_expense": string,"p_fixed": string,"p_periodo": string }; Returns: Json
+{ Args: { "p_cierra"?: boolean,"p_expense": string,"p_fixed": string,"p_periodo": string }; Returns: Json
                            },
 "link_family_member":
 { Args: { "p_family": string,"p_household": string,"p_user": string }; Returns: undefined
@@ -2482,7 +2482,7 @@ isOneToOne: false
 { Args: { "p_cierra"?: boolean,"p_desc_suffix"?: string,"p_fecha": string,"p_fixed": string,"p_medio"?: string,"p_periodo": string,"p_valor": number }; Returns: Json
                            },
 "pay_subscription":
-{ Args: { "p_fecha"?: string,"p_medio"?: string,"p_sub": string,"p_valor"?: number }; Returns: Json
+{ Args: { "p_fecha"?: string,"p_medio"?: string,"p_parcial"?: boolean,"p_sub": string,"p_valor"?: number }; Returns: Json
                            },
 "person_label":
 { Args: { "p_user": string }; Returns: string

@@ -119,6 +119,12 @@
     "from": "https://www.daviplata.com/documents/33100/247243/Logo+dav/9c05b554-7487-ae4f-d805-84323b99ba7b",
     "at": "2026-11-07"
   },
+  "davivienda": {
+    "file": "/brands/davivienda.png",
+    "bleed": true,
+    "from": "https://www.davivienda.com/documents/816881/819781/Logo+davivienda/dfe78d40-5bde-7774-88d9-99b23d27e36e",
+    "at": "2026-11-08"
+  },
   "didi": {
     "file": "/brands/didi.png",
     "bleed": false,
@@ -166,6 +172,12 @@
     "bleed": false,
     "from": "https://www.fna.gov.co/icons/favicon.png",
     "at": "2026-11-07"
+  },
+  "global66": {
+    "file": "/brands/global66.svg",
+    "bleed": false,
+    "from": "https://www.global66.com/ui-kit/assets/at-logo-iso/iso-default.svg",
+    "at": "2026-11-08"
   },
   "iris": {
     "file": "/brands/iris.png",
@@ -287,6 +299,12 @@
     "from": "https://www.tigo.com.co/apple-touch-icon.png",
     "at": "2026-11-07"
   },
+  "tuya": {
+    "file": "/brands/tuya.svg",
+    "bleed": false,
+    "from": "https://www.tuya.com.co/sites/all/themes/tuya/assets/images/pre-home/logo_tuya.svg",
+    "at": "2026-11-08"
+  },
   "twelvedata": {
     "file": "/brands/twelvedata.png",
     "bleed": false,
@@ -310,6 +328,12 @@
     "bleed": true,
     "from": "https://vix.com/assets/externals/icons/apple-touch-icon-192x192.png",
     "at": "2026-11-07"
+  },
+  "wompi": {
+    "file": "/brands/wompi.svg",
+    "bleed": false,
+    "from": "https://public-assets.wompi.com/brand_wompi/logos/isotipo-primary.svg",
+    "at": "2026-11-08"
   },
   "xbox": {
     "file": "/brands/xbox.png",

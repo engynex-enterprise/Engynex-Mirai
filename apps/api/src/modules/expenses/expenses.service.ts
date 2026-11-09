@@ -6,7 +6,7 @@ import { Injectable } from "@nestjs/common"
 import type { ExpenseInput, ExpenseSaved, LinkFixed } from "@mirai/contracts/modules/expenses"
 import type { z } from "zod"
 import { todayBogota } from "@mirai/domain/dates"
-import { sugerirPagoFijo } from "@mirai/domain/fixed"
+import { pagoPeriodo, sugerirPagoFijo } from "@mirai/domain/fixed"
 import { atLeast } from "@mirai/domain/household/roles"
 import { isHormiga, localCat, vecesMes, type LocalCatSource } from "@mirai/domain/hormiga"
 import { DomainError } from "../../core/errors/domain-error"
@@ -104,7 +104,7 @@ export class ExpensesService {
     } else if (!prev && editor) {
       const fijos = (await this.tables.part(w.scope, w.bookId, "fixed_expenses")).map((f: Rec) => ({ ...f, payments: ((f.fixed_expense_payments as Rec[] | undefined) ?? []).filter((p) => !p.deleted_at) }))
       const sug = sugerirPagoFijo({ descripcion, valor: v.valor, fecha: String(expense.fecha), provider_id: v.provider_id ?? null, fixed_expense_id: null, origen: v.origen }, fijos as never, today)
-      if (sug) sugerenciaFijo = { fixed_id: String(sug.fixed.id), nombre: sug.fixed.nombre, periodo: sug.per, due: sug.due, valor: sug.valor }
+      if (sug) sugerenciaFijo = { fixed_id: String(sug.fixed.id), nombre: sug.fixed.nombre, periodo: sug.per, due: sug.due, valor: sug.valor, abonado: sug.abonado, completo: sug.completo }
     }
 
     w.changed("expenses", id, prev ? "UPDATE" : "INSERT", fondo ? ["fund_movements", "emergency_funds"] : [])
@@ -115,14 +115,27 @@ export class ExpensesService {
     }
   }
 
-  /** POST …/expenses/:id/link-fixed (link_expense_fixed). */
+  /**
+   * POST …/expenses/:id/link-fixed (link_expense_fixed). Si el periodo ya tiene abonos, este gasto se suma como uno
+   * más: queda pagado solo si cubre lo que falta (la misma regla de `pay_fixed_expense`).
+   */
   async linkFixed(expenseId: string, b: z.output<typeof LinkFixed>): Promise<unknown> {
     this.w.requireRole("editor", "editarTodo")
-    await this.w.rowOf("expenses", expenseId, { alive: true, msg: EXPENSE_NOT_FOUND })
-    await this.w.rowOf("fixed_expenses", b.fixedId, { alive: true, msg: "No encontramos ese gasto fijo." })
-    const r = await this.store.rpc(this.w.scope, "link_expense_fixed", { p_expense: expenseId, p_fixed: b.fixedId, p_periodo: b.periodo })
+    const g = await this.w.rowOf("expenses", expenseId, { alive: true, msg: EXPENSE_NOT_FOUND })
+    const f = await this.w.rowOf("fixed_expenses", b.fixedId, { alive: true, msg: "No encontramos ese gasto fijo." })
+    const fij = { frec: String(f.frec), valor: num(f.valor), reparto: f.reparto, variable: !!f.variable }
+    const previos = (await this.store.rows(this.w.scope, "fixed_expense_payments", this.w.bookId, { eq: { fixed_expense_id: b.fixedId, periodo: b.periodo } }))
+      .map((x) => ({ id: String(x.id), periodo: String(x.periodo), fecha: String(x.fecha), valor: num(x.valor), cierra: x.cierra as boolean | null }))
+    const P = pagoPeriodo(fij, b.periodo, previos)
+    if (P.completo) throw DomainError.conflict("Ese periodo ya está pagado.")
+    // Pagos de antes sin marcar que quedaron cortos: pasan a ser abonos (si no, la base no deja enlazar el resto).
+    for (const x of previos.filter((x) => x.cierra == null)) await this.store.update(this.w.scope, "fixed_expense_payments", this.w.bookId, x.id, { cierra: false })
+    // Sin abonos antes, enlazar deja el periodo pagado (como siempre: "esta vez costó menos"). Con abonos, solo si
+    // este gasto cubre lo que falta.
+    const cierra = b.completo ?? (!P.pagos.length || P.pagado + num(g.valor) >= P.esperado - 1)
+    const r = await this.store.rpc(this.w.scope, "link_expense_fixed", { p_expense: expenseId, p_fixed: b.fixedId, p_periodo: b.periodo, p_cierra: cierra })
     this.w.changed("expenses", expenseId, "UPDATE", ["fixed_expense_payments", "fixed_expenses"])
-    return r
+    return { ...((r ?? {}) as Record<string, unknown>), completo: cierra, falta: cierra ? 0 : Math.max(0, P.esperado - P.pagado - num(g.valor)) }
   }
 
   /** POST …/expenses/:id/unlink-fixed (unlink_expense_fixed). */

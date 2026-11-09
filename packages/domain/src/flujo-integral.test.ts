@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { quincenaBalance } from "./balance"
 import { tarjetaPagoMes } from "./cards"
-import { estadoIntegral, flujoIntegral, partesEstado, periodo, type ExtrasIntegral } from "./flujo-integral"
+import { cuentaTMes, estadoIntegral, periodosDelLibro, flujoIntegral, partesEstado, periodo, type ExtrasIntegral } from "./flujo-integral"
 import { totales } from "./totals"
 import type { BookData } from "./types"
 
@@ -235,5 +235,71 @@ describe("estadoIntegral: lo que tienes y lo que debes", () => {
     expect(E.debo.reduce((a, l) => a + l.v, 0)).toBeCloseTo(E.P)
     const P = partesEstado(E.debo)
     expect(P.reduce((a, x) => a + x.pct, 0)).toBeCloseTo(1)
+  })
+})
+
+describe("cuenta T del mes (solo lo del periodo)", () => {
+  const b = libro()
+  const P = periodo(b, "mes", 2026, 10)
+  const F = flujoIntegral(b, P, HOY)
+  const T = cuentaTMes(F)
+
+  it("las dos columnas suman lo mismo que el flujo del mes", () => {
+    expect(Math.round(T.totEntra)).toBe(Math.round(F.tot.entra))
+    expect(Math.round(T.totSale)).toBe(Math.round(F.tot.sale))
+    expect(Math.round(T.queda)).toBe(Math.round(F.tot.entra - F.tot.sale))
+  })
+
+  it("cada columna cuadra con sus filas y los porcentajes suman 1", () => {
+    expect(Math.round(T.entra.reduce((a, x) => a + x.v, 0))).toBe(Math.round(T.totEntra))
+    expect(Math.round(T.sale.reduce((a, x) => a + x.v, 0))).toBe(Math.round(T.totSale))
+    if (T.sale.length) expect(T.sale.reduce((a, x) => a + x.pct, 0)).toBeCloseTo(1, 6)
+    if (T.entra.length) expect(T.entra.reduce((a, x) => a + x.pct, 0)).toBeCloseTo(1, 6)
+  })
+
+  it("el ahorro va aparte y no se cuenta como salida del mes", () => {
+    expect(T.ahorro).toBe(F.tot.ahorro)
+    expect(T.sale.some((x) => x.modulo === "metas" && x.v > 0 && !F.porModulo.find((g) => g.modulo === "metas")?.saleFlujo)).toBe(false)
+  })
+
+  it("las filas vienen de mayor a menor y traen lo pendiente", () => {
+    const vs = T.sale.map((x) => x.v)
+    expect([...vs].sort((a, b) => b - a)).toEqual(vs)
+    expect(T.pendienteSale).toBeGreaterThanOrEqual(0)
+    expect(T.pendienteSale).toBeLessThanOrEqual(Math.round(T.totSale) + 1)
+  })
+})
+
+describe("periodos que se adaptan a cómo te pagan", () => {
+  const conFrec = (frec: string) => libro({ incomes: [{ id: "i1", concepto: "Pago", valor: 100_000, frec, dia: 15, currency: "COP" } as never] })
+
+  it("quien cobra por semana ve la semana; quien cobra quincenal ve sus quincenas", () => {
+    expect(periodosDelLibro(conFrec("semanal")).map((x) => x.tipo)).toContain("semana")
+    expect(periodosDelLibro(conFrec("diario")).map((x) => x.tipo)).toContain("semana")
+    const q = periodosDelLibro(conFrec("quincenal")).map((x) => x.tipo)
+    expect(q).toContain("q1")
+    expect(q).toContain("q2")
+    expect(q).not.toContain("semana")
+  })
+
+  it("quien solo cobra mensual no ve quincenas ni semana", () => {
+    const t = periodosDelLibro(conFrec("mensual")).map((x) => x.tipo)
+    expect(t).not.toContain("q1")
+    expect(t).not.toContain("semana")
+    expect(t).toContain("mes")
+    expect(t).toContain("anio")
+  })
+
+  it("con pagos anuales o fechas del calendario aparece el semestre", () => {
+    expect(periodosDelLibro(conFrec("anual")).map((x) => x.tipo)).toContain("semestre")
+    expect(periodosDelLibro(conFrec("mensual")).map((x) => x.tipo)).not.toContain("semestre")
+  })
+
+  it("la semana va de lunes a domingo y el semestre parte el año en dos", () => {
+    const b = libro()
+    // El 10 de noviembre de 2026 es martes: la semana va del lunes 9 al domingo 15.
+    expect(periodo(b, "semana", 2026, 10, 10)).toMatchObject({ a: "2026-11-09", b: "2026-11-15" })
+    expect(periodo(b, "semestre", 2026, 2)).toMatchObject({ a: "2026-01-01", b: "2026-06-30" })
+    expect(periodo(b, "semestre", 2026, 8)).toMatchObject({ a: "2026-07-01", b: "2026-12-31" })
   })
 })

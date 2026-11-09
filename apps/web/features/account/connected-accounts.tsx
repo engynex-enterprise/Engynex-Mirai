@@ -30,14 +30,14 @@ const PERFIL = "/perfil"
 /** Mensajes al volver de Google o de un enlace de cambio de correo. */
 const RETURN_MSG: Record<string, [ok: boolean, title: string, desc?: string]> = {
   "cuentas:ya_existe": [false, "Esa cuenta de Google ya es de otra persona en Mirai", "Cada cuenta de Google solo puede estar en una cuenta de Mirai. Entra con esa cuenta y bórrala (Ajustes › Datos y cuenta) o elige otra cuenta de Google."],
-  "cuentas:sin_vincular": [false, "No pudimos conectar la cuenta de Google", "La conexión de cuentas está apagada en Mirai. Escríbenos desde Ayuda › Soporte."],
+  "cuentas:sin_vincular": [false, "No pudimos conectar la cuenta de Google", "Por ahora no se pueden conectar cuentas de Google. Escríbenos desde Ayuda › Soporte y te ayudamos."],
   "cuentas:error": [false, "No pudimos conectar la cuenta de Google", "Intenta de nuevo. Si cancelaste en la ventana de Google, no pasó nada."],
   "correo:listo": [true, "¡Listo! Cambiamos el correo de tu cuenta", "Desde ahora entras y recibes los avisos en tu correo nuevo."],
   "correo:falta_otro": [true, "Confirmaste uno de los dos enlaces", "Abre también el enlace que te llegó al otro correo para terminar el cambio."],
 }
 
 /**
- * Perfil › "Cuentas conectadas": las formas de entrar (Google con su correo, correo y contraseña, enlace mágico) con
+ * Perfil › "Cómo entras a Mirai": las formas de entrar (Google con su correo, correo y contraseña, enlace mágico) con
  * Cambiar y Quitar, el correo de la cuenta con su cambio pendiente, Agregar otra forma de entrar y el paso a paso
  * "Mi correo de Google ya no lo uso". Ajustes › Tu cuenta enlaza aquí (sin repetir la lógica).
  */
@@ -104,8 +104,9 @@ export function ConnectedAccounts() {
   }
 
   if (isPending || !account) return (
-    <Panel id="cuentas" title="Cuentas conectadas" icon="link" className="h-auto">
-      <div className="grid gap-3" aria-busy="true" aria-label="Cargando cuentas">{[0, 1, 2].map((i) => <div key={i} className="flex items-center gap-3"><Skeleton className="size-10 rounded-[28%]" /><div className="grid flex-1 gap-1.5"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-40" /></div></div>)}</div>
+    <Panel id="cuentas" title="Cómo entras a Mirai" icon="link" className="h-auto">
+      <Skeleton className="h-20 w-full rounded-xl" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Cargando cuentas">{[0, 1, 2].map((i) => <div key={i} className="grid gap-3 rounded-xl border p-4"><div className="flex items-center gap-3"><Skeleton className="size-10 rounded-[28%]" /><div className="grid flex-1 gap-1.5"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-40" /></div></div><Skeleton className="h-9 w-full" /></div>)}</div>
     </Panel>
   )
 
@@ -118,44 +119,53 @@ export function ConnectedAccounts() {
   }
 
   return (
-    <Panel id="cuentas" title="Cuentas conectadas" icon="link" className="h-auto scroll-mt-20"
+    <Panel id="cuentas" title="Cómo entras a Mirai" icon="link" className="h-auto scroll-mt-20"
       action={<Button size="sm" variant="ghost" onClick={() => openHelpCenter("cuenta")}><CircleHelp /> Cómo funciona</Button>}
-      description="Las formas en que entras a Mirai. Tus datos están en tu cuenta, no en el correo: si cambias de correo o de cuenta de Google, no pierdes nada.">
-      {/* Correo de la cuenta */}
+      description="Aquí decides con qué entras: tu cuenta de Google, tu contraseña o un enlace al correo. Cambiar de correo no borra nada: tus gastos, metas y hogar siguen igual. (Nada que ver con tus cuentas del banco.)">
+      {/* Correo de la cuenta: la fila ancha de arriba */}
       <div className="grid gap-2" data-method="correo">
-        <div className="flex flex-wrap items-center gap-3">
-          <ToneIcon icon="mail" tone="blue" className="rounded-[28%]" />
-          <div className="min-w-0 flex-1"><p className="text-sm font-medium">Correo de tu cuenta</p><p className="truncate text-xs text-muted-foreground" title={account.email ?? ""}>{account.email}</p></div>
-          <Button size="sm" variant="outline" onClick={() => setEmailOpen(true)}><Pencil /> Cambiar correo</Button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl bg-secondary/50 p-4">
+          <ToneIcon icon="mail" tone="blue" className="size-12 rounded-[28%]" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] text-muted-foreground">Correo de tu cuenta</p>
+            <p className="truncate text-[17px] leading-6 font-semibold" title={account.email ?? ""}>{account.email}</p>
+            <p className="text-[13px] text-muted-foreground">Aquí te llegan los avisos y los enlaces para entrar.</p>
+          </div>
+          <Button size="sm" variant="outline" className="max-sm:w-full" onClick={() => setEmailOpen(true)}><Pencil /> Cambiar correo</Button>
         </div>
         <PendingEmail account={account} onDone={refresh} />
       </div>
 
-      <ul className="grid gap-3 border-t pt-3" aria-label="Formas de entrar">
+      {/* Formas de entrar: una tarjeta por forma, en dos o tres columnas según el ancho */}
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Formas de entrar">
         {methods.map((m) => (
-          <li key={m.key} className="grid gap-1" data-method={m.kind}>
-            <div className="flex flex-wrap items-center gap-3">
-              {m.kind === "google" ? <BrandLogo k="google" size={40} /> : <ToneIcon icon={m.kind === "password" ? "key-round" : "wand-sparkles"} tone={m.kind === "password" ? "navy" : "violet"} className="rounded-[28%]" />}
+          <li key={m.key} className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" data-method={m.kind}>
+            <div className="flex min-w-0 items-start gap-3">
+              {m.kind === "google" ? <BrandLogo k="google" size={40} /> : <ToneIcon icon={m.kind === "password" ? "key-round" : "wand-sparkles"} tone={m.kind === "password" ? "navy" : "violet"} className="size-10 rounded-[28%]" />}
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{m.label}</p>
-                <p className="truncate text-xs text-muted-foreground" title={m.detail}>{m.kind === "magic" ? `Te llega a ${m.detail}` : m.detail}</p>
-                {m.kind !== "magic" && <p className="text-xs text-muted-foreground">{m.lastAt ? `Última vez: ${haceCuanto(m.lastAt)}` : "Aún no has entrado con esta forma"}</p>}
+                <p className="text-[15px] leading-5 font-semibold">{m.label}</p>
+                <p className="truncate text-[13px] text-muted-foreground" title={m.detail}>{m.kind === "magic" ? `Te llega a ${m.detail}` : m.detail}</p>
               </div>
-              {m.kind === "magic" ? <Tip label="Sirve mientras uses este correo. Si cambias el correo de tu cuenta, el enlace te llega al nuevo."><span><StatusPill tone="ok">Disponible</StatusPill></span></Tip> : (
-                <div className="flex flex-wrap items-center gap-1 max-sm:w-full max-sm:justify-end">
-                  {m.kind === "google"
-                    ? <Button size="sm" variant="outline" disabled={linking} onClick={() => linkGoogle(m.identityId)} aria-label={`Cambiar cuenta de Google ${m.detail}`}>{linking ? <Spinner /> : <ArrowRightLeft />} Cambiar</Button>
-                    : <Button size="sm" variant="outline" onClick={() => setPwOpen(true)} aria-label="Cambiar contraseña"><KeyRound /> Cambiar</Button>}
-                  {removeBtn(m)}
-                </div>
-              )}
+              {m.kind === "magic" && <Tip label="Siempre puedes entrar así. Si cambias tu correo, el enlace te llega al nuevo."><span><StatusPill tone="ok">Siempre activo</StatusPill></span></Tip>}
             </div>
-            {!m.removable && m.kind !== "magic" && <p className="pl-[52px] text-xs text-muted-foreground">Es tu única forma de entrar: agrega otra antes de quitarla.</p>}
+            <p className="text-[13px] text-muted-foreground">
+              {m.kind === "magic" ? "Te mandamos un enlace a tu correo, lo tocas y entras. Sin contraseña."
+                : !m.removable ? "Es la única manera que tienes de entrar. Agrega otra antes de quitar esta."
+                : m.lastAt ? `Última vez: ${haceCuanto(m.lastAt)}` : "Todavía no has entrado por aquí"}
+            </p>
+            {m.kind !== "magic" && (
+              <div className="mt-auto flex flex-wrap items-center gap-2">
+                {m.kind === "google"
+                  ? <Button size="sm" variant="outline" className="flex-1" disabled={linking} onClick={() => linkGoogle(m.identityId)} aria-label={`Cambiar cuenta de Google ${m.detail}`}>{linking ? <Spinner /> : <ArrowRightLeft />} Cambiar</Button>
+                  : <Button size="sm" variant="outline" className="flex-1" onClick={() => setPwOpen(true)} aria-label="Cambiar contraseña"><KeyRound /> Cambiar</Button>}
+                {removeBtn(m)}
+              </div>
+            )}
           </li>
         ))}
       </ul>
 
-      <div className="flex flex-wrap gap-2 border-t pt-3">
+      <div className="flex flex-wrap items-center gap-2 border-t pt-4">
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild><Button size="sm"><Plus /> Agregar otra forma de entrar</Button></DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-60">
@@ -164,8 +174,8 @@ export function ConnectedAccounts() {
           </DropdownMenuContent>
         </DropdownMenu>
         {gs.length > 0 && <Button size="sm" variant="outline" onClick={() => setMoveOpen(true)}><Wand2 /> Mi correo de Google ya no lo uso</Button>}
+        <p className="text-[13px] text-muted-foreground sm:ml-auto sm:text-right">Sesiones abiertas y actividad de seguridad en <Link className="text-link underline" href="/ajustes?tab=cuenta"><Settings className="inline size-3" /> Ajustes › Tu cuenta</Link> · Dos pasos en <Link className="text-link underline" href="/ajustes?tab=seguridad">Seguridad</Link>.</p>
       </div>
-      <p className="text-xs text-muted-foreground">Sesiones abiertas, actividad de seguridad y dueño del hogar en <Link className="text-link underline" href="/ajustes?tab=cuenta"><Settings className="inline size-3" /> Ajustes › Tu cuenta</Link>. Verificación en dos pasos en <Link className="text-link underline" href="/ajustes?tab=seguridad">Seguridad</Link>.</p>
 
       <EmailChangeDialog open={emailOpen} onOpenChange={setEmailOpen} current={account.email ?? ""} onDone={refresh} />
       <ResponsiveDialog open={pwOpen} onOpenChange={setPwOpen} title={account.has_password ? "Cambiar tu contraseña" : "Crear una contraseña"}
@@ -185,7 +195,7 @@ export function ConnectedAccounts() {
         desc="Ya conectamos tu cuenta de Google nueva. Si ya no usas la anterior, quítala para entrar solo con la nueva. También puedes dejar las dos."
         onConfirm={() => { const m = offerOld; setOfferOld(null); if (m) remove(m) }} />
       <Confirm open={reauth} onOpenChange={setReauth} title="Vuelve a entrar para confirmar que eres tú" action="Volver a entrar"
-        desc="Por seguridad, para quitar una forma de entrar te pedimos haber entrado hace poco. Entra de nuevo y vuelve a esta tarjeta." onConfirm={reenter} />
+        desc="Hace rato entraste a Mirai. Por seguridad, vuelve a entrar y te traemos de nuevo a esta pantalla." onConfirm={reenter} />
     </Panel>
   )
 }

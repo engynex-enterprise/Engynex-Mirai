@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -19,19 +20,24 @@ import { Combobox } from "@/components/mirai/combobox"
 import { ChoiceCards, Segmented } from "@/components/mirai/choice-cards"
 import { Money } from "@/components/mirai/money"
 import { Icon } from "@/components/mirai/icon"
+import { Notice } from "@/components/mirai/notice"
+import { ToneIcon } from "@/components/mirai/tone-icon"
 import { Barcode, ReceiptArt } from "@/components/mirai/receipt"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ArrowLeft, ArrowRight, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSave } from "@/hooks/use-book-data"
 import {
-  DED_EN, DIAS_SEMANA, FSP_LEY797, MESES_LARGOS, TIPOS_INGRESO, dedAMes, incomePagos, incomeReparto, planIngreso, quincenaDeDia, smmlvFor, tipoIngreso, uvtFor,
+  DED_EN, DIAS_SEMANA, FSP_LEY797, GRUPOS_INGRESO, MESES_LARGOS, TIPOS_INGRESO, dedAMes, incomePagos, incomeReparto, planIngreso, quincenaDeDia, smmlvFor, tipoIngreso, uvtFor,
   type Deducciones, type IncomeReparto, type NominaCfg, type PlanIngreso, type TipoIngreso,
 } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { CURRENCY_OPTIONS, memberOptions, useIncomeCategories, useMembers, useSettings } from "@/features/catalogs/hooks"
 import { DeductionsEditor, defaultDed } from "./deductions-editor"
+
+/** Auxilio de transporte 2026 (Decreto 1470 de 2025): lo paga la empresa a quien gana hasta 2 salarios mínimos. */
+const AUX_TRANSPORTE_2026 = 249_095
 
 const FRECS = [
   { value: "mensual", label: "Cada mes" },
@@ -65,6 +71,8 @@ const schema = z.object({
   dia: z.number().int().min(1).max(31),
   d1: z.number().int().min(1).max(15), d2: z.number().int().min(16).max(31),
   dow: z.string(), mes: z.string(), quien: z.string(),
+  /** Del valor del mes, cuánto es auxilio de transporte (no paga salud ni pensión, sí cuenta para la retención). */
+  aux: z.number(),
 })
 type Values = z.infer<typeof schema>
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; income?: Row<"incomes"> | null }
@@ -83,21 +91,49 @@ export function IncomeForm(props: Props) {
   const [formId] = useState(() => `ingreso-${Math.random().toString(36).slice(2)}`)
   // Vista de detalle dentro de la misma ventana (como los modales de Facebook): oculta el formulario sin desmontarlo.
   const [detalle, setDetalle] = useState(false)
-  const close = (o: boolean) => { if (!o) setDetalle(false); props.onOpenChange(o) }
+  // Primer paso: solo "¿qué tipo de ingreso es?". Al escoger, aparecen los campos de ESE tipo y el recibo.
+  // Al editar un ingreso que ya existe se entra directo al formulario.
+  const [conTipo, setConTipo] = useState(!!props.income)
+  const [abierto, setAbierto] = useState(props.open)
+  if (props.open !== abierto) { setAbierto(props.open); if (props.open) setConTipo(!!props.income) }
+  const close = (o: boolean) => { if (!o) { setDetalle(false); setConTipo(!!props.income) } props.onOpenChange(o) }
+  const paso1 = !conTipo && !detalle
   return (
-    <ResponsiveDialog open={props.open} onOpenChange={close} wide="xl" split
-      title={detalle ? "Detalle del ingreso" : props.income ? "Editar ingreso" : "Agregar ingreso"}
-      description={detalle ? "Todo el cálculo de tu ingreso: descuentos, cada pago, próximas fechas y el año completo." : "A la izquierda nos cuentas cómo es tu ingreso; a la derecha ves el recibo de lo que te llega."}
-      onBack={detalle ? () => setDetalle(false) : undefined}
+    <ResponsiveDialog open={props.open} onOpenChange={close} wide="xl" split={!paso1}
+      title={detalle ? "Detalle del ingreso" : paso1 ? "¿Qué tipo de ingreso es?" : props.income ? "Editar ingreso" : "Agregar ingreso"}
+      description={detalle ? "Todo el cálculo de tu ingreso: descuentos, cada pago, próximas fechas y el año completo."
+        : paso1 ? "Escoge el que más se parezca. Según el tipo te preguntamos solo lo que aplica y calculamos los descuentos que correspondan."
+        : "A la izquierda nos cuentas cómo es tu ingreso; a la derecha ves el recibo de lo que te llega."}
+      onBack={detalle ? () => setDetalle(false) : !paso1 && !props.income ? () => setConTipo(false) : undefined}
       footer={detalle
         ? <><Button variant="outline" onClick={() => setDetalle(false)}><ArrowLeft /> Volver</Button><SubmitButton form={formId} /></>
-        : <><Button variant="outline" onClick={() => close(false)}>Cancelar</Button><SubmitButton form={formId} /></>}>
-      <ReadyGate><IncomeFormBody {...props} onOpenChange={close} formId={formId} detalle={detalle} onDetalle={() => setDetalle(true)} /></ReadyGate>
+        : paso1
+          ? <><Button variant="outline" onClick={() => close(false)}>Cancelar</Button><span className="self-center text-[13px] text-muted-foreground">Toca el que recibes</span></>
+          : <><Button variant="outline" onClick={() => close(false)}>Cancelar</Button><SubmitButton form={formId} /></>}>
+      <ReadyGate><IncomeFormBody {...props} onOpenChange={close} formId={formId} detalle={detalle} onDetalle={() => setDetalle(true)}
+        conTipo={conTipo} onConTipo={setConTipo} /></ReadyGate>
     </ResponsiveDialog>
   )
 }
 
-function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Props & { formId: string; detalle: boolean; onDetalle: () => void }) {
+/** Tarjeta de un tipo de ingreso en el primer paso: ícono de color, nombre y un ejemplo corto. */
+function TipoCard({ t, selected, onClick }: { t: (typeof TIPOS_INGRESO)[number]; selected: boolean; onClick: () => void }) {
+  return (
+    <button type="button" role="radio" aria-checked={selected} aria-label={t.label} onClick={onClick}
+      className={cn("group grid gap-2 rounded-2xl border p-4 text-left transition-all outline-none hover:-translate-y-0.5 hover:shadow-card focus-visible:ring-2 focus-visible:ring-ring",
+        selected ? "border-primary bg-brand-soft/50 ring-2 ring-primary" : "bg-card hover:border-foreground/20")}>
+      <ToneIcon icon={t.icon} tone={t.tone} size="lg" className="transition-transform group-hover:scale-105" />
+      <span className="grid gap-0.5">
+        <span className="text-[15px] leading-5 font-semibold">{t.label}</span>
+        <span className="text-[13px] leading-[18px] text-muted-foreground">{t.desc}</span>
+      </span>
+    </button>
+  )
+}
+
+function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle, conTipo, onConTipo }: Props & {
+  formId: string; detalle: boolean; onDetalle: () => void; conTipo: boolean; onConTipo: (v: boolean) => void
+}) {
   const save = useSave("incomes")
   const saveCat = useSave("income_categories")
   const { data: cats = [] } = useIncomeCategories()
@@ -129,6 +165,7 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
       ded: R.ded ?? "mitad", x1: R.x1 ?? 0, dias: R.dias ?? 30,
       dia: income?.dia ?? 30, d1: R.d1 ?? 15, d2: R.d2 ?? (income ? 31 : 30), dow: String(R.dow ?? 5), mes: String(R.mes ?? 12),
       quien: income ? (income.member_id ?? "familia") : defQuien(cfg?.defaults, members),
+      aux: Number((income?.deducciones as Deducciones | null)?.noIbc ?? 0) || 0,
     },
   })
   const { errors, isSubmitting } = form.formState
@@ -140,7 +177,8 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
   const verMonto = !!td && (!!w.desc || w.currency !== "COP")
   const verFrec = verMonto && w.mensual > 0
   const verPagos = verFrec && !!w.frec
-  const plan = planIngreso({ frec: w.frec ?? "mensual", mensual: w.mensual, b1: w.b1, b2: w.b2, dias: w.dias, D: conDesc ? ded : null, ref, ded: w.ded, x1: w.ded === "pers" ? w.x1 : undefined })
+  const dedConAux = conDesc ? { ...ded, ...(w.aux > 0 && td?.ded === "empleado" ? { noIbc: w.aux } : {}) } : null
+  const plan = planIngreso({ frec: w.frec ?? "mensual", mensual: w.mensual, b1: w.b1, b2: w.b2, dias: w.dias, D: dedConAux, ref, ded: w.ded, x1: w.ded === "pers" ? w.x1 : undefined })
   // Guardar se activa cuando el formulario está completo y hay un valor del mes.
   useSubmitState(formId, form, { valid: plan.mensual > 0 })
 
@@ -155,12 +193,19 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
     const c = form.getValues("concepto").trim()
     if (!c || (t0 && c === tipoDef(t0).label)) set("concepto", nt.label)
     setDed({ ...defaultDed(nt.ded, nomina), otros: ded.otros })
+    // Cada tipo propone cómo suele pagarse (el salario por quincenas, los honorarios al mes, la prima una vez al año).
+    if (!income && !form.getValues("frec")) set("frec", nt.frec)
+    // Los ingresos sin descuentos de ley (ventas, regalos, subsidios) no preguntan por descuentos.
+    if (!nt.ibc && nt.ded === "otro" && nt.ret === "no") set("desc", "no")
+    onConTipo(true)
   }
   const setDedEn = (v: string) => { set("ded", v); if (v === "pers" && !form.getValues("x1")) set("x1", Math.round(plan.desc / 2)) }
 
   async function onSubmit(v: Values) {
     const conD = v.desc === "si" && v.currency === "COP"
-    const p = planIngreso({ frec: v.frec, mensual: v.mensual, b1: v.b1, b2: v.b2, dias: v.dias, D: conD ? ded : null, ref, ded: v.ded, x1: v.ded === "pers" ? v.x1 : undefined })
+    const t0d = tipoDef(v.tipo)
+    const dedFinal = conD ? { ...ded, ...(v.aux > 0 && t0d.ded === "empleado" ? { noIbc: v.aux } : {}) } : null
+    const p = planIngreso({ frec: v.frec, mensual: v.mensual, b1: v.b1, b2: v.b2, dias: v.dias, D: dedFinal, ref, ded: v.ded, x1: v.ded === "pers" ? v.x1 : undefined })
     if (!(p.mensual > 0)) return void form.setError("mensual", { message: "Escribe cuánto recibes" })
     const t = tipoDef(v.tipo)
     // Categoría: la del tipo de ingreso (se crea si el libro no la tiene); al editar sin cambiar el tipo se respeta la que tenía.
@@ -185,7 +230,7 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
       ...(income ? { id: income.id } : {}),
       concepto: v.concepto.trim(), category_id, frec: v.frec, dia: Math.round(v.dia || 30), currency: v.currency,
       member_id: v.quien === "familia" ? null : v.quien,
-      valor: p.valor, bruto: conD ? p.bruto : null, deducciones: conD ? ({ ...ded, mes: true } as never) : null, reparto: reparto as never,
+      valor: p.valor, bruto: conD ? p.bruto : null, deducciones: conD ? ({ ...(dedFinal ?? ded), mes: true } as never) : null, reparto: reparto as never,
     } as never)
     const msg = quinc
       ? `1ª quincena te llegan ${fmtMoney(p.pagos[0].neto)} y 2ª quincena ${fmtMoney(p.pagos[1].neto)}${conD ? ` (descuentos del mes: ${fmtMoney(p.desc)})` : ""}.`
@@ -201,16 +246,43 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
   const labelMes = anual ? "¿Cuánto recibes en ese pago?" : conDesc ? (td?.ded === "empleado" ? "¿Cuánto ganas al mes? (sueldo antes de descuentos)" : "¿Cuánto recibes al mes? (antes de descuentos)") : "¿Cuánto recibes al mes?"
   const diaQ = (n: 1 | 2) => (n === 1 ? `día ${w.d1 || 15}` : (w.d2 || 30) >= 31 ? "fin de mes" : `día ${w.d2}`)
 
+  if (!conTipo && !detalle) return (
+    <div className="grid gap-6 pb-4 md:px-6 md:pt-5">
+      {GRUPOS_INGRESO.map((g) => {
+        const list = TIPOS_INGRESO.filter((t) => t.grupo === g.id)
+        if (!list.length) return null
+        return (
+          <section key={g.id} className="grid gap-3">
+            <div>
+              <h3 className="text-[15px] font-semibold">{g.label}</h3>
+              <p className="text-[13px] text-muted-foreground">{g.desc}</p>
+            </div>
+            <div role="radiogroup" aria-label={g.label} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {list.map((t) => <TipoCard key={t.value} t={t} selected={w.tipo === t.value} onClick={() => setTipo(t.value)} />)}
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+
   return (
     <>
     <form id={formId} onSubmit={form.handleSubmit(onSubmit)} noValidate aria-busy={isSubmitting} className={cn("grid lg:h-full lg:grid-cols-[minmax(0,1fr)_400px]", detalle && "hidden")}>
       <div className="pb-6 md:px-6 md:pt-5 lg:min-h-0 lg:overflow-y-auto">
       <FieldGroup>
-        <FormField label="¿Qué tipo de ingreso es?" tip={false} hint={td?.desc} error={errors.tipo?.message}>
-          <Controller control={form.control} name="tipo" render={({ field }) => (
-            <ChoiceCards name="tipo" value={field.value} onChange={(v) => setTipo(v as TipoIngreso)} cols={4} items={TIPOS_INGRESO.map((t) => ({ value: t.value, label: t.label, icon: t.icon }))} />
-          )} />
-        </FormField>
+        {td && (
+          <div className="flex items-center gap-3 rounded-xl bg-secondary/50 p-3">
+            <ToneIcon icon={td.icon} tone={td.tone} size="lg" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-semibold">{td.label}</p>
+              <p className="text-[13px] text-muted-foreground">{td.desc}</p>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={() => onConTipo(false)}>Cambiar</Button>
+          </div>
+        )}
+        {td?.nota && <Notice tone={td.value === "prima" ? "warn" : "info"} title={td.value === "prima" ? "Ojo con la prima legal" : "Cómo lo calculamos"}
+          action={td.value === "prima" ? <Button type="button" size="sm" variant="outline" asChild><Link href="/primas">Ver Primas</Link></Button> : undefined}>{td.nota}</Notice>}
 
         {td && <FormField label="Concepto" htmlFor="i-concepto" error={errors.concepto?.message} required hint="El nombre con el que lo verás. Ej. Salario Altipal, Auxilio de conectividad.">
           <Input id="i-concepto" className="h-11" placeholder="Ej. Salario de Ana" {...form.register("concepto")} />
@@ -236,6 +308,20 @@ function IncomeFormBody({ onOpenChange, income, formId, detalle, onDetalle }: Pr
             <Controller control={form.control} name="currency" render={({ field }) => <Combobox id="i-moneda" value={field.value} onChange={field.onChange} options={CURRENCY_OPTIONS} />} />
           </FormField>
         </div>}
+
+        {verMonto && conDesc && td?.ded === "empleado" && (
+          <FormField label="¿Cuánto de eso es auxilio de transporte?" htmlFor="i-aux" hint={<>Lo paga la empresa si ganas hasta 2 salarios mínimos. En 2026 es <Money value={AUX_TRANSPORTE_2026} /> al mes. Déjalo en cero si no lo recibes.</>}
+            tip="El auxilio de transporte no paga salud ni pensión, pero sí cuenta para la retención en la fuente. Si lo separas aquí, tus descuentos quedan bien calculados.">
+            <Controller control={form.control} name="aux" render={({ field }) => (
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+                <MoneyInput id="i-aux" value={field.value} onChange={(v) => set("aux", v)} currency={w.currency} />
+                {field.value === 0 && w.mensual > 0 && w.mensual <= 2 * ref.smmlv + AUX_TRANSPORTE_2026 && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => set("aux", AUX_TRANSPORTE_2026)}>Usar el de 2026</Button>
+                )}
+              </div>
+            )} />
+          </FormField>
+        )}
 
         {verFrec && conDesc && td && (
           <Collapsible open={verDesc} onOpenChange={setVerDesc} className="rounded-lg border">

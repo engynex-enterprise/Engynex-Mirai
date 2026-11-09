@@ -5,6 +5,7 @@
 import { addDays, conv, gastosMesK, iso, mkey, toDay, type BookData } from "@mirai/domain"
 import { estadoIntegral, flujoIntegral, type ExtrasIntegral } from "@mirai/domain/flujo-integral"
 import { capacidad, compromisos, decisiones, deudas, metasAvance } from "@mirai/domain/dashboard"
+import { metaEstado, parseMetaCfg } from "@mirai/domain/meta"
 import { clip, toLines, topN } from "../compact"
 import type { ChatFacts } from "../router"
 
@@ -24,7 +25,9 @@ export function contextoChat(b: BookData, today: string, f: ChatFacts, X: Extras
   const en30 = iso(addDays(t, 30))
   const vencidos = R.movs.filter((x) => x.estado === "vencido")
   const proximos = R.movs.filter((x) => x.fecha >= today && x.fecha <= en30 && x.estado !== "hecho" && x.modulo !== "presupuesto")
-  const dec = decisiones(b, today, { comp: C, cap, deu: D, vencidos, proximos: R.movs })
+  // La meta financiera principal del libro (Perfil): el norte con el que la IA ordena sus consejos.
+  const M = metaEstado(parseMetaCfg((b.settings as { meta_cfg?: unknown }).meta_cfg), String((b.settings as { meta?: string }).meta ?? ""), b, today)
+  const dec = decisiones(b, today, { comp: C, cap, deu: D, vencidos, proximos: R.movs, meta: M })
   const extrasMes = b.extraIncomes.filter((x) => x.fecha.startsWith(k)).reduce((a, x) => a + conv(+x.valor, (x as { currency?: string }).currency, trm), 0)
   const gastoCat = new Map<string, number>()
   for (const g of gastosMesK(b.expenses, k)) gastoCat.set(g.category_id ?? "", (gastoCat.get(g.category_id ?? "") ?? 0) + +g.valor)
@@ -53,6 +56,7 @@ export function contextoChat(b: BookData, today: string, f: ChatFacts, X: Extras
     otras_deudas: E.debo.filter((x) => x.grupo === "otras" || x.grupo === "impuestos").slice(0, 5).map((x) => ({ nombre: clip(x.n, 30), saldo: r0(x.v), estimado: x.estimado ? "si" : "" })),
     te_deben: E.tengo.filter((x) => x.grupo === "me-deben").slice(0, 6).map((x) => ({ nombre: clip(x.n, 30), saldo: r0(x.v) })),
     metas: metasAvance(b, today).slice(0, 6).map((m) => ({ nombre: clip(m.nombre, 30), objetivo: r0(m.objetivo), ahorrado: r0(m.ahorrado), falta: r0(m.falta), ahorro_mensual_para_llegar: r0(m.mensual), fecha: m.fecha })),
+    meta_principal: M ? { que_quiere: clip(M.titulo, 60), tipo: M.def.tipo, objetivo: r0(M.objetivo), lleva: r0(M.llevas), falta: r0(M.falta), avance_pct: Math.round(M.progreso * 100), separar_al_mes: M.mensual ? r0(M.mensual) : "", para_cuando: M.meses ? `en ${M.meses} meses` : "", lo_que_sigue: M.siguiente ? clip(M.siguiente.t, 60) : "" } : "",
     topes_presupuesto_mes: topes,
     pagos_atrasados: vencidos.filter((x) => x.dir === "sale").slice(0, 5).map((x) => ({ que: clip(x.n, 30), valor: r0(x.v), fecha: x.fecha })),
     proximos_30_dias: proximos.slice(0, 8).map((x) => ({ que: clip(x.n, 30), valor: r0(x.v), fecha: x.fecha, dir: x.dir })),

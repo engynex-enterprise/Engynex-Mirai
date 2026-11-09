@@ -1,0 +1,164 @@
+/* La consola de Mirai en el navegador. Paleta Engynex, aire tipo Meta, bordes suaves tipo Fluent.
+   CSS propio a propósito: sin CDN, para que la página abra aunque no haya internet. */
+
+:root {
+  --navy: #1f2b4b;
+  --lima: #9edb4e;
+  --verde: #3f7a1e;
+  --fondo: #f6f7f9;
+  --tarjeta: #ffffff;
+  --texto: #15203a;
+  --sutil: #5c6780;
+  --borde: #e3e7ee;
+  --ok: #2f8f3e;
+  --aviso: #b26a00;
+  --error: #d1363b;
+  --apagado: #98a1b3;
+  --radio: 12px;
+  --sombra: 0 1px 2px rgb(21 32 58 / 6%), 0 4px 16px rgb(21 32 58 / 5%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0f1522;
+    --tarjeta: #161e2e;
+    --texto: #e8ecf3;
+    --sutil: #93a0b8;
+    --borde: #27314a;
+    --ok: #7bc96f;
+    --aviso: #e0a33a;
+    --error: #ef6a6e;
+    --apagado: #67738c;
+    --sombra: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 20px rgb(0 0 0 / 25%);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Cabecera ─────────────────────────────────────────────────────────── */
+.cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  background: linear-gradient(100deg, var(--navy), #2b3c66 55%, var(--verde));
+  color: #fff;
+  box-shadow: var(--sombra);
+}
+.marca { display: flex; align-items: center; gap: 12px; }
+.marca img { border-radius: 10px; background: #fff; padding: 4px; }
+.cabecera h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.cabecera .sutil { margin: 2px 0 0; color: rgb(255 255 255 / 72%); font-size: 12.5px; }
+.kanji { color: var(--lima); font-weight: 500; }
+.cabecera-derecha { display: flex; align-items: center; gap: 10px; }
+
+/* ── Cuerpo ───────────────────────────────────────────────────────────── */
+.cuerpo { display: grid; grid-template-columns: 216px 1fr; gap: 20px; padding: 20px; max-width: 1240px; margin: 0 auto; }
+@media (max-width: 760px) {
+  .cuerpo { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
+  .menu { display: flex; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+  .menu button { white-space: nowrap; }
+}
+
+.menu { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 84px; align-self: start; }
+.menu button {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 12px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--sutil);
+  font: inherit; font-weight: 550; text-align: left; cursor: pointer;
+}
+.menu button:hover { background: var(--tarjeta); color: var(--texto); }
+.menu button[aria-current="true"] { background: var(--tarjeta); color: var(--texto); box-shadow: var(--sombra); }
+.menu button[aria-current="true"]::before { content: ""; width: 3px; height: 16px; border-radius: 2px; background: var(--lima); margin-left: -4px; }
+.menu .atajo { margin-left: auto; font-size: 11px; color: var(--apagado); }
+
+.contenido { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.contenido:focus { outline: none; }
+.cargando { color: var(--sutil); padding: 24px; }
+
+/* ── Tarjetas ─────────────────────────────────────────────────────────── */
+.tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: var(--sombra); overflow: hidden; }
+.tarjeta-cabeza { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; }
+.tarjeta-cabeza h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.tarjeta-cabeza p { margin: 0; color: var(--sutil); font-size: 12.5px; }
+
+.filas { display: flex; flex-direction: column; }
+.fila { display: grid; grid-template-columns: minmax(140px, 1.1fr) minmax(90px, 0.8fr) 2.4fr; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--borde); align-items: baseline; }
+.fila:hover { background: color-mix(in srgb, var(--lima) 7%, transparent); }
+.fila .n { font-weight: 550; }
+.fila .v { color: var(--sutil); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+.fila .d { color: var(--sutil); font-size: 13.5px; }
+@media (max-width: 640px) {
+  .fila { grid-template-columns: 1fr; gap: 2px; }
+}
+
+.grupo { padding: 12px 16px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--apagado); border-top: 1px solid var(--borde); }
+
+/* ── Semáforo ─────────────────────────────────────────────────────────── */
+.pastilla { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: rgb(255 255 255 / 14%); color: #fff; }
+.punto { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.punto--ok { background: var(--ok); }
+.punto--aviso { background: var(--aviso); }
+.punto--error { background: var(--error); }
+.punto--apagado { background: var(--apagado); }
+/* El color no va solo: cada estado lleva además su palabra, por daltonismo. */
+.estado { font-size: 12px; color: var(--sutil); }
+
+.chequeo { display: grid; grid-template-columns: 18px minmax(120px, 0.7fr) 2.6fr auto; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--borde); align-items: baseline; }
+.chequeo .t { font-weight: 550; }
+.chequeo .d { color: var(--sutil); font-size: 13.5px; }
+.chequeo .ms { color: var(--apagado); font-size: 12px; font-variant-numeric: tabular-nums; }
+.arregla { grid-column: 2 / -1; margin-top: 2px; color: var(--aviso); font-size: 13px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+@media (max-width: 640px) {
+  .chequeo { grid-template-columns: 18px 1fr; }
+  .chequeo .d, .arregla { grid-column: 2 / -1; }
+  .chequeo .ms { display: none; }
+}
+
+/* ── Botones ──────────────────────────────────────────────────────────── */
+.boton { border: 1px solid transparent; border-radius: 9px; padding: 7px 13px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; background: var(--lima); color: #16250a; }
+.boton:hover { filter: brightness(1.05); }
+.boton--suave { background: rgb(255 255 255 / 16%); color: #fff; border-color: rgb(255 255 255 / 22%); }
+.contenido .boton--suave { background: var(--tarjeta); color: var(--texto); border-color: var(--borde); }
+.boton--peligro { background: var(--error); color: #fff; }
+.boton[disabled] { opacity: 0.5; cursor: default; }
+
+/* ── Comandos ─────────────────────────────────────────────────────────── */
+.comando { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--borde); align-items: center; }
+.comando .n { font-weight: 600; }
+.comando .d { color: var(--sutil); font-size: 13.5px; }
+.comando .cmd { color: var(--apagado); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+.riesgo { color: var(--aviso); font-size: 12.5px; font-weight: 600; }
+
+.salida { background: #0d1320; color: #cfd8e6; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.55; padding: 12px 14px; max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+/* stderr no es sinónimo de error: docker y pnpm escriben ahí su información normal. Se distingue, sin alarmar. */
+.salida .err { color: #9fb0c9; }
+.salida:empty::after { content: "esperando…"; color: #667; }
+
+/* ── Diálogo ──────────────────────────────────────────────────────────── */
+.dialogo { border: 1px solid var(--borde); border-radius: var(--radio); padding: 0; background: var(--tarjeta); color: var(--texto); box-shadow: 0 20px 60px rgb(0 0 0 / 28%); max-width: 460px; width: calc(100% - 32px); }
+.dialogo::backdrop { background: rgb(8 12 22 / 55%); }
+.dialogo form { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.dialogo h2 { margin: 0; font-size: 16px; }
+.dialogo input { padding: 9px 11px; border: 1px solid var(--borde); border-radius: 9px; background: var(--fondo); color: var(--texto); font: inherit; }
+.dialogo-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+.sutil { color: var(--sutil); }
+.pie { margin: 0; padding: 10px 16px; font-size: 13.5px; font-weight: 600; border-top: 1px solid var(--borde); }
+.pie--ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+.pie--error { background: color-mix(in srgb, var(--error) 12%, transparent); color: var(--error); }
+.pie--corriendo { background: color-mix(in srgb, var(--lima) 14%, transparent); color: var(--verde); }
+@media (prefers-color-scheme: dark) { .pie--corriendo { color: var(--lima); } }
+.aviso-caja { margin: 0; padding: 10px 16px; background: color-mix(in srgb, var(--aviso) 12%, transparent); color: var(--aviso); font-size: 13.5px; border-top: 1px solid var(--borde); }

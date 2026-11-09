@@ -237,14 +237,16 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       if (!sug) toast.success(titulo)
       else {
         const cual = [sug.fixed.nombre, periodoTexto(sug.per)].filter(Boolean).join(" de ")
+        // Con abonos, la sugerencia es por lo que FALTA del periodo: se dice para que la persona sepa qué va a pasar.
+        const resto = sug.abonado > 0 ? ` Ya le habías abonado ${fmtMoney(sug.abonado)} y faltaban ${fmtMoney(sug.valor)}.` : ""
         toast.success(titulo, {
-          description: `¿Es el pago de ${cual}? Si lo es, lo marcamos como pagado y no se cuenta dos veces.`,
+          description: `¿Es el pago de ${cual}?${resto} Si lo es, lo marcamos como ${sug.completo ? "pagado" : "un abono"} y no se cuenta dos veces.`,
           duration: 12000,
           action: { label: "Sí, es ese pago", onClick: async () => {
-            const { error: le } = await linkExpenseFixed({ p_expense: data.id, p_fixed: sug.fixed.id, p_periodo: sug.per })
+            const { error: le } = await linkExpenseFixed({ p_expense: data.id, p_fixed: sug.fixed.id, p_periodo: sug.per, p_cierra: sug.completo })
             if (le) return toast.error("No se pudo enlazar", { description: le.message })
             qc.invalidateQueries({ queryKey: ["b", bookId] })
-            toast.success(`${sug.fixed.nombre} quedó pagado`, { description: "Usamos este gasto como el pago: no se cuenta dos veces.", action: { label: "Deshacer", onClick: async () => {
+            toast.success(sug.completo ? `${sug.fixed.nombre} quedó pagado` : `Abono a ${sug.fixed.nombre}`, { description: sug.completo ? "Usamos este gasto como el pago: no se cuenta dos veces." : `Usamos este gasto como abono: faltan ${fmtMoney(Math.max(0, sug.valor - Number(data.valor)))} de este periodo.`, action: { label: "Deshacer", onClick: async () => {
               const { error: ue } = await unlinkExpenseFixed({ p_expense: data.id })
               if (ue) return toast.error("No se pudo deshacer", { description: ue.message })
               qc.invalidateQueries({ queryKey: ["b", bookId] })
