@@ -303,3 +303,39 @@ describe("periodos que se adaptan a cómo te pagan", () => {
     expect(periodo(b, "semestre", 2026, 8)).toMatchObject({ a: "2026-07-01", b: "2026-12-31" })
   })
 })
+
+// La bandeja de gastos generales (/gastos-todos) no recalcula nada: filtra los movimientos de salida de flujoIntegral.
+// Por eso su total tiene que ser el mismo "Lo que sale" del Balance, y cada fila tiene que saber de qué registro
+// viene para poder abrir el pago de su módulo.
+describe("bandeja de gastos generales", () => {
+  const b = libro({
+    fixedExpenses: [fijo({})],
+    expenses: [{ id: "g1", fecha: "2026-11-08", descripcion: "Mercado", valor: 180000, category_id: "c-mer" } as never],
+    subscriptions: [{ id: "s1", nombre: "Netflix", valor: 38900, ciclo: "mensual", proximo: "2026-11-12" } as never],
+    creditCards: [{ id: "t1", nombre: "Visa", cupo: 5000000, corte: 10, pago: 25, tasa: 2, purchases: [] } as never],
+  })
+  const P = periodo(b, "mes", 2026, 10)
+  const F = flujoIntegral(b, P, "2026-11-10")
+  const bandeja = F.movs.filter((m) => m.dir === "sale" && (m.clase === "gasto" || m.clase === "deuda"))
+
+  it("el total de la bandeja es el mismo «Lo que sale» del Balance", () => {
+    expect(bandeja.reduce((a, m) => a + m.v, 0)).toBeCloseTo(F.tot.sale, 6)
+  })
+
+  it("los préstamos que te dan o que haces no cuentan como gasto", () => {
+    expect(bandeja.some((m) => m.clase === "credito")).toBe(false)
+  })
+
+  it("cada salida sabe de qué registro viene, para poder pagarla desde la bandeja", () => {
+    // "Por gastar" es lo que queda del presupuesto, no un pago a nadie: no sale de ningún registro y no se paga.
+    const pagables = bandeja.filter((m) => m.modulo !== "presupuesto")
+    expect(pagables.length).toBeGreaterThan(0)
+    for (const m of pagables) {
+      expect(m.ref, `${m.modulo} ${m.id} sin ref`).toBeTruthy()
+      expect(m.ref!.id).toBeTruthy()
+    }
+    expect(pagables.find((m) => m.modulo === "fijos")?.ref).toMatchObject({ tabla: "fixed_expenses", per: "2026-11" })
+    expect(pagables.find((m) => m.modulo === "suscripciones")?.ref).toMatchObject({ tabla: "subscriptions", id: "s1" })
+    expect(pagables.find((m) => m.modulo === "gastos")?.ref).toMatchObject({ tabla: "expenses", id: "g1" })
+  })
+})

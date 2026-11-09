@@ -26,6 +26,7 @@ import type { Row } from "@/lib/supabase/tables"
 import { useCategories, usePaymentMethods, useProviders, useSettings } from "@/features/catalogs/hooks"
 import { SubscriptionForm } from "./subscription-form"
 import { ChargeSubDialog, type CobroSub } from "./charge-sub-dialog"
+import { cobroDe as cobroDeSub } from "./cobro"
 import { kickAutomations } from "@/features/automations/runner"
 
 export function SubscriptionsView() {
@@ -54,11 +55,7 @@ export function SubscriptionsView() {
    * Lo que vale el cobro que está pendiente (en COP y solo tu parte) y lo que ya le abonaste: los gastos enlazados a
    * esa suscripción con la fecha de ese cobro (`sub_proximo`). Con abonos, "Ya se cobró" paga solo lo que falta.
    */
-  const cobroDe = (s: Row<"subscriptions">): CobroSub => {
-    const esperado = Math.round(conv(Number(s.valor), s.currency, trm) / Math.max(1, s.comparte))
-    const abonado = expenses.filter((g) => g.subscription_id === s.id && g.sub_proximo === s.proximo).reduce((a, g) => a + Number(g.valor), 0)
-    return { sub: s, esperado, abonado }
-  }
+  const cobroDe = (s: Row<"subscriptions">): CobroSub => cobroDeSub(s, expenses as never, trm)
 
   /**
    * "Ya se cobró": en una sola transacción registra el gasto (en COP y solo tu parte, o lo que falte si ya abonaste),

@@ -15,7 +15,13 @@ import { useBookData } from "@/features/book/use-book-data"
 import { useIntegralExtras } from "@/features/balance/use-integral"
 import { EstadoPill } from "@/features/balance/balance-parts"
 import { MODULOS, flujoIntegral, periodo, periodosDelLibro, type Mov, type PeriodoOpcion } from "@/lib/domain/flujo-integral"
+import { loanName } from "@/lib/domain"
 import { fmtDate, todayISO } from "@/lib/format"
+import { PayFixedDialog } from "@/features/fixed/pay-fixed-dialog"
+import { ChargeSubDialog } from "@/features/subscriptions/charge-sub-dialog"
+import { cobroDe } from "@/features/subscriptions/cobro"
+import { PayLoanDialog } from "@/features/loans/pay-loan-dialog"
+import { PayCardForm } from "@/features/cards/card-forms"
 
 /** Lo que la bandeja cuenta como "sale": consumo y deudas. Ahorrar no es gastar, por eso va aparte. */
 const GASTO = ["gasto", "deuda"]
@@ -32,6 +38,7 @@ export function BandejaView() {
   const X = useIntegralExtras(book, today)
   const [tipo, setTipo] = useState<PeriodoOpcion["tipo"]>("mes")
   const [conAhorro, setConAhorro] = useState(false)
+  const [pagando, setPagando] = useState<Mov | null>(null)
 
   const [y, m] = today.split("-").map(Number)
   const P = book ? periodo(book, tipo, y, m - 1) : null
@@ -42,6 +49,13 @@ export function BandejaView() {
   const porPagar = suma((mv) => mv.estado !== "hecho")
   const vencido = suma((mv) => mv.estado === "vencido")
   const pagado = suma((mv) => mv.estado === "hecho")
+
+  // Para pagar desde acá hace falta la fila original del módulo: es lo que esperan sus diálogos.
+  const ref = pagando?.ref ?? null
+  const fila = <T extends { id?: string | null }>(xs: T[] | undefined, id: string) => xs?.find((x) => x.id === id) ?? null
+  const sePuedePagar = (mv: Mov) => mv.estado !== "hecho" && !!mv.ref && mv.ref.tabla !== "expenses"
+  const cerrar = (o: boolean) => { if (!o) setPagando(null) }
+  const prestamo = ref?.tabla === "loans" && book ? fila(book.loans, ref.id) : null
 
   const columns: DTColumn<Mov>[] = [
     { id: "fecha", header: "Fecha", sort: (mv) => mv.fecha, csv: (mv) => mv.fecha },
@@ -97,9 +111,18 @@ export function BandejaView() {
         item={(mv) => (
           <ListRow key={mv.id} icon={mv.icon} title={mv.n} subtitle={`${fmtDate(mv.fecha)} · ${mv.s}`}
             badges={<EstadoPill m={mv} />} value={<Money value={mv.v} className="font-bold" />}
-            onClick={() => router.push(mv.href)} />
+            onClick={() => router.push(mv.href)}
+            actions={sePuedePagar(mv)
+              ? [{ label: `Pagar ${mv.n}`, tip: "Registrar el pago", icon: "circle-check", onClick: () => setPagando(mv), className: mv.estado === "vencido" ? "text-danger" : "text-success" }]
+              : []} />
         )}
       />
+
+      {/* Cada fila abre el pago de su propio módulo: una sola ventana a la vez. */}
+      <PayFixedDialog fixed={ref?.tabla === "fixed_expenses" && book ? (fila(book.fixedExpenses, ref.id) as never) : null} onOpenChange={cerrar} onReschedule={() => setPagando(null)} />
+      <ChargeSubDialog cobro={ref?.tabla === "subscriptions" && book ? (() => { const s = fila(book.subscriptions, ref.id); return s ? cobroDe(s as never, book.expenses as never, book.settings.trm) : null })() : null} onOpenChange={cerrar} />
+      <PayLoanDialog loan={prestamo as never} name={prestamo && book ? loanName(prestamo as never, book.contacts, book.entities) : ""} onOpenChange={cerrar} />
+      <PayCardForm card={ref?.tabla === "credit_cards" && book ? (fila(book.creditCards, ref.id) as never) : null} onOpenChange={cerrar} />
     </div>
   )
 }

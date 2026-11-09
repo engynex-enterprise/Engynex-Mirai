@@ -74,6 +74,9 @@ export const ESTADOS: Record<Estado, { label: string; hint: string }> = {
   estimado: { label: "Estimado", hint: "Mirai lo calculó con tus datos: puede cambiar." },
 }
 
+/** De qué registro salió un movimiento, para que la bandeja pueda abrir el pago de su módulo. */
+export type MovRef = { tabla: "fixed_expenses" | "subscriptions" | "credit_cards" | "loans" | "expenses"; id: string; per?: string }
+
 export interface Mov {
   /** Id estable (módulo, registro y periodo). */
   id: string
@@ -94,6 +97,8 @@ export interface Mov {
   /** Pasó sin que Mirai tenga cómo saber si se pagó (sueldo, suscripción, pago de tarjeta): se supone hecho. */
   supuesto?: boolean
   href: string
+  /** De qué registro salió (la bandeja lo usa para abrir el pago del módulo dueño). */
+  ref?: MovRef
   /** Parte de intereses (cuotas de deudas y pago de tarjetas). */
   interes?: number
 }
@@ -351,8 +356,8 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     const td = tipoDef(tipo)
     const cobrar = L.kind === "cobrar"
     const base = cobrar
-      ? { dir: "entra" as const, modulo: "me-deben" as const, clase: "cobro" as const, icon: "hand-coins", href: "/me-deben", cat: "Te pagan préstamos" }
-      : { dir: "sale" as const, modulo: "le-debo" as const, clase: "deuda" as const, icon: td?.icon ?? "landmark", href: "/le-debo", cat: td?.corto ?? "Deudas" }
+      ? { dir: "entra" as const, modulo: "me-deben" as const, clase: "cobro" as const, icon: "hand-coins", href: "/me-deben", cat: "Te pagan préstamos", ref: { tabla: "loans" as const, id: L.id ?? "" } }
+      : { dir: "sale" as const, modulo: "le-debo" as const, clase: "deuda" as const, icon: td?.icon ?? "landmark", href: "/le-debo", cat: td?.corto ?? "Deudas", ref: { tabla: "loans" as const, id: L.id ?? "" } }
     const det = L.concepto ? ` · ${L.concepto}` : ""
     for (const h of e.hist) {
       if (h.tipo === "cuota") push({ ...base, id: `loan:${L.id}:c${h.n}`, fecha: h.fecha, n: `Cuota ${h.n} · ${nm}`, s: (cobrar ? "Te pagaron" : "Pagaste") + det, v: h.valor, estado: "hecho", interes: cobrar ? undefined : h.int })
@@ -387,9 +392,10 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
         // (programado o vencido). La moto: $70.000 la quincena, pagaste $40.000 → $40.000 hecho y $30.000 por pagar.
         const PP = pagoPeriodo(f, p.per, f.payments, trm)
         const ult = PP.pagos.reduce<string>((a, x) => (x.fecha && isoOf(x.fecha) > a ? isoOf(x.fecha) : a), "")
+        const refFijo = { tabla: "fixed_expenses" as const, id: f.id, per: p.per }
         const tipo = aporte
-          ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas" }
-          : { modulo: "fijos" as const, clase: "gasto" as const, n: f.nombre, s: "Gasto fijo", icon: catIcon(b.categories, f.category_id), cat: f.category_id ? catName(f.category_id) : "Gastos fijos", catId: f.category_id ?? null, href: "/fijos" }
+          ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas", ref: refFijo }
+          : { modulo: "fijos" as const, clase: "gasto" as const, n: f.nombre, s: "Gasto fijo", icon: catIcon(b.categories, f.category_id), cat: f.category_id ? catName(f.category_id) : "Gastos fijos", catId: f.category_id ?? null, href: "/fijos", ref: refFijo }
         if (PP.pagos.length) {
           const fecha = ult || p.due
           push({ id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha, estado: "hecho", v: PP.pagado, ...tipo, ...(PP.parcial ? { s: `${tipo.s} · abono` } : {}) })
@@ -418,7 +424,7 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
         const fecha = iso(d)
         if (desde && fecha < desde) continue
         const gs = gastosDeCobro({ id: s.id, nombre: s.nombre, provider_id: prov }, expRows, ym(fecha), usados, (x) => !gastoYaContado(x))
-        const base = { id: `sub:${s.id}:${ym(fecha)}`, dir: "sale" as const, modulo: "suscripciones" as const, clase: "gasto" as const, n: s.nombre, icon: "repeat", cat: sCat ? catName(sCat) : "Suscripciones", catId: sCat ?? null, href: "/suscripciones" }
+        const base = { id: `sub:${s.id}:${ym(fecha)}`, dir: "sale" as const, modulo: "suscripciones" as const, clase: "gasto" as const, n: s.nombre, icon: "repeat", cat: sCat ? catName(sCat) : "Suscripciones", catId: sCat ?? null, href: "/suscripciones", ref: { tabla: "subscriptions" as const, id: s.id } }
         if (!gs.length) { push({ ...base, fecha, s: s.ciclo === "anual" ? "Suscripción anual" : "Suscripción", v: esperado, ...sinRegistro(fecha) }); continue }
         // El cobro quedó cerrado si la suscripción ya pasó al siguiente (`proximo` avanzó). Si no, lo registrado son
         // abonos: cada uno sale como hecho y lo que falta sale aparte, igual que en un gasto fijo.
@@ -433,7 +439,7 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
   // 5. Tarjetas: el pago del mes (cuotas de sus compras) en el día de pago. Sus compras no salen aparte (regla 2).
   //    Si registraste pagos de la tarjeta ese mes (card_payments), salen esos pagos con su fecha y valor (lo real).
   for (const t of b.creditCards) {
-    const base = { dir: "sale" as const, modulo: "tarjetas" as const, clase: "deuda" as const, n: `Tarjeta ${t.nombre}`, icon: "credit-card", cat: "Tarjetas de crédito", href: "/tarjetas" }
+    const base = { dir: "sale" as const, modulo: "tarjetas" as const, clase: "deuda" as const, n: `Tarjeta ${t.nombre}`, icon: "credit-card", cat: "Tarjetas de crédito", href: "/tarjetas", ref: { tabla: "credit_cards" as const, id: t.id } }
     for (const [y, m] of meses) {
       const fecha = iso(new Date(y, m, Math.min(+t.pago || 15, lastDay(y, m))))
       const fm = tarjetaFlujoMes(t, y, m, today)
@@ -451,7 +457,7 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     if (gastoYaContado(g) || g.origen === "aporte" || usados.has(g.id)) continue
     contados.push(g)
     const cat = catName(g.category_id)
-    push({ id: `exp:${g.id}`, dir: "sale", modulo: "gastos", clase: "gasto", fecha: g.fecha, n: g.descripcion, s: g.origen === "compartido" ? `Gasto compartido · ${cat}` : `Gasto · ${cat}`, icon: catIcon(b.categories, g.category_id), v: conv(+g.valor, g.currency, trm), cat, catId: g.category_id ?? null, estado: "hecho", href: "/gastos" })
+    push({ id: `exp:${g.id}`, dir: "sale", modulo: "gastos", clase: "gasto", fecha: g.fecha, n: g.descripcion, s: g.origen === "compartido" ? `Gasto compartido · ${cat}` : `Gasto · ${cat}`, icon: catIcon(b.categories, g.category_id), v: conv(+g.valor, g.currency, trm), cat, catId: g.category_id ?? null, estado: "hecho", href: "/gastos", ref: { tabla: "expenses", id: g.id } })
   }
 
   // 7. Calendario: ingresos con valor; egresos con valor o, si es un impuesto, con su estimado.
