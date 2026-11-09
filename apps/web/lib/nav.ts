@@ -12,7 +12,7 @@ export const NAV: NavSection[] = [
     entries: [
       { g: "dinero", label: "Mi dinero", icon: "wallet", iso: "ingresos", items: [
         leaf("balance", "Balance", "scale"), leaf("ingresos", "Ingresos", "arrow-down-to-line"),
-        { ...leaf("gastos", "Gastos", "receipt"), alias: ["fijos", "suscripciones", "tarjetas"] },
+        { ...leaf("gastos", "Gastos", "receipt"), alias: ["gastos-todos", "fijos", "suscripciones", "tarjetas"] },
         leaf("proveedores", "Proveedores", "store"),
         leaf("correo", "Correo del banco", "mail"), leaf("importar", "Importar extractos", "file-up"),
       ] },
@@ -61,6 +61,7 @@ export const isGroup = (e: NavLeaf | NavGroup): e is NavGroup => "g" in e
  * entrada en ⌘K: grupo y sección donde se muestran.
  */
 const EN_PESTANAS: { leaf: NavLeaf; g: string }[] = [
+  { leaf: leaf("gastos-todos", "Todos los gastos", "layers"), g: "dinero" },
   { leaf: leaf("fijos", "Gastos fijos", "house"), g: "dinero" },
   { leaf: leaf("suscripciones", "Suscripciones", "repeat"), g: "dinero" },
   { leaf: leaf("tarjetas", "Tarjetas de crédito", "credit-card"), g: "dinero" },
@@ -84,12 +85,13 @@ export const navIdOf = (id: string) => PAGES.find((p) => p.alias?.includes(id))?
 /** Pestañas de las páginas que agrupan varias (Gastos: del día a día y fijos). */
 export const PAGE_TABS: Record<string, { id: string; label: string; icon: string; desc: string }[]> = (() => {
   const gastos = [
+    { id: "gastos-todos", label: "Todos", icon: "layers", desc: "Todo lo que sale, de todos lados, en una sola lista" },
     { id: "gastos", label: "Del día a día", icon: "receipt", desc: "Mercado, salidas, transporte y gastos hormiga" },
     { id: "fijos", label: "Fijos", icon: "house", desc: "Arriendo, servicios, cuotas: se repiten cada mes" },
     { id: "suscripciones", label: "Suscripciones", icon: "repeat", desc: "Netflix, Spotify, apps: se cobran solas" },
     { id: "tarjetas", label: "Tarjetas", icon: "credit-card", desc: "Compras con tarjeta, cuotas y el pago del mes" },
   ]
-  return { gastos, fijos: gastos, suscripciones: gastos, tarjetas: gastos }
+  return { gastos, "gastos-todos": gastos, fijos: gastos, suscripciones: gastos, tarjetas: gastos }
 })()
 
 export const pageById = (id: string) => PAGES.find((p) => p.id === id)
