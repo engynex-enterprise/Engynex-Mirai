@@ -47,7 +47,24 @@ test("salir de deudas: el plan cuadra con tarjeta pagada y crédito quincenal", 
       expect(t, `${donde}: monto fuera de rango`).not.toMatch(/\$\s?[\d.]{13,}/)
       expect(t, `${donde}: cifra inválida`).not.toMatch(/NaN|Infinity/)
     }
+    // Un texto que no cabe en su tarjeta se corta con "…" y la cifra queda a medias ("$4.370.0…"): el valor del KPI
+    // va en un <span class="truncate">. Aquí no se mira la foto, se mide lo que el navegador tuvo que esconder.
+    // Solo los tres KPI de "Así vas hoy": en las listas de deudas el nombre SÍ se recorta a propósito.
+    const KPIS = ["Debes hoy", "Pagas al mes", "Quedarías libre en"]
+    const sinRecortes = async (donde: string) => {
+      const sobra = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+      expect(sobra, `${donde}: la pantalla se corre en horizontal`).toBeLessThanOrEqual(0)
+      for (const label of KPIS) {
+        const kpi = main.getByText(label, { exact: true }).first().locator("xpath=ancestor::div[@data-slot='card'][1]")
+        const cortados = await kpi.evaluate((root: HTMLElement) =>
+          [...root.querySelectorAll<HTMLElement>("*")]
+            .filter((el) => el.clientWidth > 0 && el.scrollWidth - el.clientWidth > 1 && getComputedStyle(el).overflowX !== "visible")
+            .map((el) => `"${(el.textContent ?? "").trim().slice(0, 40)}" (le faltan ${el.scrollWidth - el.clientWidth}px)`))
+        expect(cortados, `${donde}: el KPI "${label}" muestra el texto cortado`).toEqual([])
+      }
+    }
     await sinDisparates("sin plata extra")
+    await sinRecortes("sin plata extra")
 
     // Las dos deudas sembradas entran al plan (el nombre se repite en la lista y en los dos caminos: basta la primera).
     const detalle = main.locator("details", { hasText: "que estoy contando" })
@@ -70,6 +87,7 @@ test("salir de deudas: el plan cuadra con tarjeta pagada y crédito quincenal", 
     await main.getByRole("textbox", { name: "Plata extra al mes" }).fill("300000")
     await expect(main.getByText(/quedas libre de deudas en/).first()).toBeVisible({ timeout: 20_000 })
     await sinDisparates("con $300.000 extra")
+    await sinRecortes("con $300.000 extra")
     // Con plata extra aparece el plan accionable, con la primera deuda por nombre propio.
     await expect(main.getByText("Tu plan, en 3 pasos")).toBeVisible()
     await shot(page, "estrategia-plan", info.project.name)
