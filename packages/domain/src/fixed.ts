@@ -23,14 +23,9 @@ export interface FixedPeriod {
   due: string
 }
 
-type FijoPeriodInput = Pick<FixedExpenseIn, "frec" | "dia" | "dia2" | "mes" | "desde" | "fecha_unica">
+type FijoPeriodInput = Pick<FixedExpenseIn, "frec" | "dia" | "dia2" | "mes" | "desde" | "fecha_unica" | "hasta">
 
-/**
- * Periodos de un gasto fijo que caen en el mes `m` (base 0) del año `y`.
- * Bimestral/trimestral/semestral toman la fase de `desde`. Un día mayor al último del mes se recorta.
- * `today` solo se usa si un gasto único no tiene fecha (la v4 tomaba hoy).
- */
-export function fijoPeriods(f: FijoPeriodInput, y: number, m: number, today?: DateInput): FixedPeriod[] {
+function periodosDelMes(f: FijoPeriodInput, y: number, m: number, today?: DateInput): FixedPeriod[] {
   const ld = lastDay(y, m)
   const mk = `${y}-${String(m + 1).padStart(2, "0")}`
   const dd = (x: number | null | undefined) => iso(new Date(y, m, Math.min(x || 1, ld)))
@@ -50,9 +45,28 @@ export function fijoPeriods(f: FijoPeriodInput, y: number, m: number, today?: Da
   return []
 }
 
-/** Valor mensual equivalente: quincenal ×2; con paso N meses ÷N; único → 0. */
-/** Equivalente mensual de un fijo, en pesos si se pasa la TRM (un fijo en USD o EUR se convierte). */
-export function fijoMensual(f: Pick<FixedExpenseIn, "frec" | "valor"> & { currency?: string | null }, trm?: Record<string, number> | null): number {
+/**
+ * Periodos de un gasto fijo que caen en el mes `m` (base 0) del año `y`.
+ * Bimestral/trimestral/semestral toman la fase de `desde`. Un día mayor al último del mes se recorta.
+ * `today` solo se usa si un gasto único no tiene fecha (la v4 tomaba hoy).
+ * Un fijo con fecha de fin (`hasta`) no tiene periodos después de esa fecha.
+ */
+export function fijoPeriods(f: FijoPeriodInput, y: number, m: number, today?: DateInput): FixedPeriod[] {
+  const out = periodosDelMes(f, y, m, today)
+  const h = f.hasta
+  return h ? out.filter((p) => p.due <= h) : out
+}
+
+/**
+ * Equivalente mensual de un fijo, en pesos si se pasa la TRM (un fijo en USD o EUR se convierte).
+ * Con `today`, un fijo que ya terminó (`hasta`) vale 0: no sigue sumando en "Total al mes".
+ */
+export function fijoMensual(
+  f: Pick<FixedExpenseIn, "frec" | "valor"> & { currency?: string | null; hasta?: string | null },
+  trm?: Record<string, number> | null,
+  today?: DateInput,
+): number {
+  if (today && f.hasta && iso(toDay(today)) > f.hasta) return 0
   const v = trm && f.currency && f.currency !== "COP" ? f.valor * (+trm[f.currency] || 1) : f.valor
   return f.frec === "quincenal" ? v * 2 : FSTEP[f.frec] ? v / FSTEP[f.frec] : 0
 }
@@ -120,7 +134,7 @@ export function fijoStatus(f: FixedExpenseIn, today: DateInput): FixedStatus {
   // Pendiente = sin pagar o con abonos y le falta.
   const venc = out.filter((p) => !p.completo && p.due < ti)
   const prox = out.find((p) => !p.completo && p.due >= ti) || null
-  return { periods: out, venc, prox, mensual: fijoMensual(f) }
+  return { periods: out, venc, prox, mensual: fijoMensual(f, null, t) }
 }
 
 /** Fecha del primer periodo vencido o del próximo; si no hay, hoy + 10 días. */

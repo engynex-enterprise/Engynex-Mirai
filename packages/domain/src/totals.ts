@@ -67,7 +67,8 @@ export function cuotasDelMes(loans: LoanIn[], kind: "cobrar" | "pagar", today: D
 }
 
 /** Suma mensual de los gastos fijos (en pesos si se pasa la TRM). */
-export const fijosMes = (fixed: FixedExpenseIn[], trm?: Record<string, number> | null): number => fixed.reduce((a, f) => a + fijoMensual(f, trm), 0)
+export const fijosMes = (fixed: FixedExpenseIn[], trm?: Record<string, number> | null, today?: DateInput): number =>
+  fixed.reduce((a, f) => a + fijoMensual(f, trm, today), 0)
 
 /** Gastos de un mes ('YYYY-MM'). */
 export const gastosMesK = <T extends Pick<ExpenseIn, "fecha">>(expenses: T[], k: string): T[] => expenses.filter((g) => g.fecha.startsWith(k))

@@ -120,3 +120,37 @@ describe("sugerirPagoFijo con abonos: enlazar el gasto que paga lo que falta", (
     expect(sugerirPagoFijo({ ...resto, valor: 70000 }, [cerrado as never], resto.fecha, { incluirPagados: true })).toMatchObject({ per: "2026-11", yaPagado: true })
   })
 })
+
+describe("hasta: el gasto fijo deja de pedir pagos", () => {
+  const base = { id: "f1", nombre: "Plan celular", valor: 60_000, frec: "mensual", dia: 10, desde: "2026-01", payments: [] }
+
+  it("no genera periodos después de la fecha de fin", () => {
+    const f = { ...base, hasta: "2026-03-31" }
+    expect(fijoPeriods(f, 2026, 2)).toHaveLength(1) // marzo: el día 10 sí entra
+    expect(fijoPeriods(f, 2026, 3)).toHaveLength(0) // abril: ya terminó
+  })
+
+  it("incluye el periodo que cae justo en la fecha de fin", () => {
+    expect(fijoPeriods({ ...base, hasta: "2026-03-10" }, 2026, 2)).toHaveLength(1)
+    expect(fijoPeriods({ ...base, hasta: "2026-03-09" }, 2026, 2)).toHaveLength(0)
+  })
+
+  it("sin hasta, se comporta igual que siempre", () => {
+    expect(fijoPeriods(base, 2026, 3)).toEqual(fijoPeriods({ ...base, hasta: null }, 2026, 3))
+  })
+
+  it("fijoMensual da 0 cuando ya terminó y today se pasa", () => {
+    const f = { ...base, hasta: "2026-03-31" }
+    expect(fijoMensual(f, null, "2026-05-01")).toBe(0)
+    expect(fijoMensual(f, null, "2026-03-01")).toBe(60_000)
+    expect(fijoMensual(f)).toBe(60_000) // sin today, no cambia nada
+  })
+
+  it("fijoStatus de un fijo terminado no deja próximos ni suma al mes", () => {
+    const st = fijoStatus({ ...base, hasta: "2026-03-31" }, "2026-06-15")
+    expect(st.prox).toBeNull()
+    expect(st.mensual).toBe(0)
+    // Lo que quedó sin pagar antes de terminar se sigue debiendo.
+    expect(st.periods.every((p) => p.due <= "2026-03-31")).toBe(true)
+  })
+})
