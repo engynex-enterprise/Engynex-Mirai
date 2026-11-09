@@ -82,7 +82,9 @@ export function agenda(b: BookData, today: DateInput): AgendaItem[] {
   const out: AgendaItem[] = items.map((x) => {
     const fd = parseDate(x.fecha)
     const d = days(t, fd)
-    return { ...x, d, st: d < 0 ? "bad" : d <= A ? "warn" : "ok", lbl: relTime(fd, t) }
+    // Un gasto fijo puede tener sus propios días de aviso (el predial 15, el arriendo 5); sin él, el del libro.
+    const av = x.aviso ?? A
+    return { ...x, d, st: d < 0 ? "bad" : d <= av ? "warn" : "ok", lbl: relTime(fd, t) }
   })
   return out.sort((p, q) => (p.fecha < q.fecha ? -1 : p.fecha > q.fecha ? 1 : 0))
 }

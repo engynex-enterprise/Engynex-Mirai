@@ -58,7 +58,7 @@ const schema = z.object({
   fpag: z.string(), vpag: z.number(),
   repQ: z.enum(["igual", "distinto"]), q1: z.number(), q2: z.number(),
   hasta: z.string().nullable(),
-  aviso: z.number().int().min(0).max(100).nullable(),
+  aviso: z.number().int("Escribe un número entero, sin decimales").min(0, "No puede ser negativo").max(100, "No puede ser mayor a 100").nullable(),
 }).refine((v) => !v.hasta || !FSTEP[v.frec] || !v.prox || v.hasta >= v.prox, {
   path: ["hasta"],
   message: "La fecha de fin no puede ser antes del próximo pago",
@@ -304,7 +304,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
               tip="Con cuántos días de anticipación te recordamos este pago. Si lo dejas vacío usamos el que tienes en Ajustes › Alertas para todos."
               error={errors.aviso?.message}>
               <div className="flex items-center gap-2">
-                <Input id="f-aviso" className="h-11 w-24" type="number" min={0} max={100} placeholder={String(cfg?.anticipo ?? 5)}
+                <Input id="f-aviso" className="h-11 w-24" type="number" min={0} max={100} step={1} placeholder={String(cfg?.anticipo ?? 5)}
                   {...form.register("aviso", { setValueAs: (x) => (x === "" || x == null ? null : Number(x)) })} />
                 <span className="text-sm text-muted-foreground">días antes</span>
               </div>
