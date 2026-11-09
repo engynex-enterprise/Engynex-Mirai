@@ -41,7 +41,7 @@ export function indicadores(b: BookData, today: DateInput): Indicador[] {
   const hayLiq = b.assets.some((a) => /^11/.test(a.cod)) || b.investments.some((x) => x.tipo === "ahorro")
   const hayAct = b.assets.length > 0 || b.investments.length > 0
   const hayGastosCur = gCur.length > 0
-  const gReal = gPrev.filter((g) => !g.fixed_expense_id).reduce((a, g) => a + +g.valor, 0) + fijosMes(b.fixedExpenses) + cuo + subsMes(b.subscriptions, s.trm)
+  const gReal = gPrev.filter((g) => !g.fixed_expense_id).reduce((a, g) => a + +g.valor, 0) + fijosMes(b.fixedExpenses, undefined, t) + cuo + subsMes(b.subscriptions, s.trm)
   const bas = gastosBasicos(b, t)
   const liq = liquidez(b.assets, b.investments, s.trm, t)
   const mesPrev = MESL[addMonths(t, -1).getMonth()]

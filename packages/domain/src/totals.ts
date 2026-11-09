@@ -128,7 +128,7 @@ export function gastosBasicos(b: Pick<BookData, "fixedExpenses" | "loans" | "sub
   const fc = fixedCategoryIds(b.fixedExpenses)
   return (
     // Sin los aportes a metas o al fondo (fijos con link_type): ahorrar no es un gasto básico.
-    fijosMes(b.fixedExpenses.filter((f) => !(f as { link_type?: string | null }).link_type), b.settings.trm) +
+    fijosMes(b.fixedExpenses.filter((f) => !(f as { link_type?: string | null }).link_type), b.settings.trm, today) +
     cuotasMes(b.loans, "pagar", today) +
     subsMes(b.subscriptions, b.settings.trm) +
     b.categories.filter((c) => c.grupo === "n" && !fc.has(c.id)).reduce((a, c) => a + +c.tope, 0)

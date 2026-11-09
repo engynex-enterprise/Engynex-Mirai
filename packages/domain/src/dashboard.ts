@@ -137,8 +137,8 @@ export interface Compromisos {
 /** Lo que pagas sí o sí cada mes (fijos, cuotas, tarjetas y suscripciones) frente a tu ingreso. */
 export function compromisos(b: BookData, today: DateInput): Compromisos {
   const ingreso = ingresoMensual(b.incomes, b.settings.trm)
-  const fijos = b.fixedExpenses.filter((f) => !f.link_type).reduce((a, f) => a + fijoMensual(f, b.settings.trm), 0)
-  const aportes = b.fixedExpenses.filter((f) => f.link_type).reduce((a, f) => a + fijoMensual(f), 0)
+  const fijos = b.fixedExpenses.filter((f) => !f.link_type).reduce((a, f) => a + fijoMensual(f, b.settings.trm, today), 0)
+  const aportes = b.fixedExpenses.filter((f) => f.link_type).reduce((a, f) => a + fijoMensual(f, null, today), 0)
   const cuotas = cuotasMes(b.loans, "pagar", today)
   // El plan del mes (no lo que falta pagar): registrar el pago de la tarjeta no baja el compromiso.
   const tarjetas = b.creditCards.reduce((a, c) => a + tarjetaCuotaMes(c, today), 0)
