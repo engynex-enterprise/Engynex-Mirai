@@ -25,7 +25,8 @@ import { payFixedExpense } from "./commands"
 import { FFREC, FSTEP, categoriaSugerida, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
-import { categoryOptions, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import { categoryOptions, CURRENCY_OPTIONS, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
+import Link from "next/link"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { Check, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -50,6 +51,7 @@ const schema = z.object({
   provider_id: z.string().nullable(),
   contact_id: z.string().nullable(),
   referencia: z.string(),
+  currency: z.string(),
   /** Para quién es el gasto: vacío = toda la familia (general); una o varias personas (se reparte en partes iguales). */
   personas: z.array(z.string()),
   yaPagoQ: z.enum(["no", "q1", "q2", "ambas"]), yaPagoM: z.enum(["no", "si"]),
@@ -87,6 +89,9 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
   const defs = (cfg?.defaults ?? {}) as { fijo_cat?: string; fijo_medio?: string; medio?: string }
   const defCat = cats.find((c) => c.id === defs.fijo_cat)?.id
   const defMedio = [defs.fijo_medio, defs.medio].find((id) => !!id && methods.some((m) => m.id === id))
+  // Tasa guardada para una moneda (Ajustes › Finanzas). 0 = todavía no la tiene.
+  const trm = (cfg?.trm ?? {}) as Record<string, number>
+  const trmDe = (c: string) => (c && c !== "COP" ? +trm[c] || 0 : 0)
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const [catManual, setCatManual] = useState(!!fixed || !!preset?.category_id || !!defCat)
   const [newCat, setNewCat] = useState<string | null>(null)
@@ -102,6 +107,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? preset?.payment_method_id ?? defMedio ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? preset?.proveedor ?? "", provider_id: fixed?.provider_id ?? preset?.provider_id ?? null,
       contact_id: fixed?.contact_id ?? preset?.contact_id ?? null,
       referencia: fixed?.referencia ?? "",
+      currency: fixed?.currency ?? "COP",
       personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
@@ -132,7 +138,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       dia: v.frec === "quincenal" ? Math.min(15, Math.max(1, Math.round(v.diaQ1 || 15))) : step ? prox.getDate() : 1,
       dia2: v.frec === "quincenal" ? Math.min(31, Math.max(16, Math.round(v.dia2 || 30))) : null,
       mes: step ? prox.getMonth() + 1 : null, fecha_unica: v.frec === "unico" ? v.fecha : null,
-      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, contact_id: v.contact_id, referencia: (v.referencia ?? "").trim(), reparto,
+      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, contact_id: v.contact_id, referencia: (v.referencia ?? "").trim(), currency: v.currency, reparto,
       // La base sincroniza member_id (la persona si es una sola) para lo que solo conoce una persona.
       member_ids: v.personas.length ? v.personas : null, member_id: v.personas.length === 1 ? v.personas[0] : null,
     }
@@ -203,14 +209,26 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
             </div>
           ) : w.tipoValor === "fijo" ? (
             <FormField label={w.frec === "quincenal" ? "Valor de cada quincena" : "Valor"} htmlFor="f-valor" required>
-              <Controller control={form.control} name="valor" render={({ field }) => <MoneyInput id="f-valor" value={field.value} onChange={field.onChange} />} />
+              <Controller control={form.control} name="valor" render={({ field }) => <MoneyInput id="f-valor" value={field.value} onChange={field.onChange} currency={w.currency} decimals />} />
             </FormField>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2">
-              <FormField label="Lo mínimo que pagas" htmlFor="f-vmin"><Controller control={form.control} name="vmin" render={({ field }) => <MoneyInput id="f-vmin" value={field.value} onChange={field.onChange} />} /></FormField>
-              <FormField label="Lo máximo que pagas" htmlFor="f-vmax"><Controller control={form.control} name="vmax" render={({ field }) => <MoneyInput id="f-vmax" value={field.value} onChange={field.onChange} />} /></FormField>
+              <FormField label="Lo mínimo que pagas" htmlFor="f-vmin"><Controller control={form.control} name="vmin" render={({ field }) => <MoneyInput id="f-vmin" value={field.value} onChange={field.onChange} currency={w.currency} decimals />} /></FormField>
+              <FormField label="Lo máximo que pagas" htmlFor="f-vmax"><Controller control={form.control} name="vmax" render={({ field }) => <MoneyInput id="f-vmax" value={field.value} onChange={field.onChange} currency={w.currency} decimals />} /></FormField>
             </div>
           )}
+          <div className="grid gap-5 sm:grid-cols-2">
+            <FormField label="Moneda" htmlFor="f-moneda" tip="Si pagas en dólares o euros, guárdalo en su moneda: Mirai lo convierte a pesos con la tasa que tengas en Ajustes › Finanzas.">
+              <Controller control={form.control} name="currency" render={({ field }) => <Combobox id="f-moneda" value={field.value} onChange={(v) => field.onChange(v || "COP")} options={CURRENCY_OPTIONS} />} />
+            </FormField>
+            {w.currency !== "COP" && (
+              <FormField label="En pesos">
+                {trmDe(w.currency)
+                  ? <p className="text-sm text-muted-foreground">≈ <span className="font-semibold" data-money>{fmtMoney(Math.round((w.tipoValor === "rango" ? (w.vmin + w.vmax) / 2 : w.valor) * trmDe(w.currency)))}</span> al mes, con la tasa que tienes guardada.</p>
+                  : <p className="text-sm text-muted-foreground">Todavía no tienes la tasa de {w.currency}. Guárdala en <Link href="/ajustes?tab=finanzas" className="underline">Ajustes › Finanzas</Link> para ver el equivalente en pesos.</p>}
+              </FormField>
+            )}
+          </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <FormField label="¿Cada cuánto?" htmlFor="f-frec">
               <Controller control={form.control} name="frec" render={({ field }) => <Combobox id="f-frec" value={field.value} onChange={field.onChange} options={Object.entries(FFREC).map(([value, label]) => ({ value, label }))} />} />
