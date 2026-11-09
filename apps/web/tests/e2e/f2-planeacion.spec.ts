@@ -21,7 +21,7 @@ test("metas, fondo de emergencia, inversiones y salir de deudas con datos de eje
   await page.getByRole("textbox", { name: "¿Cuánto necesitas?" }).fill("8000000")
   await page.getByRole("button", { name: "Guardar meta" }).click()
   await expect(page.getByText("Meta creada")).toBeVisible()
-  await expect(page.getByText(`Viaje ${info.project.name}`)).toBeVisible()
+  await expect(page.getByText(`Viaje ${info.project.name}`).first()).toBeVisible()
   await shot(page, "metas", info.project.name)
   await page.goto("/inversiones?nuevo=1")
   await page.getByRole("textbox", { name: "Nombre" }).fill("CDT prueba")
@@ -31,6 +31,7 @@ test("metas, fondo de emergencia, inversiones y salir de deudas con datos de eje
   await expect(page.getByText(/Al final recibirás/).first()).toBeVisible()
   await shot(page, "inversiones", info.project.name)
   await page.goto("/estrategia")
-  await expect(page.getByText(/Registra tus créditos en Le debo|Avalancha/).first()).toBeVisible()
+  // Aquí solo se comprueba que la sección abre; el plan con deudas de verdad se prueba en f2-estrategia.spec.ts.
+  await expect(page.getByText(/Así vas hoy|No tienes deudas por pagar|no puedo armarte el plan/).first()).toBeVisible()
   expect(errs, errs.join("\n")).toEqual([])
 })

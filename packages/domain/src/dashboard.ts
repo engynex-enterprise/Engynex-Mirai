@@ -301,7 +301,9 @@ export function decisiones(b: BookData, today: DateInput, ctx: { comp: Compromis
   if (pagar.length && cap.libre > 0 && cap.variableBase !== "sin-datos") {
     const extra = Math.max(100000, mil(cap.libre * 0.3))
     const S = debtStrategy(pagar, b.contacts, b.entities, extra, today)
-    if (S) {
+    // `fin: false` = ni pagando las cuotas ni con el abono se acaban (la cuota no cubre los intereses): ahí `m` y `ti`
+    // son el tope de la simulación, así que no se puede prometer un ahorro ni una fecha.
+    if (S && S.base.fin && S[S.recomendado].fin) {
       const r = S[S.recomendado]
       const ahorro = Math.max(0, S.base.ti - r.ti)
       const meses = Math.max(0, S.base.m - r.m)

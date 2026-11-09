@@ -122,7 +122,7 @@ export interface LoanEngine {
   paraSaldar: number
 }
 
-type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null; primera?: string | null }
+export type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null; primera?: string | null }
 
 /**
  * Simula el préstamo cuota a cuota aplicando los pagos registrados en orden de fecha.
@@ -226,6 +226,24 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
     intVencido: vencidas.reduce((a, r) => a + r.int + r.extra, 0),
     paraSaldar: saldo + vencidas.reduce((a, r) => a + r.int + r.extra, 0),
   }
+}
+
+/**
+ * Lo que un préstamo se lleva CADA MES: la cuota × las veces que cae al mes (una quincenal cuenta dos veces). Un pago
+ * único no cuenta como si fuera de todos los meses: se reparte entre los que faltan para pagarlo; en "solo intereses"
+ * cuentan los intereses del mes. `sinExtra` descuenta lo que se paga de más con la cuota (seguros y cargos): sirve
+ * cuando lo que importa es cuánto baja la deuda, no cuánto sale del bolsillo.
+ */
+export function cuotaMensual(L: EngineLoan, today: DateInput, opts: { eng?: LoanEngine; sinExtra?: boolean } = {}): number {
+  const e = opts.eng ?? loanEngine(L, today)
+  if (e.done || !e.next) return 0
+  const valor = Math.max(0, e.next.valor - (opts.sinExtra ? +(L.extra ?? 0) || 0 : 0))
+  if (L.frec === "unico" || !FMES[L.frec] || e.plan.length === 1) {
+    const meses = Math.max(1, Math.ceil((parseDate(e.next.fecha).getTime() - toDay(today).getTime()) / (30.44 * 864e5)))
+    return valor / meses
+  }
+  if (e.sys === "americano") return e.next.int * (FMES[L.frec] || 1)
+  return valor * (FMES[L.frec] || 1)
 }
 
 export interface LoanPreviewInput {

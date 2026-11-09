@@ -42,6 +42,23 @@ export const HELP: Record<string, HelpEntry> = {
       "Todo sale de lo que registras en Mirai: mientras más completo, más acertadas las recomendaciones. Los impuestos y lo que falta por gastar son estimados.",
     ],
   },
+  estrategia: {
+    t: "Salir de deudas",
+    i: "Mira en cuánto tiempo te quitas tus deudas de encima y cuánto te ahorras si cada mes le pones un poquito más a una de ellas.",
+    p: [
+      "Arriba, en <b>Así vas hoy</b>, está tu situación real: cuánto debes, cuánto se te va cada mes en cuotas y en qué mes caería tu última cuota si sigues pagando solo eso. Sale de lo que tienes en <b>Le debo</b> y en <b>Tarjetas</b>.",
+      "Lo primero que te muestra no te cuesta un peso: cuando termines una deuda, en vez de quedarte con esa cuota, échasela completa a la siguiente. Sigues pagando lo mismo cada mes y sales mucho antes.",
+      "En <b>¿Y cuánto más puedes poner cada mes?</b> escribe lo que te sobra (así sean $20.000) y mira de una en qué fecha quedarías libre y cuánta plata te ahorras.",
+      "Abajo están los dos caminos para repartir esa plata extra: <b>empezar por la más cara</b> (la que cobra más interés, la que menos te cuesta al final) o <b>empezar por la más pequeña</b> (la que tachas más rápido, la que más anima). Mirai te marca el que más te conviene con tus números.",
+      "Las cuotas de todas tus deudas las sigues pagando igual: lo único que cambia es a cuál le cae la plata extra. Cuando una queda en cero, todo lo que le pagabas pasa a la siguiente.",
+      "Si te cae una plata de una (prima, cesantías), usa <b>¿Y si te cae una plata y abonas de una?</b> para ver cómo te quedaría la deuda. Ahí decides entre <b>terminar antes</b> o <b>pagar menos cada mes</b>.",
+    ],
+    tips: [
+      "Nada de lo que escribes aquí se guarda ni cambia tus deudas: es para que veas qué pasaría antes de decidir.",
+      "Abonar para \"terminar antes\" casi siempre ahorra más intereses que bajar la cuota.",
+      "Si una deuda no se acaba nunca, es porque lo que pagas no alcanza ni para los intereses: ahí toca abonar de más o cambiar las condiciones con quien te prestó.",
+    ],
+  },
   "le-debo": {
     t: "Le debo", i: "Tus créditos y deudas: con el banco, la casa de empeño, la tienda que te fía, un familiar o un almacén.",
     p: [
@@ -154,7 +171,7 @@ export const HELP: Record<string, HelpEntry> = {
   cuenta: {
     t: "Tu cuenta", i: "Cómo entras a Mirai, el correo de tu cuenta, tus sesiones abiertas y de qué hogares eres dueño. Tus datos están en tu cuenta, no en el correo: cambiar de correo o de cuenta de Google no borra nada.",
     p: [
-      "En tu <b>perfil › Cuentas conectadas</b> ves cada forma de entrar: Google (con su correo), correo y contraseña, y el enlace mágico. Cada una dice cuándo la usaste por última vez.",
+      "En tu <b>perfil › Cómo entras a Mirai</b> ves cada forma de entrar: Google (con su correo), correo y contraseña, y el enlace mágico. Cada una dice cuándo la usaste por última vez.",
       "<b>Cambiar cuenta de Google</b>: toca <b>Cambiar</b> en Google y escoge tu otra cuenta en la ventana de Google. Al volver te ofrecemos quitar la anterior. Si esa cuenta de Google ya es de otra persona en Mirai, te avisamos y no se conecta.",
       "<b>Cambiar correo</b>: escribe el correo nuevo y te enviamos un enlace para confirmarlo (por seguridad, también uno a tu correo actual: ábrelos los dos). Mientras tanto verás <b>Pendiente de confirmar</b>, con Reenviar enlace y Cancelar el cambio.",
       "<b>Agregar otra forma de entrar</b>: crea una contraseña o conecta otra cuenta de Google. Así entras aunque dejes de usar una. Mirai no deja quitar la última forma de entrar.",

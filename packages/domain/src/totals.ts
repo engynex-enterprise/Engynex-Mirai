@@ -5,7 +5,7 @@ import { tarjetasDeuda } from "./cards"
 import { fijoMensual } from "./fixed"
 import { isHormiga } from "./hormiga"
 import { inv } from "./investments"
-import { FMES, loanEngine } from "./loans"
+import { cuotaMensual, FMES, loanEngine } from "./loans"
 import { conv } from "./money"
 import { incomeReparto, pagosMes } from "./reparto"
 import { subsMes } from "./subscriptions"
@@ -47,18 +47,7 @@ export function liquidez(assets: AssetIn[], investments: InvestmentIn[], trm: Tr
  * reparte entre los meses que faltan para pagarlo. En "solo intereses" cuentan los intereses de cada mes.
  */
 export function cuotasMes(loans: LoanIn[], kind: "cobrar" | "pagar", today: DateInput): number {
-  const t = toDay(today)
-  const mesesHasta = (fecha: string) => Math.max(1, Math.ceil((parseDate(fecha).getTime() - t.getTime()) / (30.44 * 864e5)))
-  return loans
-    .filter((L) => L.kind === kind)
-    .reduce((a, L) => {
-      const e = loanEngine(L, today)
-      if (e.done || !e.next) return a
-      const unaSola = L.frec === "unico" || !FMES[L.frec] || e.plan.length === 1
-      if (unaSola) return a + e.next.valor / mesesHasta(e.next.fecha)
-      if (e.sys === "americano") return a + e.next.int * (FMES[L.frec] || 1)
-      return a + e.next.valor * (FMES[L.frec] || 1)
-    }, 0)
+  return loans.filter((L) => L.kind === kind).reduce((a, L) => a + cuotaMensual(L, today), 0)
 }
 
 /**
