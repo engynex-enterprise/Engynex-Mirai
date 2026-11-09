@@ -3,8 +3,9 @@ import { login, shot, watchErrors } from "./helpers"
 import { admin } from "./qa"
 
 // Agregar gasto fijo › "¿A quién le pagas?": una persona nueva queda en Contactos y en el fijo (contact_id).
-// Además guarda referencia, moneda, fecha de fin y aviso propio, y al pagarlo el gasto hereda la persona.
-test("gasto fijo: a quién le pagas, referencia, fin y aviso propio", async ({ page }, info) => {
+// Además guarda referencia y aviso propio, y al pagarlo el gasto hereda la persona. (Moneda y fecha de fin:
+// cubiertas en las pruebas de dominio de packages/domain, no aquí.)
+test("gasto fijo: a quién le pagas, referencia y aviso propio", async ({ page }, info) => {
   test.setTimeout(180_000)
   const errs = watchErrors(page)
   await login(page)
@@ -58,9 +59,9 @@ test("gasto fijo: a quién le pagas, referencia, fin y aviso propio", async ({ p
     await expect(payDlg.getByText("CTR-9001")).toBeVisible()
     await payDlg.getByRole("button", { name: /^Registrar (pago|abono)$/ }).click()
     await expect(page.getByText(/Pago registrado|pagado/i).first()).toBeVisible()
-    await page.waitForTimeout(500) // el toast sale apenas responde la API; dale un respiro a PostgREST para verlo
-    const { data: g } = await sb.from("expenses").select("contact_id").eq("fixed_expense_id", data!.id).limit(1).single()
-    expect(g?.contact_id).toBe(data?.contact_id)
+    // El toast sale apenas responde la API; espera a que PostgREST vea la fila (misma carrera que f2-pago-parcial.spec.ts
+    // y f3-compartidos-pago.spec.ts resuelven con expect.poll sobre la consulta, no con un tiempo fijo).
+    await expect.poll(async () => (await sb.from("expenses").select("contact_id").eq("fixed_expense_id", data!.id)).data).toEqual([{ contact_id: data?.contact_id }])
   } finally {
     const { data: f } = await sb.from("fixed_expenses").select("id").eq("nombre", nombre).limit(1).maybeSingle()
     if (f?.id) {
