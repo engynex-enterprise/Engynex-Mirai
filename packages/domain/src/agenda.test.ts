@@ -223,4 +223,13 @@ describe("aviso propio del gasto fijo", () => {
     const b = libro({ fixedExpenses: [fijo({ aviso: 15 }) as never] })
     expect(agenda(b, "2026-07-08").find((x) => x.k === "fijo")?.aviso).toBe(15)
   })
+
+  it("el estado (st) de la pastilla usa el aviso propio, no el del libro", () => {
+    // A 12 días: con aviso propio de 15 ya debe avisar (warn); con el del libro (5) todavía no (ok).
+    const conPropio = libro({ fixedExpenses: [fijo({ aviso: 15 }) as never] })
+    const sinPropio = libro({ fixedExpenses: [fijo({}) as never] })
+    const hoy = "2026-07-08"
+    expect(agenda(conPropio, hoy).find((x) => x.k === "fijo")?.st).toBe("warn")
+    expect(agenda(sinPropio, hoy).find((x) => x.k === "fijo")?.st).toBe("ok")
+  })
 })

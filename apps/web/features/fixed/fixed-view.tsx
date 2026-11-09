@@ -190,6 +190,6 @@ function paraQuien(f: FixedRow, members: Parameters<typeof memberName>[1]) {
 /** A quién se le paga el fijo: el negocio (Proveedores) o la persona (Contactos). */
 function pagadoA(f: FixedRow, providers: { id: string; nombre: string }[], contacts: { id: string; nombre: string }[]): string {
   if (f.provider_id) return providers.find((p) => p.id === f.provider_id)?.nombre ?? f.proveedor ?? ""
-  if (f.contact_id) return contacts.find((c) => c.id === f.contact_id)?.nombre ?? ""
+  if (f.contact_id) return contacts.find((c) => c.id === f.contact_id)?.nombre ?? "Persona eliminada"
   return f.proveedor ?? ""
 }
