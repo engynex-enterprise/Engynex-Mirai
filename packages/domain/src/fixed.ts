@@ -115,8 +115,10 @@ export interface FixedStatus {
 /**
  * Estado de un gasto fijo: recorre desde max(mes de `desde`, hace 3 meses) hasta hoy + 13 meses,
  * ignora periodos anteriores a `inicio` y cruza con los pagos registrados.
+ * `trm` (opcional, en pesos si se pasa) convierte `mensual` igual que `fijoMensual`/`fijosMes`, para que
+ * el total de la tabla y el KPI del mismo listado no se contradigan con un fijo en USD o EUR.
  */
-export function fijoStatus(f: FixedExpenseIn, today: DateInput): FixedStatus {
+export function fijoStatus(f: FixedExpenseIn, today: DateInput, trm?: Record<string, number> | null): FixedStatus {
   const t = toDay(today)
   const ti = iso(t)
   const out: FixedPeriodStatus[] = []
@@ -134,7 +136,7 @@ export function fijoStatus(f: FixedExpenseIn, today: DateInput): FixedStatus {
   // Pendiente = sin pagar o con abonos y le falta.
   const venc = out.filter((p) => !p.completo && p.due < ti)
   const prox = out.find((p) => !p.completo && p.due >= ti) || null
-  return { periods: out, venc, prox, mensual: fijoMensual(f, null, t) }
+  return { periods: out, venc, prox, mensual: fijoMensual(f, trm ?? null, t) }
 }
 
 /** Fecha del primer periodo vencido o del próximo; si no hay, hoy + 10 días. */

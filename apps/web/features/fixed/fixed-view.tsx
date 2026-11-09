@@ -50,7 +50,7 @@ export function FixedView() {
 
   // Sin useMemo: el React Compiler memoiza solo (con useMemo no podía conservar la memoización).
   const rows: R[] = fixed.map((f) => {
-    const st = fijoStatus(f as unknown as FixedExpenseIn, today)
+    const st = fijoStatus(f as unknown as FixedExpenseIn, today, book?.settings.trm)
     const next = st.venc[0] ?? st.prox
     const fin = !!f.hasta && f.hasta < today
     const av = f.aviso ?? anticipo

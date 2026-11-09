@@ -154,3 +154,17 @@ describe("hasta: el gasto fijo deja de pedir pagos", () => {
     expect(st.periods.every((p) => p.due <= "2026-03-31")).toBe(true)
   })
 })
+
+describe("fijoStatus: trm convierte mensual igual que fijoMensual (el KPI y la tabla de Fijos no se contradicen)", () => {
+  const sub = { id: "netflix", nombre: "Netflix", valor: 10, frec: "mensual", dia: 5, desde: "2026-01", currency: "USD", payments: [] }
+  const trm = { USD: 4000, EUR: 4300 }
+
+  it("con trm, mensual sale convertido a pesos", () => {
+    expect(fijoStatus(sub, HOY, trm).mensual).toBe(40_000)
+  })
+
+  it("sin trm, mensual se queda en la moneda original (igual que siempre)", () => {
+    expect(fijoStatus(sub, HOY).mensual).toBe(10)
+    expect(fijoStatus(sub, HOY, null).mensual).toBe(10)
+  })
+})
