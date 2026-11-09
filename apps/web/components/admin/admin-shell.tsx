@@ -12,6 +12,7 @@ import { Icon } from "@/components/mirai/icon"
 import { IsoIcon } from "@/components/mirai/iso-icon"
 import { UserAvatar } from "@/components/mirai/user-avatar"
 import { AppContextProvider, useApp } from "@/components/app/app-context"
+import { useHydrated } from "@/hooks/use-hydrated"
 import { ADMIN_NAV, adminPage } from "@/lib/admin-nav"
 import { Crumbs } from "@/components/mirai/crumbs"
 import { ToneIcon } from "@/components/mirai/tone-icon"
@@ -23,6 +24,9 @@ function Nav() {
   const { user } = useApp()
   const { isMobile, setOpenMobile } = useSidebar()
   const { resolvedTheme, setTheme } = useTheme()
+  // El servidor no conoce el tema real (next-themes lo resuelve en el navegador): hasta hidratar, el botón dice
+  // "Modo oscuro" con la luna, igual que el HTML del servidor. Sin esto el árbol no coincide y React lo vuelve a pintar.
+  const dark = useHydrated() && resolvedTheme === "dark"
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="gap-2 pt-3">
@@ -57,7 +61,7 @@ function Nav() {
       <SidebarFooter className="gap-1 pb-3">
         <SidebarMenu>
           <SidebarMenuItem><SidebarMenuButton asChild tooltip="Volver a Mirai"><Link href="/inicio"><ArrowLeft /><span>Volver a Mirai</span></Link></SidebarMenuButton></SidebarMenuItem>
-          <SidebarMenuItem><SidebarMenuButton tooltip={resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"} onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>{resolvedTheme === "dark" ? <Sun /> : <Moon />}<span>{resolvedTheme === "dark" ? "Modo claro" : "Modo oscuro"}</span></SidebarMenuButton></SidebarMenuItem>
+          <SidebarMenuItem><SidebarMenuButton tooltip={dark ? "Modo claro" : "Modo oscuro"} onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun /> : <Moon />}<span>{dark ? "Modo claro" : "Modo oscuro"}</span></SidebarMenuButton></SidebarMenuItem>
           <SidebarMenuItem><div className="flex items-center gap-2 p-2"><UserAvatar src={user.avatar} name={user.nombre} className="size-7" /><span className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden"><span className="truncate text-sm font-medium">{user.nombre}</span><span className="truncate text-xs text-muted-foreground">{user.email}</span></span></div></SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

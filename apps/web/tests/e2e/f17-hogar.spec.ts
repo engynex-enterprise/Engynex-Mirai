@@ -64,7 +64,9 @@ test("hogar: integrante sin cuenta, invitar sin duplicados, cambiar rol y cancel
   // 2) Invitar por correo
   await page.getByRole("button", { name: "Agregar persona" }).click()
   await page.getByRole("button", { name: "Continuar" }).click() // "Invitarla para que use Mirai" viene elegido
-  await page.getByRole("textbox", { name: "Correo o celular" }).fill(correo)
+  // «¿Cómo le mandamos la invitación?»: Correo viene elegido; el campo es el mismo para correo o celular (inv-dest).
+  await expect(page.getByRole("radio", { name: "Correo" })).toHaveAttribute("aria-checked", "true")
+  await page.locator("#inv-dest").fill(correo)
   await page.getByRole("textbox", { name: "Nombre" }).fill(invitado)
   await page.getByRole("radio", { name: "Solo mira" }).click()
   await page.getByRole("button", { name: "Enviar invitación" }).click()
@@ -81,7 +83,7 @@ test("hogar: integrante sin cuenta, invitar sin duplicados, cambiar rol y cancel
   // 3) El mismo correo (con mayúsculas y espacios) no se repite: ofrece reenviar, con límite de 10 minutos
   await page.getByRole("button", { name: "Agregar persona" }).click()
   await page.getByRole("button", { name: "Continuar" }).click()
-  await page.getByRole("textbox", { name: "Correo o celular" }).fill(`  ${correo.toUpperCase()} `)
+  await page.locator("#inv-dest").fill(`  ${correo.toUpperCase()} `)
   await page.getByRole("button", { name: "Enviar invitación" }).click()
   await expect(page.getByText("Ya la invitaste")).toBeVisible()
   await expect(page.getByText(new RegExp(`Ya invitaste a ${invitado}`))).toBeVisible()

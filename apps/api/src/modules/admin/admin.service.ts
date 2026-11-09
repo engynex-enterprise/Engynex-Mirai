@@ -5,6 +5,9 @@ import { randomUUID } from "node:crypto"
 import { Injectable } from "@nestjs/common"
 import type { UserDetail } from "@mirai/contracts/modules/admin"
 import { vigente } from "@mirai/domain/plans"
+import { integrationFromEnv } from "@mirai/services/integrations/env"
+import { INTEGRATIONS, integrationByKind } from "@mirai/services/integrations/registry"
+import { EMAIL_KINDS } from "@mirai/services/notify/email-kinds"
 import { AppConfig } from "../../core/config/app-config"
 import { RequestContextService } from "../../core/context/request-context.service"
 import { systemScope } from "../../core/db/scope"
@@ -334,22 +337,77 @@ export class AdminService {
     })
   }
 
+  /**
+   * Consola › Sistema: qué tiene configurado ESTE despliegue. v7 (desde 2026-11-07): un solo servidor con Dokploy
+   * (Postgres + PostgREST interno + Redis + archivos S3 + esta API con Better Auth); ya no hay Vercel ni Supabase.
+   * Correo, WhatsApp, Telegram, push, IA y AdSense se pueden encender con las variables del servidor o en consola ›
+   * Integraciones globales: cuentan de las dos formas (y "Apagada" en la consola manda sobre la variable).
+   * `req` = sin eso Mirai no funciona; lo demás es opcional. Solo dice SI hay dato, nunca su valor.
+   */
   async system() {
-    const [settings, migraciones, huerfanos, refs, ads] = await Promise.all([this.repo.settings(SYS), this.repo.migrations(SYS), this.repo.orphanCount(SYS), this.repo.referralCounts(SYS), this.repo.adsenseMode(SYS)])
-    const env = (k: string) => !!process.env[k]
+    const [settings, migraciones, huerfanos, refs, modos] = await Promise.all([this.repo.settings(SYS), this.repo.migrations(SYS), this.repo.orphanCount(SYS), this.repo.referralCounts(SYS), this.repo.integrationModes(SYS)])
+    const env = (k: string) => !!process.env[k]?.trim()
+    const val = (k: string) => process.env[k]?.trim() || undefined
+    const host = (u: string | undefined) => {
+      try {
+        return u ? new URL(u).host : undefined
+      } catch {
+        return undefined
+      }
+    }
+    /** Encendida: lo guardado en la consola manda; si no hay fila, basta con las variables del servidor. */
+    const activa = (kind: string) => {
+      const modo = modos[kind]
+      if (modo) return modo !== "apagada"
+      const def = integrationByKind(kind)
+      return !!integrationFromEnv(kind, (n) => process.env[n]) || !!(def?.env && env(def.env))
+    }
+    const primera = (kinds: readonly string[]) => kinds.find(activa)
+    /** "Resend · variables del servidor" (sin claves ni correos: solo de dónde sale la configuración). */
+    const nota = (kind: string | undefined) => (kind ? `${integrationByKind(kind)?.n ?? kind} · ${modos[kind] ? "consola › Integraciones globales" : "variables del servidor"}` : null)
+    const it = (grupo: string, k: string, ok: unknown, o: { req?: boolean; nota?: string | null } = {}) => ({ grupo, k, ok: !!ok, req: !!o.req, nota: o.nota ?? null })
+
+    const { adapter, postgrest, url: dbUrl } = this.config.db
+    const dbOk = adapter === "postgrest" ? !!(postgrest?.url && postgrest.jwtSecret) : adapter === "pg" ? !!dbUrl : !!this.config.supabase.secretKey
+    const store = val("OBJECT_STORE") ?? "supabase"
+    const sitio = val("SITE_URL") ?? val("NEXT_PUBLIC_SITE_URL") ?? val("BETTER_AUTH_URL") ?? val("API_PUBLIC_URL")
+    const correo = primera(EMAIL_KINDS)
+    const wa = activa("whatsapp")
+    const tg = activa("telegram")
+    const ia = primera(INTEGRATIONS.filter((i) => i.cat === "ia").map((i) => i.kind))
+    const iaPreferida = val("AI_PLATFORM_PROVIDER")
+    const mp = env("MERCADOPAGO_ACCESS_TOKEN")
+    const wompi = (env("WOMPI_PUBLIC_KEY") || env("NEXT_PUBLIC_WOMPI_PUBLIC_KEY")) && env("WOMPI_INTEGRITY_SECRET")
+
     return {
       settings, migraciones, huerfanos, referidos: refs.total, premiados: refs.premiados,
       estado: [
-        { k: "Supabase (servicio)", ok: !!this.config.supabase.secretKey }, { k: "Cifrado de claves", ok: !!this.config.encryptionKey },
-        { k: "Cron de avisos", ok: !!this.config.scheduler.cronSecret || !!this.config.scheduler.audience },
-        { k: "Google (Gmail y Calendar)", ok: env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET") }, { k: "Vercel AI Gateway", ok: env("AI_GATEWAY_API_KEY") },
-        { k: "Notificaciones push (VAPID)", ok: (env("VAPID_PUBLIC_KEY") || env("NEXT_PUBLIC_VAPID_PUBLIC_KEY")) && env("VAPID_PRIVATE_KEY") },
-        { k: "Mercado Pago", ok: env("MERCADOPAGO_ACCESS_TOKEN") }, { k: "Webhook Mercado Pago firmado", ok: env("MERCADOPAGO_WEBHOOK_SECRET") },
-        { k: "Wompi", ok: (env("WOMPI_PUBLIC_KEY") || env("NEXT_PUBLIC_WOMPI_PUBLIC_KEY")) && env("WOMPI_INTEGRITY_SECRET") }, { k: "Eventos Wompi firmados", ok: env("WOMPI_EVENTS_SECRET") },
-        { k: "Google AdSense", ok: (!!ads && ads !== "apagada") || (env("NEXT_PUBLIC_ADSENSE_CLIENT") && env("NEXT_PUBLIC_ADSENSE_SLOT")) },
-        { k: "Dirección del sitio", ok: env("SITE_URL") || env("NEXT_PUBLIC_SITE_URL") || env("VERCEL_PROJECT_PRODUCTION_URL") },
+        it("Servidor", "Base de datos", dbOk, { req: true, nota: adapter === "postgrest" ? `PostgREST interno con RLS (${host(postgrest?.url) ?? "sin URL"})` : adapter === "pg" ? "Conexión directa a Postgres" : "Supabase" }),
+        it("Servidor", "Conexión directa a la base", env("AUTH_DATABASE_URL") || env("DATABASE_URL"), { req: true, nota: "La usan el login propio y el tiempo real (LISTEN)" }),
+        it("Servidor", "Cifrado de claves", this.config.encryptionKey, { req: true, nota: "ENCRYPTION_KEY: los secretos de las integraciones" }),
+        it("Servidor", "Dirección del sitio", sitio, { req: true, nota: host(sitio) ?? "SITE_URL" }),
+        it("Servidor", "Archivos (adjuntos y copias)", store !== "memory" && (store === "supabase" ? !!this.config.supabase.secretKey : env("STORAGE_BUCKET_PRIVATE")), { req: true, nota: `${store}${host(val("S3_ENDPOINT")) ? ` · ${host(val("S3_ENDPOINT"))}` : ""}` }),
+        it("Servidor", "Tiempo real y colas (Redis)", env("REDIS_URL"), { nota: "Sin Redis funciona igual con un solo servidor" }),
+        it("Servidor", "Trabajos programados", this.config.scheduler.cronSecret || this.config.scheduler.audience || this.config.scheduler.oidc, { req: true, nota: "Avisos, automatizaciones y copias (servicio cron)" }),
+
+        it("Cuentas", "Login propio (Better Auth)", (val("BETTER_AUTH_SECRET")?.length ?? 0) >= 32, { req: true, nota: host(val("BETTER_AUTH_URL")) ?? "BETTER_AUTH_SECRET + BETTER_AUTH_URL" }),
+        it("Cuentas", "Entrar con Google", env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET"), { nota: "También Gmail y Calendar" }),
+        it("Cuentas", "Captcha (Cloudflare Turnstile)", env("TURNSTILE_SECRET_KEY"), { nota: "Protege registro, ingreso y recuperar clave" }),
+
+        it("Avisos", "Correo", correo, { req: true, nota: nota(correo) ?? "Sin correo no salen invitaciones ni verificación de cuenta" }),
+        it("Avisos", "WhatsApp", wa, { nota: wa ? nota("whatsapp") : "Recordatorios y resúmenes por WhatsApp" }),
+        it("Avisos", "Telegram", tg, { nota: tg ? nota("telegram") : "Avisos por el bot de Telegram" }),
+        it("Avisos", "Notificaciones push (VAPID)", (env("VAPID_PUBLIC_KEY") || env("NEXT_PUBLIC_VAPID_PUBLIC_KEY")) && env("VAPID_PRIVATE_KEY"), { nota: "Avisos en el celular con la app instalada" }),
+
+        it("Inteligencia artificial", "IA de la plataforma", ia, { nota: ia ? nota(ia) : `Chat, consejero y lectura de facturas${iaPreferida ? ` (preferida: ${integrationByKind(iaPreferida)?.n ?? iaPreferida})` : ""}` }),
+
+        it("Cobros y anuncios", "Mercado Pago", mp),
+        it("Cobros y anuncios", "Webhook de Mercado Pago firmado", env("MERCADOPAGO_WEBHOOK_SECRET"), { req: mp, nota: "Sin la firma no se registran los pagos" }),
+        it("Cobros y anuncios", "Wompi", wompi),
+        it("Cobros y anuncios", "Eventos de Wompi firmados", env("WOMPI_EVENTS_SECRET"), { req: !!wompi, nota: "Sin la firma no se registran los pagos" }),
+        it("Cobros y anuncios", "Google AdSense", activa("adsense") || (env("NEXT_PUBLIC_ADSENSE_CLIENT") && env("NEXT_PUBLIC_ADSENSE_SLOT")), { nota: "Relleno de los espacios del plan gratis" }),
       ],
-      ambiente: this.config.env, rama: process.env.GIT_BRANCH ?? "local", commit: this.config.commit.slice(0, 7),
+      ambiente: this.config.env, rama: val("GIT_BRANCH") ?? (this.config.env === "produccion" ? "main" : "local"), commit: this.config.commit.slice(0, 7),
     }
   }
 

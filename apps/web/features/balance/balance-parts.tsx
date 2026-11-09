@@ -34,7 +34,7 @@ export function MonthNav({ ym, label, onMove, children }: { ym: string; label?: 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="outline" size="icon" aria-label="Periodo anterior" onClick={() => onMove(-1)}><ChevronLeft /></Button>
-      <p className="min-w-36 text-center font-semibold capitalize sm:min-w-44">{label ?? fmtMonth(ym)}</p>
+      <p className={cn("min-w-36 text-center font-semibold sm:min-w-44", !label && "capitalize")}>{label ?? fmtMonth(ym)}</p>
       <Button variant="outline" size="icon" aria-label="Periodo siguiente" onClick={() => onMove(1)}><ChevronRight /></Button>
       {children}
     </div>

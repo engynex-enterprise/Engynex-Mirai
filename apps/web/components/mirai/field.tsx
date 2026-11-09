@@ -15,7 +15,7 @@ export function InfoTip({ text, label }: { text: string; label?: string }) {
           <Info className="size-4" />
         </button>
       </TooltipTrigger>
-      <TooltipContent className="max-w-72 bg-navy text-white">{text}</TooltipContent>
+      <TooltipContent className="max-w-72">{text}</TooltipContent>
     </Tooltip>
   )
 }

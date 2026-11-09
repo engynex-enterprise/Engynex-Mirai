@@ -5,6 +5,7 @@
 import { Injectable } from "@nestjs/common"
 import { mask } from "@mirai/crypto"
 import type { AdminCoupon, AdminPlan, BroadcastRow, CouponInput, GlobalIntegration, PlanInput } from "@mirai/contracts/modules/admin-platform"
+import { ENV_INTEGRATION_KINDS, integrationFromEnv, mergeEnv } from "@mirai/services/integrations/env"
 import { INTEGRATIONS, integrationByKind, isAdminOnly, type IntegrationDef } from "@mirai/services/integrations/registry"
 import type { IntegrationValue } from "@mirai/services/integrations/store"
 import { EMAIL_KINDS } from "@mirai/services/notify/email-kinds"
@@ -135,18 +136,38 @@ export class AdminPlatformService {
     }
   }
 
-  /** getGlobalIntegration de @mirai/services, con RowStore y CryptoService. */
-  private async global(kind: string) {
+  /** Lo que el despliegue trae en sus variables (correo, WhatsApp, Telegram), o null si no está completo. */
+  private envOf(kind: string) {
+    return integrationFromEnv(kind, (n) => this.port.envValue(n))
+  }
+
+  /** La fila tal como está guardada (para no volver a guardar lo que ya vive en las variables del servidor). */
+  private async row(kind: string) {
     const r = await this.store.first<GlobalRow>(SYS, "platform_integrations", { eq: { kind } })
     return r ? { row: r, config: { ...(r.config ?? {}) }, secrets: this.secretsOf(r.secrets_enc) } : null
   }
 
+  /**
+   * getGlobalIntegration de @mirai/services, con RowStore y CryptoService: la fila guardada combinada con las
+   * variables del despliegue. Sin fila, las variables solas la dejan ACTIVA (`desdeEnv`), igual que en los avisos.
+   */
+  private async global(kind: string) {
+    const [r, env] = [await this.row(kind), this.envOf(kind)]
+    if (!r) return env ? { row: { kind, modo: "obligatoria", planes: [], config: env.config, meta: {}, updated_at: null, secrets_enc: null } as GlobalRow, config: env.config, secrets: env.secrets, desdeEnv: true } : null
+    return { ...r, config: mergeEnv(env?.config, r.config), secrets: mergeEnv(env?.secrets, r.secrets), desdeEnv: false }
+  }
+
   private view(def: IntegrationDef, r: GlobalRow | undefined, own: { kind: string; enabled: boolean }[]): GlobalIntegration {
     const mine = own.filter((x) => x.kind === def.kind)
+    // Correo, WhatsApp y Telegram necesitan TODAS sus variables (clave, remitente, número) para contar como listas;
+    // las demás, solo la del registro (VAPID, GOOGLE_CLIENT_ID…).
+    const env = ENV_INTEGRATION_KINDS.includes(def.kind) ? !!this.envOf(def.kind) : !!(def.env && this.port.hasEnv(def.env))
+    const envCfg = env ? this.envOf(def.kind)?.config : undefined
     return {
-      kind: def.kind, modo: r?.modo ?? "apagada", planes: r?.planes ?? [], config: (r?.config ?? {}) as Record<string, unknown>, meta: (r?.meta ?? {}) as Record<string, unknown>,
+      kind: def.kind, modo: r?.modo ?? (env && envCfg ? "obligatoria" : "apagada"), planes: r?.planes ?? [],
+      config: mergeEnv(envCfg, (r?.config ?? {}) as Record<string, unknown>), meta: (r?.meta ?? {}) as Record<string, unknown>,
       updated_at: r?.updated_at ?? null, hogaresPropios: mine.filter((x) => x.enabled).length, hogaresApagada: mine.filter((x) => !x.enabled).length,
-      env: !!(def.env && this.port.hasEnv(def.env)), adminOnly: isAdminOnly(def), existe: !!r, guardada: !!r?.secrets_enc || Object.keys(r?.config ?? {}).length > 0,
+      env, adminOnly: isAdminOnly(def), existe: !!r, guardada: !!r?.secrets_enc || Object.keys(r?.config ?? {}).length > 0,
     }
   }
 
@@ -170,7 +191,7 @@ export class AdminPlatformService {
   /** adminSaveGlobalIntegration: los errores que el administrador debe leer salen como VALIDATION con el mismo texto. */
   async saveIntegration(kind: string, input: { modo: string; planes: string[]; values: Record<string, string | number | boolean> }): Promise<Msg & { warn?: string }> {
     const def = this.def(kind)
-    const prev = await this.global(kind)
+    const prev = await this.row(kind)
     const config: Record<string, unknown> = { ...(prev?.config ?? {}) }
     const secrets: Record<string, string> = { ...(prev?.secrets ?? {}) }
     const meta: Record<string, unknown> = {}
@@ -228,6 +249,7 @@ export class AdminPlatformService {
     const g = await this.global(kind)
     const keyless = !def.fields.some((f) => f.required)
     if (!g && !keyless) return { ok: false, msg: "Primero guarda la configuración." }
+    const fila = !!g && !g.desdeEnv
     const v: IntegrationValue = { kind, enabled: true, config: g?.config ?? {}, secrets: g?.secrets ?? {} }
     const { user } = await this.access.actor()
     const mail = EMAIL_KINDS.includes(kind)
@@ -235,12 +257,12 @@ export class AdminPlatformService {
     try {
       const r = await this.port.test(v, def, user.email)
       if (mail) await this.logSend({ ...log, status: "enviado", ref: r.ref ?? null })
-      if (g) await this.setLastTest(kind, true, r.msg)
+      if (fila) await this.setLastTest(kind, true, r.msg)
       return { ok: true, msg: r.msg }
     } catch (e) {
       const msg = this.port.errorMsg(e, def.url)
       if (mail) await this.logSend({ ...log, status: "fallido", error: msg })
-      if (g) await this.setLastTest(kind, false, msg)
+      if (fila) await this.setLastTest(kind, false, msg)
       return { ok: false, msg }
     }
   }
@@ -313,13 +335,18 @@ export class AdminPlatformService {
     for (const k of Object.keys(s.casos)) this.caso(k)
     this.checkMap(s.map)
     for (const c of Object.values(s.casos)) this.checkMap(c.map)
-    const row = await this.store.first<{ config: Record<string, unknown> | null }>(SYS, "platform_integrations", { columns: ["config"], eq: { kind: "whatsapp" } })
-    if (!row) throw DomainError.validation(NO_WA)
+    // Con WhatsApp encendido desde las variables del servidor todavía no hay fila: estos ajustes (plantilla por caso,
+    // imagen del encabezado) la crean, sin tocar el token, que se queda en el servidor.
+    if (!(await this.global("whatsapp"))) throw DomainError.validation(NO_WA)
+    const prev = await this.row("whatsapp")
     // Solo se guardan los casos con algo propio.
     const casos = Object.fromEntries(Object.entries(s.casos).filter(([, c]) => c && (c.template || c.headerImage)).map(([k, c]) => [k, c.template ? c : { headerImage: c.headerImage }]))
-    const config: Record<string, unknown> = { ...(row.config ?? {}), template: s.template, lang: s.lang, wa: { map: s.map, headerImage: s.headerImage, enlaceBase: s.enlaceBase.replace(/\/+$/, ""), casos } }
+    const config: Record<string, unknown> = { ...(prev?.config ?? {}), template: s.template, lang: s.lang, wa: { map: s.map, headerImage: s.headerImage, enlaceBase: s.enlaceBase.replace(/\/+$/, ""), casos } }
     delete config.tplSpec
-    await this.store.update(SYS, "platform_integrations", { eq: { kind: "whatsapp" } }, { config, updated_by: this.ctx.user.id, updated_at: new Date().toISOString() })
+    await this.store.upsert(SYS, "platform_integrations", [{
+      kind: "whatsapp", modo: prev?.row.modo ?? "obligatoria", planes: prev?.row.planes ?? [], config, meta: prev?.row.meta ?? {},
+      secrets_enc: prev?.row.secrets_enc ?? null, updated_by: this.ctx.user.id, updated_at: new Date().toISOString(),
+    }], { onConflict: ["kind"] })
     await this.audit("whatsapp: ajustes de plantillas", "whatsapp", { template: s.template, lang: s.lang, casos: Object.fromEntries(Object.entries(casos).map(([k, c]) => [k, (c as { template?: string }).template ?? "(por defecto)"])) })
     return { msg: "Ajustes de WhatsApp guardados." }
   }

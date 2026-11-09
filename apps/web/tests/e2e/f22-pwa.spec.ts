@@ -55,7 +55,8 @@ test("cada acceso directo abre su formulario", async ({ page, request }, info) =
   await login(page)
   const expected: Record<string, RegExp> = {
     "/gastos?nuevo=1": /Registrar gasto/,
-    "/ingresos?nuevo=1": /Agregar ingreso/,
+    // Un ingreso nuevo abre en su primer paso: elegir el tipo (salario, honorarios…).
+    "/ingresos?nuevo=1": /¿Qué tipo de ingreso es\?|Agregar ingreso/,
     "/le-debo?nuevo=1": /deuda/i,
     "/me-deben?nuevo=1": /préstamo|me deben|prestaste/i,
     "/calendario?nuevo=1": /Nueva fecha importante/,

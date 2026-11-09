@@ -53,7 +53,8 @@ export abstract class AdminRepo {
   abstract orphanCount(scope: DbScope): Promise<number>
   abstract deleteOrphans(scope: DbScope): Promise<number>
   abstract referralCounts(scope: DbScope): Promise<{ total: number; premiados: number }>
-  abstract adsenseMode(scope: DbScope): Promise<string | null>
+  /** Modo guardado en consola › Integraciones globales de cada integración (kind → apagada | opcional | por_defecto | obligatoria). */
+  abstract integrationModes(scope: DbScope): Promise<Record<string, string>>
   abstract updateFeedback(scope: UserScope, id: string, patch: { estado?: string; respuesta?: string }): Promise<void>
   abstract signedFeedbackUrls(scope: DbScope, paths: string[], seconds: number): Promise<Map<string, string>>
   abstract notifyLog(scope: DbScope, limit: number): Promise<Record<string, unknown>[]>

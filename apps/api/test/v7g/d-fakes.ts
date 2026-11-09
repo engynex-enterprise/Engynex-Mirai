@@ -44,6 +44,8 @@ export class FakeMailer extends AccountantMailer {
 
 export class FakePlatformIntegrations extends PlatformIntegrationsPort {
   env = new Set<string>()
+  /** Variables del despliegue con su valor (correo, WhatsApp, Telegram: integrationFromEnv). */
+  envVals = new Map<string, string>()
   tests: { kind: string; config: Record<string, unknown>; secretKeys: string[]; adminEmail: string }[] = []
   testError: Error | null = null
   lang: string | null = "es_CO"
@@ -57,7 +59,10 @@ export class FakePlatformIntegrations extends PlatformIntegrationsPort {
   tplStatus = "PENDING"
 
   hasEnv(name: string) {
-    return this.env.has(name)
+    return this.env.has(name) || this.envVals.has(name)
+  }
+  envValue(name: string) {
+    return this.envVals.get(name) ?? (this.env.has(name) ? "valor-de-prueba" : undefined)
   }
   publicSiteUrl() {
     return SITE

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { gastoDeCobro, type GastoCobro } from "./subscriptions"
+import { gastoDeCobro, type GastoCobro, cobroToca } from "./subscriptions"
 
 const NETFLIX = { id: "s1", nombre: "Netflix", provider_id: null }
 const g = (o: Partial<GastoCobro> & { id: string }): GastoCobro => ({ fecha: "2026-11-05", descripcion: "Netflix", ...o })
@@ -31,5 +31,23 @@ describe("gastoDeCobro: emparejar el cobro de una suscripción con su gasto", ()
 
   it("respeta el filtro (p. ej. gastos que ya salen por otro lado)", () => {
     expect(gastoDeCobro(NETFLIX, [g({ id: "a" })], "2026-11", new Set(), () => false)).toBeUndefined()
+  })
+})
+
+describe("cobroToca: cuándo se ofrece «Ya se cobró»", () => {
+  const HOY_S = "2026-11-09"
+  it("el cobro de este mes (aunque falten días) o uno atrasado: sí", () => {
+    expect(cobroToca({ activa: true, proximo: "2026-11-25" }, HOY_S)).toBe(true)
+    expect(cobroToca({ activa: true, proximo: "2026-10-30" }, HOY_S)).toBe(true)
+  })
+  it("ya registraste el de este mes y el próximo es el otro mes: no", () => {
+    expect(cobroToca({ activa: true, proximo: "2026-12-05" }, HOY_S)).toBe(false)
+  })
+  it("el del otro mes ya está dentro de los días de aviso: sí, se puede adelantar", () => {
+    expect(cobroToca({ activa: true, proximo: "2026-12-02" }, "2026-11-28", 5)).toBe(true)
+  })
+  it("pausada o sin fecha: no", () => {
+    expect(cobroToca({ activa: false, proximo: "2026-11-10" }, HOY_S)).toBe(false)
+    expect(cobroToca({ activa: true, proximo: null }, HOY_S)).toBe(false)
   })
 })

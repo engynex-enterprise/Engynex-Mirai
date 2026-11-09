@@ -65,12 +65,12 @@ export function PageHeader({ id, title, description, actions, noHelp, children }
  */
 function PageTabs({ current, tabs }: { current: string; tabs: { id: string; label: string; icon: string; desc: string }[] }) {
   return (
-    <nav aria-label="Secciones" className="appear -mt-2 grid auto-cols-fr grid-flow-col gap-1 rounded-xl bg-card p-1 shadow-card ring-1 ring-black/5 sm:flex sm:w-fit dark:ring-white/10">
+    <nav aria-label="Secciones" className="appear -mt-2 grid auto-cols-fr grid-flow-col gap-1 rounded-xl bg-card p-1 shadow-card ring-1 ring-black/5 sm:flex sm:w-fit sm:max-w-full dark:ring-white/10">
       {tabs.map((t) => {
         const on = t.id === current
         return (
           <Link key={t.id} href={`/${t.id}`} aria-current={on ? "page" : undefined}
-            className={cn("group flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors max-sm:flex-col max-sm:gap-1 max-sm:text-center sm:min-w-52 sm:px-3",
+            className={cn("group flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors max-sm:flex-col max-sm:gap-1 max-sm:text-center sm:max-w-60 sm:min-w-0 sm:flex-1 sm:px-3",
               on ? "bg-brand-soft text-foreground ring-1 ring-brand/30" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}>
             <span className={cn("grid size-8 shrink-0 place-items-center rounded-full", on ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground group-hover:text-foreground")}><Icon name={t.icon} className="size-4" /></span>
             <span className="grid min-w-0 sm:text-left">

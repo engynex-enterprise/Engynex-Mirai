@@ -28,18 +28,12 @@ import { can } from "@/lib/household/roles"
 import { fetchHouseholdIntegrations, fetchPlatformIntegrations } from "../api"
 import { CATS, CLIENT_INTEGRATIONS, type IntegrationCategory, type IntegrationDef } from "@/lib/integrations/registry"
 import { deleteIntegration, listModels, saveIntegration, testIntegration, toggleIntegration } from "@/features/integrations/api"
+import { FreeBadge } from "@/features/integrations/free-badge"
 import { MODEL_LIST } from "@/lib/ai/models"
 import { integrationBrand } from "@/lib/brands"
 import { cn } from "@/lib/utils"
 
 type Pub = { kind: string; enabled: boolean; config: Record<string, unknown>; meta: Record<string, unknown> }
-const FREE = { gratis: ["pagado", "Gratis"], "plan-gratis": ["estimado", "Plan gratis"], pago: ["gray", "De pago"] } as const
-const FREE_TIP = {
-  gratis: "No cuesta nada usarlo.",
-  "plan-gratis": "Tiene un plan gratis con un límite de uso; si lo pasas, el proveedor puede cobrar.",
-  pago: "El proveedor cobra por uso en tu cuenta con él.",
-} as const
-
 /** Integraciones que ofrece la plataforma (sin secretos). */
 function useGlobalIntegrations() {
   return useQuery({
@@ -139,7 +133,7 @@ const FILTERS: ListFilter<Row>[] = [
   { value: "activos", label: "Activos", match: (r) => r.on },
   { value: "gratis", label: "Gratis o con plan gratis", match: (r) => r.def.free !== "pago" },
 ]
-const SEARCH = (r: Row) => `${r.def.n} ${r.def.d}`
+const SEARCH = (r: Row) => `${r.def.n} ${r.def.d} ${r.def.para}`
 
 /** Proveedores que el hogar puede configurar: solo IA (el resto lo administra Mirai en la consola). */
 export function IntegrationsTab({ only = ["ia"] }: { only?: IntegrationCategory[] }) {
@@ -189,11 +183,12 @@ export function IntegrationsTab({ only = ["ia"] }: { only?: IntegrationCategory[
                     {brand ? <BrandLogo k={brand} size={40} className={cn(!on && "opacity-80 grayscale-[.35]")} /> : <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg", on ? "bg-brand-soft text-brand" : "bg-muted text-muted-foreground")}><Icon name={def.icon} className="size-5" /></span>}
                     <div className="grid min-w-0 flex-1 gap-1">
                       <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}
-                        <Tip label={FREE_TIP[def.free]}><span><StatusPill tone={FREE[def.free][0]}>{FREE[def.free][1]}</StatusPill></span></Tip>
+                        <FreeBadge free={def.free} />
                         {def.scope === "platform" && <Tip label="La configura quien administra Mirai para todos"><span><StatusPill tone="info">Del despliegue</StatusPill></span></Tip>}
                         {offered && <Tip label={locked ? "Mirai la deja siempre activa para tu plan" : "Mirai la incluye: no necesitas clave propia"}><span><StatusPill tone="pagado">{locked ? "Incluida por Mirai · obligatoria" : "Incluida por Mirai"}</StatusPill></span></Tip>}
                       </p>
                       <p className="text-sm text-muted-foreground">{def.d}</p>
+                      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Para qué sirve: </span>{def.para}</p>
                       {usesMirai && on && <p className="text-xs font-medium text-success">Usas el servicio de Mirai: no tienes que configurar nada.</p>}
                       {offered && !usesMirai && modo === "opcional" && !on && <p className="text-xs text-muted-foreground">Mirai la ofrece: actívala y listo, sin claves.</p>}
                     </div>

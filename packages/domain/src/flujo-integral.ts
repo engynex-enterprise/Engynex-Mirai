@@ -101,6 +101,16 @@ export interface Mov {
   ref?: MovRef
   /** Parte de intereses (cuotas de deudas y pago de tarjetas). */
   interes?: number
+  /** Medio de pago con que salió o va a salir (payment_methods.id), si se sabe. */
+  medioId?: string | null
+  /** Quién de la familia lo hizo o lo paga (family_members.id). */
+  memberId?: string | null
+  /** A quién se le paga: un negocio (providers.id), una persona (contacts.id) o una entidad (entities.id). */
+  providerId?: string | null
+  contactId?: string | null
+  entityId?: string | null
+  /** Nombre escrito a mano de a quién se le paga (gastos fijos de antes, sin proveedor). */
+  paraTxt?: string | null
 }
 
 /** Datos que no están en `BookData` y que la vista carga aparte (todos opcionales). */
@@ -170,8 +180,12 @@ const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().normalize
 const isoOf = (d: DateInput) => iso(toDay(d))
 const ym = (f: string) => f.slice(0, 7)
 const monthStart = (f: string | null | undefined) => (f ? `${f.slice(0, 7)}-01` : "")
-type Raw = { created_at?: string | null; currency?: string | null; provider_id?: string | null; category_id?: string | null; origen?: string | null }
+type Raw = {
+  created_at?: string | null; currency?: string | null; provider_id?: string | null; category_id?: string | null; origen?: string | null
+  payment_method_id?: string | null; member_id?: string | null; contact_id?: string | null; entity_id?: string | null; proveedor?: string | null
+}
 const raw = (x: unknown) => x as Raw
+type FixedPaymentRaw = { payment_method_id?: string | null }
 
 /** ¿La fecha del calendario es un impuesto (renta, predial, vehicular…)? El SOAT y la técnico-mecánica no lo son. */
 export const esImpuesto = (c: { titulo: string; template_key?: string | null; cat?: string | null }) =>
@@ -355,9 +369,10 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     const tipo = loanTipo(L as never)
     const td = tipoDef(tipo)
     const cobrar = L.kind === "cobrar"
+    const quien = { contactId: L.contact_id ?? null, entityId: L.entity_id ?? null, providerId: raw(L).provider_id ?? null }
     const base = cobrar
-      ? { dir: "entra" as const, modulo: "me-deben" as const, clase: "cobro" as const, icon: "hand-coins", href: "/me-deben", cat: "Te pagan préstamos", ref: { tabla: "loans" as const, id: L.id ?? "" } }
-      : { dir: "sale" as const, modulo: "le-debo" as const, clase: "deuda" as const, icon: td?.icon ?? "landmark", href: "/le-debo", cat: td?.corto ?? "Deudas", ref: { tabla: "loans" as const, id: L.id ?? "" } }
+      ? { dir: "entra" as const, modulo: "me-deben" as const, clase: "cobro" as const, icon: "hand-coins", href: "/me-deben", cat: "Te pagan préstamos", ref: { tabla: "loans" as const, id: L.id ?? "" }, ...quien }
+      : { dir: "sale" as const, modulo: "le-debo" as const, clase: "deuda" as const, icon: td?.icon ?? "landmark", href: "/le-debo", cat: td?.corto ?? "Deudas", ref: { tabla: "loans" as const, id: L.id ?? "" }, ...quien }
     const det = L.concepto ? ` · ${L.concepto}` : ""
     for (const h of e.hist) {
       if (h.tipo === "cuota") push({ ...base, id: `loan:${L.id}:c${h.n}`, fecha: h.fecha, n: `Cuota ${h.n} · ${nm}`, s: (cobrar ? "Te pagaron" : "Pagaste") + det, v: h.valor, estado: "hecho", interes: cobrar ? undefined : h.int })
@@ -393,9 +408,15 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
         const PP = pagoPeriodo(f, p.per, f.payments, trm)
         const ult = PP.pagos.reduce<string>((a, x) => (x.fecha && isoOf(x.fecha) > a ? isoOf(x.fecha) : a), "")
         const refFijo = { tabla: "fixed_expenses" as const, id: f.id, per: p.per }
+        // Con qué se pagó: el medio del último pago del periodo o, si aún no se paga, el del gasto fijo.
+        const medioPago = (PP.pagos.at(-1) as (FixedPaymentRaw | undefined))?.payment_method_id
+        const quien = {
+          medioId: medioPago ?? raw(f).payment_method_id ?? null, memberId: raw(f).member_id ?? null,
+          providerId: raw(f).provider_id ?? null, contactId: f.contact_id ?? null, paraTxt: raw(f).proveedor?.trim() || null,
+        }
         const tipo = aporte
-          ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas", ref: refFijo }
-          : { modulo: "fijos" as const, clase: "gasto" as const, n: f.nombre, s: "Gasto fijo", icon: catIcon(b.categories, f.category_id), cat: f.category_id ? catName(f.category_id) : "Gastos fijos", catId: f.category_id ?? null, href: "/fijos", ref: refFijo }
+          ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas", ref: refFijo, ...quien }
+          : { modulo: "fijos" as const, clase: "gasto" as const, n: f.nombre, s: "Gasto fijo", icon: catIcon(b.categories, f.category_id), cat: f.category_id ? catName(f.category_id) : "Gastos fijos", catId: f.category_id ?? null, href: "/fijos", ref: refFijo, ...quien }
         if (PP.pagos.length) {
           const fecha = ult || p.due
           push({ id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha, estado: "hecho", v: PP.pagado, ...tipo, ...(PP.parcial ? { s: `${tipo.s} · abono` } : {}) })
@@ -424,7 +445,10 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
         const fecha = iso(d)
         if (desde && fecha < desde) continue
         const gs = gastosDeCobro({ id: s.id, nombre: s.nombre, provider_id: prov }, expRows, ym(fecha), usados, (x) => !gastoYaContado(x))
-        const base = { id: `sub:${s.id}:${ym(fecha)}`, dir: "sale" as const, modulo: "suscripciones" as const, clase: "gasto" as const, n: s.nombre, icon: "repeat", cat: sCat ? catName(sCat) : "Suscripciones", catId: sCat ?? null, href: "/suscripciones", ref: { tabla: "subscriptions" as const, id: s.id } }
+        const base = {
+          id: `sub:${s.id}:${ym(fecha)}`, dir: "sale" as const, modulo: "suscripciones" as const, clase: "gasto" as const, n: s.nombre, icon: "repeat", cat: sCat ? catName(sCat) : "Suscripciones", catId: sCat ?? null,
+          href: "/suscripciones", ref: { tabla: "subscriptions" as const, id: s.id }, medioId: raw(s).payment_method_id ?? null, providerId: prov ?? null,
+        }
         if (!gs.length) { push({ ...base, fecha, s: s.ciclo === "anual" ? "Suscripción anual" : "Suscripción", v: esperado, ...sinRegistro(fecha) }); continue }
         // El cobro quedó cerrado si la suscripción ya pasó al siguiente (`proximo` avanzó). Si no, lo registrado son
         // abonos: cada uno sale como hecho y lo que falta sale aparte, igual que en un gasto fijo.
@@ -439,11 +463,11 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
   // 5. Tarjetas: el pago del mes (cuotas de sus compras) en el día de pago. Sus compras no salen aparte (regla 2).
   //    Si registraste pagos de la tarjeta ese mes (card_payments), salen esos pagos con su fecha y valor (lo real).
   for (const t of b.creditCards) {
-    const base = { dir: "sale" as const, modulo: "tarjetas" as const, clase: "deuda" as const, n: `Tarjeta ${t.nombre}`, icon: "credit-card", cat: "Tarjetas de crédito", href: "/tarjetas", ref: { tabla: "credit_cards" as const, id: t.id } }
+    const base = { dir: "sale" as const, modulo: "tarjetas" as const, clase: "deuda" as const, n: `Tarjeta ${t.nombre}`, icon: "credit-card", cat: "Tarjetas de crédito", href: "/tarjetas", ref: { tabla: "credit_cards" as const, id: t.id }, entityId: raw(t).entity_id ?? null }
     for (const [y, m] of meses) {
       const fecha = iso(new Date(y, m, Math.min(+t.pago || 15, lastDay(y, m))))
       const fm = tarjetaFlujoMes(t, y, m, today)
-      fm.pagos.forEach((p, ix) => push({ ...base, id: `card:${t.id}:pago:${p.id ?? `${p.fecha}:${ix}`}`, fecha: isoOf(p.fecha), s: p.tipo === "total" ? "Pagaste el total de la tarjeta" : "Pagaste la tarjeta", v: +p.valor, estado: "hecho", interes: ix ? 0 : Math.min(fm.interes, +p.valor) }))
+      fm.pagos.forEach((p, ix) => push({ ...base, id: `card:${t.id}:pago:${p.id ?? `${p.fecha}:${ix}`}`, fecha: isoOf(p.fecha), s: p.tipo === "total" ? "Pagaste el total de la tarjeta" : "Pagaste la tarjeta", v: +p.valor, estado: "hecho", interes: ix ? 0 : Math.min(fm.interes, +p.valor), medioId: raw(p).payment_method_id ?? null }))
       if (!fm.pagos.length && inR(fecha)) push({ ...base, id: `card:${t.id}:${ym(fecha)}`, fecha, s: "Pago del mes (cuotas de tus compras)", v: fm.estimado, ...sinRegistro(fecha), interes: fm.interes })
     }
   }
@@ -457,7 +481,9 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
     if (gastoYaContado(g) || g.origen === "aporte" || usados.has(g.id)) continue
     contados.push(g)
     const cat = catName(g.category_id)
-    push({ id: `exp:${g.id}`, dir: "sale", modulo: "gastos", clase: "gasto", fecha: g.fecha, n: g.descripcion, s: g.origen === "compartido" ? `Gasto compartido · ${cat}` : `Gasto · ${cat}`, icon: catIcon(b.categories, g.category_id), v: conv(+g.valor, g.currency, trm), cat, catId: g.category_id ?? null, estado: "hecho", href: "/gastos", ref: { tabla: "expenses", id: g.id } })
+    push({ id: `exp:${g.id}`, dir: "sale", modulo: "gastos", clase: "gasto", fecha: g.fecha, n: g.descripcion, s: g.origen === "compartido" ? `Gasto compartido · ${cat}` : `Gasto · ${cat}`, icon: catIcon(b.categories, g.category_id), v: conv(+g.valor, g.currency, trm), cat, catId: g.category_id ?? null, estado: "hecho", href: "/gastos", ref: { tabla: "expenses", id: g.id },
+      medioId: g.payment_method_id ?? null, memberId: g.member_id ?? null, providerId: g.provider_id ?? null, contactId: g.contact_id ?? null,
+    })
   }
 
   // 7. Calendario: ingresos con valor; egresos con valor o, si es un impuesto, con su estimado.

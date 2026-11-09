@@ -77,12 +77,14 @@ test("proveedores: crear desde el selector dentro de Gasto fijo y verlo en el m�
   await dlg.getByRole("textbox", { name: "Nombre" }).fill(nombre)
   await dlg.getByRole("textbox", { name: "Valor" }).fill("180000")
 
-  // El proveedor se elige de una lista; si no existe, se agrega desde el mismo selector.
-  await dlg.getByRole("combobox", { name: "Proveedor" }).click()
+  // «¿A quién le pagas?» › Negocio o empresa: el proveedor se elige de una lista; si no existe, se agrega desde el
+  // mismo selector (id f-prov: su nombre accesible cambia con lo elegido).
+  await dlg.getByRole("radio", { name: "Negocio o empresa" }).click()
+  await dlg.locator("#f-prov").click()
   await page.getByPlaceholder("Buscar o escribir un proveedor…").fill(prov)
   await page.getByRole("option", { name: `Agregar proveedor “${prov}”` }).click()
   await expect(page.getByText("Proveedor agregado").first()).toBeVisible()
-  await expect(dlg.getByRole("combobox", { name: "Proveedor" })).toContainText(prov)
+  await expect(dlg.locator("#f-prov")).toContainText(prov)
   // Su tipo (servicios públicos) sugiere la categoría del gasto fijo.
   await expect(dlg.getByRole("combobox", { name: "Categoría" })).toContainText("Servicios públicos")
   await shot(page, "fijo-con-proveedor", info.project.name)
@@ -95,7 +97,9 @@ test("proveedores: crear desde el selector dentro de Gasto fijo y verlo en el m�
   const li = page.locator("#main li", { hasText: nombre }).first()
   if (info.project.name === "movil") { await li.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: `Editar ${nombre}` }).click() }
   else await li.getByRole("button", { name: `Editar ${nombre}` }).click()
-  await expect(page.getByRole("dialog").getByRole("combobox", { name: "Proveedor" })).toContainText(prov)
+  // Al editarlo, «¿A quién le pagas?» abre en Negocio o empresa con el proveedor elegido.
+  await expect(page.getByRole("dialog").getByRole("radio", { name: "Negocio o empresa" })).toHaveAttribute("aria-checked", "true")
+  await expect(page.getByRole("dialog").locator("#f-prov")).toContainText(prov)
   await page.keyboard.press("Escape")
 
   await page.goto("/proveedores")
@@ -157,7 +161,8 @@ test("proveedores: medio de pago preferido, próximo pago, detalle y deuda enlaz
   const f = page.getByRole("dialog")
   await f.getByRole("textbox", { name: "Nombre" }).fill(fijo)
   await f.getByRole("textbox", { name: "Valor" }).fill("90000")
-  await f.getByRole("combobox", { name: "Proveedor" }).click()
+  await f.getByRole("radio", { name: "Negocio o empresa" }).click()
+  await f.locator("#f-prov").click()
   await page.getByPlaceholder("Buscar o escribir un proveedor…").fill(prov)
   await page.getByRole("option", { name: new RegExp(prov) }).first().click()
   await expect(f.getByRole("combobox", { name: /Medio de pago|¿Con qué/ }).first()).toContainText("Transferencia")

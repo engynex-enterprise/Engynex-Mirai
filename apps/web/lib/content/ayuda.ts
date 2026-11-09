@@ -65,6 +65,7 @@ const V53: Release = {
 const V55: Release = {
   v: "5.5", f: "2 nov 2026", t: "Automatiza tu plata y entiende cada peso",
   items: [
+    ["new", "Todos tus gastos en una sola lista", "En Gastos › Todos ves todo lo que sale de tu bolsillo (día a día, fijos, suscripciones, tarjetas, cuotas de deudas, impuestos y mesadas) sin contar nada dos veces. Muévete de mes en mes o mira los próximos 7 días, compara con el periodo anterior, mira si te alcanza con lo que tienes, en qué se va la plata, cómo vas con tu presupuesto y cuánto pagas en intereses. Toca un pago para ver su detalle, págalo, cambia su fecha o pide que te avisemos; elige varios para pagarlos de una vez o exportarlos. Si registraste un pago dos veces, te lo mostramos para enlazarlo con un toque."],
     ["new", "Automatizaciones", "Crea flujos con un diagrama: \"si pasa esto, haz aquello\". Por ejemplo, avísame si un gasto pasa de $200.000, ahorra el 10 % de cada ingreso o recuérdame 3 días antes de cada pago. Ya trae plantillas listas; en el plan gratis tienes 3 activas."],
     ["new", "Recibo de tu ingreso", "Al agregar un ingreso ves a la derecha un recibo que se arma mientras escribes. Toca Más detalle para ver cada descuento, lo que llega en cada pago, las próximas fechas y el año completo."],
     ["new", "Uso de IA", "En Ajustes › Uso de IA ves cuántos créditos de IA llevas este mes, cuánto te queda, en qué los usaste y cuánto ahorraste con las respuestas que Mirai calcula sin IA."],

@@ -367,7 +367,7 @@ El texto de `para` también entra al buscador de las dos pantallas (`useListCont
 `SEARCH` en Ajustes), para poder buscar «dólares» y que salga la TRM. El buscador global del CLI
 (`packages/cli/src/datos/buscador.ts`) **no** indexa integraciones hoy, así que ahí no hay nada que hacer.
 
-## 10. Base de datos — `db/postgres/0009_datos_al_dia.sql`
+## 10. Base de datos — `db/postgres/0010_datos_al_dia.sql`
 
 Aditiva, idempotente, sin cambiar el comportamiento de lo publicado:
 

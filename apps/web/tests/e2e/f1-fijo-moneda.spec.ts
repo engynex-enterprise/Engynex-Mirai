@@ -76,9 +76,11 @@ test("gasto fijo en dólares: se ve en USD y al mes en pesos, y el pago se regis
     // El gasto que queda está en pesos (no "10"). Se espera a que PostgREST vea la fila, como f1-fijo-pagar-a.
     await expect.poll(async () => (await sb.from("expenses").select("valor").eq("fixed_expense_id", fijo!.id)).data?.map((e) => Number(e.valor))).toEqual([40_000])
 
-    await page.goto("/gastos")
+    // El pago de un fijo ya no está en «Del día a día»: está en «Todos» (cada pestaña muestra solo lo suyo).
+    await page.goto("/gastos-todos")
     const movs = page.locator('[data-testid="data-table"]').filter({ hasText: "Movimientos" })
-    await movs.getByPlaceholder("Buscar gasto").fill(nombre)
+    await movs.getByRole("tab", { name: /Pagados/ }).click()
+    await movs.getByPlaceholder("Buscar un gasto").fill(nombre)
     const gasto = movs.locator("li", { hasText: nombre })
     await expect(gasto.getByText(/^\$\s*40\.000$/).filter({ visible: true })).toBeVisible()
     await shot(page, "fijo-moneda-gasto", info.project.name)

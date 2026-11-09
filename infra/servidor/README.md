@@ -37,7 +37,7 @@ node infra/servidor/variables.mjs <dominio>
 Crea `~/.mirai/servidor-<dominio>.env`; los secretos nuevos quedan en `~/.mirai/servidor-<dominio>.secretos` y se
 reutilizan (**`BETTER_AUTH_SECRET` y las contraseñas de la base nunca cambian**). `ENCRYPTION_KEY` y `CRON_SECRET` salen
 de `.env.local` y deben ser las de producción. A mano en el panel: `AI_GATEWAY_API_KEY`, `TURNSTILE_SECRET_KEY`,
-`MERCADOPAGO_*` y `WOMPI_*` si se usan.
+`MERCADOPAGO_*` y `WOMPI_*` si se usan. Las de correo y WhatsApp (sección 6) se copian de `.env.local` si están ahí.
 
 ## 4a. Dokploy
 
@@ -75,7 +75,65 @@ URL="postgres://postgres:$POSTGRES_PASSWORD@localhost:56432/mirai"
 `db-destino.mjs` pone las contraseñas de `authenticator` y `mirai_app` desde `MIRAI_AUTHENTICATOR_PASSWORD` y
 `MIRAI_APP_PASSWORD` (ya cargadas por el `.secretos`). Después: **Redeploy**.
 
-## 6. Google, pagos y avisos
+## 6. Correo y WhatsApp (sin esto Mirai no envía nada)
+
+Mirai no trae proveedor de correo propio. **Sin una clave, las invitaciones, los recordatorios y los correos de la
+cuenta (verificación, recuperación de contraseña, enlace mágico) no salen** y la app dice "No hay un servicio de correo
+activo en Mirai". Con las variables de abajo en **Dokploy › Environment** quedan activos para **todos los hogares** al
+desplegar, sin entrar a la consola; lo que se guarde en *consola › Integraciones globales* manda sobre ellas (y
+*Apagada* las apaga aunque la variable exista).
+
+**Correo con Resend** (3.000 correos/mes gratis, lo recomendado):
+
+El DNS ya está puesto: la zona activa de `engynex.com` es **Cloudflare** (NS `kaiser`/`monika.ns.cloudflare.com`; la
+zona que queda en Hostinger ya no la usa nadie) y ahí están `resend._domainkey.mirai`, `send.mirai` y `rsend.mirai`,
+más un SPF único y el DMARC. O sea: el dominio de envío es **`mirai.engynex.com`**, no `engynex.com`.
+
+1. Entra a [resend.com](https://resend.com) › **Domains**: `mirai.engynex.com` debe aparecer *verified* (si está
+   *pending*, dale **Verify**; los registros ya existen).
+2. **API Keys › Create** (permiso *Sending access*) y copia la clave `re_…` (solo se ve una vez).
+3. Desde el computador del dueño, con la clave:
+
+   ```bash
+   node infra/servidor/activar-avisos.mjs --resend re_... --from no-responder@mirai.engynex.com
+   ```
+
+   Comprueba en Resend que el dominio esté verificado, guarda las variables en Dokploy (sin borrar las demás) y pide
+   el despliegue. `--revisar` solo mira qué hay hoy; `--sin-desplegar` guarda sin desplegar. No imprime ningún valor.
+   A mano es lo mismo en Dokploy › Environment:
+
+   ```
+   RESEND_API_KEY=re_...
+   MAIL_FROM=no-responder@mirai.engynex.com   # del dominio verificado; vacío = AUTH_MAIL_FROM
+   MAIL_FROM_NAME=Mirai
+   ```
+
+4. Comprueba en **consola › Integraciones globales › Correo con Resend**: debe decir *Activa* con la etiqueta
+   *Variables del servidor*. Botón **Probar** (te llega un correo) y **Enviar prueba** (a quien quieras).
+
+Para probar sin dominio verificado: `MAIL_FROM=onboarding@resend.dev` (solo le llega a tu propio correo de Resend).
+Otros proveedores, igual de válidos: `BREVO_API_KEY`, `SENDGRID_API_KEY`, `GMAIL_USER` + `GMAIL_APP_PASSWORD`, o
+`SMTP_HOST` + `SMTP_PORT` + `SMTP_SECURE` + `SMTP_USER` + `SMTP_PASS`. Si hay varios, se usa el primero de esta lista:
+Resend, Brevo, SendGrid, Gmail, SMTP.
+
+**WhatsApp Cloud API** (Meta cobra por mensaje):
+
+```
+WHATSAPP_TOKEN=EAAG...        # token permanente de un usuario del sistema con whatsapp_business_messaging y _management
+WHATSAPP_PHONE_ID=...         # "Phone number ID" (no el número)
+WHATSAPP_WABA_ID=...          # ID de la cuenta de WhatsApp Business: con él Mirai administra las plantillas
+WHATSAPP_TEMPLATE=mirai_resumen
+WHATSAPP_LANG=es_CO
+```
+
+o `node infra/servidor/activar-avisos.mjs --whatsapp EAAG... --phone-id ... --waba-id ...`.
+
+Los avisos van con la plantilla aprobada por Meta. Las **invitaciones al hogar** necesitan además una plantilla propia
+aprobada para ese caso: *consola › WhatsApp › Plantillas y casos* › caso **Invitación al hogar** (ahí se crea, se pide
+aprobación y se asigna). Sin ella, la app ofrece mandar la invitación desde el WhatsApp de la persona, que también
+sirve. Telegram, si se quiere: `TELEGRAM_BOT_TOKEN` y `TELEGRAM_BOT_NAME`.
+
+## 6b. Google y pagos
 
 - Cliente OAuth de Google: origen `https://<dominio>` y redirecciones `https://<dominio>/api/auth/callback/google` y
   `https://<dominio>/v1/google/callback`.

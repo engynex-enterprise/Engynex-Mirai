@@ -32,6 +32,10 @@ import { reviewMonthHormiga } from "@/features/ai/api"
 import { ExpenseForm } from "./expense-form"
 import { isHormiga } from "./logic"
 import { hormigas } from "@/lib/domain"
+import { flujoIntegral, periodo } from "@/lib/domain/flujo-integral"
+import { esGastoSuelto, idsDiaADia } from "@/lib/domain/bandeja"
+import { useBookData } from "@/features/book/use-book-data"
+import Link from "next/link"
 import { AdSlot } from "@/features/ads/ad-slot"
 
 type G = Row<"expenses">
@@ -51,6 +55,7 @@ export function ExpensesView() {
   const [nuevo, setNuevo] = useNewParam()
   const [editing, setEditing] = useState<G | null>(null)
   const { data: all, isPending } = useList("expenses", { order: { column: "fecha", ascending: false } })
+  const { data: book } = useBookData()
   const { data: cats = [] } = useCategories()
   const { data: methods = [] } = usePaymentMethods()
   const { data: members = [] } = useMembers()
@@ -73,8 +78,17 @@ export function ExpensesView() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["b", bookId, "expenses"] }),
   })
 
+  // Solo lo del día a día: lo que tiene su propia pestaña (pagos de fijos, cobros de suscripción, compras con tarjeta,
+  // cuotas y aportes) va en ella y todo junto en «Todos». `fuera` sale del flujo (también los cobros de suscripción
+  // registrados a mano con su nombre); `esGastoSuelto` cubre lo recién registrado mientras el libro se recarga.
+  const fuera = useMemo(() => {
+    if (!book) return new Set<string>()
+    const [y, m] = mes.split("-").map(Number)
+    const dia = idsDiaADia(flujoIntegral(book, periodo(book, "mes", y, m - 1), today))
+    return new Set(book.expenses.filter((g) => g.fecha.startsWith(mes) && !dia.has(g.id)).map((g) => g.id))
+  }, [book, mes, today])
   // Del mes elegido; el mismo día, lo último registrado arriba.
-  const rows = useMemo(() => (all ?? []).filter((g) => g.fecha.startsWith(mes)).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.created_at ?? "").localeCompare(a.created_at ?? "")), [all, mes])
+  const rows = useMemo(() => (all ?? []).filter((g) => g.fecha.startsWith(mes) && esGastoSuelto(g) && !fuera.has(g.id)).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.created_at ?? "").localeCompare(a.created_at ?? "")), [all, mes, fuera])
   const stats = useMemo(() => {
     const [y, m] = mes.split("-").map(Number)
     const dim = new Date(y, m, 0).getDate()
@@ -117,14 +131,14 @@ export function ExpensesView() {
 
   return (
     <div className="grid gap-6">
-      <PageHeader id="gastos" description="Todo lo que gastas. Mirai detecta los gastos “hormiga”: pequeños, frecuentes y evitables, que juntos suman mucho. También puedes marcarlos tú con la taza."
+      <PageHeader id="gastos" description="Lo que gastas en el día a día: mercado, salidas, transporte, domicilios. Mirai detecta los gastos “hormiga”: pequeños, frecuentes y evitables, que juntos suman mucho. También puedes marcarlos tú con la taza."
         actions={canAdd && <Button onClick={() => setNuevo(true)}><Plus /> Registrar gasto</Button>} />
 
       <KpiGrid>
-        <Kpi icon="receipt" tone="expense" label={today.startsWith(mes) ? "Gastaste este mes" : `Gastaste en ${fmtMonth(mes)}`} loading={isPending} value={<Money value={stats.total} />} sub={`${rows.length} gasto${rows.length === 1 ? "" : "s"}`} />
+        <Kpi icon="receipt" tone="expense" label={today.startsWith(mes) ? "Día a día este mes" : `Día a día en ${fmtMonth(mes)}`} loading={isPending} value={<Money value={stats.total} />} sub={`${rows.length} gasto${rows.length === 1 ? "" : "s"}`} />
         <Kpi icon="coffee" tone="amber" label="Gastos hormiga" loading={isPending} value={<Money value={stats.llevas} />} sub={stats.base === "pronto" ? `${stats.nh} gasto${stats.nh === 1 ? "" : "s"} · aún es pronto para proyectar` : stats.base === "mes-cerrado" ? `${stats.nh} gasto${stats.nh === 1 ? "" : "s"} en el mes` : <>Proyección del mes <Money value={stats.proy} short /></>}
           info="Gastos pequeños, frecuentes y evitables (un tinto, un domicilio, un snack). Juntos suman mucho al año." />
-        <Kpi icon="calendar-days" tone="blue" label="Promedio por día" loading={isPending} value={<Money value={stats.diario} />} sub={`Día a día, en ${stats.elapsed} día${stats.elapsed === 1 ? "" : "s"} (sin fijos)`} />
+        <Kpi icon="calendar-days" tone="blue" label="Promedio por día" loading={isPending} value={<Money value={stats.diario} />} sub={`En ${stats.elapsed} día${stats.elapsed === 1 ? "" : "s"}`} />
         <Kpi icon="trending-up" tone="violet" label="Gasto más alto" loading={isPending} value={<Money value={stats.top ? Number(stats.top.valor) : 0} />} sub={stats.top?.descripcion || "—"} />
       </KpiGrid>
 
@@ -177,11 +191,21 @@ export function ExpensesView() {
       </Card>
 
       <DataTable<G>
-        title="Movimientos" info="Todos tus gastos del mes. Búscalos, fíltralos por categoría, persona o medio de pago, y exporta lo que ves."
+        title="Gastos del día a día" info="Mercado, salidas, transporte, domicilios: lo que gastas en el día a día. Los pagos de gastos fijos, suscripciones, tarjetas y cuotas están en su propia pestaña, y todo junto en «Todos»."
+        subtitle={<>¿Buscas los pagos de fijos, suscripciones o tarjetas? Están todos juntos en <Link href="/gastos-todos" className="text-link hover:underline">Todos</Link>.</>}
         data={rows} loading={isPending} columns={columns} rowKey={(g) => g.id} noun={["gasto", "gastos"]} exportName={`gastos-${mes}`}
         total={{ value: (g) => Number(g.valor) }}
         initialSort={{ id: "fecha", dir: "desc" }}
-        group={{ by: (g) => g.fecha, sorts: ["fecha"], label: (d, gs) => <><span>{dayHeading(d, today)}</span><Money value={gs.reduce((a, g) => a + Number(g.valor), 0)} className="font-semibold normal-case" /></> }}
+        selectable
+        grouping="dia"
+        groupings={[
+          { id: "dia", label: "Por día", by: (g) => g.fecha, title: (d) => dayHeading(d, today) },
+          { id: "cat", label: "Por categoría", by: (g) => catOf(g)?.nombre ?? "Sin categoría" },
+          { id: "quien", label: "Por quién gastó", by: (g) => memberName(g.member_id, members) },
+          { id: "medio", label: "Por medio de pago", by: (g) => methodOf(g)?.nombre ?? "Sin medio de pago" },
+          { id: "para", label: "Por a quién le pagaste", by: (g) => pagadoA(g) || "Sin decir" },
+          { id: "hormiga", label: "Hormiga o no", by: (g) => (isHormiga(g, cats, umbral) ? "Gastos hormiga" : "Otros gastos") },
+        ]}
         search={{ placeholder: "Buscar gasto", text: (g) => `${g.descripcion} ${catOf(g)?.nombre ?? ""} ${methodOf(g)?.nombre ?? ""} ${pagadoA(g)} ${memberName(g.member_id, members)}` }}
         toolbar={
           <Select value={mes} onValueChange={setMes}>
@@ -192,7 +216,6 @@ export function ExpensesView() {
         views={[
           { id: "todos", label: "Todos" },
           { id: "hormiga", label: "Hormiga", match: (g) => isHormiga(g, cats, umbral), hint: HORMIGA_HINT.auto },
-          { id: "fijos", label: "De gastos fijos", match: (g) => !!g.fixed_expense_id, hint: "Pagos que registraste desde Gastos fijos." },
         ]}
         filters={[
           { id: "cat", label: "Categoría", options: catalogOptions(rows, cats, pick.cat, "Sin categoría"), match: catalogMatch(pick.cat) },
@@ -205,12 +228,12 @@ export function ExpensesView() {
           { id: "valor", label: "Valor", kind: "range", money: true, value: (g) => Number(g.valor) },
         ]}
         emptyState={<EmptyState iso="gastos" title="No hay gastos en este mes" description="Registra lo que pagas y Mirai te ayuda a ver en qué se va tu plata." action={canAdd && <Button onClick={() => setNuevo(true)}><Plus /> Registrar gasto</Button>} />}
-        item={(g) => {
+        item={(g, select) => {
           const cat = catOf(g)
           const h = isHormiga(g, cats, umbral)
           const can = canRow(g)
           return (
-            <ListRow key={g.id} icon="receipt"
+            <ListRow key={g.id} icon="receipt" select={select && { ...select, label: `Elegir ${g.descripcion || "gasto"}` }}
               media={<EntityLogo name={g.descripcion} provider={provOf(g)} icon={cat?.icon ?? "receipt"} seed={cat?.id} tone={h ? "warning" : undefined} />}
               title={g.descripcion || "Gasto"}
               badges={<>

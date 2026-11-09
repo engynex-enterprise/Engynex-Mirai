@@ -105,3 +105,16 @@ export function gastoDeCobro<T extends GastoCobro>(
 ): T | undefined {
   return gastosDeCobro(s, gastos, mes, usados, ok)[0]
 }
+
+/**
+ * ¿Toca registrar el cobro ("Ya se cobró")? Solo si la suscripción está activa y su próximo cobro es de este mes, ya
+ * pasó o cae dentro de los días de aviso. Si el de este mes ya se registró, `proximo` pasó al siguiente y no se ofrece
+ * otra vez hasta que se acerque (la misma regla que el botón de pagar de un gasto fijo, `estadoFijo`).
+ */
+export function cobroToca(s: { activa?: boolean | null; proximo?: string | null }, today: string, aviso = 5): boolean {
+  if (s.activa === false || !s.proximo) return false
+  const p = s.proximo.slice(0, 10), t = today.slice(0, 10)
+  if (p.slice(0, 7) <= t.slice(0, 7)) return true
+  const dias = Math.round((new Date(`${p}T12:00:00`).getTime() - new Date(`${t}T12:00:00`).getTime()) / 864e5)
+  return dias <= aviso
+}

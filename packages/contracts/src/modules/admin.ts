@@ -89,7 +89,8 @@ export const SystemInfo = z.object({
   settings: z.record(z.string(), z.unknown()).nullable(),
   migraciones: z.array(z.object({ name: z.string(), applied_at: z.string() })),
   huerfanos: z.number(), referidos: z.number(), premiados: z.number(),
-  estado: z.array(z.object({ k: z.string(), ok: z.boolean() })),
+  /** Qué tiene configurado ESTE despliegue (variables del servidor + integraciones globales), por grupos. */
+  estado: z.array(z.object({ k: z.string(), ok: z.boolean(), grupo: z.string(), req: z.boolean(), nota: z.string().nullable() })),
   ambiente: z.string(), rama: z.string(), commit: z.string(),
 })
 export const AdminFeedback = z.object({

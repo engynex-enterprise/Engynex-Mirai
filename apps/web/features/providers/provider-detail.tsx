@@ -16,7 +16,7 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { Tip } from "@/components/mirai/tip"
 import { useCanEdit } from "@/components/app/app-context"
 import { useList } from "@/hooks/use-book-data"
-import { FFREC, fijoStatus, fmtNit, fmtSitio, fmtTelefono, loanName, tipoLabel, type FixedExpenseIn } from "@/lib/domain"
+import { FFREC, estadoFijo, fijoStatus, fmtNit, fmtSitio, fmtTelefono, loanName, tipoLabel, type FixedExpenseIn } from "@/lib/domain"
 import { providerMonthly, type ProviderDebt, type ProviderNext } from "@/lib/domain/proveedor-pagos"
 import { fmtDate, fmtMoney, monthName, todayISO } from "@/lib/format"
 import { DUE_HINT, DUE_TONE, dueState, dueText } from "@/lib/list-helpers"
@@ -70,7 +70,8 @@ function Body({ p, next, debt, onEdit }: { p: Provider; next?: ProviderNext; deb
   const anio = gastos.filter((g) => g.fecha.startsWith(today.slice(0, 4))).reduce((a, g) => a + Number(g.valor), 0)
   const medio = methods.find((m) => m.id === p.payment_method_id)
   const categoria = cats.find((c) => c.id === p.category_id)
-  const nextFijo = fixed.map((f) => ({ f, st: fijoStatus(f as unknown as FixedExpenseIn, today) })).map(({ f, st }) => ({ f, d: st.venc[0] ?? st.prox })).filter((x) => x.d).sort((a, b) => a.d!.due.localeCompare(b.d!.due))[0]
+  // El botón "Pagar" solo para un fijo que toca pagar (vencido, de este mes o dentro del aviso): misma regla que Fijos.
+  const nextFijo = fixed.map((f) => ({ f, d: estadoFijo(f as unknown as FixedExpenseIn, today).porPagar })).filter((x) => x.d).sort((a, b) => a.d!.due.localeCompare(b.d!.due))[0]
   const st = next ? dueState(next.fecha, today) : null
   const web = fmtSitio(p.sitio_web)
   const enlazados = fixed.length + misSubs.length + loans.length

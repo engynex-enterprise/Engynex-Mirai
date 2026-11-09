@@ -47,7 +47,9 @@ writeFileSync(secretosFile, Object.entries(nuevos).map(([k, v]) => `${k}=${v}`).
 chmodSync(secretosFile, 0o600)
 
 const local = existsSync(join(ROOT, ".env.local")) ? parse(readFileSync(join(ROOT, ".env.local"), "utf8")) : {}
-const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "TURNSTILE_SECRET_KEY", "AI_GATEWAY_CF_TOKEN"]
+// Avisos de la plataforma (correo, WhatsApp, Telegram): con ellas quedan activos para todos los hogares al desplegar.
+const AVISOS = ["MAIL_FROM", "MAIL_FROM_NAME", "AUTH_MAIL_FROM", "RESEND_API_KEY", "BREVO_API_KEY", "SENDGRID_API_KEY", "GMAIL_USER", "GMAIL_APP_PASSWORD", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USER", "SMTP_PASS", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID", "WHATSAPP_WABA_ID", "WHATSAPP_TEMPLATE", "WHATSAPP_LANG", "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_NAME"]
+const copiar = ["ENCRYPTION_KEY", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "TURNSTILE_SECRET_KEY", "AI_GATEWAY_CF_TOKEN", ...AVISOS]
 const desdeLocal = Object.fromEntries(copiar.filter((k) => local[k]).map((k) => [k, local[k]]))
 if (local.NEXT_PUBLIC_VAPID_PUBLIC_KEY) desdeLocal.VAPID_PUBLIC_KEY = local.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const faltan = ["ENCRYPTION_KEY", "CRON_SECRET"].filter((k) => !desdeLocal[k])
@@ -80,5 +82,7 @@ console.log(`  Generadas una vez (se reutilizan): ${Object.keys(nuevos).join(", 
 console.log(`  Desde .env.local: ${Object.keys(desdeLocal).join(", ") || "ninguna"}`)
 console.log(`  Archivos: ${Object.keys(r2).length ? "Cloudflare R2 (" + new URL(r2.S3_ENDPOINT).host + ")" : "SeaweedFS del servidor"}`)
 console.log(`  Navegador (WEB_BUILD_ENV_B64): ${Object.keys(publicos).join(", ")}`)
+const avisos = AVISOS.filter((k) => desdeLocal[k])
+console.log(`  Avisos (correo, WhatsApp, Telegram): ${avisos.length ? avisos.join(", ") : "ninguno — sin esto Mirai no envía correos (README › Correo y WhatsApp)"}`)
 if (faltan.length) console.log(`! Faltan en .env.local: ${faltan.join(", ")} (cópialas de producción antes de desplegar)`)
 console.log("  A mano en el panel: AI_GATEWAY_API_KEY y las de Mercado Pago y Wompi (si las usas).")

@@ -19,8 +19,8 @@ import { invalidateBook, useList, useSave, useSoftDelete } from "@/hooks/use-boo
 import { useNewParam } from "@/hooks/use-new-param"
 import { apiDeleteRow } from "@/lib/api/book-rows"
 import { paySubscription } from "@/features/fixed/commands"
-import { conv, detectSubs, iso, subMensual, subsMes } from "@/lib/domain"
-import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
+import { cobroToca, conv, detectSubs, iso, subMensual, subsMes } from "@/lib/domain"
+import { fmtDate, fmtMoney, fmtMonth, todayISO } from "@/lib/format"
 import { DUE_HINT, DUE_TONE, dueState, dueText } from "@/lib/list-helpers"
 import type { Row } from "@/lib/supabase/tables"
 import { useCategories, usePaymentMethods, useProviders, useSettings } from "@/features/catalogs/hooks"
@@ -120,6 +120,13 @@ export function SubscriptionsView() {
         ]}
         initialSort={{ id: "proximo", dir: "asc" }}
         total={{ value: (s) => (s.activa ? subMensual({ ...s, valor: Number(s.valor) }, trm) : 0), label: "tu parte al mes" }}
+        selectable
+        groupings={[
+          { id: "mes", label: "Por mes de cobro", by: (s) => (s.activa && s.proximo ? s.proximo.slice(0, 7) : "~"), title: (k) => (k === "~" ? "Pausadas o sin fecha" : fmtMonth(k)) },
+          { id: "ciclo", label: "Por cada cuánto", by: (s) => s.ciclo, title: (k) => (k === "anual" ? "Anuales" : "Mensuales") },
+          { id: "medio", label: "Por medio de pago", by: (s) => methods.find((m) => m.id === s.payment_method_id)?.nombre ?? "Sin medio de pago" },
+          { id: "estado", label: "Por estado", by: (s) => (s.activa ? "Activas" : "Pausadas") },
+        ]}
         search={{ placeholder: "Buscar suscripción", text: (s) => `${s.nombre} ${methods.find((m) => m.id === s.payment_method_id)?.nombre ?? ""} ${providers.find((p) => p.id === s.provider_id)?.nombre ?? ""}` }}
         views={[
           { id: "todas", label: "Todas" },
@@ -135,11 +142,11 @@ export function SubscriptionsView() {
           { id: "valor", label: "Valor", kind: "range", money: true, value: (s) => conv(Number(s.valor), s.currency, trm) },
         ]}
         emptyState={<EmptyState iso="suscripciones" title="Sin suscripciones registradas" description="Agrega lo que se cobra solo para que no te lleguen cobros olvidados." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar suscripción</Button>} />}
-        item={(s) => {
+        item={(s, select) => {
           const anual = subMensual({ ...s, valor: Number(s.valor) }, trm) * 12 // subMensual ya es tu parte
           const due = s.activa && s.proximo ? dueState(s.proximo, today, anticipo) : null
           return (
-            <ListRow key={s.id} icon="repeat" media={<EntityLogo name={s.nombre} src={s.logo_path} provider={providers.find((p) => p.id === s.provider_id)} icon="repeat" seed={s.nombre} />} title={s.nombre}
+            <ListRow key={s.id} icon="repeat" select={select && { ...select, label: `Elegir ${s.nombre}` }} media={<EntityLogo name={s.nombre} src={s.logo_path} provider={providers.find((p) => p.id === s.provider_id)} icon="repeat" seed={s.nombre} />} title={s.nombre}
               badges={<>
                 {s.comparte > 1 && <StatusPill tone="info" hint="La pagas entre varias personas: en tu presupuesto contamos solo tu parte.">compartida entre {s.comparte}</StatusPill>}
                 {!s.activa && <StatusPill tone="gray" hint="Pausada: no cuenta en lo que pagas al mes.">pausada</StatusPill>}
@@ -149,8 +156,11 @@ export function SubscriptionsView() {
               value={<Money value={Number(s.valor)} currency={s.currency} className="font-bold" />}
               onClick={canEdit ? () => setEditing(s) : undefined}
               actions={canEdit ? [
-                { label: `Ya se cobró ${s.nombre}`, tip: "Ya se cobró: registrarlo en mis gastos", icon: "circle-check", className: "text-success", onClick: () => cobrada(s) },
-                { label: `Registrar un abono a ${s.nombre}`, tip: "Pagué solo una parte (abono)", icon: "split", onClick: () => setCobro(cobroDe(s)) },
+                // Solo cuando toca (este mes, atrasado o dentro del aviso): si ya se registró, no se ofrece otra vez.
+                ...(cobroToca(s, today, anticipo) ? [
+                  { label: `Ya se cobró ${s.nombre}`, tip: "Ya se cobró: registrarlo en mis gastos", icon: "circle-check", className: "text-success", onClick: () => cobrada(s) },
+                  { label: `Registrar un abono a ${s.nombre}`, tip: "Pagué solo una parte (abono)", icon: "split", onClick: () => setCobro(cobroDe(s)) },
+                ] : []),
                 { label: `Editar ${s.nombre}`, tip: "Editar", icon: "pencil", onClick: () => setEditing(s) },
                 { label: `Eliminar ${s.nombre}`, tip: "Eliminar", icon: "trash-2", onClick: () => del.mutate(s), destructive: true },
               ] : []} />

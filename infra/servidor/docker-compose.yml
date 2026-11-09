@@ -78,6 +78,33 @@ x-api-env: &api-env
   AI_GATEWAY_CF_TOKEN: ${AI_GATEWAY_CF_TOKEN:-}
   # Cuál IA de la plataforma va primero (las demás quedan de respaldo): ai_gemini, gateway (Vercel), vertex…
   AI_PLATFORM_PROVIDER: ${AI_PLATFORM_PROVIDER:-ai_gemini}
+  # ── Avisos de la plataforma: correo, WhatsApp y Telegram ──────────────────────────────────────────────────────
+  # Con estas variables quedan ACTIVOS para todos los hogares desde el primer arranque (invitaciones, recordatorios y
+  # los correos de la cuenta: verificación, recuperación de clave y enlace mágico). Sin ellas, Mirai dice "no hay un
+  # servicio de correo activo" y la persona comparte el enlace a mano. Lo que se guarde en consola › Integraciones
+  # globales manda sobre estas variables. Guía: infra/servidor/README.md › Correo y WhatsApp.
+  # Remitente de TODOS los correos (debe ser de un dominio verificado en el proveedor). Vacío: usa AUTH_MAIL_FROM.
+  MAIL_FROM: ${MAIL_FROM:-}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Mirai}
+  # Un solo proveedor de correo basta (se usa el primero configurado, en este orden).
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  BREVO_API_KEY: ${BREVO_API_KEY:-}
+  SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+  GMAIL_USER: ${GMAIL_USER:-}
+  GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-465}
+  SMTP_SECURE: ${SMTP_SECURE:-1}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  # WhatsApp Cloud API (Meta): token permanente del usuario del sistema y el Phone number ID.
+  WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+  WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+  WHATSAPP_WABA_ID: ${WHATSAPP_WABA_ID:-}
+  WHATSAPP_TEMPLATE: ${WHATSAPP_TEMPLATE:-mirai_resumen}
+  WHATSAPP_LANG: ${WHATSAPP_LANG:-es_CO}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  TELEGRAM_BOT_NAME: ${TELEGRAM_BOT_NAME:-}
   MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
   MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
   WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-}
@@ -85,6 +112,9 @@ x-api-env: &api-env
   WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:-}
   TICK_DAILY_TASKS: "1"
   AUTOMATIONS_OUTBOX: "1"
+  # Para consola › Sistema (ambiente, rama y commit desplegado). SOURCE_COMMIT lo pone el panel en cada despliegue.
+  GIT_COMMIT: ${SOURCE_COMMIT:-}
+  GIT_BRANCH: ${MIRAI_RAMA:-main}
 
 services:
   # ── Base de datos (Postgres 17). Sin puerto público: se entra por un túnel SSH (README › Migrar los datos). ──

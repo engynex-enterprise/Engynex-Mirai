@@ -280,7 +280,8 @@ export class FakeAdminRepo extends AdminRepo {
   async orphanCount() { return 0 }
   async deleteOrphans() { return 2 }
   async referralCounts() { return { total: 3, premiados: 1 } }
-  async adsenseMode() { return null }
+  modos: Record<string, string> = {}
+  async integrationModes() { return this.modos }
   updatedFeedback: { scope: DbScope["kind"]; id: string }[] = []
   async updateFeedback(scope: UserScope, id: string) { this.updatedFeedback.push({ scope: scope.kind, id }) }
   async signedFeedbackUrls() { return new Map<string, string>() }

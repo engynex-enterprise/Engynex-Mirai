@@ -61,6 +61,8 @@
   --color-receipt: var(--receipt);
   --color-link: var(--link);
   --color-navy-tone: var(--navy-tone);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
   --color-field: var(--field);
   --color-hover: var(--hover);
   --color-press: var(--press);
@@ -120,6 +122,8 @@
   --receipt: #FBF8EE;
   --link: #1F6B0E;
   --navy-tone: #1F2B4B;
+  --tooltip: #1F2B4B;
+  --tooltip-foreground: #FFFFFF;
   --field: #FFFFFF;
   --hover: rgba(0, 0, 0, .05);
   --press: rgba(0, 0, 0, .10);
@@ -194,6 +198,8 @@
   --receipt: #2A303C;
   --link: #B2EB6A;
   --navy-tone: #C9D3EA;
+  --tooltip: #2C3A61;
+  --tooltip-foreground: #F4F6FB;
   --field: #242526;
   --hover: rgba(255, 255, 255, .1);
   --press: rgba(255, 255, 255, .2);

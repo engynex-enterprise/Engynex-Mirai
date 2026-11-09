@@ -25,6 +25,23 @@ export const HELP: Record<string, HelpEntry> = {
       "Si tu patrimonio crece cada mes, vas por buen camino. Míralo en la gráfica de patrimonio o en el Dashboard.",
     ],
   },
+  "gastos-todos": {
+    t: "Todos los gastos",
+    i: "Todo lo que sale de tu bolsillo en un solo lugar: gastos del día a día, fijos, suscripciones, tarjetas, cuotas de deudas, impuestos y mesadas, más un estimado de lo que te queda por gastar según tu presupuesto. Cada pago aparece una sola vez y el total es el mismo «Sale» del Balance.",
+    p: [
+      "Elige el periodo (quincena, mes, semestre, año o <b>Próximos 7 días</b>) y muévete con las flechas. Arriba ves cuánto sale, cuánto ya pagaste, cuánto falta y lo vencido, comparado con el periodo anterior.",
+      "<b>¿Te alcanza?</b> suma lo que tienes hoy en tus cuentas y lo que te falta recibir, y le resta lo que te falta pagar. Si no tienes cuentas registradas, agrégalas en el Balance.",
+      "<b>¿En qué se va?</b> reparte lo que sale por tipo de gasto o por categoría, y <b>Tu presupuesto</b> muestra cómo vas contra el tope de cada categoría.",
+      "Toca un pago para ver su detalle: a quién le pagas, con qué medio, quién gastó y los intereses. Desde ahí lo pagas, cambias su fecha, pides que te avisemos o abres su sección.",
+      "Marca la casilla de varios pagos para <b>pagarlos de una vez</b> o <b>exportarlos</b>. Con <b>Agrupar</b> los ves por día, por tipo de gasto o por categoría, con el subtotal de cada grupo.",
+      "<b>Por confirmar</b> (etiqueta <b>Ya pasó</b>) son pagos cuya fecha pasó y no tienes registrados, como una suscripción o la tarjeta. Mirai los cuenta como pagados; confírmalos para que las cifras queden exactas.",
+    ],
+    tips: [
+      "Si un gasto suelto se parece al pago de un gasto fijo, te avisamos: enlázalo y deja de contarse dos veces.",
+      "Los aportes a tus metas y al fondo no son gasto: súmalos con «Incluir ahorro» si quieres verlos.",
+      "La marca <b>Hormiga</b> señala gastos pequeños que se repiten: sumados, pesan.",
+    ],
+  },
   dashboard: {
     t: "Dashboard",
     i: "Tus números en gráficas para decidir: cuánto entra y sale cada mes, en qué se va la plata, cómo va tu patrimonio, tus deudas y qué te conviene hacer.",

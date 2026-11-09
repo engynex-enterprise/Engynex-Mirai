@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { norm } from "@/lib/domain"
@@ -80,6 +81,16 @@ type Props<T> = {
   narrow?: boolean
   /** Acciones sobre varias filas seleccionadas. */
   bulk?: { label: string; onSelect: (rows: T[]) => void; destructive?: boolean }[]
+  /** Casillas para elegir filas aunque no haya acciones en grupo (con columnas `csv`: "Exportar seleccionadas"). */
+  selectable?: boolean
+  /**
+   * Modo lista: selector "Agrupar" (Sin agrupar + cada opción). Cada grupo junta todas sus filas y muestra cuántas son
+   * y su subtotal (con `total.value`). `title` pone el nombre del grupo (por defecto, la clave).
+   */
+  groupings?: { id: string; label: string; by: (row: T) => string; title?: (key: string) => React.ReactNode }[]
+  /** Agrupación con la que abre (id de `groupings`); controlada si se pasa `onGrouping`. */
+  grouping?: string
+  onGrouping?: (id: string) => void
   initialSort?: { id: string; dir: "asc" | "desc" }
   pageSize?: number
   /** Sin datos: texto o nodo bajo una lupa (compatibilidad). Prefiere `emptyState`. */
@@ -91,10 +102,17 @@ type Props<T> = {
   total?: { value: (row: T) => number; label?: string; currency?: string }
   /** Nombre de lo que se cuenta: ["gasto", "gastos"]. */
   noun?: [string, string]
-  /** Modo lista: cada fila la dibuja `item` (debe devolver un <li>, p. ej. <ListRow>) en escritorio y celular. */
-  item?: (row: T) => React.ReactNode
-  /** Modo lista: agrupa filas seguidas con la misma clave (p. ej. por día) mientras el orden sea uno de `sorts`. */
-  group?: { by: (row: T) => string; label: (key: string, rows: T[]) => React.ReactNode; sorts?: string[] }
+  /**
+   * Modo lista: cada fila la dibuja `item` (debe devolver un <li>, p. ej. <ListRow>) en escritorio y celular. Con
+   * `bulk`, `select` trae la casilla de la fila (pásala a <ListRow select>).
+   */
+  item?: (row: T, select?: { checked: boolean; onChange: (v: boolean) => void }) => React.ReactNode
+  /**
+   * Modo lista: agrupa filas seguidas con la misma clave (p. ej. por día) mientras el orden sea uno de `sorts`.
+   * `whole`: junta TODAS las filas de cada grupo (en el orden en que aparece el grupo), con cualquier orden.
+   * `label` recibe las filas del grupo en la página y todas las del grupo (para un subtotal).
+   */
+  group?: { by: (row: T) => string; label: (key: string, rows: T[], all: T[]) => React.ReactNode; sorts?: string[]; whole?: boolean }
   /** Modo lista: clases del <ul> (p. ej. una cuadrícula de tarjetas). */
   listClassName?: string
   /** Controles extra en la barra (p. ej. el selector de mes). */
@@ -125,7 +143,7 @@ const plural = (n: number, [s, p]: [string, string]) => `${n.toLocaleString("es-
  * la misma barra, para que todas las listas de Mirai se vean y funcionen igual.
  */
 export function DataTable<T>({
-  title, info, subtitle, data, loading, columns, rowKey, search, filters = [], views, create, exportName, details, actions, bulk, initialSort, menuAt = "end", compact, narrow,
+  title, info, subtitle, data, loading, columns, rowKey, search, filters = [], views, create, exportName, details, actions, bulk, selectable, groupings, grouping, onGrouping, initialSort, menuAt = "end", compact, narrow,
   pageSize, empty, emptyState, footer, total, noun = ["resultado", "resultados"], item, group, toolbar, bare, initialView, listClassName,
 }: Props<T>) {
   const mobile = useIsMobile()
@@ -139,6 +157,17 @@ export function DataTable<T>({
   const [sort, setSort] = useState<{ id: string; dir: "asc" | "desc" } | null>(initialSort ?? null)
   const [hidden, setHidden] = useState<string[]>(() => columns.filter((c) => c.hidden).map((c) => c.id))
   const [sel, setSel] = useState<string[]>([])
+  const [agrLocal, setAgrLocal] = useState(grouping ?? "")
+  const agr = onGrouping ? (grouping ?? "") : agrLocal
+  const setAgr = (v: string) => { setPage(0); if (onGrouping) onGrouping(v); else setAgrLocal(v) }
+  const agrupa = list ? groupings?.find((g) => g.id === agr) : undefined
+  // El grupo que manda: el elegido en "Agrupar" (grupos completos con su subtotal) o el `group` fijo de la pantalla.
+  const grp = useMemo<Props<T>["group"]>(() => agrupa
+    ? {
+        by: agrupa.by, whole: true,
+        label: (k, _rows, all) => <><span>{agrupa.title?.(k) ?? k}</span><span className="normal-case" data-money>{all.length}{total && <> · <Money value={all.reduce((a, r) => a + (Number(total.value(r)) || 0), 0)} currency={total.currency} className="font-bold text-foreground" /></>}</span></>,
+      }
+    : group, [agrupa, group, total])
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(pageSize ?? (list ? 50 : 25))
   const cols = columns.filter((c) => !hidden.includes(c.id))
@@ -146,7 +175,8 @@ export function DataTable<T>({
   const hasActions = !!(details || actions?.length)
   // Menú a la izquierda: columna angosta y fija; la primera columna de datos ya no lleva el margen del borde.
   const menuStart = hasActions && menuAt === "start"
-  const edge = (i: number) => i === 0 && !bulk && !menuStart
+  const canSel = !!bulk?.length || !!selectable
+  const edge = (i: number) => i === 0 && !canSel && !menuStart
   const cellY = compact ? "py-2.5" : "py-4"
 
   // Búsqueda + filtros (antes de las pestañas, para que cada pestaña muestre su conteo)
@@ -165,8 +195,14 @@ export function DataTable<T>({
     const vw = views?.find((v) => v.id === view)
     let r = vw?.match ? filtered.filter(vw.match) : filtered
     if (sort) { const c = columns.find((x) => x.id === sort.id); if (c?.sort) r = [...r].sort((a, b) => { const k = cmp(c.sort!(a), c.sort!(b)); return sort.dir === "asc" ? k : -k }) }
+    // Grupos completos: las filas de un mismo grupo juntas, respetando el orden de adentro.
+    if (item && grp?.whole) {
+      const by = new Map<string, T[]>()
+      for (const x of r) { const k = grp.by(x); const l = by.get(k); if (l) l.push(x); else by.set(k, [x]) }
+      r = [...by.values()].flat()
+    }
     return r
-  }, [filtered, views, view, sort, columns])
+  }, [filtered, views, view, sort, columns, item, grp])
   const pages = Math.max(1, Math.ceil(rows.length / size))
   const cur = Math.min(page, pages - 1)
   const pageRows = rows.slice(cur * size, cur * size + size)
@@ -188,14 +224,14 @@ export function DataTable<T>({
 
   const toggleSort = (id: string) => { setPage(0); setSort((s) => (!s || s.id !== id ? { id, dir: "asc" } : s.dir === "asc" ? { id, dir: "desc" } : null)) }
   const toggleFilter = (id: string, v: string) => { setPage(0); setActive((a) => ({ ...a, [id]: a[id]?.includes(v) ? a[id].filter((x) => x !== v) : [...(a[id] ?? []), v] })) }
-  const exportRows = (sep: string) => {
+  const exportRows = (sep: string, list: T[] = rows) => {
     const ex = columns.filter((c) => c.csv)
-    return [ex.map((c) => c.header), ...rows.map((r) => ex.map((c) => String(c.csv!(r) ?? "")))].map((l) => l.map((v) => (sep === ";" ? `"${v.replace(/"/g, '""')}"` : v.replace(/\t|\n/g, " "))).join(sep)).join("\n")
+    return [ex.map((c) => c.header), ...list.map((r) => ex.map((c) => String(c.csv!(r) ?? "")))].map((l) => l.map((v) => (sep === ";" ? `"${v.replace(/"/g, '""')}"` : v.replace(/\t|\n/g, " "))).join(sep)).join("\n")
   }
-  const downloadCsv = () => {
-    const blob = new Blob(["﻿" + exportRows(";")], { type: "text/csv;charset=utf-8" })
+  const downloadCsv = (list: T[] = rows) => {
+    const blob = new Blob(["﻿" + exportRows(";", list)], { type: "text/csv;charset=utf-8" })
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${exportName ?? "mirai"}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href)
-    toast.success(`${rows.length} filas exportadas`)
+    toast.success(`${list.length} ${list.length === 1 ? "fila exportada" : "filas exportadas"}`)
   }
   const copyTsv = async () => { try { await navigator.clipboard.writeText(exportRows("\t")); toast.success("Copiado: pégalo en Excel o Google Sheets") } catch { toast.error("No se pudo copiar") } }
 
@@ -220,15 +256,17 @@ export function DataTable<T>({
   }
 
   // Modo lista: filas seguidas con la misma clave van bajo un mismo título (p. ej. "Hoy · 2 de noviembre").
-  const grouped = list && group && (!group.sorts || (sort && group.sorts.includes(sort.id)))
+  const grouped = list && grp && (grp.whole || !grp.sorts || (sort && grp.sorts.includes(sort.id)))
   const listBody = () => {
-    if (!grouped) return <ul className={cn("grid-cols-[minmax(0,1fr)]", listClassName ?? "-mx-2 grid")}>{pageRows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
+    const pick = (r: T) => { const k = rowKey(r); return canSel ? { checked: sel.includes(k), onChange: (v: boolean) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k))) } : undefined }
+    if (!grouped) return <ul className={cn("grid-cols-[minmax(0,1fr)]", listClassName ?? "-mx-2 grid")}>{pageRows.map((r) => <Fragment key={rowKey(r)}>{item!(r, pick(r))}</Fragment>)}</ul>
     const gs: { key: string; rows: T[] }[] = []
-    for (const r of pageRows) { const k = group!.by(r); const last = gs.at(-1); if (last?.key === k) last.rows.push(r); else gs.push({ key: k, rows: [r] }) }
+    for (const r of pageRows) { const k = grp!.by(r); const last = gs.at(-1); if (last?.key === k) last.rows.push(r); else gs.push({ key: k, rows: [r] }) }
+    const todas = (k: string) => rows.filter((r) => grp!.by(r) === k)
     return gs.map((g, i) => (
       <section key={`${g.key}-${i}`} className="grid gap-1">
-        <h3 className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground uppercase">{group!.label(g.key, g.rows)}</h3>
-        <ul className={cn("grid-cols-[minmax(0,1fr)]", listClassName ?? "-mx-2 grid")}>{g.rows.map((r) => <Fragment key={rowKey(r)}>{item!(r)}</Fragment>)}</ul>
+        <h3 className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground uppercase">{grp!.label(g.key, g.rows, todas(g.key))}</h3>
+        <ul className={cn("grid-cols-[minmax(0,1fr)]", listClassName ?? "-mx-2 grid")}>{g.rows.map((r) => <Fragment key={rowKey(r)}>{item!(r, pick(r))}</Fragment>)}</ul>
       </section>
     ))
   }
@@ -256,6 +294,15 @@ export function DataTable<T>({
           </div>
         )}
         <div className={cn("flex flex-wrap items-center", narrow ? "gap-1" : "gap-2")}>
+          {list && !!groupings?.length && (
+            <Select value={agr || "__no"} onValueChange={(v) => setAgr(v === "__no" ? "" : v)}>
+              <SelectTrigger className={cn(narrow ? "h-9" : "h-10", "w-44 rounded-lg")} aria-label="Agrupar"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__no">Sin agrupar</SelectItem>
+                {groupings.map((g) => <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           {toolbar}
           {filters.length > 0 && (
             <Popover>
@@ -319,7 +366,7 @@ export function DataTable<T>({
             <DropdownMenu>
               {tip("Exportar", <DropdownMenuTrigger asChild><Button variant={narrow ? "ghost" : "outline"} className={tb} disabled={!rows.length} aria-label="Exportar"><Download /><span className={tl}>Exportar</span>{!narrow && <span aria-hidden className="ml-0.5 border-x-[5px] border-t-[6px] border-x-transparent border-t-current max-sm:hidden" />}</Button></DropdownMenuTrigger>)}
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={downloadCsv}><Download /> Descargar CSV (Excel)</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => downloadCsv()}><Download /> Descargar CSV (Excel)</DropdownMenuItem>
                 <DropdownMenuItem onSelect={copyTsv}><Copy /> Copiar para pegar en una hoja</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -351,6 +398,8 @@ export function DataTable<T>({
             <>
               <span className="text-sm font-semibold">{sel.length} seleccionad{sel.length === 1 ? "a" : "as"}</span>
               {bulk?.map((b) => <Button key={b.label} size="sm" variant={b.destructive ? "outline" : "secondary"} className={cn(b.destructive && "text-danger")} onClick={() => { b.onSelect(selected); setSel([]) }}>{b.label}</Button>)}
+              {columns.some((c) => c.csv) && <Button size="sm" variant="outline" onClick={() => downloadCsv(rows.filter((r) => sel.includes(rowKey(r))))}><Download /> Exportar seleccionad{sel.length === 1 ? "a" : "as"}</Button>}
+              {list && sel.length < rows.length && <Button size="sm" variant="ghost" onClick={() => setSel(rows.map(rowKey))}>Elegir los {rows.length}</Button>}
               <Button size="sm" variant="ghost" onClick={() => setSel([])}>Cancelar selección</Button>
             </>
           ) : (
@@ -359,6 +408,7 @@ export function DataTable<T>({
                 <span key={c.key} className="inline-flex h-8 max-w-full items-center gap-1 rounded-full bg-brand-soft pr-1 pl-3 text-sm font-medium text-link"><span className="truncate">{c.label}</span><button type="button" aria-label={`Quitar ${c.label}`} className="grid size-6 shrink-0 place-items-center rounded-full hover:bg-white/60 dark:hover:bg-white/10" onClick={c.clear}><X className="size-3.5" /></button></span>
               ))}
               {narrowed && <Button size="sm" variant="ghost" className="h-8 text-link" onClick={clearAll}>Limpiar</Button>}
+              {list && canSel && rows.length > 0 && <Button size="sm" variant="ghost" className="h-8 text-link" onClick={() => setSel(rows.map(rowKey))}>Elegir todos</Button>}
               <span className="ml-auto text-sm text-muted-foreground" aria-live="polite">
                 {plural(rows.length, noun)}{total && <> · {total.label ?? "suman"} <Money value={sum} currency={total.currency} className="font-semibold text-foreground" /></>}
               </span>
@@ -381,7 +431,7 @@ export function DataTable<T>({
           <thead className="sticky top-0 z-10 bg-popover shadow-[0_1px_0_var(--border),0_2px_4px_rgba(0,0,0,.04)]">
             <tr>
               {menuStart && <th className="sticky left-0 z-[1] w-14 bg-popover py-3.5 pr-1 pl-4" aria-label="Acciones" />}
-              {bulk && <th className="w-12 py-3.5 pl-7"><Checkbox aria-label="Seleccionar la página" checked={allOnPage} onCheckedChange={(v) => setSel((s) => (v ? [...new Set([...s, ...pageRows.map(rowKey)])] : s.filter((k) => !pageRows.some((r) => rowKey(r) === k))))} /></th>}
+              {canSel && <th className="w-12 py-3.5 pl-7"><Checkbox aria-label="Seleccionar la página" checked={allOnPage} onCheckedChange={(v) => setSel((s) => (v ? [...new Set([...s, ...pageRows.map(rowKey)])] : s.filter((k) => !pageRows.some((r) => rowKey(r) === k))))} /></th>}
               {cols.map((c, i) => (
                 <th key={c.id} className={cn("py-3.5 pr-4 text-left font-bold whitespace-nowrap", edge(i) && "pl-7", c.align === "right" && "text-right", c.className)}>
                   <span className={cn("inline-flex items-center gap-1.5", c.align === "right" && "flex-row-reverse")}>
@@ -399,14 +449,14 @@ export function DataTable<T>({
           </thead>
           <tbody>
             {loading ? Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-b last:border-0">{menuStart && <td className="pl-4" />}{(bulk ? [null, ...cols] : cols).map((_, j) => <td key={j} className={cn("py-5 pr-4", j === 0 && !menuStart && "pl-7")}><Skeleton className="h-5 w-3/4" /></td>)}{hasActions && !menuStart && <td />}</tr>
+              <tr key={i} className="border-b last:border-0">{menuStart && <td className="pl-4" />}{(canSel ? [null, ...cols] : cols).map((_, j) => <td key={j} className={cn("py-5 pr-4", j === 0 && !menuStart && "pl-7")}><Skeleton className="h-5 w-3/4" /></td>)}{hasActions && !menuStart && <td />}</tr>
             )) : pageRows.map((r) => {
               const k = rowKey(r)
               const href = details?.(r)
               return (
                 <tr key={k} className={cn("group/row border-b transition-colors last:border-0 hover:bg-hover/60", compact && "text-[14px]", sel.includes(k) && "bg-brand-soft/50")}>
                   {menuStart && <td className={cn("sticky left-0 z-[1] bg-popover pr-1 pl-4 align-middle group-hover/row:bg-[color-mix(in_oklab,var(--popover),var(--hover)_60%)]", cellY)}>{rowMenu(r)}</td>}
-                  {bulk && <td className={cn("pl-7", cellY)}><Checkbox aria-label="Seleccionar fila" checked={sel.includes(k)} onCheckedChange={(v) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k)))} /></td>}
+                  {canSel && <td className={cn("pl-7", cellY)}><Checkbox aria-label="Seleccionar fila" checked={sel.includes(k)} onCheckedChange={(v) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k)))} /></td>}
                   {cols.map((c, i) => <td key={c.id} className={cn("pr-4 align-middle", cellY, edge(i) && "pl-7", c.align === "right" && "text-right", c.className)}>{c.cell ? c.cell(r) : c.csv?.(r)}</td>)}
                   {hasActions && !menuStart && (
                     <td className={cn("pr-7", cellY)}>
@@ -432,7 +482,7 @@ export function DataTable<T>({
           return (
             <li key={k} className={cn("grid gap-3 bg-card p-4", sel.includes(k) && "bg-brand-soft/50")}>
               <div className="flex items-start gap-3">
-                {bulk && <Checkbox className="mt-1" aria-label="Seleccionar fila" checked={sel.includes(k)} onCheckedChange={(v) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k)))} />}
+                {canSel && <Checkbox className="mt-1" aria-label="Seleccionar fila" checked={sel.includes(k)} onCheckedChange={(v) => setSel((s) => (v ? [...s, k] : s.filter((x) => x !== k)))} />}
                 <div className="min-w-0 flex-1">{first.cell ? first.cell(r) : first.csv?.(r)}</div>
                 {rowMenu(r)}
               </div>

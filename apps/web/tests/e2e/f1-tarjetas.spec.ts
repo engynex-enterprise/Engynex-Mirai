@@ -35,14 +35,16 @@ test("tarjetas: agregar, compra a cuotas, simulador y pagar la tarjeta", async (
   await expect(page.getByText("36 cuotas")).toBeVisible()
   await shot(page, "tarjetas", info.project.name)
 
-  // Borrar el gasto de la compra en Gastos: la compra sale de la tarjeta (y la deuda baja).
+  // La compra con tarjeta es de Tarjetas: no aparece en «Del día a día» (cada pestaña muestra solo lo suyo).
   await page.goto("/gastos")
-  const g = page.locator("#main li", { hasText: nevera })
-  await expect(g).toBeVisible()
-  await g.getByRole("button", { name: "Eliminar gasto" }).click()
+  await expect(page.getByText("Gastos del día a día").first()).toBeVisible()
   await expect(page.locator("#main li", { hasText: nevera })).toHaveCount(0)
+  // Borrarla desde Tarjetas: sale de la tarjeta (y de tus gastos), y la deuda baja.
   await page.goto("/tarjetas")
   await elegir(page, nombre)
+  const compra = page.locator("#main li", { hasText: nevera }).first()
+  if (info.project.name === "movil") { await compra.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: `Eliminar compra ${nevera}` }).click() }
+  else await compra.getByRole("button", { name: `Eliminar compra ${nevera}` }).click()
   await expect(page.locator("#main").getByText(nevera)).toHaveCount(0)
 
   // Pagar la tarjeta: la deuda queda en cero y el pago aparece en el flujo del Balance.
@@ -52,7 +54,9 @@ test("tarjetas: agregar, compra a cuotas, simulador y pagar la tarjeta", async (
   await page.getByRole("textbox", { name: "Valor" }).fill("1000000")
   await page.getByRole("button", { name: "Guardar compra" }).click()
   await expect(page.getByText("Compra registrada")).toBeVisible()
-  await page.getByRole("button", { name: "Pagar la tarjeta" }).first().click()
+  // "Pagar la tarjeta" si falta algo del pago de este mes; si la compra entra en el corte del otro mes, la tarjeta está
+  // al día y se ofrece "Abonar a la deuda" (la misma ventana de pago).
+  await page.getByRole("button", { name: /^(Pagar la tarjeta|Abonar a la deuda)$/ }).first().click()
   const dlg = page.getByRole("dialog")
   await dlg.getByRole("radio", { name: /Todo lo que debes/ }).click()
   await shot(page, "tarjeta-pagar", info.project.name)

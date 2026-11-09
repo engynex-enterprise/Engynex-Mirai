@@ -29,7 +29,7 @@ import { StatusPill } from "@/components/mirai/status-pill"
 import { DataTable } from "@/components/mirai/data-table"
 import { brandFor } from "@/lib/brands"
 import { annuity, compraEstado, deudaTarjeta, proxDia, tarjetaPagoMes, tarjetasDeuda, type CardConPagos, type PurchaseState } from "@/lib/domain"
-import { fmtDate, fmtMoney, fmtPct, todayISO } from "@/lib/format"
+import { fmtDate, fmtMoney, fmtMonth, fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Row } from "@/lib/supabase/tables"
 import { useBookData } from "@/features/book/use-book-data"
@@ -130,10 +130,19 @@ export function CardsView() {
                   {u > 30 ? "Así cuidas tu historial en las centrales de riesgo." : "Usar menos del 30 % cuida tu historial crediticio."}
                 </Notice>
               </div>
-              {canEdit && (d > 0.5 || pm > 0.5) && (
+              {/* "Pagar la tarjeta" solo si falta algo del pago del mes (tarjetaPagoMes ya descuenta lo que pagaste). Con el mes
+                  pagado y deuda pendiente, se ofrece abonar: bajar la deuda antes es opcional, no un pago que falte. */}
+              {canEdit && pm > 0.5 && (
                 <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={() => setPaying(card)}><Wallet /> Pagar la tarjeta</Button>
                   <span className="text-sm text-muted-foreground">Registra lo que le pagas al banco: la deuda baja y el pago queda en tu flujo. Pagar el total cada mes evita casi todos los intereses.</span>
+                </div>
+              )}
+              {canEdit && pm <= 0.5 && d > 0.5 && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <StatusPill tone="pagado" check hint="Lo que te tocaba pagar este mes ya está registrado.">Pago del mes al día</StatusPill>
+                  <Button variant="outline" onClick={() => setPaying(card)}><Wallet /> Abonar a la deuda</Button>
+                  <span className="text-sm text-muted-foreground">Si abonas antes, debes menos y pagas menos intereses.</span>
                 </div>
               )}
               {pagos.length > 0 && (
@@ -155,6 +164,13 @@ export function CardsView() {
                   <DataTable<Compra>
                     bare title="Compras" data={card.purchases.map((p) => ({ p, e: compraEstado(ci, p as never, today) }))} rowKey={(x) => x.p.id} noun={["compra", "compras"]} exportName={`compras-${card.nombre}`}
                     total={{ value: (x) => x.e.saldo, label: "te falta pagar" }}
+                    selectable
+                    groupings={[
+                      { id: "estado", label: "Por estado", by: (x) => (x.e.pendiente ? "Por pagar" : "Pagadas") },
+                      { id: "mes", label: "Por mes de compra", by: (x) => x.p.fecha.slice(0, 7), title: (k) => fmtMonth(k) },
+                      { id: "cuotas", label: "Por cuotas", by: (x) => (x.e.n === 1 ? "A una cuota" : "Diferidas") },
+                      { id: "cat", label: "Por categoría", by: (x) => book.categories.find((c) => c.id === x.p.category_id)?.nombre ?? "Sin categoría" },
+                    ]}
                     columns={[
                       { id: "fecha", header: "Fecha", sort: (x) => x.p.fecha, csv: (x) => x.p.fecha },
                       { id: "descripcion", header: "Compra", sort: (x) => x.p.descripcion.toLowerCase(), csv: (x) => x.p.descripcion },
@@ -172,10 +188,10 @@ export function CardsView() {
                       { id: "fecha", label: "Fecha", kind: "dates", value: (x) => x.p.fecha },
                       { id: "valor", label: "Valor", kind: "range", money: true, value: (x) => Number(x.p.valor) },
                     ]}
-                    item={({ p, e }) => {
+                    item={({ p, e }, select) => {
                       const cat = book.categories.find((c) => c.id === p.category_id)
                       return (
-                        <ListRow key={p.id} icon="shopping-bag" className={cn(!e.pendiente && "opacity-70")}
+                        <ListRow key={p.id} icon="shopping-bag" select={select && { ...select, label: `Elegir ${p.descripcion}` }} className={cn(!e.pendiente && "opacity-70")}
                           media={<EntityLogo name={p.descripcion} icon={cat?.icon ?? "shopping-bag"} seed={cat?.id ?? p.descripcion} />}
                           title={p.descripcion}
                           badges={!e.pendiente ? <StatusPill tone="pagado" check hint="Ya no tiene cuotas por pagar.">pagada</StatusPill>

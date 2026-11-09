@@ -1,5 +1,5 @@
 // Eventos del calendario de pagos (calEvents de p_calendario.js en la v4).
-import { conv, fijoPeriods, fijoValorCOP, incomePagos, inv, iso, loanEngine, loanName, subOcc, tarjetaPagoMes, type BookData } from "@/lib/domain"
+import { conv, fijoPeriods, fijoValorCOP, incomePagos, inv, iso, loanEngine, loanName, pagoPeriodo, subOcc, tarjetaPagoMes, type BookData } from "@/lib/domain"
 
 export type ECatKey = "fijo" | "pagar" | "cobrar" | "ingreso" | "sub" | "tarjeta" | "cal" | "inv" | "aporte"
 export const ECAT: Record<ECatKey, { n: string; color: string; icon: string; go: string }> = {
@@ -33,7 +33,8 @@ export function calEvents(b: BookData, a: string, z: string, today: string, off:
     const k: ECatKey = f.link_type ? "aporte" : "fijo"
     for (const [y, m] of months) for (const p of fijoPeriods(f, y, m, today)) {
       if (!inR(p.due) || (f.inicio ? p.due < f.inicio : p.due.slice(0, 7) < (f.desde ?? "0000"))) continue
-      const pago = f.payments.find((x) => x.periodo === p.per)
+      // Por pagoPeriodo: también reconoce el pago hecho al crear el fijo (guardado como "de antes", `prev-…`).
+      const pago = pagoPeriodo(f, p.per, f.payments).pagos[0]
       out.push({ id: `f-${f.id}-${p.per}`, k, fecha: p.due, titulo: f.nombre + (p.per.endsWith("Q1") ? " (1ª quinc.)" : p.per.endsWith("Q2") ? " (2ª quinc.)" : ""), monto: pago ? Number(pago.valor) : fijoValorCOP(f, p.per, b.settings.trm), dir: "pagar", st: st(p.due, !!pago), go: ECAT[k].go, refId: f.id, per: p.per, rng: f.variable && (f as { vmin?: number }).vmin ? `${fmt(conv(Number((f as { vmin?: number }).vmin), f.currency, b.settings.trm))} – ${fmt(conv(Number((f as { vmax?: number }).vmax), f.currency, b.settings.trm))}` : undefined })
     }
   }

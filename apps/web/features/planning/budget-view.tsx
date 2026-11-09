@@ -22,6 +22,7 @@ import { useBookId, useCanEdit } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { saveTope } from "./api"
 import { ingresoMensual } from "@/lib/domain"
+import { gastadoMes, presupuestoCategorias, type EstadoPresupuesto, type FilaPresupuesto } from "@/lib/domain/presupuesto"
 import { fmtMoney, fmtPct, todayISO } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useBookData } from "@/features/book/use-book-data"
@@ -49,8 +50,8 @@ function TopeCell({ id, value, onSaved, label }: { id: string; value: number; on
   )
 }
 
-type Fila = { id: string; nombre: string; icon: string; grupo: string | null; tope: number; llevas: number; u: number; st: Estado; unknown?: boolean }
-type Estado = "sin" | "pasado" | "cerca" | "bien" | "otra"
+type Fila = FilaPresupuesto
+type Estado = EstadoPresupuesto
 const ESTADO: Record<Estado, { tone: "gray" | "vencido" | "porVencer" | "pagado"; label: string; tip: string }> = {
   sin: { tone: "gray", label: "Sin tope", tip: "Escribe un tope para que te avisemos cuando te acerques." },
   pasado: { tone: "vencido", label: "Te pasaste", tip: "Ya gastaste más de lo que planeaste este mes." },
@@ -70,21 +71,12 @@ export function BudgetView() {
     if (!book) return null
     const pct = book.settings.pct ?? { n: 50, g: 30, a: 20 }
     const ing = ingresoMensual(book.incomes, book.settings.trm)
-    const gastos = book.expenses.filter((g) => g.fecha.startsWith(mes))
-    const byCat = new Map<string, number>()
-    for (const g of gastos) byCat.set(g.category_id ?? "", (byCat.get(g.category_id ?? "") ?? 0) + Number(g.valor))
-    const grupo = (k: string) => book.categories.filter((c) => c.grupo === k).reduce((a, c) => a + (byCat.get(c.id) ?? 0), 0)
+    // Las mismas filas que la bandeja "Todos los gastos" (una sola cifra; los gastos en USD o EUR, en pesos).
+    const filas: Fila[] = presupuestoCategorias(book, mes)
+    const llevasDe = new Map(filas.map((f) => [f.id, f.llevas]))
+    const grupo = (k: string) => book.categories.filter((c) => c.grupo === k).reduce((a, c) => a + (llevasDe.get(c.id) ?? 0), 0)
     const planeado = (k: string) => book.categories.filter((c) => c.grupo === k).reduce((a, c) => a + Number(c.tope), 0)
-    const unknown = [...byCat.entries()].filter(([id]) => !book.categories.some((c) => c.id === id))
-    const alerta = book.settings.alerta_pres
-    const filas: Fila[] = [
-      ...book.categories.map((c): Fila => {
-        const llevas = byCat.get(c.id) ?? 0, tope = Number(c.tope), u = tope ? (llevas / tope) * 100 : 0
-        return { id: c.id, nombre: c.nombre, icon: c.icon, grupo: c.grupo, tope, llevas, u, st: !tope ? "sin" : u >= 100 ? "pasado" : u >= alerta * 0.8 ? "cerca" : "bien" }
-      }),
-      ...unknown.map(([id, v]): Fila => ({ id: id || "none", nombre: "No está en tus categorías", icon: "circle-help", grupo: null, tope: 0, llevas: v, u: 0, st: "otra", unknown: true })),
-    ]
-    const gastado = gastos.reduce((a, g) => a + Number(g.valor), 0)
+    const gastado = gastadoMes(filas)
     const topes = book.categories.reduce((a, c) => a + Number(c.tope), 0)
     return { pct, ing, grupo, planeado, filas, gastado, topes, pasadas: filas.filter((f) => f.st === "pasado").length }
   }, [book, mes])

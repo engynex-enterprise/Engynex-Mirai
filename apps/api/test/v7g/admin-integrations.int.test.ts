@@ -29,6 +29,7 @@ beforeEach(() => {
   t.fx.rows.reset()
   Object.assign(port, { tests: [], sends: [], waSends: [], testError: null, sendError: null, langError: null, lang: "es_CO", tplCalls: [], tplError: null, tplStatus: "PENDING" })
   port.env.clear()
+  port.envVals.clear()
 })
 
 describe("contrato y guardas", () => {
@@ -164,6 +165,41 @@ describe("integraciones globales", () => {
     expect(w.body.data).toEqual({ msg: "Integración guardada.", warn: "Guardado, pero no pudimos leer la plantilla: plantilla en revisión" })
   })
 
+  it("variables del servidor: el correo queda ACTIVO para todos sin guardar nada en la consola", async () => {
+    port.envVals.set("RESEND_API_KEY", "re_del_servidor").set("MAIL_FROM", "avisos@engynex.com")
+    const l = await t.call("GET", `${A}/integrations`, "owner")
+    const row = (l.body as unknown as { kind: string; modo: string; env: boolean; existe: boolean; config: Record<string, unknown> }[]).find((x) => x.kind === "email_resend")!
+    expect(row).toMatchObject({ modo: "obligatoria", env: true, existe: false, config: { from: "avisos@engynex.com", fromName: "Mirai" } })
+    expect(l.raw).not.toContain("re_del_servidor")
+    // Sin fila en la base: antes decía "Primero guarda la configuración".
+    expect((await t.call("POST", `${A}/integrations/email_resend/test`, "owner")).body.data).toMatchObject({ ok: true })
+    expect(port.tests).toMatchObject([{ kind: "email_resend", config: { from: "avisos@engynex.com" }, secretKeys: ["apiKey"] }])
+    expect((await t.call("POST", `${A}/integrations/email_resend/send-test`, "owner", { to: "ana@correo.co" })).body.data).toMatchObject({ ok: true })
+    expect(t.fx.rows.all("platform_integrations")).toEqual([])
+  })
+
+  it("variables del servidor: WhatsApp con token y número; sin el número no se enciende", async () => {
+    port.envVals.set("WHATSAPP_TOKEN", "EAAG-del-servidor")
+    const sinNumero = (await t.call("GET", `${A}/integrations/whatsapp`, "owner")).body as unknown as { modo: string; env: boolean }
+    expect(sinNumero).toMatchObject({ modo: "apagada", env: false })
+    port.envVals.set("WHATSAPP_PHONE_ID", "1234567")
+    const con = (await t.call("GET", `${A}/integrations/whatsapp`, "owner")).body as unknown as { modo: string; env: boolean; config: Record<string, unknown> }
+    expect(con).toMatchObject({ modo: "obligatoria", env: true, config: { phoneId: "1234567", template: "mirai_resumen", lang: "es_CO" } })
+  })
+
+  it("variables del servidor: lo guardado manda y el secreto del servidor nunca se copia a la base", async () => {
+    port.envVals.set("RESEND_API_KEY", "re_del_servidor").set("MAIL_FROM", "avisos@engynex.com")
+    await t.call("PUT", `${A}/integrations/email_resend`, "owner", { modo: "obligatoria", planes: [], values: { from: "hola@engynex.com" } })
+    const [row] = t.fx.rows.all<Record<string, unknown>>("platform_integrations")
+    expect(row).toMatchObject({ kind: "email_resend", config: { from: "hola@engynex.com" } })
+    expect(row.secrets_enc).toBeNull()
+    const one = (await t.call("GET", `${A}/integrations/email_resend`, "owner")).body as unknown as { config: Record<string, unknown> }
+    expect(one.config).toMatchObject({ from: "hola@engynex.com" })
+    // Y apagarla manda sobre la variable del servidor.
+    await t.call("PUT", `${A}/integrations/email_resend`, "owner", { modo: "apagada", planes: [], values: {} })
+    expect(((await t.call("GET", `${A}/integrations/email_resend`, "owner")).body as unknown as { modo: string }).modo).toBe("apagada")
+  })
+
   it("integración desconocida: 404", async () => {
     expect((await t.call("GET", `${A}/integrations/no_existe`, "owner")).body).toMatchObject({ code: "NOT_FOUND", msg: "Integración desconocida." })
     expect((await t.call("PUT", `${A}/integrations/no_existe`, "owner", { modo: "apagada" })).status).toBe(404)
@@ -224,6 +260,16 @@ describe("WhatsApp de la consola", () => {
     expect(audits()).toMatchObject([{ accion: "whatsapp: ajustes de plantillas", detalle: { casos: { pagos: "aviso", invitacion: "(por defecto)" } } }])
     expect((await t.call("PUT", `${A}/whatsapp/templates`, "owner", { ...SETTINGS, casos: { inventado: {} } })).body).toMatchObject({ msg: "Caso de WhatsApp desconocido." })
     expect((await t.call("PUT", `${A}/whatsapp/templates`, "owner", { ...SETTINGS, map: { "1": { src: "clave" } } })).body).toMatchObject({ msg: "Variable desconocida: clave." })
+  })
+
+  it("con WhatsApp en las variables del servidor, los ajustes de plantillas crean la fila sin tocar el token", async () => {
+    port.envVals.set("WHATSAPP_TOKEN", "EAAG-del-servidor").set("WHATSAPP_PHONE_ID", "1234567")
+    const r = await t.call("PUT", `${A}/whatsapp/templates`, "owner", SETTINGS)
+    expect(r.body).toEqual({ ok: true, data: { msg: "Ajustes de WhatsApp guardados." } })
+    const [row] = t.fx.rows.all<Record<string, unknown>>("platform_integrations")
+    expect(row).toMatchObject({ kind: "whatsapp", modo: "obligatoria", secrets_enc: null })
+    expect((row.config as Record<string, unknown>).wa).toMatchObject({ casos: { pagos: { template: "aviso" } } })
+    expect(r.raw).not.toContain("EAAG-del-servidor")
   })
 
   it("vista previa y prueba de una plantilla (Meta falla → 502 con su mensaje)", async () => {

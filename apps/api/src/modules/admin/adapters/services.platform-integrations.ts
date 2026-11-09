@@ -26,7 +26,10 @@ export class ServicesPlatformIntegrations extends PlatformIntegrationsPort {
   }
 
   hasEnv(name: string) {
-    return !!(this.env.values.vars[name] ?? process.env[name])
+    return !!this.envValue(name)
+  }
+  envValue(name: string) {
+    return this.env.values.vars[name] ?? process.env[name]
   }
   publicSiteUrl() {
     return rt().publicSiteUrl()

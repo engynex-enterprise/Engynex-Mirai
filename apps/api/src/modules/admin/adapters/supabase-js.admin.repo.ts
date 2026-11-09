@@ -164,8 +164,9 @@ export class SupabaseJsAdminRepo extends AdminRepo {
     const [a, b] = await Promise.all([db.from("referrals").select("id", { count: "exact", head: true }), db.from("referrals").select("id", { count: "exact", head: true }).eq("estado", "recompensado")])
     return { total: a.count ?? 0, premiados: b.count ?? 0 }
   }
-  async adsenseMode(scope: DbScope) {
-    return must(await this.db(scope).from("platform_integrations").select("modo").eq("kind", "adsense").maybeSingle())?.modo ?? null
+  async integrationModes(scope: DbScope) {
+    const rows = must(await this.db(scope).from("platform_integrations").select("kind,modo")) ?? []
+    return Object.fromEntries(rows.map((r) => [r.kind, r.modo]))
   }
   async updateFeedback(scope: UserScope, id: string, patch: { estado?: string; respuesta?: string }) {
     must(await this.db(scope).from("feedback").update(patch).eq("id", id))

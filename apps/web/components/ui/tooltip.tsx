@@ -62,9 +62,26 @@ function TooltipTrigger({
   )
 }
 
+/*
+ * Flecha de verdad (triángulo con la punta redondeada), del mismo color que la burbuja.
+ * Antes era un cuadrado girado 45°: cuando el tooltip cambiaba de color se veía el rombo completo encima.
+ * El viewBox propio manda sobre el de Radix (los props del hijo ganan en <Slot>); se sube 1px para que no
+ * quede una línea entre la burbuja y la flecha.
+ */
+function TooltipArrow() {
+  return (
+    <TooltipPrimitive.Arrow asChild width={14} height={7}>
+      <svg viewBox="0 0 14 7" preserveAspectRatio="none" aria-hidden className="-translate-y-px fill-tooltip">
+        <path d="M0 0h14L8.06 5.94a1.5 1.5 0 0 1-2.12 0Z" />
+      </svg>
+    </TooltipPrimitive.Arrow>
+  )
+}
+
 function TooltipContent({
   className,
-  sideOffset = 0,
+  sideOffset = 6,
+  collisionPadding = 8,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
@@ -73,14 +90,15 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         className={cn(
-          "z-50 inline-flex w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background has-data-[slot=kbd]:pr-1.5 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "z-50 inline-flex w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) items-center gap-1.5 rounded-lg bg-tooltip px-3 py-1.5 text-xs leading-relaxed text-pretty text-tooltip-foreground drop-shadow-[0_2px_8px_rgba(0,0,0,0.22)] has-data-[slot=kbd]:pr-1.5 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 **:data-[slot=kbd]:rounded-sm data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
+        <TooltipArrow />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   )

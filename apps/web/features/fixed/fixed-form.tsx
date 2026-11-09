@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Notice } from "@/components/mirai/notice"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -22,7 +23,7 @@ import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { payFixedExpense } from "./commands"
-import { FFREC, FSTEP, categoriaSugerida, fijoMensual, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
+import { CADA_PAGO, FFREC, FSTEP, categoriaSugerida, fijoMensual, valorPorPago, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, periodoPagoAlCrear, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { categoryOptions, CURRENCY_OPTIONS, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
@@ -111,6 +112,9 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
   const { data: history = [] } = useList("expenses", { order: { column: "created_at" } })
   const [catManual, setCatManual] = useState(!!fixed || !!preset?.category_id || !!defCat)
   const [newCat, setNewCat] = useState<string | null>(null)
+  // Al cambiar la frecuencia con un valor ya escrito: ¿ese valor es de cada pago o de todo el mes? (la gasolina de
+  // $150.000 al mes no son $150.000 cada quincena). Ver valorPorPago.
+  const [pregunta, setPregunta] = useState<{ valor: number; frec: string } | null>(null)
   const ai = useAICategory({ manual: catManual, onCategory: (id) => form.setValue("category_id", id) })
   const plus7 = new Date(new Date(today + "T12:00:00").getTime() + 7 * 864e5).toISOString().slice(0, 10)
   const form = useForm<Values>({
@@ -178,7 +182,9 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       const pers = fijoPeriods({ ...nf, valor: Number(nf.valor) } as never, y, m - 1, today)
       const toPay = v.frec === "quincenal"
         ? pers.filter((p) => v.yaPagoQ === "ambas" || p.per.endsWith(v.yaPagoQ === "q1" ? "Q1" : v.yaPagoQ === "q2" ? "Q2" : "--"))
-        : v.yaPagoM === "si" ? [{ per: `prev-${v.fpag.slice(0, 7)}`, due: v.fpag }] : []
+        // El pago de este mes paga el primer periodo si ese ya venció (próximo pago escrito en el pasado); si no, fue
+        // el periodo de antes de Mirai (`prev-AAAA-MM`). Ver periodoPagoAlCrear.
+        : v.yaPagoM === "si" ? [{ per: periodoPagoAlCrear(nf as never, v.fpag, today), due: v.fpag }] : []
       for (const p of toPay) {
         const suf = p.per.endsWith("Q1") ? " (1ª quincena)" : p.per.endsWith("Q2") ? " (2ª quincena)" : ""
         await payFixedExpense({ p_fixed: nf.id, p_periodo: p.per, p_fecha: v.frec === "quincenal" ? p.due : v.fpag, p_valor: v.vpag || fijoValor({ frec: v.frec, valor, reparto }, p.per), p_medio: v.medio ?? undefined, p_desc_suffix: suf })
@@ -228,7 +234,8 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
               <FormField label="2ª quincena" htmlFor="f-q2" hint={w.q1 || w.q2 ? `Al mes: ${fmtMoney((w.q1 || 0) + (w.q2 || 0))}` : undefined}><Controller control={form.control} name="q2" render={({ field }) => <MoneyInput id="f-q2" value={field.value} onChange={field.onChange} />} /></FormField>
             </div>
           ) : w.tipoValor === "fijo" ? (
-            <FormField label={w.frec === "quincenal" ? "Valor de cada quincena" : "Valor"} htmlFor="f-valor" required>
+            <FormField label={w.frec === "quincenal" ? "Valor de cada quincena" : w.frec === "mensual" || w.frec === "unico" ? "Valor" : `Valor de cada pago (${CADA_PAGO[w.frec]})`} htmlFor="f-valor" required
+              hint={w.valor > 0 && w.frec !== "mensual" && w.frec !== "unico" ? `${fmtMoney(w.valor, w.currency)} ${CADA_PAGO[w.frec]} = ${fmtMoney(Math.round(fijoMensual({ frec: w.frec, valor: w.valor })), w.currency)} al mes.` : undefined}>
               <Controller control={form.control} name="valor" render={({ field }) => <MoneyInput id="f-valor" value={field.value} onChange={field.onChange} currency={w.currency} decimals />} />
             </FormField>
           ) : (
@@ -251,7 +258,14 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <FormField label="¿Cada cuánto?" htmlFor="f-frec">
-              <Controller control={form.control} name="frec" render={({ field }) => <Combobox id="f-frec" value={field.value} onChange={field.onChange} options={Object.entries(FFREC).map(([value, label]) => ({ value, label }))} />} />
+              <Controller control={form.control} name="frec" render={({ field }) => <Combobox id="f-frec" value={field.value} options={Object.entries(FFREC).map(([value, label]) => ({ value, label }))}
+                onChange={(v) => {
+                  const antes = field.value
+                  field.onChange(v)
+                  const v0 = form.getValues("valor")
+                  const pide = v !== antes && v !== "mensual" && v !== "unico" && form.getValues("tipoValor") === "fijo" && v0 > 0 && !(v === "quincenal" && form.getValues("repQ") === "distinto")
+                  setPregunta(pide ? { valor: v0, frec: v } : null)
+                }} />} />
             </FormField>
             {step ? (
               <FormField label="Próximo pago" htmlFor="f-prox" hint={w.frec === "anual" ? "Se repite cada año en esta fecha." : w.frec !== "mensual" ? "Desde esta fecha contamos cada cuántos meses toca." : undefined}>
@@ -327,6 +341,16 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
                 <Segmented value={field.value} onChange={field.onChange} items={[{ value: "no", label: "Todavía no" }, { value: "q1", label: "La 1ª quincena" }, { value: "q2", label: "La 2ª" }, { value: "ambas", label: "Las dos" }]} />
               )} />
             </FormField>
+          )}
+          {pregunta && pregunta.frec === w.frec && w.valor === pregunta.valor && (
+            <Notice tone="info" title={`¿Los ${fmtMoney(pregunta.valor, w.currency)} son ${CADA_PAGO[pregunta.frec]} o de todo el mes?`}>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => setPregunta(null)}>Son {CADA_PAGO[pregunta.frec]}</Button>
+                <Button type="button" size="sm" onClick={() => { form.setValue("valor", valorPorPago(pregunta.valor, pregunta.frec), { shouldDirty: true }); setPregunta(null) }}>
+                  Son del mes: {fmtMoney(valorPorPago(pregunta.valor, pregunta.frec), w.currency)} {CADA_PAGO[pregunta.frec]}
+                </Button>
+              </div>
+            </Notice>
           )}
           {!fixed && w.frec !== "quincenal" && w.frec !== "unico" && (
             <FormField label="¿Ya lo pagaste este mes?">

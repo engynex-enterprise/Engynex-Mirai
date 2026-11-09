@@ -1,6 +1,6 @@
 // F2-I-5: consola de la plataforma. Todas las rutas con @PlatformAdmin, cada comando en admin_audit y ningún DTO con
 // montos ni movimientos de los hogares (lo único con plata es lo que los hogares le pagan a Mirai).
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 import type { AppRoute } from "@ts-rest/core"
 import { adminCoreContract as adminContract } from "@mirai/contracts/modules/admin"
@@ -54,6 +54,43 @@ describe("lecturas", () => {
     expect(u.pagos[0]).not.toHaveProperty("pagador")
     const o = (await call("owner", "GET", "/v1/admin/overview")).body
     expect(o).toMatchObject({ personas: 6, hogares: 1, libros: 1, rating: { avg: 5, count: 1 }, opinionesNuevas: 1 })
+  })
+})
+
+describe("estado de la configuración (consola › Sistema)", () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it("refleja el despliegue de hoy (un servidor con Dokploy), agrupado y sin Vercel ni Supabase", async () => {
+    // Las mismas variables del VPS (infra/servidor/docker-compose.yml), sin pasarelas de pago ni WhatsApp.
+    for (const [k, v] of Object.entries({
+      AUTH_DATABASE_URL: "postgres://mirai_app:clave@db:5432/mirai", SITE_URL: "https://mirai.engynex.com",
+      BETTER_AUTH_SECRET: "x".repeat(40), BETTER_AUTH_URL: "https://mirai.engynex.com",
+      OBJECT_STORE: "s3", STORAGE_BUCKET_PRIVATE: "mirai-private", S3_ENDPOINT: "http://minio:9000",
+      RESEND_API_KEY: "re_de_prueba", MAIL_FROM: "no-responder@mirai.engynex.com", REDIS_URL: "redis://redis:6379",
+    })) vi.stubEnv(k, v)
+    const estado = (await call("owner", "GET", "/v1/admin/system")).body.estado as { k: string; ok: boolean; grupo: string; req: boolean; nota: string | null }[]
+    const de = (k: string) => estado.find((e) => e.k === k)
+
+    expect([...new Set(estado.map((e) => e.grupo))]).toEqual(["Servidor", "Cuentas", "Avisos", "Inteligencia artificial", "Cobros y anuncios"])
+    expect(JSON.stringify(estado)).not.toMatch(/Vercel/)
+    expect(de("Conexión directa a la base")).toMatchObject({ ok: true, req: true })
+    expect(de("Login propio (Better Auth)")).toMatchObject({ ok: true, req: true, nota: "mirai.engynex.com" })
+    expect(de("Archivos (adjuntos y copias)")).toMatchObject({ ok: true, nota: "s3 · minio:9000" })
+    expect(de("Tiempo real y colas (Redis)")).toMatchObject({ ok: true, req: false })
+    // El correo sale de las variables del servidor; lo que no está configurado es opcional, no un pendiente.
+    expect(de("Correo")).toMatchObject({ ok: true, req: true, nota: "Correo con Resend · variables del servidor" })
+    expect(de("WhatsApp")).toMatchObject({ ok: false, req: false })
+    expect(de("Google AdSense")).toMatchObject({ ok: false, req: false })
+    expect(estado.filter((e) => e.req && !e.ok).map((e) => e.k)).toEqual(["Base de datos"]) // la app de prueba no trae llave de la base
+  })
+
+  it("lo apagado en consola › Integraciones globales manda sobre la variable del servidor", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", "123:token-de-prueba")
+    t.fx.admin.modos = { telegram: "apagada", whatsapp: "obligatoria" }
+    const estado = (await call("owner", "GET", "/v1/admin/system")).body.estado as { k: string; ok: boolean; nota: string | null }[]
+    expect(estado.find((e) => e.k === "Telegram")).toMatchObject({ ok: false })
+    expect(estado.find((e) => e.k === "WhatsApp")).toMatchObject({ ok: true, nota: "WhatsApp Cloud API · consola › Integraciones globales" })
+    t.fx.admin.modos = {}
   })
 })
 

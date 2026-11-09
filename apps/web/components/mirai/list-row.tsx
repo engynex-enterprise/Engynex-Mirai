@@ -4,6 +4,7 @@ import { MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { Icon } from "./icon"
 
@@ -33,13 +34,16 @@ export function IconAction({ a, className }: { a: RowAction; className?: string 
  * Fila de lista (rowi de la v4): logo o ícono, título + pills, subtítulos, valor a la derecha y acciones con tooltip.
  * En celular el valor baja bajo el título y las acciones pasan a un menú "⋯" (salvo las `inline`).
  */
-export function ListRow({ icon, media, iconClassName, title, badges, subtitle, extra, value, actions = [], onClick, className }: {
+export function ListRow({ icon, media, iconClassName, title, badges, subtitle, extra, value, actions = [], onClick, className, select }: {
   icon: string; media?: React.ReactNode; iconClassName?: string; title: React.ReactNode; badges?: React.ReactNode; subtitle?: React.ReactNode; extra?: React.ReactNode
   value?: React.ReactNode; actions?: RowAction[]; onClick?: () => void; className?: string
+  /** Casilla para elegir la fila (acciones sobre varias, p. ej. desde `DataTable` con `bulk`). */
+  select?: { checked: boolean; onChange: (v: boolean) => void; label?: string }
 }) {
   const menu = actions.filter((a) => !a.inline && !a.hideOnMobile)
   return (
-    <li className={cn("flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-hover sm:items-center", className)}>
+    <li className={cn("flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-hover sm:items-center", select?.checked && "bg-brand-soft/50", className)}>
+      {select && <Checkbox className="mt-3 sm:mt-0" aria-label={select.label ?? "Seleccionar fila"} checked={select.checked} onCheckedChange={(v) => select.onChange(!!v)} />}
       {media ?? <span className={cn("grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-foreground", iconClassName)}><Icon name={icon} className="size-5" /></span>}
       <button type="button" disabled={!onClick} onClick={onClick} className="grid min-w-0 flex-1 gap-0.5 text-left disabled:cursor-default">
         <span className="flex flex-wrap items-center gap-1.5 font-semibold"><span className="min-w-0 break-words">{title}</span>{badges}</span>

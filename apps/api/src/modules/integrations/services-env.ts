@@ -3,6 +3,7 @@
 // con los que define Terraform (infra/terraform/stack/services.tf). Nunca se registran sus valores.
 import { z } from "zod"
 import { AI_PLATFORM_ENV } from "@mirai/ai/providers/env"
+import { ENV_INTEGRATION_VARS } from "@mirai/services/integrations/env"
 
 /** Vacío = sin definir (Terraform pone "" cuando falta un valor público). */
 const blank = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v)
@@ -42,6 +43,11 @@ export const ServicesEnvSchema = z
     AUTOMATIONS_OUTBOX: bool(true),
     /** IA de la plataforma (V7-P): AI_PLATFORM_PROVIDER y credenciales de Vertex, Bedrock y Azure (packages/ai/src/providers/env.ts). */
     ...(Object.fromEntries(AI_PLATFORM_ENV.map((k) => [k, opt])) as Record<(typeof AI_PLATFORM_ENV)[number], typeof opt>),
+    /**
+     * Correo, WhatsApp y Telegram del despliegue (packages/services/src/integrations/env.ts): con ellas los avisos y
+     * los correos de la cuenta quedan ACTIVOS para todos los hogares sin pasar por consola › Integraciones globales.
+     */
+    ...(Object.fromEntries(ENV_INTEGRATION_VARS.map((k) => [k, opt])) as Record<(typeof ENV_INTEGRATION_VARS)[number], typeof opt>),
   })
   .transform((e) => {
     const site = (e.SITE_URL ?? e.NEXT_PUBLIC_SITE_URL ?? (e.MIRAI_ENV === "produccion" ? "https://mirai.engynex.com" : e.MIRAI_ENV === "pruebas" ? "https://engynex-mirai-pruebas.vercel.app" : "http://localhost:3000")).replace(/\/+$/, "")
@@ -54,6 +60,7 @@ export const ServicesEnvSchema = z
       VAPID_SUBJECT: e.VAPID_SUBJECT,
       AI_GATEWAY_API_KEY: e.AI_GATEWAY_API_KEY,
       ...Object.fromEntries(AI_PLATFORM_ENV.map((k) => [k, e[k]])),
+      ...Object.fromEntries(ENV_INTEGRATION_VARS.map((k) => [k, e[k]])),
     }
     return {
       siteUrl: site,

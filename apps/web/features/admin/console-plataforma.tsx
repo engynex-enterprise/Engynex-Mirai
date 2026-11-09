@@ -20,6 +20,7 @@ import { DataTable, DTPrimary, DTTwoLine } from "@/components/mirai/data-table"
 import { ChoiceCards, Segmented } from "@/components/mirai/choice-cards"
 import { Combobox } from "@/components/mirai/combobox"
 import { FormField } from "@/components/mirai/field"
+import { Icon } from "@/components/mirai/icon"
 import { Kpi, KpiGrid } from "@/components/mirai/kpi"
 import { ListToolbar, NoResults, useListControls, type ListFilter } from "@/components/mirai/list-toolbar"
 import { MoneyInput } from "@/components/mirai/money-input"
@@ -34,6 +35,7 @@ import { UserAvatar } from "@/components/mirai/user-avatar"
 import { useApp } from "@/components/app/app-context"
 import { deletePlan, loadAdminPlans, loadBroadcasts, savePlan } from "./platform-api"
 import { CATS, INTEGRATIONS, type IntegrationDef } from "@/lib/integrations/registry"
+import { FreeBadge } from "@/features/integrations/free-badge"
 import { ADMIN_MODES, MODES, type GlobalMode } from "@/lib/integrations/resolve"
 import { integrationBrand } from "@/lib/brands"
 import { FEATURES, FEATURE_LIST, ahorroAnual, precio } from "@/lib/plans"
@@ -242,6 +244,16 @@ function SendTestDialog({ def, open, onOpenChange }: { def: IntegrationDef; open
 }
 
 type IntItem = { def: IntegrationDef; r: GlobalRow; estado: "activa" | "apagada" | "sin" ; label: string; tone: PillTone; libre: boolean; keyless: boolean }
+/**
+ * Los dos grupos del panel, por QUIÉN la configura. El corte sale de `r.adminOnly` (la API lo calcula con `isAdminOnly`
+ * del registro), la misma regla que usa el resto de la app: no es un criterio nuevo. Por eso la IA sale en los dos:
+ * Vertex, Bedrock y Azure son del administrador; las otras seis las puede poner cada hogar con su propia clave.
+ */
+const BLOQUES = [
+  { id: "sistema", n: "Del sistema", icon: "server", d: "Las configuras tú y aplican a toda la plataforma. Si está activa, Mirai la usa para los planes que elijas en cada una.", match: (x: IntItem) => x.r.adminOnly },
+  { id: "hogar", n: "Del hogar", icon: "house", d: "Cada familia puede poner su propia clave. Tú decides cómo recibe la de Mirai: opcional, activa por defecto u obligatoria.", match: (x: IntItem) => !x.r.adminOnly },
+] as const
+
 const INT_FILTERS: ListFilter<IntItem>[] = [
   { value: "todas", label: "Todas", icon: "list" },
   { value: "activa", label: "Activas", icon: "circle-check", match: (x) => x.estado === "activa" },
@@ -251,7 +263,7 @@ const INT_FILTERS: ListFilter<IntItem>[] = [
 
 function intItem(def: IntegrationDef, r: GlobalRow): IntItem {
   const keyless = !def.fields.some((f) => f.required)
-  // Solo admin: activa · apagada (fila guardada) · sin fila: disponible (sin claves o variable de entorno) o sin configurar.
+  // Solo admin: activa (fila guardada o variables del servidor) · apagada · sin fila: disponible (sin claves) o sin configurar.
   const libre = !r.existe && (keyless || r.env)
   const label = r.adminOnly ? (r.modo !== "apagada" ? "Activa" : r.existe ? "Apagada" : libre ? "Disponible" : "Sin configurar") : MODES.find((m) => m.value === r.modo)?.label ?? r.modo
   const estado = r.modo !== "apagada" || libre ? "activa" : r.existe || r.guardada ? "apagada" : "sin"
@@ -266,7 +278,7 @@ export function IntegracionesPanel() {
   const [testing, setTesting] = useState<string | null>(null)
   const qc = useQueryClient()
   const items = (data ? INTEGRATIONS.map((def) => intItem(def, data.find((x) => x.kind === def.kind)!)) : undefined)
-  const c = useListControls(items, { text: (x) => `${x.def.n} ${CATS[x.def.cat].n} ${x.label}`, filters: INT_FILTERS })
+  const c = useListControls(items, { text: (x) => `${x.def.n} ${CATS[x.def.cat].n} ${x.label} ${x.def.d} ${x.def.para}`, filters: INT_FILTERS })
   if (isPending || !data) return <div className="grid gap-6"><Skeleton className="h-24 rounded-lg" /><div className="grid gap-4 lg:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-36 rounded-lg" />)}</div></div>
   const probar = async (def: IntegrationDef) => {
     setTesting(def.kind)
@@ -277,48 +289,70 @@ export function IntegracionesPanel() {
   }
   const editRow = edit.value ? data.find((x) => x.kind === edit.value!.kind) : undefined
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-8">
       <Notice tone="info" title="Cómo funciona">
-        <p>Los hogares solo configuran la <b>inteligencia artificial</b> (pueden usar su propia clave). Para la IA decides cómo reciben la de Mirai: <b>opcional</b>, <b>activa por defecto</b> u <b>obligatoria</b>.</p>
-        <p className="mt-1">Todo lo demás (correo, WhatsApp, Telegram, push, datos, Google e infraestructura) <b>solo lo configuras tú</b>: si está <b>activa</b>, Mirai la usa para los planes elegidos. Cada persona decide en Ajustes › Alertas si recibe avisos por correo, WhatsApp, Telegram o push.</p>
+        <p>El correo, WhatsApp y Telegram también se encienden con las <b>variables del servidor</b> (Dokploy › Environment): así quedan activos para todos desde el despliegue, sin guardar nada aquí. Lo que guardes en esta pantalla manda sobre ellas.</p>
+        <p className="mt-1">Cada persona decide en Ajustes › Alertas si recibe los avisos por correo, WhatsApp, Telegram o push.</p>
       </Notice>
       <ListToolbar c={c} placeholder="Buscar integración" filters={INT_FILTERS} />
       {!c.rows.length && <NoResults c={c}>No hay integraciones con esa búsqueda o ese filtro.</NoResults>}
-      {(Object.keys(CATS) as (keyof typeof CATS)[]).map((cat) => {
-        const list = c.rows.filter((x) => x.def.cat === cat)
-        if (!list.length) return null
+      {BLOQUES.map((b) => {
+        const enBloque = c.rows.filter(b.match)
+        if (!enBloque.length) return null
         return (
-          <section key={cat} className="grid gap-3" aria-label={CATS[cat].n}>
-            <SectionTitle icon={CATS[cat].icon} description={CATS[cat].d}>{CATS[cat].n}</SectionTitle>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {list.map(({ def, r, label, tone, keyless }) => {
-                const meta = r.meta as { lastOk?: boolean; lastMsg?: string }
-                const canSend = r.guardada && (EMAIL_KINDS.includes(def.kind) || def.kind === "whatsapp")
-                const brand = integrationBrand(def.kind, r.config)
-                return (
-                  <Card key={def.kind} className="h-full gap-3 p-5 shadow-card ring-0">
-                    <div className="flex items-start gap-3">
-                      {brand ? <BrandLogo k={brand} size={40} /> : <ToneIcon icon={def.icon} tone={toneFor(def.kind)} />}
-                      <div className="grid min-w-0 flex-1 gap-1">
-                        <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}
-                          <Tip label={r.adminOnly ? "Si está activa, Mirai la usa para los planes elegidos" : MODES.find((m) => m.value === r.modo)?.desc}><span className="inline-flex"><StatusPill tone={tone}>{label}</StatusPill></span></Tip>
-                          {r.env && <Tip label="Los datos vienen de una variable de entorno de Vercel"><span className="inline-flex"><StatusPill tone="info">Variable del despliegue</StatusPill></span></Tip>}
-                          {r.adminOnly && r.guardada && <StatusPill tone="gray">Datos guardados</StatusPill>}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{r.planes.length ? `Solo planes: ${r.planes.join(", ")}` : "Todos los planes"}{r.adminOnly ? "" : ` · ${r.hogaresPropios} ${r.hogaresPropios === 1 ? "hogar" : "hogares"} con cuenta propia${r.hogaresApagada ? ` · ${r.hogaresApagada} la ${r.hogaresApagada === 1 ? "apagó" : "apagaron"}` : ""}`}</p>
-                      </div>
-                    </div>
-                    {meta.lastMsg && <p className={cn("flex items-start gap-1.5 text-xs", meta.lastOk ? "text-success" : "text-danger")}>{meta.lastOk ? <CircleCheck className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0" />}<span className="min-w-0 break-words">Última prueba: {meta.lastMsg}</span></p>}
-                    <div className="mt-auto flex flex-wrap gap-2 pt-1">
-                      <Button size="sm" variant="outline" onClick={() => edit.show(def)}>Configurar</Button>
-                      {(r.modo !== "apagada" || r.guardada || (r.adminOnly && keyless)) && <Button size="sm" variant="soft" disabled={testing === def.kind} onClick={() => probar(def)}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar</Button>}
-                      {canSend && <Button size="sm" variant="soft" onClick={() => sendTo.show(def)}><Send /> Enviar prueba</Button>}
-                      {def.kind === "whatsapp" && <Button size="sm" variant="soft" asChild><Link href="/admin/whatsapp"><MessageCircle /> Plantillas y casos</Link></Button>}
-                    </div>
-                  </Card>
-                )
-              })}
+          <section key={b.id} className="grid gap-5" aria-label={b.n}>
+            <div className="grid gap-1 border-b pb-3">
+              <h2 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
+                <Icon name={b.icon} className="size-5 shrink-0 text-brand" />
+                {b.n}
+                <StatusPill tone="gray">{enBloque.length} {enBloque.length === 1 ? "integración" : "integraciones"}</StatusPill>
+              </h2>
+              <p className="text-sm text-muted-foreground">{b.d}</p>
             </div>
+            {(Object.keys(CATS) as (keyof typeof CATS)[]).map((cat) => {
+              const list = enBloque.filter((x) => x.def.cat === cat)
+              if (!list.length) return null
+              return (
+                <section key={cat} className="grid gap-3" aria-label={`${b.n} · ${CATS[cat].n}`}>
+                  <SectionTitle as="h3" icon={CATS[cat].icon} description={CATS[cat].d}>{CATS[cat].n}</SectionTitle>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {list.map(({ def, r, label, tone, keyless }) => {
+                    const meta = r.meta as { lastOk?: boolean; lastMsg?: string }
+                    const canSend = (r.guardada || r.env) && (EMAIL_KINDS.includes(def.kind) || def.kind === "whatsapp")
+                    const brand = integrationBrand(def.kind, r.config)
+                    return (
+                      <Card key={def.kind} className="h-full gap-3 p-5 shadow-card ring-0">
+                        <div className="flex items-start gap-3">
+                          {brand ? <BrandLogo k={brand} size={40} /> : <ToneIcon icon={def.icon} tone={toneFor(def.kind)} />}
+                          <div className="grid min-w-0 flex-1 gap-1">
+                            <p className="flex flex-wrap items-center gap-1.5 font-semibold">{def.n}
+                              <Tip label={r.adminOnly ? "Si está activa, Mirai la usa para los planes elegidos" : MODES.find((m) => m.value === r.modo)?.desc}><span className="inline-flex"><StatusPill tone={tone}>{label}</StatusPill></span></Tip>
+                              <FreeBadge free={def.free} />
+                              {r.env && <Tip label="Las credenciales vienen de las variables del servidor (Dokploy › Environment): queda activa para todos sin configurar nada aquí"><span className="inline-flex"><StatusPill tone="info">Variables del servidor</StatusPill></span></Tip>}
+                              {r.adminOnly && r.guardada && <StatusPill tone="gray">Datos guardados</StatusPill>}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{r.planes.length ? `Solo planes: ${r.planes.join(", ")}` : "Todos los planes"}{r.adminOnly ? "" : ` · ${r.hogaresPropios} ${r.hogaresPropios === 1 ? "hogar" : "hogares"} con cuenta propia${r.hogaresApagada ? ` · ${r.hogaresApagada} la ${r.hogaresApagada === 1 ? "apagó" : "apagaron"}` : ""}`}</p>
+                          </div>
+                        </div>
+                        {/* Qué es y para qué sirve: sin esto la tarjeta solo decía el nombre y había que adivinar. */}
+                        <div className="grid gap-1.5">
+                          <p className="text-sm text-muted-foreground">{def.d}</p>
+                          <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Para qué sirve: </span>{def.para}</p>
+                        </div>
+                        {meta.lastMsg && <p className={cn("flex items-start gap-1.5 text-xs", meta.lastOk ? "text-success" : "text-danger")}>{meta.lastOk ? <CircleCheck className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0" />}<span className="min-w-0 break-words">Última prueba: {meta.lastMsg}</span></p>}
+                        <div className="mt-auto flex flex-wrap gap-2 pt-1">
+                          <Button size="sm" variant="outline" onClick={() => edit.show(def)}>Configurar</Button>
+                          {(r.modo !== "apagada" || r.guardada || (r.adminOnly && keyless)) && <Button size="sm" variant="soft" disabled={testing === def.kind} onClick={() => probar(def)}>{testing === def.kind ? <Spinner /> : <FlaskConical />} Probar</Button>}
+                          {canSend && <Button size="sm" variant="soft" onClick={() => sendTo.show(def)}><Send /> Enviar prueba</Button>}
+                          {def.kind === "whatsapp" && <Button size="sm" variant="soft" asChild><Link href="/admin/whatsapp"><MessageCircle /> Plantillas y casos</Link></Button>}
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
           </section>
         )
       })}
@@ -508,7 +542,11 @@ export function SistemaPanel() {
   const avisoV = aviso ?? s.aviso_global
   const tonoV = (tono ?? s.aviso_tono) as "info" | "warn" | "ok"
   const avisoDirty = avisoV !== s.aviso_global || tonoV !== s.aviso_tono
-  const pendientes = data.estado.filter((e) => !e.ok).length
+  const pendientes = data.estado.filter((e) => e.req && !e.ok).length
+  const opcionales = data.estado.filter((e) => !e.req && !e.ok).length
+  // Un bloque por grupo, en el orden en que la API los manda (Servidor, Cuentas, Avisos…). Durante un despliegue la
+  // web puede hablar con una API anterior que todavía manda la lista sin grupo: ahí va todo en un solo bloque.
+  const grupos = [...data.estado.reduce((m, e) => m.set(e.grupo || "Configuración", [...(m.get(e.grupo || "Configuración") ?? []), e]), new Map<string, typeof data.estado>()).entries()]
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       <Panel title="Aviso para todos" icon="megaphone" description="Un mensaje arriba de todas las pantallas de Mirai (por ejemplo, mantenimiento programado). Déjalo vacío para quitarlo.">
@@ -523,17 +561,31 @@ export function SistemaPanel() {
         <ToggleRow title="Límites de los planes también en la base de datos" label="Límites en la base de datos" desc="La app ya respeta los límites. Esto los hace cumplir aunque alguien use la API directamente. Enciéndelo al publicar los planes en producción." checked={s.limites_db} onChange={(x) => save({ limites_db: x }, x ? "Límites activos en la base" : "Límites de la base apagados")} />
         <ToggleRow title="Funciones Premium también en la base de datos" label="Premium en la base de datos" desc="Impuestos (renta, bienes y contador) y familia (mesadas y compartidos) solo se pueden guardar con un plan que los incluya, aunque alguien use la API directamente. Enciéndelo cuando producción tenga la versión que lo entiende." checked={!!s.premium_db} onChange={(x) => save({ premium_db: x }, x ? "Premium activo en la base" : "Premium de la base apagado")} />
       </Panel>
-      <Panel title="Programa de referidos" icon="gift" description={`${plural(data.referidos ?? 0, "persona llegó invitada", "personas llegaron invitadas")} · ${plural(data.premiados ?? 0, "invitación premiada", "invitaciones premiadas")}. Quien invita y quien llega reciben días del plan elegido (máximo 12 premios por persona).`}>
+      <Panel className="xl:col-span-2" title="Programa de referidos" icon="gift" description={`${plural(data.referidos ?? 0, "persona llegó invitada", "personas llegaron invitadas")} · ${plural(data.premiados ?? 0, "invitación premiada", "invitaciones premiadas")}. Quien invita y quien llega reciben días del plan elegido (máximo 12 premios por persona).`}>
         <ToggleRow title="Programa activo" label="Programa de referidos activo" checked={s.referidos_activo} onChange={(x) => save({ referidos_activo: x }, x ? "Referidos activos" : "Referidos en pausa")} />
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField label="Plan que se regala" tip={false}><Combobox value={s.referidos_plan} onChange={(x) => save({ referidos_plan: x }, "Plan del premio guardado")} options={plans.filter((p) => p.value !== "gratis")} /></FormField>
           <FormField label="Días de premio" htmlFor="rf-d" tip={false} hint="De 1 a 365. Se guarda al salir del campo."><Input id="rf-d" type="number" min={1} max={365} className="h-11" defaultValue={s.referidos_dias} onBlur={(e) => { const n = +e.target.value; if (n >= 1 && n <= 365 && n !== s.referidos_dias) save({ referidos_dias: n }, "Días del premio guardados") }} /></FormField>
         </div>
       </Panel>
-      <Panel title="Estado de la configuración" icon="server" action={<StatusPill tone={pendientes ? "porVencer" : "pagado"}>{pendientes ? `${pendientes} pendiente${pendientes === 1 ? "" : "s"}` : "Todo listo"}</StatusPill>}
+      <Panel className="xl:col-span-2" title="Estado de la configuración" icon="server" action={<StatusPill tone={pendientes ? "vencido" : "pagado"} check={!pendientes}>{pendientes ? `${pendientes} sin configurar` : "Todo listo"}</StatusPill>}
         description={`Ambiente: ${data.ambiente} · rama ${data.rama}${data.commit ? ` · ${data.commit}` : ""}`}>
-        <ul className="grid divide-y text-sm">{data.estado.map((e) => <li key={e.k} className="flex items-center justify-between gap-2 py-1.5"><span className="min-w-0 break-words">{e.k}</span>{e.ok ? <StatusPill tone="pagado" check>Configurado</StatusPill> : <StatusPill tone="gray">Pendiente</StatusPill>}</li>)}</ul>
-        <p className="text-xs text-muted-foreground">Las variables se configuran en Vercel › Environment Variables (guía en docs/DEPLOY-VERCEL.md).</p>
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {grupos.map(([g, items]) => (
+            <div key={g} className="grid content-start gap-1">
+              <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{g}</h3>
+              <ul className="grid divide-y text-sm">
+                {items.map((e) => (
+                  <li key={e.k} className="flex items-start justify-between gap-2 py-2">
+                    <span className="grid min-w-0 gap-0.5"><span className="break-words">{e.k}</span>{e.nota && <span className="text-xs break-words text-muted-foreground">{e.nota}</span>}</span>
+                    {e.ok ? <StatusPill tone="pagado" check>Listo</StatusPill> : e.req ? <StatusPill tone="vencido" hint="Mirai no funciona completo sin esto.">Falta</StatusPill> : <StatusPill tone="gray" hint="Es opcional: Mirai funciona sin esto.">Sin usar</StatusPill>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{opcionales > 0 && `${plural(opcionales, "cosa opcional", "cosas opcionales")} sin usar. `}Las variables se configuran en Dokploy › Environment (guía en infra/servidor/README.md); lo que guardes en Integraciones globales manda sobre ellas.</p>
       </Panel>
       <Panel title="Mantenimiento" icon="wrench" className="xl:col-span-2">
         <div className="flex flex-wrap items-center gap-3">

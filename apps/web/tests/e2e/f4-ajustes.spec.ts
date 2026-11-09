@@ -74,8 +74,9 @@ test("ajustes: pestañas, catálogos, finanzas, alertas, IA, hogar y datos", asy
   await shot(page, "ajustes-integraciones-modelos", info.project.name)
   await page.keyboard.press("Escape")
   await dlg.getByRole("button", { name: "Cancelar" }).click()
-  // Sin clave guardada, Gemini pide la clave antes de mostrar modelos.
-  await card("Google Gemini").getByRole("button", { name: "Configurar" }).click()
+  // Sin clave guardada, Gemini pide la clave antes de mostrar modelos. Si la plataforma ya la da ("Incluida por
+  // Mirai"), el botón es "Usar mi propia cuenta" y abre la misma ventana.
+  await card("Google Gemini").getByRole("button", { name: /^(Configurar|Usar mi propia cuenta)$/ }).click()
   await expect(page.getByRole("dialog").getByText("Cuando pegues la clave, aquí aparecen los modelos que puedes usar.")).toBeVisible()
   await page.getByRole("dialog").getByRole("button", { name: "Cancelar" }).click()
 

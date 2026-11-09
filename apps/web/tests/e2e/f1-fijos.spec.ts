@@ -26,10 +26,15 @@ test("gastos fijos: rango variable, pagar, ajustar rango y deshacer", async ({ p
   const paid = page.locator("#main li", { hasText: nombre }).filter({ hasText: "Pagado el" })
   await expect(paid).toBeVisible()
 
+  // El gasto que sale del pago es de Fijos: no aparece en «Del día a día» (cada pestaña muestra solo lo suyo).
   await page.goto("/gastos")
-  await expect(page.locator("#main li", { hasText: nombre }).getByText("fijo")).toBeVisible()
-  // Editar el valor del gasto que salió del pago: el pago del fijo (y el flujo del Balance) toman el valor nuevo.
-  await page.locator("#main li", { hasText: nombre }).getByText(nombre).first().click()
+  await expect(page.getByText("Gastos del día a día").first()).toBeVisible()
+  await expect(page.locator("#main li", { hasText: nombre })).toHaveCount(0)
+  // Se edita desde Fijos › Pagos registrados: el pago del fijo (y el flujo del Balance) toman el valor nuevo.
+  await page.goto("/fijos")
+  const pago = page.locator("#main li", { hasText: nombre }).filter({ hasText: "Pagado el" })
+  if (info.project.name === "movil") { await pago.getByRole("button", { name: "Más acciones" }).click(); await page.getByRole("menuitem", { name: `Editar pago de ${nombre}` }).click() }
+  else await pago.getByRole("button", { name: `Editar pago de ${nombre}` }).click()
   await page.getByRole("textbox", { name: "Valor" }).fill("240000")
   await page.getByRole("button", { name: "Guardar" }).click()
   await expect(page.getByText("Gasto actualizado")).toBeVisible()

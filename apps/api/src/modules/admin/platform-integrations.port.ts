@@ -12,6 +12,8 @@ export type WaCaseOverride = { template?: string; lang?: string; map?: Record<st
 export abstract class PlatformIntegrationsPort {
   /** ¿Existe la variable de entorno del registro (`def.env`) en este despliegue? */
   abstract hasEnv(name: string): boolean
+  /** Valor de una variable del despliegue, para armar la integración que viene del servidor (integrationFromEnv). */
+  abstract envValue(name: string): string | undefined
   /** Dirección pública del sitio (enlaces de WhatsApp) e imagen de marca por defecto de los encabezados. */
   abstract publicSiteUrl(): string
   abstract defaultHeaderImage(): string

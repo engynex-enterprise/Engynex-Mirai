@@ -57,6 +57,8 @@ const QA_PASSWORD = "Mirai-QA-local-2026"
 const DEMO = { email: "demo@mirai.local", password: "Mirai-demo-local-2026", nombre: "Demo Mirai" }
 // 32 bytes en base64, solo local (cifra integraciones de prueba en la base de Docker).
 const LOCAL_ENCRYPTION_KEY = Buffer.alloc(32, 0x4d).toString("base64")
+// Avisos de la plataforma (correo, WhatsApp, Telegram): solo con --serve y solo si están en .env.local.
+const AVISOS_ENV = ["MAIL_FROM", "MAIL_FROM_NAME", "AUTH_MAIL_FROM", "RESEND_API_KEY", "BREVO_API_KEY", "SENDGRID_API_KEY", "GMAIL_USER", "GMAIL_APP_PASSWORD", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USER", "SMTP_PASS", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID", "WHATSAPP_WABA_ID", "WHATSAPP_TEMPLATE", "WHATSAPP_LANG", "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_NAME"]
 
 /** Nombres (sin valores) de .env.local, y los hosts reales para la salvaguarda (no se imprimen). */
 function realEnvFile() {
@@ -114,7 +116,7 @@ async function buildEnv() {
     E2E_QA_PASSWORD: QA_PASSWORD,
     E2E_API_URL: LOCAL.apiUrl,
     ...miraiEnv(keys),
-    ...(SERVE ? realGoogle() : {}),
+    ...(SERVE ? { ...realGoogle(), ...realAvisos() } : {}),
   }
   const all = { ...base, ...env, ...local }
   assertLocal(all, real.forbidden)
@@ -131,14 +133,45 @@ async function buildEnv() {
  * redirección http://localhost:55300/api/auth/callback/google. Las pruebas siguen con el cliente de mentira.
  */
 function realGoogle() {
-  const f = join(ROOT, ".env.local")
-  if (!existsSync(f)) return {}
-  const text = readFileSync(f, "utf8")
-  const val = (k) => text.match(new RegExp(`^\\s*(?:export\\s+)?${k}\\s*=\\s*["']?([^"'\\r\\n]*)["']?\\s*$`, "m"))?.[1]?.trim()
+  const val = envLocal()
+  if (!val) return {}
   // Primero el cliente propio de local (GOOGLE_LOCAL_*); si no hay, el de siempre.
   const id = val("GOOGLE_LOCAL_CLIENT_ID") || val("GOOGLE_CLIENT_ID")
   const secret = val("GOOGLE_LOCAL_CLIENT_ID") ? val("GOOGLE_LOCAL_CLIENT_SECRET") : val("GOOGLE_CLIENT_SECRET")
-  return id && secret ? { GOOGLE_CLIENT_ID: id, GOOGLE_CLIENT_SECRET: secret } : {}
+  // Conectar Gmail y Calendar (Correo, Agenda) también necesita la llave con que la API firma el `state` de OAuth.
+  // Si .env.local no la trae, una fija de solo este computador (no protege nada fuera de Docker local).
+  const state = val("GOOGLE_OAUTH_STATE_KEY") || "mirai-local-solo-docker-google-oauth-state-0001"
+  return id && secret ? { GOOGLE_CLIENT_ID: id, GOOGLE_CLIENT_SECRET: secret, GOOGLE_OAUTH_STATE_KEY: state } : {}
+}
+
+/**
+ * Cómo leer un valor de la .env.local real (sin imprimirlo). null si no existe el archivo.
+ * [ \t] y no \s, como infra/servidor/variables.mjs: con \s una variable vacía (`X=`) se traga la línea siguiente.
+ */
+function envLocal() {
+  const f = join(ROOT, ".env.local")
+  if (!existsSync(f)) return null
+  const text = readFileSync(f, "utf8")
+  return (k) => text.match(new RegExp(`^[ \\t]*(?:export[ \\t]+)?${k}[ \\t]*=[ \\t]*["']?([^"'\\r\\n]*)["']?[ \\t]*$`, "m"))?.[1]?.trim()
+}
+
+/**
+ * --serve: correo, WhatsApp y Telegram REALES de .env.local para probar los avisos antes de desplegar (las mismas
+ * variables del servidor, infra/servidor/README.md › Correo y WhatsApp). Ojo: con esto los correos SALEN de verdad.
+ * Las pruebas (sin --serve) nunca las reciben: el correo de auth queda en AUTH_MAIL_DRIVER=log y no hay proveedor.
+ */
+function realAvisos() {
+  const val = envLocal()
+  if (!val) return {}
+  const out = {}
+  for (const k of AVISOS_ENV) {
+    const v = val(k)
+    if (v) out[k] = v
+  }
+  // Sin proveedor completo no se pasa nada (evita dejar media configuración y un error raro al enviar).
+  const hayCorreo = out.RESEND_API_KEY || out.BREVO_API_KEY || out.SENDGRID_API_KEY || (out.GMAIL_USER && out.GMAIL_APP_PASSWORD) || (out.SMTP_HOST && out.SMTP_USER && out.SMTP_PASS)
+  if (hayCorreo && !out.MAIL_FROM && !out.AUTH_MAIL_FROM) out.MAIL_FROM = "onboarding@resend.dev"
+  return out
 }
 
 /** La API entra como `mirai_app` (NOINHERIT), igual que en el servidor (infra/servidor): un permiso que falte en
@@ -316,7 +349,7 @@ async function main() {
     console.log(`  Base de datos:  ${LOCAL.dbUrl.replace(/:[^:@/]+@/, ":•••@")}`)
     console.log(`  Archivos:       consola de MinIO http://localhost:55901`)
     console.log(`  Correos:        los de registro y recuperar clave quedan en infra/local/.run/logs/API.log (con su enlace)`)
-    console.log(`  Google:         ${realGoogle().GOOGLE_CLIENT_ID ? "cliente real de .env.local (autoriza http://localhost:55300/api/auth/callback/google)" : "sin cliente real: usa correo y clave"}`)
+    console.log(`  Google:         ${realGoogle().GOOGLE_CLIENT_ID ? `cliente real de .env.local (autoriza http://localhost:55300/api/auth/callback/google y, para Gmail y Calendar, http://localhost:${API_PORT}/v1/google/callback)` : "sin cliente real: usa correo y clave"}`)
     console.log(`  Cuenta demo:    ${DEMO.email} / ${DEMO.password}`)
     console.log(`  Registros:      infra/local/.run/logs/{API,gateway,web}.log`)
     return

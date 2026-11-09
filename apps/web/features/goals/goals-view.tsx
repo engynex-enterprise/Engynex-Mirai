@@ -22,7 +22,7 @@ import { invalidateBook, useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { apiDeleteRow } from "@/lib/api/book-rows"
 import { goalContribute, updateFund } from "./commands"
-import { aporteFondoSugerido, fijoStatus, imprevistos, liquidez, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
+import { aporteFondoSugerido, estadoFijo, imprevistos, liquidez, metaPlan, payDays, type FixedExpenseIn } from "@/lib/domain"
 import { fondoEstado } from "@/lib/domain/savings"
 import { Combobox } from "@/components/mirai/combobox"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
@@ -44,16 +44,17 @@ function AporteRow({ fixed, today, onPay, onEdit, onNew, sugerido, label }: { fi
       <Button variant="soft" size="sm" onClick={onNew}>Programar un aporte fijo</Button>
     </div>
   )
-  const st = fijoStatus(fixed as unknown as FixedExpenseIn, today)
-  const pend = st.venc[0]
+  // Misma regla que Fijos: solo se ofrece "Ya aporté" cuando toca (vencido, este mes o dentro del aviso).
+  const E = estadoFijo(fixed as unknown as FixedExpenseIn, today)
+  const pend = E.vencidos[0]
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-soft p-3 text-sm">
       <CalendarClock className="size-5 text-brand" />
       <span className="grid flex-1">
         <b>Aporte programado: {fmtMoney(Number(fixed.valor))} {fixed.frec === "quincenal" ? "cada quincena" : "cada mes"}</b>
-        <span className="text-muted-foreground">{pend ? <span className="text-danger">Pendiente desde {fmtDate(pend.due)}</span> : st.prox ? `Próximo: ${fmtDate(st.prox.due)}` : ""} · llevas {fixed.payments.length} aporte{fixed.payments.length === 1 ? "" : "s"} {label}</span>
+        <span className="text-muted-foreground">{pend ? <span className="text-danger">Pendiente desde {fmtDate(pend.due)}</span> : E.estado === "pagado" ? `Este mes ya aportaste${E.proximo ? ` · próximo: ${fmtDate(E.proximo.due)}` : ""}` : E.proximo ? `Próximo: ${fmtDate(E.proximo.due)}` : ""} · llevas {fixed.payments.length} aporte{fixed.payments.length === 1 ? "" : "s"} {label}</span>
       </span>
-      {(pend || st.prox) && <Button size="sm" onClick={() => onPay(fixed)}>Ya aporté</Button>}
+      {E.porPagar && <Button size="sm" onClick={() => onPay(fixed)}>Ya aporté</Button>}
       <IconAction a={{ label: "Editar aporte", tip: "Cambiar el aporte programado", icon: "pencil", onClick: onEdit }} />
     </div>
   )

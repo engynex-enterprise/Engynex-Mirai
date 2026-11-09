@@ -87,6 +87,45 @@ export interface FixedPeriodStatus extends FixedPeriod {
   parcial: boolean
 }
 
+/** Lo que hace falta para saber desde qué periodo cuida Mirai un fijo y cuándo se creó. */
+type FijoInicio = FijoPeriodInput & { inicio?: string | null; created_at?: string | null }
+
+/** Primer periodo que Mirai cuida de un fijo: el primero con fecha de pago igual o posterior a `inicio`. */
+export function primerPeriodo(f: Partial<FijoInicio>): FixedPeriod | null {
+  if (!f.inicio || !f.frec) return null
+  const ini = iso(parseDate(f.inicio))
+  const d0 = parseDate(ini)
+  for (let k = 0; k <= 12; k++) {
+    const d = new Date(d0.getFullYear(), d0.getMonth() + k, 1)
+    const p = fijoPeriods(f as FijoPeriodInput, d.getFullYear(), d.getMonth(), d0).find((x) => x.due >= ini)
+    if (p) return p
+  }
+  return null
+}
+
+/**
+ * Con qué periodo se guarda el «¿Ya lo pagaste este mes?» al crear un fijo (`fpag`: cuándo lo pagó). Si el primer
+ * periodo que Mirai cuida ya venció hoy, ese pago es el de ese periodo: «Próximo pago: 5 nov» escrito el 9 nov y «ya
+ * lo pagué el 5 nov» paga noviembre. Si el próximo pago todavía no llega, lo que pagó este mes fue el periodo de antes
+ * de empezar a usar Mirai (`prev-AAAA-MM`): queda registrado como gasto pero no paga ningún periodo.
+ */
+export function periodoPagoAlCrear(f: Partial<FijoInicio>, fpag: string, today: DateInput): string {
+  const p = primerPeriodo(f)
+  return p && p.due <= iso(toDay(today)) ? p.per : `prev-${fpag.slice(0, 7)}`
+}
+
+/**
+ * ¿Los pagos "de antes del alta" (`prev-…`) de este fijo son los del periodo `per`? Sí cuando `per` es el primer
+ * periodo y ya había vencido el día en que se creó el fijo: así quedaron guardados los fijos creados antes de
+ * `periodoPagoAlCrear` (salían vencidos aunque ya estaban pagados).
+ */
+function prevEsDe(f: Partial<FijoInicio>, per: string): boolean {
+  const creado = f.created_at?.slice(0, 10)
+  if (!creado) return false
+  const p = primerPeriodo(f)
+  return !!p && p.per === per && p.due <= creado
+}
+
 /**
  * Cómo va un periodo de un fijo con sus pagos (abonos): lo pagado, lo que falta y si quedó completo. Queda completo si
  * un pago lo cierra (`cierra: true`, también "esta vez costó menos"), si lo pagado cubre el valor del periodo, o si el
@@ -98,12 +137,14 @@ export interface FixedPeriodStatus extends FixedPeriod {
  * lo mismo con y sin `trm`.
  */
 export function pagoPeriodo(
-  f: Pick<FixedExpenseIn, "frec" | "valor" | "variable" | "currency"> & { reparto?: unknown },
+  f: Pick<FixedExpenseIn, "frec" | "valor" | "variable" | "currency"> & { reparto?: unknown } & Partial<FijoInicio>,
   per: string,
   pagos: FixedPaymentIn[],
   trm?: Trm | null,
 ) {
-  const vivos = pagos.filter((x) => x.periodo === per && !x.deleted_at)
+  // Un pago guardado como "de antes del alta" (`prev-…`) puede ser en realidad el del primer periodo (ver `prevEsDe`).
+  const prev = pagos.some((x) => x.periodo?.startsWith("prev-")) && prevEsDe(f, per)
+  const vivos = pagos.filter((x) => (x.periodo === per || (prev && x.periodo?.startsWith("prev-"))) && !x.deleted_at)
   const pagado = vivos.reduce((a, x) => a + (+x.valor || 0), 0)
   const esperado = trm ? fijoValorCOP(f, per, trm) : fijoValor(f, per)
   const completo = vivos.length > 0 && (
@@ -148,6 +189,85 @@ export function fijoStatus(f: FixedExpenseIn, today: DateInput, trm?: Record<str
   const venc = out.filter((p) => !p.completo && p.due < ti)
   const prox = out.find((p) => !p.completo && p.due >= ti) || null
   return { periods: out, venc, prox, mensual: fijoMensual(f, trm ?? null, t) }
+}
+
+export type EstadoFijo = "vencido" | "pronto" | "pendiente" | "pagado" | "luego" | "aldia" | "terminado"
+
+export interface EstadoDeFijo {
+  /**
+   * vencido: un periodo pasó sin pagarse completo · pronto: lo que toca pagar cae dentro de los días de aviso ·
+   * pendiente: el periodo de este mes todavía no llega (o tiene un abono) · pagado: los periodos de este mes ya están
+   * pagados y el próximo es más adelante · luego: este mes no le toca (bimestral, anual…) y el próximo está lejos ·
+   * aldia: no tiene más periodos · terminado: ya pasó su fecha de fin.
+   */
+  estado: EstadoFijo
+  /** El periodo que toca pagar ahora (el vencido más viejo, el de este mes o uno dentro del aviso). Sin él, no hay botón de pagar. */
+  porPagar: FixedPeriodStatus | null
+  /** El próximo periodo sin pagar, aunque todavía no toque ("próximo: 5 dic"). */
+  proximo: FixedPeriodStatus | null
+  vencidos: FixedPeriodStatus[]
+  /** Los periodos que caen este mes existen y están todos pagados completos. */
+  pagadoMes: boolean
+  st: FixedStatus
+}
+
+/**
+ * Una sola regla para la etiqueta de un gasto fijo y para el botón de pagar (Fijos, Metas, Proveedores). Solo se
+ * ofrece pagar lo que toca: lo vencido, lo de este mes o lo que cae dentro de los días de aviso (`aviso` del fijo o
+ * `anticipo` del libro). Si lo de este mes ya está pagado, el siguiente no se ofrece hasta que se acerque.
+ */
+export function estadoFijo(f: FixedExpenseIn & { aviso?: number | null }, today: DateInput, o: { anticipo?: number; trm?: Trm | null } = {}): EstadoDeFijo {
+  const st = fijoStatus(f, today, o.trm)
+  const ti = iso(toDay(today))
+  const mes = ti.slice(0, 7)
+  const delMes = st.periods.filter((p) => p.due.startsWith(mes))
+  const pagadoMes = delMes.length > 0 && delMes.every((p) => p.completo)
+  const aviso = f.aviso ?? o.anticipo ?? 5
+  const dias = (d: string) => Math.round((parseDate(d).getTime() - parseDate(ti).getTime()) / 864e5)
+  const toca = (p: FixedPeriodStatus) => p.due.startsWith(mes) || p.parcial || dias(p.due) <= aviso
+  const proximo = st.prox
+  const porPagar = st.venc[0] ?? (proximo && toca(proximo) ? proximo : null)
+  const fin = !!f.hasta && f.hasta < ti
+  const estado: EstadoFijo = st.venc.length ? "vencido"
+    : porPagar ? (dias(porPagar.due) <= aviso ? "pronto" : "pendiente")
+    : fin ? "terminado"
+    : !proximo ? "aldia"
+    : pagadoMes ? "pagado"
+    : "luego"
+  return { estado, porPagar, proximo, vencidos: st.venc, pagadoMes, st }
+}
+
+/**
+ * Fin de la quincena en que cae `today` ('YYYY-MM-DD'), con el corte de quincena del libro (`corte_q`, 15 por defecto):
+ * del 1 al corte es la 1ª; del día siguiente a fin de mes, la 2ª.
+ */
+export function finQuincena(today: DateInput, corte = 15): string {
+  const t = toDay(today)
+  const c = Math.min(Math.max(+corte || 15, 1), 27)
+  return iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() <= c ? c : lastDay(t.getFullYear(), t.getMonth())))
+}
+
+/**
+ * Lo que falta pagar de los periodos que vencen entre `desde` y `hasta` (incluidos), sin los ya pagados completos y,
+ * con abonos, solo lo que falta. La moto ($75.000 por quincena, abonaste $40.000 a la 1ª): en la 1ª quincena faltan
+ * $35.000; en el mes, $110.000 (los $35.000 más los $75.000 de la 2ª).
+ */
+export function faltaEntre(periods: FixedPeriodStatus[], desde: string, hasta: string): number {
+  return periods.filter((p) => !p.completo && p.due >= desde && p.due <= hasta).reduce((a, p) => a + p.falta, 0)
+}
+
+/** Cómo se dice "cada pago" según la frecuencia ("cada quincena", "cada dos meses"…). */
+export const CADA_PAGO: Record<string, string> = { mensual: "cada mes", quincenal: "cada quincena", bimestral: "cada dos meses", trimestral: "cada tres meses", semestral: "cada seis meses", anual: "cada año", unico: "una sola vez" }
+
+/**
+ * Lo que vale cada pago si `valorMes` es lo de todo el mes: la gasolina de $150.000 al mes, pagada cada quincena, son
+ * $75.000 por quincena; el agua de $60.000 al mes, cobrada cada dos meses, son $120.000 por factura. Un pago único no
+ * se reparte.
+ */
+export function valorPorPago(valorMes: number, frec: string): number {
+  if (frec === "unico") return valorMes
+  const porMes = fijoMensual({ frec, valor: 1 })
+  return porMes > 0 ? Math.round(valorMes / porMes) : valorMes
 }
 
 /** Fecha del primer periodo vencido o del próximo; si no hay, hoy + 10 días. */

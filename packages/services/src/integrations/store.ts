@@ -1,5 +1,6 @@
 // Integración efectiva de un hogar (solo servidor). Movido de apps/web/features/integrations/store.ts (F2-E-1).
 import { resolveIntegration, resolvePlatformOnly, type GlobalMode } from "@mirai/domain/integrations/resolve"
+import { integrationFromEnv, mergeEnv } from "./env"
 import { rt } from "../runtime"
 import { integrationByKind, isAdminOnly } from "./registry"
 
@@ -8,10 +9,21 @@ export type IntegrationValue = { kind: string; enabled: boolean; config: Record<
 const supabaseAdmin = () => rt().admin()
 const secretsOf = (enc: string | null | undefined) => { if (!enc) return {}; try { return JSON.parse(rt().decrypt(enc)) as Record<string, string> } catch { return {} } }
 
-/** Integración global de la plataforma (consola › Integraciones), con secretos descifrados. */
+/**
+ * Integración global de la plataforma (consola › Integraciones), con secretos descifrados.
+ * Correo, WhatsApp y Telegram también se encienden con las variables del despliegue (packages/services/src/integrations/env.ts):
+ * sin fila en la base quedan ACTIVAS para todos los planes, y lo que el administrador guarde manda campo a campo.
+ */
 export async function getGlobalIntegration(kind: string) {
   const { data } = await supabaseAdmin().from("platform_integrations").select("*").eq("kind", kind).maybeSingle()
-  return data ? { modo: data.modo as GlobalMode, planes: data.planes ?? [], config: (data.config ?? {}) as Record<string, unknown>, secrets: secretsOf(data.secrets_enc) } : null
+  const env = isAdminOnly(kind) ? integrationFromEnv(kind, (n) => rt().env(n)) : null
+  if (!data) return env ? { modo: "obligatoria" as GlobalMode, planes: [] as string[], config: env.config, secrets: env.secrets, desdeEnv: true } : null
+  return {
+    modo: data.modo as GlobalMode, planes: data.planes ?? [],
+    config: mergeEnv(env?.config, (data.config ?? {}) as Record<string, unknown>),
+    secrets: mergeEnv(env?.secrets, secretsOf(data.secrets_enc)),
+    desdeEnv: false,
+  }
 }
 
 /** Solo la configuración propia del hogar (para guardarla sin mezclar los secretos de la plataforma). */
