@@ -57,6 +57,11 @@ const schema = z.object({
   yaPagoQ: z.enum(["no", "q1", "q2", "ambas"]), yaPagoM: z.enum(["no", "si"]),
   fpag: z.string(), vpag: z.number(),
   repQ: z.enum(["igual", "distinto"]), q1: z.number(), q2: z.number(),
+  hasta: z.string().nullable(),
+  aviso: z.number().int().min(0).max(100).nullable(),
+}).refine((v) => !v.hasta || !FSTEP[v.frec] || !v.prox || v.hasta >= v.prox, {
+  path: ["hasta"],
+  message: "La fecha de fin no puede ser antes del próximo pago",
 })
 type Values = z.infer<typeof schema>
 /** `preset`: valores iniciales al crear (p. ej. desde Proveedores › "Agregar recordatorio de pago"). */
@@ -111,6 +116,8 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
+      hasta: fixed?.hasta ?? null,
+      aviso: fixed?.aviso ?? null,
     },
   })
   const { errors, isSubmitting } = form.formState
@@ -139,6 +146,8 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       dia2: v.frec === "quincenal" ? Math.min(31, Math.max(16, Math.round(v.dia2 || 30))) : null,
       mes: step ? prox.getMonth() + 1 : null, fecha_unica: v.frec === "unico" ? v.fecha : null,
       payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, contact_id: v.contact_id, referencia: (v.referencia ?? "").trim(), currency: v.currency, reparto,
+      hasta: v.hasta || null,
+      aviso: v.aviso == null || Number.isNaN(v.aviso) ? null : Math.max(0, Math.min(100, Math.round(v.aviso))),
       // La base sincroniza member_id (la persona si es una sola) para lo que solo conoce una persona.
       member_ids: v.personas.length ? v.personas : null, member_id: v.personas.length === 1 ? v.personas[0] : null,
     }
@@ -281,6 +290,24 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
             <FormField label="Número de cuenta, contrato o referencia (opcional)" htmlFor="f-ref"
               tip="El número con el que pagas: la cuenta de Enel, el contrato del arriendo, el código del colegio. Te lo mostramos al registrar el pago para que no tengas que buscarlo.">
               <Input id="f-ref" className="h-11" placeholder="Ej. 123456789" {...form.register("referencia")} />
+            </FormField>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <FormField label="¿Hasta cuándo lo pagas? (opcional)" htmlFor="f-hasta" error={errors.hasta?.message}
+              tip="Si el pago tiene fin (un plan a 12 meses, un contrato que se vence, un crédito), pon la última fecha: después de ese día dejamos de pedírtelo y de contarlo en tus cuentas. Déjalo vacío si no se acaba."
+              hint={w.hasta ? "Después de esa fecha no te lo volvemos a cobrar ni lo sumamos al mes." : undefined}>
+              <Controller control={form.control} name="hasta" render={({ field }) => (
+                <DatePicker id="f-hasta" value={field.value} onChange={(v) => field.onChange(v ?? null)} quick="futuro" />
+              )} />
+            </FormField>
+            <FormField label="Avisarme con (opcional)" htmlFor="f-aviso"
+              tip="Con cuántos días de anticipación te recordamos este pago. Si lo dejas vacío usamos el que tienes en Ajustes › Alertas para todos."
+              error={errors.aviso?.message}>
+              <div className="flex items-center gap-2">
+                <Input id="f-aviso" className="h-11 w-24" type="number" min={0} max={100} placeholder={String(cfg?.anticipo ?? 5)}
+                  {...form.register("aviso", { setValueAs: (x) => (x === "" || x == null ? null : Number(x)) })} />
+                <span className="text-sm text-muted-foreground">días antes</span>
+              </div>
             </FormField>
           </div>
           {!fixed && w.frec === "quincenal" && (
