@@ -31,8 +31,8 @@ import { Check, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useList, invalidateBook } from "@/hooks/use-book-data"
 import { CategoryDialog } from "@/features/catalogs/category-dialog"
-import { ProviderSelect } from "@/features/providers/provider-select"
 import { useAICategory } from "@/features/expenses/use-ai-category"
+import { PagarA } from "@/features/expenses/pagar-a"
 
 export type FixedRow = Row<"fixed_expenses"> & { payments: Row<"fixed_expense_payments">[] }
 
@@ -48,6 +48,7 @@ const schema = z.object({
   medio: z.string().nullable(),
   proveedor: z.string(),
   provider_id: z.string().nullable(),
+  contact_id: z.string().nullable(),
   /** Para quién es el gasto: vacío = toda la familia (general); una o varias personas (se reparte en partes iguales). */
   personas: z.array(z.string()),
   yaPagoQ: z.enum(["no", "q1", "q2", "ambas"]), yaPagoM: z.enum(["no", "si"]),
@@ -56,7 +57,7 @@ const schema = z.object({
 })
 type Values = z.infer<typeof schema>
 /** `preset`: valores iniciales al crear (p. ej. desde Proveedores › "Agregar recordatorio de pago"). */
-type Preset = { nombre?: string; provider_id?: string | null; proveedor?: string; payment_method_id?: string | null; category_id?: string | null }
+type Preset = { nombre?: string; provider_id?: string | null; contact_id?: string | null; proveedor?: string; payment_method_id?: string | null; category_id?: string | null }
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; fixed?: FixedRow | null; preset?: Preset | null }
 
 export function FixedForm(props: Props) {
@@ -98,6 +99,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       frec: fixed?.frec ?? "mensual", prox: fixed ? fijoProxIso(toIn(fixed), today) : fijoProxIso(null, today),
       diaQ1: fixed?.frec === "quincenal" ? Math.min(15, fixed.dia) : 15, dia2: fixed?.dia2 ?? 30,
       fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? preset?.payment_method_id ?? defMedio ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? preset?.proveedor ?? "", provider_id: fixed?.provider_id ?? preset?.provider_id ?? null,
+      contact_id: fixed?.contact_id ?? preset?.contact_id ?? null,
       personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
@@ -128,7 +130,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       dia: v.frec === "quincenal" ? Math.min(15, Math.max(1, Math.round(v.diaQ1 || 15))) : step ? prox.getDate() : 1,
       dia2: v.frec === "quincenal" ? Math.min(31, Math.max(16, Math.round(v.dia2 || 30))) : null,
       mes: step ? prox.getMonth() + 1 : null, fecha_unica: v.frec === "unico" ? v.fecha : null,
-      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, reparto,
+      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, contact_id: v.contact_id, reparto,
       // La base sincroniza member_id (la persona si es una sola) para lo que solo conoce una persona.
       member_ids: v.personas.length ? v.personas : null, member_id: v.personas.length === 1 ? v.personas[0] : null,
     }
@@ -237,18 +239,21 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
               )} />
             </FormField>
             <FormField label="Medio de pago" htmlFor="f-medio"><Controller control={form.control} name="medio" render={({ field }) => <Combobox id="f-medio" value={field.value} onChange={field.onChange} options={methodOptions(methods)} />} /></FormField>
-            <FormField label="Proveedor" htmlFor="f-prov" tip="A quién le pagas: la inmobiliaria, Enel, el colegio… Elígelo de tu lista o escribe el nombre para agregarlo.">
+            <FormField label="¿A quién le pagas?" className="sm:col-span-2"
+              tip="Si es un negocio o una empresa a la que le pagas seguido (la inmobiliaria, Enel, el colegio) elige Negocio o empresa y queda en Proveedores. Si es alguien en particular (el arrendador, la señora del aseo), elige Una persona y queda en Contactos.">
               <Controller control={form.control} name="provider_id" render={({ field }) => (
-                <ProviderSelect id="f-prov" value={field.value} fallbackName={w.proveedor} onChange={(id, p) => {
-                  field.onChange(id)
-                  form.setValue("proveedor", p?.nombre ?? "")
-                  // Medio de pago preferido del proveedor (solo al crear).
-                  if (!fixed && p?.payment_method_id) form.setValue("medio", p.payment_method_id)
-                  if (p && !form.getValues("nombre").trim()) form.setValue("nombre", p.nombre, { shouldValidate: true })
-                  // Categoría por defecto del proveedor si aún no la escogió a mano.
-                  const c = categoriaSugerida(p, cats)
-                  if (c && (!catManual || !form.getValues("category_id"))) form.setValue("category_id", c)
-                }} />
+                <PagarA idPrefix="f" provider={field.value} contact={w.contact_id}
+                  onContact={(id) => form.setValue("contact_id", id)}
+                  onProvider={(id, p) => {
+                    field.onChange(id)
+                    form.setValue("proveedor", p?.nombre ?? "")
+                    // Medio de pago preferido del proveedor (solo al crear).
+                    if (!fixed && p?.payment_method_id) form.setValue("medio", p.payment_method_id)
+                    if (p && !form.getValues("nombre").trim()) form.setValue("nombre", p.nombre, { shouldValidate: true })
+                    // Categoría por defecto del proveedor si aún no la escogió a mano.
+                    const c = categoriaSugerida(p, cats)
+                    if (c && (!catManual || !form.getValues("category_id"))) form.setValue("category_id", c)
+                  }} />
               )} />
             </FormField>
           </div>
