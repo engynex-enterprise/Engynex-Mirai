@@ -102,6 +102,16 @@ export type FixedExpenseIn = Pick<Row<"fixed_expenses">, "id" | "nombre" | "valo
   variable?: boolean
   link_type?: string | null
   link_id?: string | null
+  /** Moneda del valor ('COP', 'USD', 'EUR'); se convierte con la TRM del libro. */
+  currency?: string | null
+  /** Hasta cuándo se paga ('YYYY-MM-DD'); vacío = indefinido. */
+  hasta?: string | null
+  /** Días de anticipo del aviso propios de este gasto; vacío = el del libro. */
+  aviso?: number | null
+  /** Persona a la que se le paga (Contactos). */
+  contact_id?: string | null
+  /** Número de cuenta, contrato o referencia. */
+  referencia?: string | null
   /** Pagos registrados (tabla `fixed_expense_payments`). */
   payments: FixedPaymentIn[]
 }

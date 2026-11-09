@@ -305,6 +305,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"api_idempotency": {
+                  Row: {
+                    "created_at": string,"expires_at": string,"fingerprint": string,"key": string,"response": Json | null,"route": string,"status": number | null,"user_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_at"?: string,"fingerprint": string,"key": string,"response"?: Json | null,"route": string,"status"?: number | null,"user_id"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_at"?: string,"fingerprint"?: string,"key"?: string,"response"?: Json | null,"route"?: string,"status"?: number | null,"user_id"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"assets": {
                   Row: {
                     "book_id": string,"cod": string,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"id": string,"nombre": string,"saldo_at": string | null,"saldo_base": number | null,"saldo_fecha": string | null,"updated_at": string,"valor": number
@@ -812,6 +826,12 @@ isOneToOne: false
       referencedRelation: "categories"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "expenses_contact_id_fkey"
+      columns: ["contact_id"]
+isOneToOne: false
+      referencedRelation: "contacts"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "expenses_fixed_expense_id_fkey"
       columns: ["fixed_expense_id"]
 isOneToOne: false
@@ -967,14 +987,14 @@ isOneToOne: false
                   ]
                 },"fixed_expenses": {
                   Row: {
-                    "book_id": string,"category_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"desde": string,"dia": number,"dia2": number | null,"fecha_unica": string | null,"frec": string,"id": string,"inicio": string | null,"link_id": string | null,"link_type": string | null,"logo_path": string | null,"member_id": string | null,"member_ids": (string)[] | null,"mes": number | null,"nombre": string,"payment_method_id": string | null,"proveedor": string,"provider_id": string | null,"reparto": Json | null,"updated_at": string,"valor": number,"variable": boolean,"vmax": number | null,"vmin": number | null
+                    "aviso": number | null,"book_id": string,"category_id": string | null,"contact_id": string | null,"created_at": string,"created_by": string | null,"currency": string,"deleted_at": string | null,"desde": string,"dia": number,"dia2": number | null,"fecha_unica": string | null,"frec": string,"hasta": string | null,"id": string,"inicio": string | null,"link_id": string | null,"link_type": string | null,"logo_path": string | null,"member_id": string | null,"member_ids": (string)[] | null,"mes": number | null,"nombre": string,"payment_method_id": string | null,"proveedor": string,"provider_id": string | null,"referencia": string,"reparto": Json | null,"updated_at": string,"valor": number,"variable": boolean,"vmax": number | null,"vmin": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "book_id": string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"member_id"?: string | null,"member_ids"?: (string)[] | null,"mes"?: number | null,"nombre": string,"payment_method_id"?: string | null,"proveedor"?: string,"provider_id"?: string | null,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
+                    "aviso"?: number | null,"book_id": string,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"hasta"?: string | null,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"member_id"?: string | null,"member_ids"?: (string)[] | null,"mes"?: number | null,"nombre": string,"payment_method_id"?: string | null,"proveedor"?: string,"provider_id"?: string | null,"referencia"?: string,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
                   }
                   Update: {
-                    "book_id"?: string,"category_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"member_id"?: string | null,"member_ids"?: (string)[] | null,"mes"?: number | null,"nombre"?: string,"payment_method_id"?: string | null,"proveedor"?: string,"provider_id"?: string | null,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
+                    "aviso"?: number | null,"book_id"?: string,"category_id"?: string | null,"contact_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"currency"?: string,"deleted_at"?: string | null,"desde"?: string,"dia"?: number,"dia2"?: number | null,"fecha_unica"?: string | null,"frec"?: string,"hasta"?: string | null,"id"?: string,"inicio"?: string | null,"link_id"?: string | null,"link_type"?: string | null,"logo_path"?: string | null,"member_id"?: string | null,"member_ids"?: (string)[] | null,"mes"?: number | null,"nombre"?: string,"payment_method_id"?: string | null,"proveedor"?: string,"provider_id"?: string | null,"referencia"?: string,"reparto"?: Json | null,"updated_at"?: string,"valor"?: number,"variable"?: boolean,"vmax"?: number | null,"vmin"?: number | null
                   }
                   Relationships: [
                     {
@@ -988,6 +1008,12 @@ isOneToOne: false
       columns: ["category_id"]
 isOneToOne: false
       referencedRelation: "categories"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fixed_expenses_contact_id_fkey"
+      columns: ["contact_id"]
+isOneToOne: false
+      referencedRelation: "contacts"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "fixed_expenses_member_id_fkey"
@@ -1781,14 +1807,14 @@ isOneToOne: false
                   ]
                 },"platform_settings": {
                   Row: {
-                    "anuncios_accion_cada": number,"anuncios_adsense_pct": number,"anuncios_modal_horas": number,"anuncios_ticker": boolean,"aviso_global": string,"aviso_tono": string,"cron_horario": boolean,"cron_horario_visto": string | null,"ia_aviso_pct": number,"ia_cache_horas": number,"ia_credito_usd": number,"ia_cupos_activo": boolean,"ia_precios": NonNullable<Json>,"id": boolean,"limites_db": boolean,"premium_db": boolean,"referidos_activo": boolean,"referidos_dias": number,"referidos_plan": string,"registro_abierto": boolean,"sync_enlaces": boolean,"updated_at": string
+                    "anuncios_accion_cada": number,"anuncios_adsense_pct": number,"anuncios_modal_horas": number,"anuncios_ticker": boolean,"api_rollout": NonNullable<Json>,"aviso_global": string,"aviso_tono": string,"cron_horario": boolean,"cron_horario_visto": string | null,"ia_aviso_pct": number,"ia_cache_horas": number,"ia_credito_usd": number,"ia_cupos_activo": boolean,"ia_precios": NonNullable<Json>,"id": boolean,"limites_db": boolean,"premium_db": boolean,"referidos_activo": boolean,"referidos_dias": number,"referidos_plan": string,"registro_abierto": boolean,"sync_enlaces": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "anuncios_accion_cada"?: number,"anuncios_adsense_pct"?: number,"anuncios_modal_horas"?: number,"anuncios_ticker"?: boolean,"aviso_global"?: string,"aviso_tono"?: string,"cron_horario"?: boolean,"cron_horario_visto"?: string | null,"ia_aviso_pct"?: number,"ia_cache_horas"?: number,"ia_credito_usd"?: number,"ia_cupos_activo"?: boolean,"ia_precios"?: NonNullable<Json>,"id"?: boolean,"limites_db"?: boolean,"premium_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"sync_enlaces"?: boolean,"updated_at"?: string
+                    "anuncios_accion_cada"?: number,"anuncios_adsense_pct"?: number,"anuncios_modal_horas"?: number,"anuncios_ticker"?: boolean,"api_rollout"?: NonNullable<Json>,"aviso_global"?: string,"aviso_tono"?: string,"cron_horario"?: boolean,"cron_horario_visto"?: string | null,"ia_aviso_pct"?: number,"ia_cache_horas"?: number,"ia_credito_usd"?: number,"ia_cupos_activo"?: boolean,"ia_precios"?: NonNullable<Json>,"id"?: boolean,"limites_db"?: boolean,"premium_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"sync_enlaces"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "anuncios_accion_cada"?: number,"anuncios_adsense_pct"?: number,"anuncios_modal_horas"?: number,"anuncios_ticker"?: boolean,"aviso_global"?: string,"aviso_tono"?: string,"cron_horario"?: boolean,"cron_horario_visto"?: string | null,"ia_aviso_pct"?: number,"ia_cache_horas"?: number,"ia_credito_usd"?: number,"ia_cupos_activo"?: boolean,"ia_precios"?: NonNullable<Json>,"id"?: boolean,"limites_db"?: boolean,"premium_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"sync_enlaces"?: boolean,"updated_at"?: string
+                    "anuncios_accion_cada"?: number,"anuncios_adsense_pct"?: number,"anuncios_modal_horas"?: number,"anuncios_ticker"?: boolean,"api_rollout"?: NonNullable<Json>,"aviso_global"?: string,"aviso_tono"?: string,"cron_horario"?: boolean,"cron_horario_visto"?: string | null,"ia_aviso_pct"?: number,"ia_cache_horas"?: number,"ia_credito_usd"?: number,"ia_cupos_activo"?: boolean,"ia_precios"?: NonNullable<Json>,"id"?: boolean,"limites_db"?: boolean,"premium_db"?: boolean,"referidos_activo"?: boolean,"referidos_dias"?: number,"referidos_plan"?: string,"registro_abierto"?: boolean,"sync_enlaces"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -2338,6 +2364,9 @@ isOneToOne: false
               "cached_tokens": number,"costo_cop": number,"costo_usd": number,"creditos": number,"de_plataforma": boolean,"dia": string,"duracion_ms": number,"feature": string,"fuente": string,"household_id": string,"input_tokens": number,"llamadas": number,"model": string,"ok": boolean,"output_tokens": number,"plan": string,"provider": string,"tokens_evitados": number
             }[]
                            },
+"api_idempotency_cleanup":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "apply_household_transfer":
 { Args: { "p_from": string,"p_from_role": string,"p_household": string,"p_to": string }; Returns: undefined
                            },
@@ -2457,6 +2486,9 @@ isOneToOne: false
                            },
 "mirai_app_context":
 { Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"mirai_live_notify_install":
+{ Args: { "enable"?: boolean }; Returns: number
                            },
 "mirai_notify_cron_active":
 { Args: Record<PropertyKey, never>; Returns: boolean
