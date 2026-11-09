@@ -8,7 +8,7 @@ export const ID = {
   mercado: uid(1), imprevistos: uid(2), otros: uid(3), restaurantes: uid(4), arriendoCat: uid(5),
   regla: uid(10), nequi: uid(11), efectivo: uid(12),
   gastoOwner: uid(20), gastoRegistra: uid(21), gastoBorrado: uid(22),
-  arriendo: uid(30), pagoArriendo: uid(31),
+  arriendo: uid(30), pagoArriendo: uid(31), fijoUsd: uid(32),
   tarjeta: uid(40), meta: uid(50), cuenta: uid(60), sub: uid(70), loan: uid(80),
   catPremium: uid(100), ajena: uid(101),
 }

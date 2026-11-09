@@ -32,11 +32,14 @@ export class FixedService {
     await this.w.assertRefs("fixed_expense_payments", { payment_method_id: b.payment_method_id })
     // Abonos: lo que ya se pagó del periodo y lo que falta (pagoPeriodo, la misma regla de la app).
     const fij = { frec: String(f.frec), valor: num(f.valor), reparto: f.reparto, variable: !!f.variable }
+    const currency = String(f.currency ?? "COP") || "COP"
     const previos = (await this.store.rows(this.w.scope, "fixed_expense_payments", this.w.bookId, { eq: { fixed_expense_id: fixedId, periodo: b.periodo } }))
       .map((x) => ({ id: String(x.id), periodo: String(x.periodo), fecha: String(x.fecha), valor: num(x.valor), cierra: x.cierra as boolean | null }))
     const P = pagoPeriodo(fij, b.periodo, previos)
     if (P.completo) throw DomainError.conflict("Ese periodo ya está pagado.")
-    const valor = b.valor ?? (P.pagos.length ? P.falta : fijoValor(fij, b.periodo))
+    // El valor viaja SIEMPRE en pesos. Si el cliente no lo manda y el fijo está en USD o EUR, se convierte con la TRM
+    // del libro y, sin tasa, no se registra nada (la misma regla de `pay_subscription`).
+    const valor = b.valor ?? (await this.enPesos(P.pagos.length ? P.falta : fijoValor(fij, b.periodo), currency))
     if (!(valor > 0)) throw DomainError.validation("Escribe el valor que pagaste.", { valor: "Escribe el valor que pagaste" })
     // Pagos de antes sin marcar que quedaron cortos: pasan a ser abonos (si no, la base no deja registrar el resto).
     for (const x of previos.filter((x) => x.cierra == null)) await this.store.update(this.w.scope, "fixed_expense_payments", this.w.bookId, x.id, { cierra: false })
@@ -47,6 +50,19 @@ export class FixedService {
     })) as Rec | null
     this.w.changed("fixed_expenses", fixedId, "UPDATE", ["fixed_expense_payments", "expenses", "goals", "goal_movements", "emergency_funds", "fund_movements"])
     return { ...(r ?? {}), valor, periodo: b.periodo, completo: cierra, falta: cierra ? 0 : Math.max(0, P.esperado - P.pagado - valor) }
+  }
+
+  /**
+   * Un valor en la moneda del gasto fijo, pasado a pesos con la TRM del libro (`book_settings.trm`), igual que hace
+   * `pay_subscription` en la base. Sin tasa guardada el pago no se registra: mejor nada que un monto equivocado.
+   */
+  private async enPesos(valor: number, currency: string): Promise<number> {
+    if (currency === "COP") return valor
+    const s = (await this.store.single(this.w.scope, "book_settings", this.w.bookId)) as { trm?: Record<string, number> } | null
+    const tasa = Number(s?.trm?.[currency] ?? 0) || 0
+    if (!(tasa > 0))
+      throw DomainError.validation(`Este gasto fijo está en ${currency} y no tienes la tasa guardada. Ponla en Ajustes › Finanzas o escribe el valor en pesos.`, { valor: `Falta la tasa de ${currency}` })
+    return Math.round(valor * tasa)
   }
 
   /** DELETE …/fixed/payments/:id (unpay_fixed_expense). */

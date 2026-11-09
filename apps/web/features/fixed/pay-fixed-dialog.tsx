@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { FieldGroup } from "@/components/ui/field"
 import { ResponsiveDialog } from "@/components/mirai/responsive-dialog"
 import { SubmitButton } from "@/components/mirai/submit-button"
@@ -15,31 +16,40 @@ import { ChoiceCards } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { invalidateBook } from "@/hooks/use-book-data"
 import { payFixedExpense } from "./commands"
-import { fijoStatus, fijoValor, type FixedExpenseIn } from "@/lib/domain"
+import { fijoStatus, fijoValor, fijoValorCOP, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
-import { methodOptions, usePaymentMethods } from "@/features/catalogs/hooks"
+import { methodOptions, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
 import type { FixedRow } from "./fixed-form"
 
 const qLabel = (per: string) => (per.endsWith("Q1") ? "1ª quincena" : per.endsWith("Q2") ? "2ª quincena" : "")
 
 export function PayFixedDialog({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow | null; onOpenChange: (o: boolean) => void; onReschedule: (f: FixedRow) => void }) {
+  // La tasa se lee aquí (no dentro) porque el valor sugerido se calcula una sola vez, al abrir la ventana.
+  const { data: cfg, isPending } = useSettings()
   return (
     <ResponsiveDialog open={!!fixed} onOpenChange={onOpenChange} title={fixed ? `${fixed.link_type ? "Registrar" : "Pagar"} ${fixed.nombre}` : ""}
       description={fixed?.frec === "quincenal" ? "Elige la quincena que pagaste. Queda en tus gastos con su fecha." : "Registra el pago: queda en tus gastos y no te lo volvemos a recordar este periodo."}>
-      {fixed && <PayBody fixed={fixed} onOpenChange={onOpenChange} onReschedule={onReschedule} />}
+      {fixed && (isPending
+        ? <p className="flex items-center gap-2 py-4 text-muted-foreground"><Spinner /> Un momento…</p>
+        : <PayBody fixed={fixed} trm={(cfg?.trm ?? {}) as Record<string, number>} onOpenChange={onOpenChange} onReschedule={onReschedule} />)}
     </ResponsiveDialog>
   )
 }
 
-function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpenChange: (o: boolean) => void; onReschedule: (f: FixedRow) => void }) {
+function PayBody({ fixed, trm, onOpenChange, onReschedule }: { fixed: FixedRow; trm: Record<string, number>; onOpenChange: (o: boolean) => void; onReschedule: (f: FixedRow) => void }) {
   const bookId = useBookId()
   const qc = useQueryClient()
   const today = todayISO()
   const { data: methods = [] } = usePaymentMethods()
+  // El pago SIEMPRE se registra en pesos (es lo que salió del bolsillo). Un fijo en USD o EUR se convierte con la
+  // tasa guardada en Ajustes › Finanzas; sin tasa no proponemos nada y la persona escribe lo que le cobraron.
+  const cur = fixed.currency || "COP"
+  const tasa = cur === "COP" ? 1 : +trm[cur] || 0
+  const enPesos = (v: number) => (cur === "COP" ? v : Math.round(v * tasa))
   const st = fijoStatus({ ...fixed, valor: Number(fixed.valor), payments: fixed.payments.map((p) => ({ ...p, valor: Number(p.valor) })) } as FixedExpenseIn, today)
   const opts = [...st.venc, ...(st.prox ? [st.prox] : [])]
   // Lo que falta de un periodo: con abonos, el resto; si no, su valor (con reparto por quincena).
-  const faltaDe = (p: string) => { const o = opts.find((x) => x.per === p); return o?.parcial ? o.falta : fijoValor(fixed, p) }
+  const faltaDe = (p: string) => { const o = opts.find((x) => x.per === p); return o?.parcial ? o.falta : Math.round(fijoValorCOP(fixed, p, trm)) }
   const [per, setPer] = useState(opts[0]?.per ?? "")
   const [valor, setValor] = useState(fixed.variable && !opts[0]?.parcial ? 0 : faltaDe(opts[0]?.per ?? ""))
   // Con un valor distinto por quincena, el valor sugerido cambia con el periodo.
@@ -53,6 +63,12 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
   const [fecha, setFecha] = useState(today)
   const [medio, setMedio] = useState<string | null>(fixed.payment_method_id ?? methods[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
+  // Ayuda del campo: el rango de un fijo variable y, si está en otra moneda, de dónde sale el valor en pesos.
+  const rango = fixed.variable && fixed.vmin ? `Normalmente pagas entre ${fmtMoney(Number(fixed.vmin), cur)} y ${fmtMoney(Number(fixed.vmax), cur)}. Escribe el valor de la factura.` : ""
+  const moneda = cur === "COP" ? ""
+    : tasa ? `Este gasto está en ${cur}: ${fmtMoney(fijoValor(fixed, per), cur)} a ${fmtMoney(tasa)} por ${cur} son ${fmtMoney(enPesos(fijoValor(fixed, per)))}. Registramos el pago en pesos: cámbialo si tu banco te cobró otra cosa.`
+    : `Este gasto está en ${cur} y todavía no tienes su tasa. Guárdala en Ajustes › Finanzas o escribe aquí los pesos que te cobraron.`
+  const hintValor = [rango, moneda].filter(Boolean).join(" ") || undefined
 
   const pay = async () => {
     if (!valor) return toast.error("Escribe el valor que pagaste")
@@ -89,8 +105,8 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
         }))} />
       </FormField>
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField label="Valor pagado" htmlFor="pf-valor" required hint={fixed.variable && fixed.vmin ? `Normalmente pagas entre ${fmtMoney(Number(fixed.vmin))} y ${fmtMoney(Number(fixed.vmax))}. Escribe el valor de la factura.` : undefined}>
-          <MoneyInput id="pf-valor" value={valor} onChange={setValor} placeholder={fixed.variable ? new Intl.NumberFormat("es-CO").format(Number(fixed.valor)) : "0"} />
+        <FormField label={cur === "COP" ? "Valor pagado" : "Valor pagado, en pesos"} htmlFor="pf-valor" required hint={hintValor}>
+          <MoneyInput id="pf-valor" value={valor} onChange={setValor} placeholder={fixed.variable ? new Intl.NumberFormat("es-CO").format(enPesos(Number(fixed.valor))) : "0"} />
         </FormField>
         <FormField label="Fecha del pago" htmlFor="pf-fecha"><DatePicker id="pf-fecha" value={fecha} onChange={(v) => setFecha(v ?? today)} /></FormField>
         <FormField label="Medio de pago" htmlFor="pf-medio"><Combobox id="pf-medio" value={medio} onChange={setMedio} options={methodOptions(methods)} /></FormField>

@@ -125,6 +125,28 @@ describe("gastos fijos y suscripciones", () => {
     expect(t.changes.map((c) => c.table)).toEqual(expect.arrayContaining(["fixed_expenses", "fixed_expense_payments", "expenses"]))
   })
 
+  it("pay: un fijo en USD se registra EN PESOS con la TRM del libro (como pay_subscription)", async () => {
+    t.fx.store.rpcImpl.pay_fixed_expense = () => ({ ajuste: null, aporte: null })
+    t.fx.store.seed("fixed_expenses", [{ id: ID.fijoUsd, book_id: B_GRATIS, nombre: "Nube", valor: 10, currency: "USD", frec: "mensual", dia: 5, link_type: null, inicio: null }])
+    t.fx.store.seed("book_settings", [{ book_id: B_GRATIS, umbral: 25000, ia: { on: true }, defaults: { medio: ID.nequi }, smmlv: {}, uvt: {}, nomina: {}, trm: { USD: 4000 } }])
+    const r = await t.call("POST", `${B}/fixed/${ID.fijoUsd}/pay`, "editor", { periodo: "2026-11", fecha: "2026-11-05" })
+    expect(r.status).toBe(200)
+    // USD 10 × 4.000 = $ 40.000 en el gasto, no "$ 10".
+    expect(t.fx.store.rpcs[0].args).toMatchObject({ p_fixed: ID.fijoUsd, p_valor: 40000, p_cierra: true })
+  })
+
+  it("pay: un fijo en USD sin tasa guardada no se registra y lo dice en español", async () => {
+    t.fx.store.rpcImpl.pay_fixed_expense = () => ({ ajuste: null, aporte: null })
+    t.fx.store.seed("fixed_expenses", [{ id: ID.fijoUsd, book_id: B_GRATIS, nombre: "Nube", valor: 10, currency: "USD", frec: "mensual", dia: 5, link_type: null, inicio: null }])
+    const r = await t.call("POST", `${B}/fixed/${ID.fijoUsd}/pay`, "editor", { periodo: "2026-11", fecha: "2026-11-05" })
+    expect(r).toMatchObject({ status: 400, body: { msg: expect.stringContaining("no tienes la tasa guardada") } })
+    expect(t.fx.store.rpcs).toHaveLength(0)
+    // Con el valor en pesos escrito a mano sí pasa (la persona sabe lo que le cobraron).
+    const ok = await t.call("POST", `${B}/fixed/${ID.fijoUsd}/pay`, "editor", { periodo: "2026-11", fecha: "2026-11-05", valor: 41500 })
+    expect(ok.status).toBe(200)
+    expect(t.fx.store.rpcs[0].args).toMatchObject({ p_valor: 41500 })
+  })
+
   it("pay: el pago de antes del alta (prev-AAAA-MM de fixed-form) pasa igual a la RPC; otros textos → 400", async () => {
     t.fx.store.rpcImpl.pay_fixed_expense = () => ({ ajuste: null, aporte: null })
     const r = await t.call("POST", `${B}/fixed/${ID.arriendo}/pay`, "editor", { periodo: "prev-2026-11", fecha: "2026-11-03", valor: 1200000 })
