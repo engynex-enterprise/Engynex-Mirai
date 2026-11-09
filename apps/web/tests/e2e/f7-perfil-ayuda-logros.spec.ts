@@ -32,9 +32,14 @@ test("perfil, novedades, preguntas, manual, tour y logros", async ({ page }, inf
   await expect(tel).toHaveValue("300 123 4567")
   await tel.blur()
   // Meta financiera: tipo, monto, fecha, avance y pasos
-  await page.getByRole("button", { name: "Escoger mi meta" }).click()
-  const metaDlg = page.getByRole("dialog", { name: "¿Cuál es tu meta?" })
-  await metaDlg.getByRole("radio", { name: /Comprar vivienda/ }).click()
+  const metaCard0 = page.locator("#meta")
+  const escoger = metaCard0.getByRole("button", { name: "Escoger mi meta" })
+  // En un reintento la meta ya existe: entonces se edita en vez de escogerla de cero.
+  if (await escoger.isVisible().catch(() => false)) await escoger.click()
+  else await metaCard0.getByRole("button", { name: "Editar" }).click()
+  const metaDlg = page.getByRole("dialog", { name: /¿Cuál es tu meta\?|Cambia tu meta/ })
+  const tipoCasa = metaDlg.getByRole("radio", { name: /Comprar vivienda/ })
+  if (await tipoCasa.isVisible().catch(() => false)) await tipoCasa.click()
   await metaDlg.getByRole("textbox", { name: "¿Cómo la llamas?" }).fill("Cuota inicial del apartamento")
   await metaDlg.getByRole("textbox", { name: "¿Cuánto necesitas?" }).fill("60000000")
   await metaDlg.getByRole("button", { name: "Guardar mi meta" }).click()
@@ -42,9 +47,11 @@ test("perfil, novedades, preguntas, manual, tour y logros", async ({ page }, inf
   const metaCard = page.locator("#meta")
   await expect(metaCard.getByText("Cuota inicial del apartamento")).toBeVisible()
   await expect(metaCard.getByText(/Te faltan/)).toBeVisible()
-  // Un paso que se marca a mano queda guardado
-  await metaCard.getByRole("checkbox", { name: /cuota inicial/i }).first().check()
-  await expect(metaCard.getByRole("checkbox", { name: /cuota inicial/i }).first()).toBeChecked()
+  // Los pasos vienen plegados (lo primero es "Lo que sigue"); se abren y se marca uno a mano.
+  await metaCard.getByRole("button", { name: /Ver tus \d+ pasos/ }).click()
+  const paso = metaCard.getByRole("checkbox", { name: /cuota inicial/i }).first()
+  await paso.check()
+  await expect(paso).toBeChecked()
   // Cédula → los 2 dígitos de la DIAN salen solos
   const doc = page.getByRole("textbox", { name: "Número de documento" })
   await doc.fill("1.020.345.678")

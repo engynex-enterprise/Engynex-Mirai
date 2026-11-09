@@ -149,7 +149,8 @@ test("ajustes de nómina: procedimiento de retención por defecto y tabla del fo
   await shot(page, "ajustes-nomina", info.project.name)
   // Un ingreso nuevo de salario ya trae el procedimiento 2 con ese porcentaje.
   await page.goto("/ingresos?nuevo=1")
-  await page.getByRole("radio", { name: "Salario" }).click()
+  await expect(page.getByRole("heading", { name: "¿Qué tipo de ingreso es?" })).toBeVisible({ timeout: 20_000 })
+  await page.getByRole("radio", { name: "Salario", exact: true }).click()
   await page.getByRole("radio", { name: "Sí, me descuentan" }).click()
   await page.getByRole("textbox", { name: /¿Cuánto ganas al mes\?/ }).fill("9175000")
   await expect(page.getByTestId("ingreso-resumen")).toContainText(/\$\s?274\.000/)

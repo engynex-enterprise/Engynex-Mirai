@@ -41,7 +41,10 @@ export function MetaCard({ cfg }: { cfg: Row<"book_settings"> | undefined }) {
   const canEdit = useCanEdit()
   const [open, setOpen] = useState(false)
   const save = useBookSettingsSave()
-  const meta = parseMetaCfg(cfg?.meta_cfg)
+  const guardado = parseMetaCfg(cfg?.meta_cfg)
+  // Los pasos que se acaban de marcar se ven marcados de una, sin esperar a que el servidor responda.
+  const [recien, setRecien] = useState<Record<string, boolean>>({})
+  const meta = guardado ? { ...guardado, pasos: { ...(guardado.pasos ?? {}), ...recien } } : guardado
   const titulo = cfg?.meta ?? ""
   const est = book ? metaEstado(meta, titulo, book, todayISO()) : null
 
@@ -49,7 +52,10 @@ export function MetaCard({ cfg }: { cfg: Row<"book_settings"> | undefined }) {
     const next = { ...(meta ?? { tipo: "otro" as MetaTipo }), ...patch }
     save.mutate({ meta_cfg: next as never }, { onSuccess: () => msg && toast.success(msg) })
   }
-  const marcar = (id: string, on: boolean) => guardar({ pasos: { ...(meta?.pasos ?? {}), [id]: on } })
+  const marcar = (id: string, on: boolean) => {
+    setRecien((r) => ({ ...r, [id]: on }))
+    guardar({ pasos: { ...(meta?.pasos ?? {}), [id]: on } })
+  }
 
   if (!est || !meta) return (
     <Panel id="meta" title="Tu meta principal" icon="target" className="h-auto"

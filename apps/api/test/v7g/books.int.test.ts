@@ -10,7 +10,7 @@ let t: V7gApp
 const SETTINGS = {
   book_id: B_GRATIS, meta: "", umbral: 25000, limite: 250000, trm: { USD: 4100, EUR: 4450 }, trm_auto: true, pct: { n: 50, g: 30, a: 20 }, emerg_meta: 6, anticipo: 5,
   usura: 26, usura_auto: true, corte_q: 15, alerta_pres: 100, estricto: "equilibrado", defaults: {}, notif: {}, ia: {}, relaciones: ["Familiar"], apps: [], setup: {},
-  uvt: {}, smmlv: {}, gami: true, nomina: {}, updated_at: "2026-11-01T00:00:00Z",
+  uvt: {}, smmlv: {}, gami: true, nomina: {}, meta_cfg: {}, updated_at: "2026-11-01T00:00:00Z",
 }
 const NUEVO = "0000aaaa-0000-4000-8000-00000000aaaa"
 const OTRO = "0000bbbb-0000-4000-8000-00000000bbbb"
