@@ -1,7 +1,7 @@
 // Que la consola de la terminal se dibuje de verdad: logo, menú y paneles, sin tumbarse.
 import { render } from "ink-testing-library"
 import { describe, expect, it } from "vitest"
-import { App } from "./app.tsx"
+import { App, PuertoTrancado } from "./app.tsx"
 
 /** Ink pinta en varios cuadros; se espera a que el contenido aparezca. */
 const esperar = (obtener: () => string | undefined, texto: string, intentos = 60) =>
@@ -24,9 +24,10 @@ describe("la consola en la terminal", () => {
     const { lastFrame, unmount } = render(<App inicial="stack" sinRaton />)
     const cuadro = await esperar(lastFrame, "Arquitectura")
     expect(cuadro).toContain("未来")
-    for (const s of ["Salud", "Stack", "Infra", "Arquitectura", "Comandos", "Ayuda"]) expect(cuadro).toContain(s)
-    // Ninguna opción del menú se parte en dos líneas (pasaba con "Arquitectura" y un menú angosto).
-    for (const linea of cuadro.split("\n")) expect(linea.trim()).not.toMatch(/^│\s*Arquitectura/)
+    for (const s of ["Ambientes", "Salud", "Stack", "Infraestructura", "Arquitectura", "Comandos", "Ayuda"]) expect(cuadro).toContain(s)
+    // Ningún título del menú se corta ni se parte en dos líneas (pasó con "Infraestructura").
+    expect(cuadro).not.toContain("Infraestructu…")
+    for (const linea of cuadro.split("\n")) expect(linea.trim()).not.toMatch(/^│\s*(Arquitectura|Infraestructura)\s*│?$/)
     expect(cuadro).toContain("q salir")
     unmount()
   })
@@ -40,10 +41,36 @@ describe("la consola en la terminal", () => {
 
   it("muestra los comandos y marca los de riesgo", async () => {
     const { lastFrame, unmount } = render(<App inicial="comandos" sinRaton />)
-    const cuadro = await esperar(lastFrame, "Levantar todo local")
-    expect(cuadro).toContain("⚠")
-    expect(cuadro).toContain("pide confirmación escrita")
+    const cuadro = await esperar(lastFrame, "Levantar: Desarrollo")
+    expect(cuadro).toContain("⚠ confirma")
+    expect(cuadro).toContain("Ambientes")
     unmount()
+  })
+
+  it("muestra los tres ambientes con sus puertos", async () => {
+    const { lastFrame, unmount } = render(<App inicial="ambientes" sinRaton />)
+    const cuadro = await esperar(lastFrame, "Producción en este computador", 120)
+    expect(cuadro).toContain("Desarrollo")
+    expect(cuadro).toContain("Solo los servicios")
+    expect(cuadro).toContain("55300")
+    expect(cuadro).toContain("56300")
+    expect(cuadro).toContain("l levantar")
+    unmount()
+  })
+
+  it("cuando un puerto está trancado ofrece cerrarlo, en vez de dejar el error en la cara", () => {
+    // Es el caso que rompía antes: "El puerto 55300 está ocupado (¿otra corrida con --keep?)".
+    const { lastFrame, unmount } = render(<PuertoTrancado puertos={[55300]} />)
+    const cuadro = lastFrame() ?? ""
+    expect(cuadro).toContain("55300")
+    expect(cuadro).toContain("ocupado")
+    expect(cuadro).toContain("cerrar lo que estorba y levantar")
+    expect(cuadro).toContain("cancelar")
+    unmount()
+
+    const varios = render(<PuertoTrancado puertos={[55300, 55080]} />)
+    expect(varios.lastFrame()).toContain("Los puertos 55300, 55080 están ocupados")
+    varios.unmount()
   })
 
   it("la ayuda explica los atajos", async () => {

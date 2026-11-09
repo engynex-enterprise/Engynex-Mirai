@@ -158,6 +158,30 @@ Semáforo: **●** verde `<500ms` / ok · **●** amarillo `<2s` o advertencia �
 
 ## 4. Los paneles (iguales en las dos caras)
 
+### 4.0 Ambientes
+
+El panel con el que abre la consola. Tres ambientes, cada uno con lo que es, para cuándo sirve, sus puertos
+en vivo y un botón para levantarlo o apagarlo:
+
+| Ambiente | Comando | Puertos | Para qué |
+|---|---|---|---|
+| **Desarrollo** | `pnpm dev` | 55300 · 55080 · 55081 | El día a día, con recarga en caliente |
+| **Producción en este computador** | `infra/servidor/prueba-local.mjs` | 56300 · 56081 · 56432 · 56900 | El mismo despliegue del VPS, compilado, para probar antes de subir |
+| **Solo los servicios** | `pnpm local:up` | 55432 · 55430 · 55379 · 55900 | Base, PostgREST, Redis y archivos, sin la web |
+
+Producción local vive en los `56xxx` y desarrollo en los `55xxx`: pueden estar los dos arriba a la vez. Para
+decidir si un ambiente está corriendo manda **el primer puerto** (la puerta de entrada); si está libre pero
+quedan otros ocupados, se dice "apagado (quedan restos en …)" en vez de mentir.
+
+**Levantar** revisa primero si algún puerto suyo está tomado. Si lo está, en vez de dejar el error del
+script en la cara («El puerto 55300 está ocupado»), ofrece cerrar lo que estorba y continuar.
+
+**Apagar** (`apagarAmbiente`) cierra los procesos que tengan sus puertos y baja los contenedores si los
+hay. Hace falta porque `pnpm dev` no tiene apagado propio —se corta con `Ctrl-C`— y es justo el que deja
+el 55300 trancado para la siguiente corrida.
+
+Mientras algo arranca, el panel se vuelve a mirar solo cada pocos segundos.
+
 Todos combinan **lectura en vivo del repositorio** con **textos cortos en español** (`src/datos/contenido.ts`)
 que explican para qué sirve cada cosa.
 
@@ -240,6 +264,27 @@ observa el CI. Meter ese flujo en un menú invitaría a saltarse pasos.
 
 Los comandos largos (`dev`, `e2e:local`) toman la pantalla completa mientras corren y devuelven el control
 al terminar.
+
+### 4.6 Los demás paneles
+
+| Panel | Qué muestra | De dónde sale |
+|---|---|---|
+| **Registros** | Los contenedores y sus logs **en vivo**, con filtro | `docker ps` y `docker logs -f` por SSE (también del VPS por SSH) |
+| **Recursos** | CPU y memoria por contenedor, disco del equipo y lo que ocupa Docker, con medidores | `docker stats`, `docker system df`, `df -h` |
+| **Base de datos** | Las tablas con sus filas y tamaño; columnas, índices y políticas RLS; consultas de solo lectura | Postgres **local** por `pg` |
+| **Pruebas** | Las 5 baterías con su duración, y las capturas de Playwright | `SUITES` + `apps/web/tests/.out` |
+| **Cambios** | Lo que tocaste agrupado por paquete, con diff, y los últimos commits | `git status/diff/log` |
+| **Despliegue** | Las corridas de CI y de despliegue, y **por qué falló** la que falló | `gh run list` y `gh run view --log-failed` |
+| **Endpoints** | Los 305 endpoints de `/v1` con su descripción, filtrables | `@mirai/contracts/api`, el contrato de verdad |
+
+**Buscador global** (`b` en la terminal, `⌘K` en el navegador): un índice de ~464 cosas —endpoints,
+secciones, módulos, servicios, paquetes, tecnologías, comandos, ambientes y baterías— que busca sin
+tildes y pesa el título por encima del detalle. Cada hallazgo lleva al panel donde vive eso.
+
+**Frenos de la base de datos:** las consultas son de solo lectura con **dos** candados: se revisa el texto
+(nada de `insert`, `update`, `delete`, `drop`…, ni varias sentencias en una) **y** la transacción es
+`read only`, así que aunque algo se cuele, Postgres lo rechaza. Apunta siempre a la base local, nunca a
+producción. Desde la web, probar un endpoint solo permite `GET`: un `POST` escribiría datos de verdad.
 
 ## 5. La ventana en el navegador (`--web`)
 

@@ -1,6 +1,7 @@
 // El catálogo de comandos que la consola sabe correr, con su nivel de riesgo.
 // Todos existen ya en el package.json de la raíz (o en infra/): la consola los envuelve, no los reinventa.
 import { AMBIENTES } from "./ambientes.ts"
+import { SUITES } from "./pruebas.ts"
 
 export type Riesgo = "ninguno" | "alto"
 
@@ -46,15 +47,24 @@ const DE_AMBIENTES: Comando[] = AMBIENTES.flatMap((a) => [
     : []),
 ])
 
+/** Las baterías de pruebas, derivadas de SUITES para no repetir el comando en dos lados. */
+const DE_PRUEBAS: Comando[] = SUITES.map((s) => ({
+  id: `prueba-${s.id}`,
+  titulo: s.titulo,
+  detalle: `${s.detalle} (${s.tarda})`,
+  cmd: s.cmd,
+  args: s.args,
+  riesgo: "ninguno" as const,
+  largo: s.id === "e2e",
+  grupo: "Revisar",
+}))
+
 export const COMANDOS: Comando[] = [
   ...DE_AMBIENTES,
+  ...DE_PRUEBAS,
 
-  { id: "lint", titulo: "Revisar el estilo", detalle: "ESLint en todo el monorepo. Tiene que quedar en cero errores.", cmd: "pnpm", args: ["lint"], riesgo: "ninguno", grupo: "Revisar" },
-  { id: "typecheck", titulo: "Revisar los tipos", detalle: "TypeScript en la web y en cada paquete.", cmd: "pnpm", args: ["typecheck"], riesgo: "ninguno", grupo: "Revisar" },
-  { id: "test", titulo: "Pruebas de los cálculos", detalle: "Vitest: dominio, contratos, web y API.", cmd: "pnpm", args: ["test"], riesgo: "ninguno", grupo: "Revisar" },
   { id: "secretos", titulo: "Buscar secretos", detalle: "Revisa que no se haya colado una llave en el código.", cmd: "pnpm", args: ["secretos"], riesgo: "ninguno", grupo: "Revisar" },
   { id: "build", titulo: "Compilar", detalle: "La compilación de producción de la web y los paquetes.", cmd: "pnpm", args: ["build"], riesgo: "ninguno", grupo: "Revisar" },
-  { id: "e2e", titulo: "Batería de pantalla", detalle: "Playwright en escritorio (1366 px) y celular (400 px) contra el stack local. Tarda.", cmd: "pnpm", args: ["e2e:local"], riesgo: "ninguno", largo: true, grupo: "Revisar" },
 
   { id: "migr-pendientes", titulo: "Ver migraciones pendientes", detalle: "Qué le falta a la base del VPS. No cambia nada.", cmd: "pnpm", args: ["db:migrate:vps", "--", "--pendientes"], riesgo: "ninguno", grupo: "Base de datos" },
   {

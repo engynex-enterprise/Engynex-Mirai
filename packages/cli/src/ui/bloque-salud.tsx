@@ -1,39 +1,47 @@
-// Un bloque de salud (Local, Producción, Repo, VPS) con su semáforo y sus chequeos.
+// Un bloque de salud (Local, Producción, Repo, VPS): cabecera con semáforo y sus chequeos al abrir.
 import { Box, Text } from "ink"
 import type { Bloque } from "../datos/tipos.ts"
-import { COLORES, ETIQUETA, color, semaforo } from "./tema.ts"
+import { C, c, columna, recortar, semaforo } from "./tema.ts"
 
 export function BloqueSalud({ bloque, ancho, abierto, seleccionado }: { bloque: Bloque; ancho: number; abierto: boolean; seleccionado: boolean }) {
   const s = semaforo(bloque.estado)
+  const cuantos = bloque.chequeos.filter((x) => x.estado === "error" || x.estado === "aviso").length
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column">
       <Box>
-        <Text color={seleccionado ? color(COLORES.lima) : undefined} bold>
-          {seleccionado ? "▸ " : "  "}
+        <Text color={c(seleccionado ? C.lima : C.borde)}>{seleccionado ? "▌" : " "}</Text>
+        <Text color={s.color}> {s.punto} </Text>
+        <Text bold color={c(seleccionado ? C.lima : C.texto)}>
+          {columna(bloque.titulo, 22)}
         </Text>
-        <Text color={s.color}>{s.simbolo} </Text>
-        <Text bold color={seleccionado ? color(COLORES.lima) : color(COLORES.blanco)}>
-          {bloque.titulo.padEnd(20)}
+        <Text color={s.color}>{columna(s.palabra, 10)}</Text>
+        <Text color={c(C.tenue)}>
+          {bloque.aPulso && bloque.estado === "apagado"
+            ? "⏎ consultar por SSH"
+            : cuantos > 0
+              ? `${cuantos} por revisar`
+              : abierto
+                ? "⏎ cerrar"
+                : `${bloque.chequeos.length} revisiones · ⏎ ver`}
         </Text>
-        <Text color={color(COLORES.gris)}>{ETIQUETA[bloque.estado]}</Text>
-        {bloque.aPulso && bloque.estado === "apagado" ? <Text color={color(COLORES.gris)}> · ⏎ consultar</Text> : null}
       </Box>
       {abierto
-        ? bloque.chequeos.map((c) => {
-            const cs = semaforo(c.estado)
+        ? bloque.chequeos.map((ch) => {
+            const cs = semaforo(ch.estado)
+            const anchoDetalle = Math.max(10, ancho - 32)
             return (
-              <Box key={c.id} flexDirection="column">
+              <Box key={ch.id} flexDirection="column">
                 <Box>
-                  <Text>{"    "}</Text>
-                  <Text color={cs.color}>{cs.simbolo} </Text>
-                  <Text color={color(COLORES.blanco)}>{c.titulo}: </Text>
-                  <Text color={color(COLORES.gris)}>{c.detalle.slice(0, Math.max(10, ancho - c.titulo.length - 12))}</Text>
-                  {c.ms !== undefined ? <Text color={color(COLORES.gris)}> ({c.ms} ms)</Text> : null}
+                  <Text color={c(C.borde)}>  │ </Text>
+                  <Text color={cs.color}>{cs.punto} </Text>
+                  <Text color={c(C.suave)}>{columna(ch.titulo, 18)}</Text>
+                  <Text color={c(C.tenue)}>{recortar(ch.detalle, anchoDetalle)}</Text>
+                  {ch.ms !== undefined ? <Text color={c(C.borde)}> {ch.ms}ms</Text> : null}
                 </Box>
-                {c.arregla ? (
+                {ch.arregla ? (
                   <Box>
-                    <Text>{"      "}</Text>
-                    <Text color={color(COLORES.amarillo)}>→ {c.arregla}</Text>
+                    <Text color={c(C.borde)}>  │ </Text>
+                    <Text color={c(C.aviso)}>  ↳ {recortar(ch.arregla, ancho - 10)}</Text>
                   </Box>
                 ) : null}
               </Box>

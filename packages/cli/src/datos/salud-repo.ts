@@ -49,12 +49,17 @@ async function ci(): Promise<Chequeo[]> {
     if (!c) return { id: nombre, titulo: nombre, estado: "apagado", detalle: "sin corridas recientes en main" }
     const cuando = new Date(c.createdAt).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })
     if (c.status !== "completed") return { id: nombre, titulo: nombre, estado: "aviso", detalle: `corriendo ahora (${cuando})` }
+    // "skipped" y "cancelled" no son un fallo: es que no llegó a correr (p. ej. el despliegue cuando el CI falló).
+    const NO_CORRIO: Record<string, string> = { skipped: "no corrió (el paso anterior no pasó)", cancelled: "lo cancelaron" }
+    if (c.conclusion && NO_CORRIO[c.conclusion]) {
+      return { id: nombre, titulo: nombre, estado: "aviso", detalle: `${NO_CORRIO[c.conclusion]} · ${cuando}` }
+    }
     return {
       id: nombre,
       titulo: nombre,
       estado: c.conclusion === "success" ? "ok" : "error",
       detalle: `${c.conclusion === "success" ? "pasó" : `falló (${c.conclusion})`} · ${cuando}`,
-      arregla: c.conclusion === "success" ? undefined : "gh run list --branch main",
+      arregla: c.conclusion === "success" ? undefined : "gh run view --log-failed --branch main",
     }
   }
   return [mostrar("CI", (n) => !/desplegar/i.test(n)), mostrar("Despliegue", (n) => /desplegar/i.test(n))]

@@ -1,13 +1,16 @@
-// La lista del panel de la derecha: filas con nombre, valor y explicación, agrupadas y con scroll.
+// La lista del panel de la derecha: columnas alineadas, grupos y scroll.
 import { Box, Text } from "ink"
-import type { Fila } from "../datos/tipos.ts"
-import { COLORES, color } from "./tema.ts"
+import type { Fila as FilaDato } from "../datos/tipos.ts"
+import { C, c } from "./tema.ts"
+import { Fila, Grupo } from "./marco.tsx"
 
-type Props = { filas: Fila[]; ancho: number; alto: number; desplazamiento: number; seleccion?: number }
+type Props = { filas: FilaDato[]; ancho: number; alto: number; desplazamiento: number; seleccion?: number }
 
-/** Parte las filas en las que caben, respetando los encabezados de grupo. */
-export function conGrupos(filas: Fila[]): ({ tipo: "grupo"; texto: string } | { tipo: "fila"; fila: Fila; indice: number })[] {
-  const out: ({ tipo: "grupo"; texto: string } | { tipo: "fila"; fila: Fila; indice: number })[] = []
+type Renglon = { tipo: "grupo"; texto: string } | { tipo: "fila"; fila: FilaDato; indice: number }
+
+/** Intercala los encabezados de grupo entre las filas. */
+export function conGrupos(filas: FilaDato[]): Renglon[] {
+  const out: Renglon[] = []
   let grupo: string | undefined
   filas.forEach((fila, indice) => {
     if (fila.grupo && fila.grupo !== grupo) {
@@ -19,35 +22,32 @@ export function conGrupos(filas: Fila[]): ({ tipo: "grupo"; texto: string } | { 
   return out
 }
 
-/** Corta un texto marcando que sigue, en vez de dejarlo cortado en seco. */
-const recortar = (texto: string, largo: number) => (texto.length <= largo ? texto : `${texto.slice(0, Math.max(0, largo - 1))}…`)
+/** Reparte el ancho entre nombre, valor y explicación según lo que traigan los datos. */
+export function anchos(filas: FilaDato[], ancho: number): [number, number, number] {
+  const nombre = Math.min(30, Math.max(14, ...filas.map((f) => f.nombre.length))) + 1
+  const hayValor = filas.some((f) => f.valor)
+  const valor = hayValor ? Math.min(24, Math.max(8, ...filas.map((f) => (f.valor ?? "").length))) + 1 : 0
+  return [nombre, valor, Math.max(0, ancho - nombre - valor - 3)]
+}
 
 export function Lista({ filas, ancho, alto, desplazamiento, seleccion }: Props) {
   const todas = conGrupos(filas)
   const visibles = todas.slice(desplazamiento, desplazamiento + alto)
-  const anchoNombre = Math.min(26, Math.max(12, ...filas.map((f) => f.nombre.length))) + 1
-  const anchoValor = Math.min(22, Math.max(6, ...filas.map((f) => (f.valor ?? "").length))) + 1
+  const a = anchos(filas, ancho)
+  const faltan = todas.length - desplazamiento - visibles.length
   return (
     <Box flexDirection="column">
       {visibles.map((it, i) =>
         it.tipo === "grupo" ? (
-          <Box key={`g${i}`} marginTop={i === 0 ? 0 : 1}>
-            <Text bold color={color(COLORES.lima)}>
-              {it.texto.toUpperCase()}
-            </Text>
-          </Box>
+          <Grupo key={`g${i}`} texto={it.texto} ancho={ancho} />
         ) : (
-          <Box key={`f${it.indice}`}>
-            <Text color={seleccion === it.indice ? color(COLORES.lima) : color(COLORES.blanco)} bold={seleccion === it.indice}>
-              {(seleccion === it.indice ? "▸ " : "  ") + recortar(it.fila.nombre, anchoNombre).padEnd(anchoNombre)}
-            </Text>
-            <Text color={color(COLORES.gris)}>{recortar(it.fila.valor ?? "", anchoValor).padEnd(anchoValor)}</Text>
-            <Text color={color(COLORES.gris)}>{recortar(it.fila.detalle, Math.max(0, ancho - anchoNombre - anchoValor - 4))}</Text>
-          </Box>
+          <Fila key={`f${it.indice}`} nombre={it.fila.nombre} valor={it.fila.valor} detalle={it.fila.detalle} anchos={a} resaltada={seleccion === it.indice} />
         ),
       )}
-      {todas.length > desplazamiento + alto ? (
-        <Text color={color(COLORES.gris)}>  … {todas.length - desplazamiento - alto} más (PgDn)</Text>
+      {faltan > 0 ? (
+        <Box marginTop={1}>
+          <Text color={c(C.tenue)}>  ↓ {faltan} más · PgDn</Text>
+        </Box>
       ) : null}
     </Box>
   )

@@ -103,13 +103,18 @@ export async function estadoAmbientes(): Promise<EstadoAmbiente[]> {
       const puertos = await Promise.all(ambiente.puertos.map(async (p) => ({ ...p, ocupado: await puertoOcupado(p.puerto) })))
       const arriba = puertos.filter((p) => p.ocupado).length
       const contenedores = ambiente.proyecto ? (porProyecto.get(ambiente.proyecto) ?? 0) : 0
-      const estado: Estado = arriba === 0 ? "apagado" : arriba === puertos.length ? "ok" : "aviso"
-      const resumen =
-        arriba === 0
-          ? "apagado"
-          : arriba === puertos.length
-            ? `corriendo${ambiente.url ? ` en ${ambiente.url}` : ""}`
-            : `a medias: ${puertos.filter((p) => !p.ocupado).map((p) => p.que).join(", ")} sin responder`
+      // El primer puerto manda: si la puerta de entrada no responde, el ambiente está abajo aunque
+      // queden restos de otra corrida (un contenedor de archivos suelto, por ejemplo).
+      const principal = puertos[0]?.ocupado ?? false
+      const faltan = puertos.filter((p) => !p.ocupado).map((p) => p.que)
+      const estado: Estado = !principal ? "apagado" : faltan.length ? "aviso" : "ok"
+      const resumen = !principal
+        ? arriba > 0
+          ? `apagado (quedan restos en ${puertos.filter((p) => p.ocupado).map((p) => p.puerto).join(", ")})`
+          : "apagado"
+        : faltan.length
+          ? `a medias: ${faltan.join(", ")} sin responder`
+          : `corriendo${ambiente.url ? ` en ${ambiente.url}` : ""}`
       return { ambiente, estado, puertos, resumen, contenedores }
     }),
   )
@@ -145,6 +150,29 @@ export async function liberarPuerto(puerto: number): Promise<{ ok: boolean; msg:
   return sigue
     ? { ok: false, msg: `No pude liberar el ${puerto} (${duenos.map((d) => d.nombre).join(", ")}). Ciérralo a mano: lsof -ti tcp:${puerto} | xargs kill -9` }
     : { ok: true, msg: `Puerto ${puerto} libre (cerré ${duenos.map((d) => `${d.nombre} ${d.pid}`).join(", ")}).` }
+}
+
+/**
+ * Apaga un ambiente de verdad: cierra lo que tenga sus puertos tomados y, si además corre en Docker,
+ * baja los contenedores. `pnpm dev` no tiene comando de apagado propio (se corta con Ctrl-C), y era
+ * justo el que dejaba el puerto 55300 trancado para la siguiente corrida.
+ */
+export async function apagarAmbiente(id: Ambiente["id"]): Promise<{ ok: boolean; msg: string }> {
+  const a = AMBIENTES.find((x) => x.id === id)
+  if (!a) return { ok: false, msg: "No conozco ese ambiente." }
+  const pasos: string[] = []
+  for (const p of a.puertos) {
+    if (!(await puertoOcupado(p.puerto))) continue
+    const r = await liberarPuerto(p.puerto)
+    pasos.push(r.msg)
+    if (!r.ok) return { ok: false, msg: pasos.join(" ") }
+  }
+  if (a.apagar) {
+    const r = await correr(a.apagar.cmd, a.apagar.args, { ms: 120000 })
+    pasos.push(r.ok ? "Contenedores abajo." : `No pude bajar los contenedores: ${r.err.split("\n")[0]}`)
+    if (!r.ok) return { ok: false, msg: pasos.join(" ") }
+  }
+  return { ok: true, msg: pasos.length ? `${a.titulo}: ${pasos.join(" ")}` : `${a.titulo} ya estaba apagado.` }
 }
 
 /** Los puertos ocupados que le estorban a este ambiente para arrancar. */

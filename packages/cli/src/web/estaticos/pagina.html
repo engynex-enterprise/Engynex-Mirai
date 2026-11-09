@@ -17,6 +17,7 @@
         </div>
       </div>
       <div class="cabecera-derecha">
+        <button id="buscar" class="boton boton--suave" title="Buscar en todo (⌘K)">Buscar <kbd>⌘K</kbd></button>
         <span id="resumen" class="pastilla pastilla--apagado">revisando…</span>
         <button id="refrescar" class="boton boton--suave" title="Refrescar">Refrescar</button>
       </div>
@@ -40,6 +41,13 @@
           <button value="si" id="confirmar-ok" class="boton boton--peligro">Correr</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="buscador" class="dialogo dialogo--ancho">
+      <div class="buscador-caja">
+        <input id="buscador-campo" placeholder="Busca un módulo, una sección, un endpoint, una tabla…" autocomplete="off" spellcheck="false" />
+        <div id="buscador-lista" class="buscador-lista"></div>
+      </div>
     </dialog>
 
     <script src="/consola.js" type="module"></script>

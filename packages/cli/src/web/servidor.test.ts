@@ -58,7 +58,7 @@ describe("el servidor de la consola web", () => {
 
   it("sirve exactamente lo mismo que la terminal", async () => {
     // Si esta prueba falla, una cara está mostrando algo que la otra no.
-    for (const id of ["stack", "infra", "arquitectura"] as const) {
+    for (const id of ["stack", "infra", "arquitectura", "endpoints"] as const) {
       const web = await (await con(`/api/panel/${id}`)).json()
       const terminal = await panel(id)
       expect(web, id).toEqual(JSON.parse(JSON.stringify(terminal)))
@@ -84,6 +84,38 @@ describe("el servidor de la consola web", () => {
     const r = await con("/api/comandos/rm-rf", { method: "POST", body: JSON.stringify({}), headers: { "content-type": "application/json" } })
     expect(r.status).toBe(400)
   })
+
+  it("la consulta a la base, desde la web, también es de solo lectura", async () => {
+    // El freno está en el motor, así que vale igual por aquí. Si esto pasa, la web podría borrar datos.
+    for (const sql of ["delete from expenses", "drop table expenses", "update profiles set nombre='x'"]) {
+      const r = await con("/api/base/consulta", { method: "POST", body: JSON.stringify({ sql }), headers: { "content-type": "application/json" } })
+      expect(((await r.json()) as { ok: boolean }).ok, sql).toBe(false)
+    }
+  })
+
+  it("probar un endpoint desde la web solo permite lecturas", async () => {
+    const r = await con("/api/endpoints/probar", { method: "POST", body: JSON.stringify({ ruta: "/v1/me", metodo: "DELETE" }), headers: { "content-type": "application/json" } })
+    expect(r.status).toBe(400)
+  })
+
+  it("el buscador responde lo mismo que el motor", async () => {
+    const { buscar } = await import("../datos/buscador.ts")
+    const web = (await (await con("/api/buscar?q=tarjeta")).json()) as { resultados: unknown }
+    expect(web.resultados).toEqual(JSON.parse(JSON.stringify(buscar("tarjeta"))))
+  })
+
+  it("una captura solo se sirve por su nombre, nunca con una ruta hacia afuera", async () => {
+    for (const malo of ["/capturas/..%2f..%2f.env.local", "/capturas/../../../etc/passwd"]) {
+      const r = await con(malo)
+      expect([404, 401, 400], malo).toContain(r.status)
+    }
+  })
+
+  it("sirve los paneles nuevos", async () => {
+    for (const id of ["registros", "recursos", "base", "pruebas", "git", "despliegue", "endpoints"]) {
+      expect((await con(`/api/panel/${id}`)).status, id).toBe(200)
+    }
+  }, 60000)
 
   it("no filtra secretos en lo que sirve", async () => {
     const texto = await (await con("/api/panel/infra")).text()
