@@ -31,13 +31,15 @@ comment on column public.fixed_expenses.aviso is 'Días de anticipo del aviso pa
 
 -- Al pagar un fijo, el gasto hereda también la persona (antes solo heredaba el negocio). De paso se le fija el
 -- search_path, que le faltaba.
+-- Solo hereda cuando el gasto no trae NINGÚN destino: con `or` podía quedar con negocio Y persona a la vez, y
+-- "a quién le pagaste" es uno solo (negocio o persona, nunca los dos).
 create or replace function public.expense_provider_default() returns trigger
     language plpgsql
     set search_path to 'public'
     as $$
 begin
-  if new.fixed_expense_id is not null and (new.provider_id is null or new.contact_id is null) then
-    select coalesce(new.provider_id, f.provider_id), coalesce(new.contact_id, f.contact_id)
+  if new.fixed_expense_id is not null and new.provider_id is null and new.contact_id is null then
+    select f.provider_id, f.contact_id
       into new.provider_id, new.contact_id
       from public.fixed_expenses f where f.id = new.fixed_expense_id;
   end if;
