@@ -76,7 +76,7 @@ export function FixedView() {
 
   const catOf = (f: FixedRow) => cats.find((c) => c.id === f.category_id)
   const provOf = (f: FixedRow) => providers.find((p) => p.id === f.provider_id)
-  const pick = { cat: (r: R) => r.f.category_id, method: (r: R) => r.f.payment_method_id, prov: (r: R) => r.f.provider_id }
+  const pick = { cat: (r: R) => r.f.category_id, method: (r: R) => r.f.payment_method_id, prov: (r: R) => r.f.provider_id, contact: (r: R) => r.f.contact_id }
   const columns: DTColumn<R>[] = [
     { id: "nombre", header: "Nombre", sort: (r) => r.f.nombre.toLowerCase(), csv: (r) => r.f.nombre },
     { id: "proximo", header: "Próximo pago", sort: (r) => r.next?.due ?? "9999", csv: (r) => r.next?.due ?? "" },
@@ -119,7 +119,8 @@ export function FixedView() {
           { id: "frec", label: "Frecuencia", options: Object.entries(FFREC).filter(([v]) => rows.some((r) => r.f.frec === v)).map(([value, label]) => ({ value, label })), match: (r, v) => r.f.frec === v },
           { id: "tipo", label: "Valor", options: [{ value: "fijo", label: "Siempre igual" }, { value: "var", label: "Varía según consumo" }], match: (r, v) => (v === "var") === !!r.f.variable },
           { id: "medio", label: "Medio de pago", options: catalogOptions(rows, methods, pick.method, "Sin medio de pago"), match: catalogMatch(pick.method) },
-          { id: "prov", label: "Pagado a", options: catalogOptions(rows, providers, pick.prov, "Sin negocio"), match: catalogMatch(pick.prov) },
+          { id: "prov", label: "Negocio", options: catalogOptions(rows, providers, pick.prov), match: catalogMatch(pick.prov) },
+          { id: "contacto", label: "Persona", options: catalogOptions(rows, contacts, pick.contact), match: catalogMatch(pick.contact) },
           { id: "proximo", label: "Próximo pago", kind: "dates", value: (r) => r.next?.due },
           { id: "valor", label: "Valor", kind: "range", money: true, value: (r) => conv(Number(r.f.valor), r.f.currency, trm) },
         ]}
