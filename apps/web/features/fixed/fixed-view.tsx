@@ -21,11 +21,11 @@ import { FFREC, fijoStatus, fijoValor, fijosMes, fixedReparto, relTime, toDay, t
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import { DUE_HINT, daysBetween } from "@/lib/list-helpers"
 import { useBookData } from "@/features/book/use-book-data"
-import { memberName, useCategories, useMembers, usePaymentMethods, useProviders } from "@/features/catalogs/hooks"
+import { memberName, useCategories, useContacts, useMembers, usePaymentMethods, useProviders } from "@/features/catalogs/hooks"
 import { FixedForm, type FixedRow } from "./fixed-form"
 import { PayFixedDialog } from "./pay-fixed-dialog"
 
-type R = { f: FixedRow; st: FixedStatus; next: FixedStatus["prox"]; estado: "vencido" | "pronto" | "luego" | "aldia" }
+type R = { f: FixedRow; st: FixedStatus; next: FixedStatus["prox"]; estado: "vencido" | "pronto" | "luego" | "aldia"; fin: boolean }
 type Pago = { f: FixedRow; p: FixedRow["payments"][number] }
 
 export function FixedView() {
@@ -42,6 +42,7 @@ export function FixedView() {
   const { data: methods = [] } = usePaymentMethods()
   const { data: members = [] } = useMembers()
   const { data: providers = [] } = useProviders()
+  const { data: contacts = [] } = useContacts()
   const del = useSoftDelete("fixed_expenses", "Gasto fijo eliminado")
   const fixed = (book?.fixedExpenses ?? []) as unknown as FixedRow[]
   const anticipo = book?.settings.anticipo ?? 5
@@ -51,15 +52,17 @@ export function FixedView() {
   const rows: R[] = fixed.map((f) => {
     const st = fijoStatus(f as unknown as FixedExpenseIn, today)
     const next = st.venc[0] ?? st.prox
-    const estado = st.venc.length ? "vencido" : !next ? "aldia" : daysBetween(today, next.due) <= anticipo ? "pronto" : "luego"
-    return { f, st, next, estado }
+    const fin = !!f.hasta && f.hasta < today
+    const av = f.aviso ?? anticipo
+    const estado = st.venc.length ? "vencido" : fin || !next ? "aldia" : daysBetween(today, next.due) <= av ? "pronto" : "luego"
+    return { f, st, next, estado, fin }
   })
   const k = (() => {
     // Lo que falta del mes: periodos sin pagar completos (con abonos, solo lo que falta).
     const pend = rows.flatMap(({ f, st }) => st.periods.filter((p) => !p.completo && p.due.startsWith(mes)).map((p) => (p.parcial ? p.falta : fijoValor(f, p.per)))).reduce((a, b) => a + b, 0)
     const pagado = rows.flatMap(({ f }) => f.payments.filter((p) => p.fecha.startsWith(mes))).reduce((a, p) => a + Number(p.valor), 0)
     const venc = rows.reduce((a, { st }) => a + st.venc.length, 0)
-    return { total: fijosMes(fixed as unknown as FixedExpenseIn[]), pend, pagado, venc, pronto: rows.filter((r) => r.estado === "pronto").length }
+    return { total: fijosMes(fixed as unknown as FixedExpenseIn[], book?.settings.trm, today), pend, pagado, venc, pronto: rows.filter((r) => r.estado === "pronto").length }
   })()
   const paidThisMonth: Pago[] = fixed.flatMap((f) => f.payments.filter((p) => p.fecha.startsWith(mes)).map((p) => ({ f, p }))).sort((a, b) => b.p.fecha.localeCompare(a.p.fecha))
 
@@ -80,7 +83,7 @@ export function FixedView() {
     { id: "mensual", header: "Al mes", sort: (r) => r.st.mensual, csv: (r) => Math.round(r.st.mensual) },
     { id: "categoria", header: "Categoría", sort: (r) => catOf(r.f)?.nombre ?? "~", csv: (r) => catOf(r.f)?.nombre ?? "" },
     { id: "frec", header: "Frecuencia", csv: (r) => FFREC[r.f.frec] },
-    { id: "proveedor", header: "Proveedor", csv: (r) => provOf(r.f)?.nombre ?? r.f.proveedor ?? "" },
+    { id: "pagadoa", header: "Pagado a", csv: (r) => pagadoA(r.f, providers, contacts) },
     { id: "medio", header: "Medio de pago", csv: (r) => methods.find((m) => m.id === r.f.payment_method_id)?.nombre ?? "" },
     { id: "estado", header: "Estado", csv: (r) => ({ vencido: "Vencido", pronto: "Por vencer", luego: "Pendiente", aldia: "Al día" })[r.estado] },
   ]
@@ -100,24 +103,25 @@ export function FixedView() {
         title="Tus gastos fijos" info="Lo que pagas cada mes o cada cierto tiempo. Toca uno para editarlo o usa el botón verde para registrar el pago."
         data={rows} loading={isPending} columns={columns} rowKey={(r) => r.f.id} noun={["gasto fijo", "gastos fijos"]} exportName="gastos-fijos"
         total={{ value: (r) => r.st.mensual, label: "suman al mes" }} initialSort={{ id: "proximo", dir: "asc" }}
-        search={{ placeholder: "Buscar gasto fijo", text: (r) => `${r.f.nombre} ${catOf(r.f)?.nombre ?? ""} ${provOf(r.f)?.nombre ?? r.f.proveedor ?? ""} ${FFREC[r.f.frec]}` }}
+        search={{ placeholder: "Buscar gasto fijo", text: (r) => `${r.f.nombre} ${catOf(r.f)?.nombre ?? ""} ${pagadoA(r.f, providers, contacts)} ${r.f.referencia ?? ""} ${FFREC[r.f.frec]}` }}
         views={[
           { id: "todos", label: "Todos" },
-          { id: "pend", label: "Pendientes este mes", match: (r) => r.st.periods.some((p) => !p.completo && p.due.startsWith(mes)) || r.st.venc.length > 0 },
+          { id: "pend", label: "Pendientes este mes", match: (r) => (r.st.periods.some((p) => !p.completo && p.due.startsWith(mes)) || r.st.venc.length > 0) && !r.fin },
           { id: "venc", label: "Vencidos", match: (r) => r.estado === "vencido", hint: DUE_HINT.vencido },
           { id: "aldia", label: "Pagados este mes", match: (r) => r.f.payments.some((p) => p.fecha.startsWith(mes)) },
+          { id: "fin", label: "Terminados", match: (r) => r.fin, hint: "Gastos fijos con fecha de fin que ya pasó: no te los volvemos a cobrar." },
         ]}
         filters={[
           { id: "cat", label: "Categoría", options: catalogOptions(rows, cats, pick.cat, "Sin categoría"), match: catalogMatch(pick.cat) },
           { id: "frec", label: "Frecuencia", options: Object.entries(FFREC).filter(([v]) => rows.some((r) => r.f.frec === v)).map(([value, label]) => ({ value, label })), match: (r, v) => r.f.frec === v },
           { id: "tipo", label: "Valor", options: [{ value: "fijo", label: "Siempre igual" }, { value: "var", label: "Varía según consumo" }], match: (r, v) => (v === "var") === !!r.f.variable },
           { id: "medio", label: "Medio de pago", options: catalogOptions(rows, methods, pick.method, "Sin medio de pago"), match: catalogMatch(pick.method) },
-          { id: "prov", label: "Proveedor", options: catalogOptions(rows, providers, pick.prov, "Sin proveedor"), match: catalogMatch(pick.prov) },
+          { id: "prov", label: "Pagado a", options: catalogOptions(rows, providers, pick.prov, "Sin negocio"), match: catalogMatch(pick.prov) },
           { id: "proximo", label: "Próximo pago", kind: "dates", value: (r) => r.next?.due },
           { id: "valor", label: "Valor", kind: "range", money: true, value: (r) => Number(r.f.valor) },
         ]}
         emptyState={<EmptyState iso="fijos" title="Aún no tienes gastos fijos" description="Empieza por el arriendo y los servicios." action={canEdit && <Button onClick={() => setNuevo(true)}><Plus /> Agregar gasto fijo</Button>} />}
-        item={({ f, st, next, estado }) => {
+        item={({ f, st, next, estado, fin }) => {
           const cat = catOf(f)
           const q = next?.per.endsWith("Q1") ? " (1ª quinc.)" : next?.per.endsWith("Q2") ? " (2ª quinc.)" : ""
           const pill = estado === "vencido" ? <StatusPill tone="vencido" hint={`${DUE_HINT.vencido} Venció el ${fmtDate(st.venc[0].due)}${st.venc.length > 1 ? ` y hay ${st.venc.length} periodos sin pagar` : ""}.`}>Vencido hace {daysBetween(st.venc[0].due, today)} días</StatusPill>
@@ -131,9 +135,10 @@ export function FixedView() {
                 {f.variable && <StatusPill tone="info" hint="El valor cambia cada mes (agua, luz, gas…). Mirai usa el promedio entre lo mínimo y lo máximo.">varía según consumo</StatusPill>}
                 {f.link_type && <StatusPill tone="estimado" hint="Aporte programado a una meta o al fondo de emergencia.">aporte</StatusPill>}
                 {next?.parcial && <StatusPill tone="warn" hint={`Abonaste ${fmtMoney(next.pagado)} a este periodo. Toca "Registrar pago" para pagar lo que falta.`}>faltan {fmtMoney(next.falta)}</StatusPill>}
+                {f.hasta && <StatusPill tone={fin ? "gray" : "info"} hint={fin ? "Ya pasó la fecha de fin: no te lo volvemos a cobrar." : "Este gasto tiene fecha de fin."}>{fin ? "terminado" : `termina el ${fmtDate(f.hasta)}`}</StatusPill>}
                 {pill}
               </>}
-              subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor, f.referencia && `ref. ${f.referencia}`, paraQuien(f, members)].filter(Boolean).join(" · ")}
+              subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, pagadoA(f, providers, contacts), f.referencia && `ref. ${f.referencia}`, paraQuien(f, members)].filter(Boolean).join(" · ")}
               value={f.variable && f.vmin ? <span className="grid text-right"><span className="font-bold"><Money value={Number(f.vmin)} short /> – <Money value={Number(f.vmax)} short /></span><span className="text-xs text-muted-foreground">promedio <Money value={Number(f.valor)} /></span></span> : fixedReparto(f).modo === "distinto" && f.frec === "quincenal"
                 ? <span className="grid text-right"><Money value={next ? fijoValor(f, next.per) : Number(f.valor)} className="font-bold" /><span className="text-xs text-muted-foreground"><Money value={fijoValor(f, "Q1")} short /> + <Money value={fijoValor(f, "Q2")} short /> al mes</span></span>
                 : <Money value={Number(f.valor)} className="font-bold" />}
@@ -180,4 +185,11 @@ function paraQuien(f: FixedRow, members: Parameters<typeof memberName>[1]) {
   if (!ids.length) return null
   const n = ids.map((id) => memberName(id, members))
   return `para ${n.length > 1 ? `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}` : n[0]}`
+}
+
+/** A quién se le paga el fijo: el negocio (Proveedores) o la persona (Contactos). */
+function pagadoA(f: FixedRow, providers: { id: string; nombre: string }[], contacts: { id: string; nombre: string }[]): string {
+  if (f.provider_id) return providers.find((p) => p.id === f.provider_id)?.nombre ?? f.proveedor ?? ""
+  if (f.contact_id) return contacts.find((c) => c.id === f.contact_id)?.nombre ?? ""
+  return f.proveedor ?? ""
 }
