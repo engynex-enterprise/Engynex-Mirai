@@ -5,7 +5,7 @@
 import { addDays, addMonths, days, fdate, iso, mkey, nextOcc, parseDate, proxDia, relTime, toDay } from "./dates"
 import { tarjetaPagoMes, tarjetasDeuda } from "./cards"
 import { fijoStatus } from "./fixed"
-import { fijoValor } from "./reparto"
+import { fijoValorCOP } from "./reparto"
 import { inv } from "./investments"
 import { loanEngine, loanName } from "./loans"
 import { conv, formatCOP as $, pct } from "./money"
@@ -47,10 +47,11 @@ export function agenda(b: BookData, today: DateInput): AgendaItem[] {
   const items: Omit<AgendaItem, "d" | "st" | "lbl">[] = []
   for (const f of b.fixedExpenses) {
     const st = fijoStatus(f, t)
-    const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: +f.valor, dir: "pagar" as const, go: "fijos", ...(f.aviso == null ? {} : { aviso: +f.aviso }) }
+    // Un fijo en USD o EUR se convierte con la TRM del libro: la agenda, Inicio y los avisos siempre hablan en pesos.
+    const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: conv(f.valor, f.currency, b.settings.trm), dir: "pagar" as const, go: "fijos", ...(f.aviso == null ? {} : { aviso: +f.aviso }) }
     // Con abonos, lo que falta del periodo (no el valor completo).
-    st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due, monto: p.parcial ? p.falta : fijoValor(f, p.per) }))
-    if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due, monto: st.prox.parcial ? st.prox.falta : fijoValor(f, st.prox.per) })
+    st.venc.forEach((p) => items.push({ ...base, per: p.per, fecha: p.due, monto: p.parcial ? p.falta : fijoValorCOP(f, p.per, b.settings.trm) }))
+    if (st.prox && days(t, parseDate(st.prox.due)) <= 45) items.push({ ...base, per: st.prox.per, fecha: st.prox.due, monto: st.prox.parcial ? st.prox.falta : fijoValorCOP(f, st.prox.per, b.settings.trm) })
   }
   for (const L of b.loans.filter((L) => L.kind === "pagar")) {
     const e = loanEngine(L, t)

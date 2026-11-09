@@ -2,8 +2,9 @@
 // quincena, en qué quincena se descuenta la nómina, días de pago propios, pago diario, el día de la semana del pago
 // semanal y el mes del pago anual. Sin reparto guardado todo funciona igual que antes (15 y fin de mes, viernes…).
 import { iso, lastDay } from "./dates"
+import { conv } from "./money"
 import { dedCalc, type DedItem, type Deducciones, type NominaRef } from "./payroll"
-import type { FixedExpenseIn, IncomeIn } from "./types"
+import type { FixedExpenseIn, IncomeIn, Trm } from "./types"
 
 export type TipoIngreso =
   // Con contrato de trabajo
@@ -308,4 +309,16 @@ export function fijoValor(f: Pick<FixedExpenseIn, "frec" | "valor"> & { reparto?
     if (v != null && Number.isFinite(+v)) return +v
   }
   return +f.valor
+}
+
+/** Un gasto fijo con la moneda en la que está guardado (`currency`: 'COP', 'USD', 'EUR'). */
+export type FijoConMoneda = Pick<FixedExpenseIn, "frec" | "valor"> & { currency?: string | null; reparto?: unknown }
+
+/**
+ * Valor de un periodo **en pesos**: `fijoValor` convertido con la TRM del libro, igual que ya hacen las
+ * suscripciones (`conv`). Un fijo en pesos devuelve exactamente lo mismo que `fijoValor`; una moneda sin
+ * tasa guardada vale 0, como en el resto de la app.
+ */
+export function fijoValorCOP(f: FijoConMoneda, per: string, trm?: Trm | null): number {
+  return conv(fijoValor(f, per), f.currency, trm ?? {})
 }

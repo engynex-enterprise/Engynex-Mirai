@@ -1,6 +1,6 @@
 // Próximo pago y deudas con cada proveedor (Proveedores: columnas "Próximo pago" y "Le debes / Te debe").
 import { fijoStatus } from "./fixed"
-import { fijoValor } from "./reparto"
+import { fijoValorCOP } from "./reparto"
 import { loanEngine } from "./loans"
 import { conv } from "./money"
 import type { DateInput, FixedExpenseIn, LoanIn, Trm } from "./types"
@@ -31,7 +31,8 @@ export function providerNextPayments(fixed: FixedWithProv[], subs: SubNext[], to
     if (!f.provider_id) continue
     const st = fijoStatus(f, today)
     const p = st.venc[0] ?? st.prox
-    if (p) put(f.provider_id, { fecha: p.due, valor: fijoValor(f, p.per), nombre: f.nombre, origen: "fijo", id: f.id, vencido: p.due < t })
+    // En pesos (como la suscripción de abajo): la columna "Próximo pago" no mezcla monedas.
+    if (p) put(f.provider_id, { fecha: p.due, valor: fijoValorCOP(f, p.per, trm), nombre: f.nombre, origen: "fijo", id: f.id, vencido: p.due < t })
   }
   for (const s of subs) {
     if (!s.provider_id || s.activa === false || !s.proximo) continue

@@ -20,6 +20,12 @@ describe("providerNextPayments", () => {
       [{ id: "s", nombre: "Nube", provider_id: "p1", valor: 10, currency: "USD", proximo: "2026-11-03", activa: true }], HOY, { USD: 4000 })
     expect(m.get("p1")).toMatchObject({ fecha: "2026-11-03", valor: 40000, origen: "suscripcion", nombre: "Nube" })
   })
+  it("un gasto fijo en USD sale convertido, igual que la suscripción", () => {
+    const m = providerNextPayments([fijo({ provider_id: "p1", valor: 10, currency: "USD" })], [], HOY, { USD: 4000 })
+    expect(m.get("p1")).toMatchObject({ valor: 40_000, origen: "fijo" })
+    // Sin tasa guardada no se inventa una cifra (como `conv`).
+    expect(providerNextPayments([fijo({ provider_id: "p1", valor: 10, currency: "USD" })], [], HOY, {}).get("p1")).toMatchObject({ valor: 0 })
+  })
   it("ignora suscripciones pausadas, sin fecha y registros sin proveedor", () => {
     const m = providerNextPayments([fijo({})], [{ id: "s", nombre: "X", provider_id: "p2", valor: 1, proximo: "2026-11-10", activa: false }, { id: "t", nombre: "Y", provider_id: "p3", valor: 1, proximo: null }], HOY, {})
     expect(m.size).toBe(0)

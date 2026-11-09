@@ -233,3 +233,43 @@ describe("aviso propio del gasto fijo", () => {
     expect(agenda(sinPropio, hoy).find((x) => x.k === "fijo")?.st).toBe("ok")
   })
 })
+
+describe("gasto fijo en otra moneda: la agenda y los avisos siempre hablan en pesos", () => {
+  // Netflix USD 10 al mes con la TRM del libro en 4.000: la pastilla de Inicio, Próximos pagos y los avisos por
+  // correo y WhatsApp tienen que decir $ 40.000, no "$ 10" (igual que ya hacen las suscripciones).
+  const netflix = { id: "f1", nombre: "Netflix", valor: 10, frec: "mensual", dia: 5, currency: "USD", category_id: null, payments: [] } as never
+  const conTrm = (trm: Record<string, number>) => libro({ settings: { ...libro().settings, trm }, fixedExpenses: [netflix] })
+
+  it("agenda: el monto del periodo viene convertido", () => {
+    expect(agenda(conTrm({ USD: 4000 }), HOY).map((x) => x.monto)).toEqual([40_000])
+  })
+  it("notifs: «Ten listos $ 40.000», no $ 10", () => {
+    const N = notifs(conTrm({ USD: 4000 }), HOY).filter((n) => n.id.startsWith("p:fijo:f1"))
+    expect(N).toHaveLength(1)
+    expect(N[0].b).toContain("40.000")
+    expect(N[0].b).not.toMatch(/\$\s?10\b/)
+  })
+  it("un fijo en pesos se comporta exactamente igual que antes", () => {
+    const pesos = libro({ settings: { ...libro().settings, trm: { USD: 4000 } }, fixedExpenses: [{ ...(netflix as object), valor: 40_000, currency: "COP" } as never] })
+    expect(agenda(pesos, HOY).map((x) => x.monto)).toEqual([40_000])
+    // Y sin `currency` (los gastos fijos de siempre), tampoco cambia nada.
+    expect(agenda(libro({ fixedExpenses: [{ ...(netflix as object), valor: 40_000, currency: null } as never] }), HOY).map((x) => x.monto)).toEqual([40_000])
+  })
+  it("sin tasa guardada no inventa una cifra (0, como las suscripciones)", () => {
+    expect(agenda(conTrm({}), HOY).map((x) => x.monto)).toEqual([0])
+  })
+})
+
+describe("flujo de caja: un fijo en otra moneda sale en pesos", () => {
+  it("USD 10 al mes × TRM 4.000 = $ 40.000 en «fijos» de cada mes", () => {
+    const b = libro({
+      settings: { ...libro().settings, trm: { USD: 4000 } },
+      fixedExpenses: [{ id: "f1", nombre: "Netflix", valor: 10, frec: "mensual", dia: 5, currency: "USD", category_id: null, payments: [] } as never],
+    })
+    expect(flujo(b, HOY)[1].det.fij).toBe(40_000)
+  })
+  it("el mismo gasto guardado en pesos da lo mismo (paridad)", () => {
+    const b = libro({ fixedExpenses: [{ id: "f1", nombre: "Netflix", valor: 40_000, frec: "mensual", dia: 5, currency: "COP", category_id: null, payments: [] } as never] })
+    expect(flujo(b, HOY)[1].det.fij).toBe(40_000)
+  })
+})

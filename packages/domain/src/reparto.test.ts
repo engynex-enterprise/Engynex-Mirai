@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { dedCalc } from "./payroll"
 import { quincena } from "./quincena"
-import { dedAMes, fijoValor, incomeCuando, incomePagos, pagosMes, planIngreso, quincenaDeDia, quincenasNetas, tipoIngreso } from "./reparto"
+import { dedAMes, fijoValor, fijoValorCOP, incomeCuando, incomePagos, pagosMes, planIngreso, quincenaDeDia, quincenasNetas, tipoIngreso } from "./reparto"
 import { ingresoBrutoMensual, ingresoMensual } from "./totals"
 import type { BookData } from "./types"
 
@@ -192,5 +192,26 @@ describe("ingreso del mes con y sin descuentos", () => {
     ]
     expect(ingresoBrutoMensual(xs, {})).toBe(9_175_000 + 60_000 + 2_000_000)
     expect(ingresoMensual(xs, {})).toBe(4_037_600 * 2 + 60_000 + 1_800_000)
+  })
+})
+
+describe("fijoValorCOP: el valor de un periodo siempre en pesos", () => {
+  const netflix = { frec: "mensual", valor: 10, currency: "USD" }
+  it("un fijo en pesos no cambia (paridad con fijoValor)", () => {
+    for (const f of [{ frec: "mensual", valor: 1_200_000 }, { frec: "mensual", valor: 1_200_000, currency: "COP" }, { frec: "mensual", valor: 1_200_000, currency: null }])
+      expect(fijoValorCOP(f, "2026-11", { USD: 4000 })).toBe(fijoValor(f, "2026-11"))
+  })
+  it("USD 10 con la TRM del libro son $ 40.000 (lo que ve Fijos en «Al mes»)", () => {
+    expect(fijoValorCOP(netflix, "2026-11", { USD: 4000 })).toBe(40_000)
+  })
+  it("sin tasa guardada vale 0, igual que las suscripciones (conv)", () => {
+    expect(fijoValorCOP(netflix, "2026-11", {})).toBe(0)
+    expect(fijoValorCOP(netflix, "2026-11", null)).toBe(0)
+    expect(fijoValorCOP(netflix, "2026-11")).toBe(0)
+  })
+  it("quincenal con valor distinto en cada quincena: convierte la quincena que toca", () => {
+    const f = { frec: "quincenal", valor: 15, currency: "USD", reparto: { modo: "distinto", q1: 10, q2: 20 } }
+    expect(fijoValorCOP(f, "2026-11-Q1", { USD: 4000 })).toBe(40_000)
+    expect(fijoValorCOP(f, "2026-11-Q2", { USD: 4000 })).toBe(80_000)
   })
 })
