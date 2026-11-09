@@ -363,9 +363,9 @@ Se pintan dos líneas en la tarjeta de `/admin/integraciones`
 └─────────────────────────────────────────────────────────────┘
 ```
 
-El texto de `para` también entra al buscador de la consola (`useListControls`, línea 269) y al índice del
-buscador global del CLI (`packages/cli/src/datos/buscador.ts`), para poder buscar «dólares» y que salga la
-TRM.
+El texto de `para` también entra al buscador de las dos pantallas (`useListControls` en la consola y
+`SEARCH` en Ajustes), para poder buscar «dólares» y que salga la TRM. El buscador global del CLI
+(`packages/cli/src/datos/buscador.ts`) **no** indexa integraciones hoy, así que ahí no hay nada que hacer.
 
 ## 10. Base de datos — `db/postgres/0009_datos_al_dia.sql`
 

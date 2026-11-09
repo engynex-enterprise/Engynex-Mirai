@@ -92,14 +92,16 @@ falta configurarla en Ajustes › Finanzas y enlaza allá, en vez de mostrar una
 
 ### 4.1 Ubicación
 
-Barra de pestañas nueva `components/app/gastos-tabs.tsx`:
+La barra de pestañas **ya existe**: `PAGE_TABS` en `lib/nav.ts:85`, que `PageHeader` pinta con `PageTabs` debajo del
+banner en `/gastos`, `/fijos`, `/suscripciones` y `/tarjetas`. Solo hay que agregarle una entrada:
 
 ```
-Todos · Día a día · Fijos · Suscripciones · Tarjetas
+Todos · Del día a día · Fijos · Suscripciones · Tarjetas
 ```
 
-Se monta arriba de `/gastos`, `/fijos`, `/suscripciones` y `/tarjetas`. La bandeja vive en **`/gastos/todos`** y se
-registra en `lib/nav.ts` (`EN_PESTANAS`) para que tenga migas, entrada en ⌘K y aparezca en el buscador global.
+`PageTabs` arma cada enlace como `/${t.id}`, así que la bandeja es el id `gastos-todos` y la ruta **`/gastos-todos`**.
+Se registra además en `EN_PESTANAS` para que tenga migas, entrada en ⌘K y salga en el buscador global. Las cuatro
+vistas que ya existen no se tocan: la pestaña aparece sola.
 
 ### 4.2 Datos: nada se recalcula
 
