@@ -232,7 +232,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       else toast.success("Imprevisto registrado", { description: `Gasto registrado y pagado con tu fondo de emergencia. Te quedan ${fmtMoney(Number(queda))} en el fondo.` })
     } else {
       // ¿Es el pago de un gasto fijo pendiente (p. ej. el arriendo)? Se pregunta y se enlaza sin duplicar.
-      const sug = !expense && canEdit && book ? sugerirPagoFijo(data, book.fixedExpenses) : null
+      const sug = !expense && canEdit && book ? sugerirPagoFijo(data, book.fixedExpenses, undefined, { trm: book.settings.trm }) : null
       const titulo = expense ? "Gasto actualizado" : isHormiga(data, cats, umbral) ? "Gasto hormiga registrado" : "Gasto registrado"
       if (!sug) toast.success(titulo)
       else {

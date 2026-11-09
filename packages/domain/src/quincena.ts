@@ -1,6 +1,6 @@
 // Entradas y salidas de una quincena o de un mes (equivalente a `quincena()` de b_core.js de la v4).
 import { fshort, iso, lastDay, parseDate } from "./dates"
-import { fijoValor, incomePagos } from "./reparto"
+import { fijoValorCOP, incomePagos } from "./reparto"
 import { tarjetaPagoMes } from "./cards"
 import { fijoPeriods, pagoPeriodo } from "./fixed"
 import { loanCal, loanEngine, loanName } from "./loans"
@@ -84,8 +84,8 @@ export function quincena(b: BookData, y: number, m: number, which: QuincenaWhich
     for (const p of fijoPeriods(f, y, m, today))
       if (inR(p.due)) {
         // Abonos (pagoPeriodo): lo pagado y, si falta, lo que falta como otra línea sin pagar.
-        const PP = pagoPeriodo(f, p.per, f.payments)
-        sal.push({ icon: catIcon(b.categories, f.category_id), n: f.nombre, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: PP.pagos.length ? PP.pagado : fijoValor(f, p.per), fecha: p.due, paid: PP.pagos.length > 0 })
+        const PP = pagoPeriodo(f, p.per, f.payments, trm)
+        sal.push({ icon: catIcon(b.categories, f.category_id), n: f.nombre, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: PP.pagos.length ? PP.pagado : fijoValorCOP(f, p.per, trm), fecha: p.due, paid: PP.pagos.length > 0 })
         if (PP.parcial && PP.falta > 0.5) sal.push({ icon: catIcon(b.categories, f.category_id), n: `${f.nombre} (falta)`, s: "Gasto fijo · " + fshort(parseDate(p.due)), v: PP.falta, fecha: p.due, paid: false })
       }
   for (const L of pagar)

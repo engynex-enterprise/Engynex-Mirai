@@ -36,7 +36,7 @@ export function posiblesDobles(b: Pick<BookData, "expenses" | "fixedExpenses" | 
   const out: PosibleDoble[] = []
   for (const g of b.expenses as RawExp[]) {
     if (g.fecha < a || g.fecha > bFin) continue
-    const s = sugerirPagoFijo({ ...g, valor: +g.valor }, b.fixedExpenses as never, today, { incluirPagados: true })
+    const s = sugerirPagoFijo({ ...g, valor: +g.valor }, b.fixedExpenses as never, today, { incluirPagados: true, trm })
     if (!s) continue
     // Solo cuenta dos veces si el periodo del fijo cae dentro del rango que se está mirando.
     if (s.due < a || s.due > bFin) continue

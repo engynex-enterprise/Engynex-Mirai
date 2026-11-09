@@ -385,7 +385,7 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
         if ((ini && p.due < ini) || (desde && p.due < desde)) continue
         // Abonos: lo pagado sale como hecho (en la fecha del último pago) y, si falta, lo que falta sale aparte
         // (programado o vencido). La moto: $70.000 la quincena, pagaste $40.000 → $40.000 hecho y $30.000 por pagar.
-        const PP = pagoPeriodo(f, p.per, f.payments)
+        const PP = pagoPeriodo(f, p.per, f.payments, trm)
         const ult = PP.pagos.reduce<string>((a, x) => (x.fecha && isoOf(x.fecha) > a ? isoOf(x.fecha) : a), "")
         const tipo = aporte
           ? { modulo: "metas" as const, clase: "ahorro" as const, n: f.nombre, s: f.link_type === "fondo" ? "Aporte al fondo de emergencia" : "Aporte a una meta", icon: "piggy-bank", cat: "Ahorro programado", href: "/metas" }
@@ -394,7 +394,7 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
           const fecha = ult || p.due
           push({ id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha, estado: "hecho", v: PP.pagado, ...tipo, ...(PP.parcial ? { s: `${tipo.s} · abono` } : {}) })
           if (PP.parcial && PP.falta > 0.5)
-            push({ id: `fijo:${f.id}:${p.per}:falta`, dir: "sale", fecha: p.due, estado: conRegistro(p.due, false), v: conv(PP.falta, cur, trm), ...tipo, s: `Falta de ${f.nombre} (ya abonaste ${fmtCOP(PP.pagado)})` })
+            push({ id: `fijo:${f.id}:${p.per}:falta`, dir: "sale", fecha: p.due, estado: conRegistro(p.due, false), v: PP.falta, ...tipo, s: `Falta de ${f.nombre} (ya abonaste ${fmtCOP(PP.pagado)})` })
         } else {
           push({ id: `fijo:${f.id}:${p.per}`, dir: "sale", fecha: p.due, estado: conRegistro(p.due, false), v: conv(fijoValor(f, p.per), cur, trm), ...tipo })
         }

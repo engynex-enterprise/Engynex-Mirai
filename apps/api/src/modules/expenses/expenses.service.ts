@@ -47,7 +47,7 @@ export class ExpensesService {
       store.rows(w.scope, "keyword_rules", w.bookId, { select: ["keyword", "category_id"] }),
       store.rows(w.scope, "payment_methods", w.bookId, { select: ["id"], order: { column: "sort", ascending: true } }),
     ])
-    const cfg = (settings ?? {}) as { umbral?: unknown; ia?: { on?: boolean; autocat?: boolean; hormiga?: boolean }; defaults?: { medio?: string } }
+    const cfg = (settings ?? {}) as { umbral?: unknown; ia?: { on?: boolean; autocat?: boolean; hormiga?: boolean }; defaults?: { medio?: string }; trm?: Record<string, number> }
     const today = todayBogota()
     const descripcion = v.descripcion.trim()
 
@@ -103,7 +103,7 @@ export class ExpensesService {
       }
     } else if (!prev && editor) {
       const fijos = (await this.tables.part(w.scope, w.bookId, "fixed_expenses")).map((f: Rec) => ({ ...f, payments: ((f.fixed_expense_payments as Rec[] | undefined) ?? []).filter((p) => !p.deleted_at) }))
-      const sug = sugerirPagoFijo({ descripcion, valor: v.valor, fecha: String(expense.fecha), provider_id: v.provider_id ?? null, fixed_expense_id: null, origen: v.origen }, fijos as never, today)
+      const sug = sugerirPagoFijo({ descripcion, valor: v.valor, fecha: String(expense.fecha), provider_id: v.provider_id ?? null, fixed_expense_id: null, origen: v.origen }, fijos as never, today, { trm: cfg.trm })
       if (sug) sugerenciaFijo = { fixed_id: String(sug.fixed.id), nombre: sug.fixed.nombre, periodo: sug.per, due: sug.due, valor: sug.valor, abonado: sug.abonado, completo: sug.completo }
     }
 
@@ -123,10 +123,14 @@ export class ExpensesService {
     this.w.requireRole("editor", "editarTodo")
     const g = await this.w.rowOf("expenses", expenseId, { alive: true, msg: EXPENSE_NOT_FOUND })
     const f = await this.w.rowOf("fixed_expenses", b.fixedId, { alive: true, msg: "No encontramos ese gasto fijo." })
-    const fij = { frec: String(f.frec), valor: num(f.valor), reparto: f.reparto, variable: !!f.variable }
+    const currency = String(f.currency ?? "COP") || "COP"
+    const fij = { frec: String(f.frec), valor: num(f.valor), reparto: f.reparto, variable: !!f.variable, currency }
+    // El gasto que se enlaza está en pesos: lo esperado del periodo también (si el fijo está en USD o EUR y el libro
+    // tiene la tasa). Sin tasa se compara como antes.
+    const trm = await this.trmLibro(currency)
     const previos = (await this.store.rows(this.w.scope, "fixed_expense_payments", this.w.bookId, { eq: { fixed_expense_id: b.fixedId, periodo: b.periodo } }))
       .map((x) => ({ id: String(x.id), periodo: String(x.periodo), fecha: String(x.fecha), valor: num(x.valor), cierra: x.cierra as boolean | null }))
-    const P = pagoPeriodo(fij, b.periodo, previos)
+    const P = pagoPeriodo(fij, b.periodo, previos, trm)
     if (P.completo) throw DomainError.conflict("Ese periodo ya está pagado.")
     // Pagos de antes sin marcar que quedaron cortos: pasan a ser abonos (si no, la base no deja enlazar el resto).
     for (const x of previos.filter((x) => x.cierra == null)) await this.store.update(this.w.scope, "fixed_expense_payments", this.w.bookId, x.id, { cierra: false })
@@ -136,6 +140,14 @@ export class ExpensesService {
     const r = await this.store.rpc(this.w.scope, "link_expense_fixed", { p_expense: expenseId, p_fixed: b.fixedId, p_periodo: b.periodo, p_cierra: cierra })
     this.w.changed("expenses", expenseId, "UPDATE", ["fixed_expense_payments", "fixed_expenses"])
     return { ...((r ?? {}) as Record<string, unknown>), completo: cierra, falta: cierra ? 0 : Math.max(0, P.esperado - P.pagado - num(g.valor)) }
+  }
+
+  /** La TRM del libro para la moneda de un gasto fijo (null en pesos o si no hay tasa guardada). */
+  private async trmLibro(currency: string): Promise<Record<string, number> | null> {
+    if (currency === "COP") return null
+    const s = (await this.store.single(this.w.scope, "book_settings", this.w.bookId)) as { trm?: Record<string, number> } | null
+    const tasa = Number(s?.trm?.[currency] ?? 0) || 0
+    return tasa > 0 ? { [currency]: tasa } : null
   }
 
   /** POST …/expenses/:id/unlink-fixed (unlink_expense_fixed). */

@@ -29,7 +29,7 @@ export function providerNextPayments(fixed: FixedWithProv[], subs: SubNext[], to
   const put = (pid: string, n: ProviderNext) => { const cur = out.get(pid); if (!cur || n.fecha < cur.fecha) out.set(pid, n) }
   for (const f of fixed) {
     if (!f.provider_id) continue
-    const st = fijoStatus(f, today)
+    const st = fijoStatus(f, today, trm)
     const p = st.venc[0] ?? st.prox
     // En pesos (como la suscripción de abajo): la columna "Próximo pago" no mezcla monedas.
     if (p) put(f.provider_id, { fecha: p.due, valor: fijoValorCOP(f, p.per, trm), nombre: f.nombre, origen: "fijo", id: f.id, vencido: p.due < t })

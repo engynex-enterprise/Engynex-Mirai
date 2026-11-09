@@ -46,7 +46,7 @@ function PayBody({ fixed, trm, onOpenChange, onReschedule }: { fixed: FixedRow; 
   const cur = fixed.currency || "COP"
   const tasa = cur === "COP" ? 1 : +trm[cur] || 0
   const enPesos = (v: number) => (cur === "COP" ? v : Math.round(v * tasa))
-  const st = fijoStatus({ ...fixed, valor: Number(fixed.valor), payments: fixed.payments.map((p) => ({ ...p, valor: Number(p.valor) })) } as FixedExpenseIn, today)
+  const st = fijoStatus({ ...fixed, valor: Number(fixed.valor), payments: fixed.payments.map((p) => ({ ...p, valor: Number(p.valor) })) } as FixedExpenseIn, today, trm)
   const opts = [...st.venc, ...(st.prox ? [st.prox] : [])]
   // Lo que falta de un periodo: con abonos, el resto; si no, su valor (con reparto por quincena).
   const faltaDe = (p: string) => { const o = opts.find((x) => x.per === p); return o?.parcial ? o.falta : Math.round(fijoValorCOP(fixed, p, trm)) }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { expectClose, fixedOf, legacyCall, scenario } from "./__tests__/adapt"
-import { fijoMensual, fijoPeriods, fijoProxIso, fijoStatus, periodoTexto, sugerirPagoFijo } from "./fixed"
+import { fijoMensual, fijoPeriods, fijoProxIso, fijoStatus, pagoPeriodo, periodoTexto, sugerirPagoFijo } from "./fixed"
 
 const HOY = "2026-10-31"
 
@@ -166,5 +166,33 @@ describe("fijoStatus: trm convierte mensual igual que fijoMensual (el KPI y la t
   it("sin trm, mensual se queda en la moneda original (igual que siempre)", () => {
     expect(fijoStatus(sub, HOY).mensual).toBe(10)
     expect(fijoStatus(sub, HOY, null).mensual).toBe(10)
+  })
+})
+
+describe("abonos a un fijo en USD: lo esperado se compara en pesos (los pagos siempre se registran en pesos)", () => {
+  const netflix = { id: "netflix", nombre: "Netflix", valor: 10, frec: "mensual", dia: 5, desde: "2026-01", currency: "USD", payments: [] }
+  const trm = { USD: 4000 }
+  const abono = [{ periodo: "2026-10", fecha: "2026-10-05", valor: 20_000, cierra: false }]
+
+  it("USD 10 a TRM 4.000 esperan $40.000: un abono de $20.000 deja el periodo PARCIAL y faltan $20.000", () => {
+    expect(pagoPeriodo(netflix, "2026-10", abono, trm)).toMatchObject({ pagado: 20_000, esperado: 40_000, falta: 20_000, completo: false, parcial: true })
+  })
+
+  it("el pago completo en pesos sí cierra el periodo", () => {
+    const P = pagoPeriodo(netflix, "2026-10", [{ periodo: "2026-10", fecha: "2026-10-05", valor: 40_000, cierra: false }], trm)
+    expect(P).toMatchObject({ pagado: 40_000, falta: 0, completo: true, parcial: false })
+  })
+
+  it("fijoStatus con la TRM: el periodo sigue pendiente y lo que falta ya está en pesos", () => {
+    const st = fijoStatus({ ...netflix, payments: abono }, HOY, trm)
+    expect(st.periods.find((x) => x.per === "2026-10")).toMatchObject({ parcial: true, completo: false, falta: 20_000 })
+    expect(st.venc.map((x) => x.per)).toContain("2026-10")
+  })
+
+  it("un fijo en pesos se comporta exactamente igual con y sin TRM (paridad con la v4)", () => {
+    const moto = { id: "moto", nombre: "Moto", valor: 70_000, frec: "mensual", dia: 5, desde: "2026-01", payments: [] }
+    const pagos = [{ periodo: "2026-10", fecha: "2026-10-05", valor: 40_000, cierra: false }]
+    expect(pagoPeriodo(moto, "2026-10", pagos, trm)).toEqual(pagoPeriodo(moto, "2026-10", pagos))
+    expect(pagoPeriodo(moto, "2026-10", pagos, trm)).toMatchObject({ esperado: 70_000, falta: 30_000, completo: false })
   })
 })

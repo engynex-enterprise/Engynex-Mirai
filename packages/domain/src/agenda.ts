@@ -46,7 +46,7 @@ export function agenda(b: BookData, today: DateInput): AgendaItem[] {
   const A = +b.settings.anticipo || 5
   const items: Omit<AgendaItem, "d" | "st" | "lbl">[] = []
   for (const f of b.fixedExpenses) {
-    const st = fijoStatus(f, t)
+    const st = fijoStatus(f, t, b.settings.trm)
     // Un fijo en USD o EUR se convierte con la TRM del libro: la agenda, Inicio y los avisos siempre hablan en pesos.
     const base = { k: "fijo" as const, id: f.id, icon: catIcon(b.categories, f.category_id), titulo: f.nombre, sub: "Gasto fijo", monto: conv(f.valor, f.currency, b.settings.trm), dir: "pagar" as const, go: "fijos", ...(f.aviso == null ? {} : { aviso: +f.aviso }) }
     // Con abonos, lo que falta del periodo (no el valor completo).

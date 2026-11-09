@@ -1,7 +1,8 @@
 // Gastos fijos: periodos, vencimientos y valor mensual (equivalente a b_core.js de la v4).
 import { addDays, iso, lastDay, mkey, parseDate, toDay } from "./dates"
-import { fijoValor } from "./reparto"
-import type { DateInput, FixedExpenseIn, FixedPaymentIn } from "./types"
+import { conv } from "./money"
+import { fijoValor, fijoValorCOP } from "./reparto"
+import type { DateInput, FixedExpenseIn, FixedPaymentIn, Trm } from "./types"
 
 export const FFREC: Record<string, string> = {
   mensual: "Cada mes",
@@ -76,9 +77,9 @@ export interface FixedPeriodStatus extends FixedPeriod {
   pago?: FixedPaymentIn
   /** Pagos (abonos) del periodo. */
   pagos: FixedPaymentIn[]
-  /** Lo pagado en el periodo. */
+  /** Lo pagado en el periodo (siempre en pesos: así se registran los pagos). */
   pagado: number
-  /** Lo que falta del periodo (0 si está completo). */
+  /** Lo que falta del periodo (0 si está completo); en pesos si `fijoStatus` recibió la TRM. */
   falta: number
   /** ¿Quedó pagado? */
   completo: boolean
@@ -91,11 +92,20 @@ export interface FixedPeriodStatus extends FixedPeriod {
  * un pago lo cierra (`cierra: true`, también "esta vez costó menos"), si lo pagado cubre el valor del periodo, o si el
  * fijo es de valor variable y hay un pago que no es abono. Los pagos de antes (`cierra` vacío) por menos del valor de
  * un fijo de valor fijo cuentan como abono: así se ve lo que falta (la moto: $70.000, pagaste $40.000 → faltan $30.000).
+ *
+ * `trm` (opcional, al final) pone `esperado` y `falta` **en pesos**, que es la moneda en la que se registran los pagos:
+ * sin ella, un Netflix de USD 10 esperaría 10 y cualquier abono lo daría por pagado. Un fijo en pesos da exactamente
+ * lo mismo con y sin `trm`.
  */
-export function pagoPeriodo(f: Pick<FixedExpenseIn, "frec" | "valor" | "variable"> & { reparto?: unknown }, per: string, pagos: FixedPaymentIn[]) {
+export function pagoPeriodo(
+  f: Pick<FixedExpenseIn, "frec" | "valor" | "variable" | "currency"> & { reparto?: unknown },
+  per: string,
+  pagos: FixedPaymentIn[],
+  trm?: Trm | null,
+) {
   const vivos = pagos.filter((x) => x.periodo === per && !x.deleted_at)
   const pagado = vivos.reduce((a, x) => a + (+x.valor || 0), 0)
-  const esperado = fijoValor(f, per)
+  const esperado = trm ? fijoValorCOP(f, per, trm) : fijoValor(f, per)
   const completo = vivos.length > 0 && (
     vivos.some((x) => x.cierra === true) || pagado >= esperado - 1 || (!!f.variable && vivos.some((x) => x.cierra == null))
   )
@@ -115,8 +125,9 @@ export interface FixedStatus {
 /**
  * Estado de un gasto fijo: recorre desde max(mes de `desde`, hace 3 meses) hasta hoy + 13 meses,
  * ignora periodos anteriores a `inicio` y cruza con los pagos registrados.
- * `trm` (opcional, en pesos si se pasa) convierte `mensual` igual que `fijoMensual`/`fijosMes`, para que
- * el total de la tabla y el KPI del mismo listado no se contradigan con un fijo en USD o EUR.
+ * `trm` (opcional, en pesos si se pasa) convierte `mensual` igual que `fijoMensual`/`fijosMes` y pone `falta` y
+ * `esperado` de cada periodo en pesos (la moneda de los pagos), para que el total de la tabla, el KPI del mismo
+ * listado y los abonos no se contradigan con un fijo en USD o EUR.
  */
 export function fijoStatus(f: FixedExpenseIn, today: DateInput, trm?: Record<string, number> | null): FixedStatus {
   const t = toDay(today)
@@ -129,7 +140,7 @@ export function fijoStatus(f: FixedExpenseIn, today: DateInput, trm?: Record<str
   for (let d = new Date(start); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
     for (const p of fijoPeriods(f, d.getFullYear(), d.getMonth(), t)) {
       if (ini && p.due < ini) continue
-      const P = pagoPeriodo(f, p.per, f.payments)
+      const P = pagoPeriodo(f, p.per, f.payments, trm)
       out.push({ ...p, pago: P.pagos[0], pagos: P.pagos, pagado: P.pagado, falta: P.falta, completo: P.completo, parcial: P.parcial })
     }
   }
@@ -182,8 +193,15 @@ type FijoSug = FixedExpenseIn & { provider_id?: string | null; vmin?: number | n
  *   que falta, p. ej. la moto de $70.000 con $40.000 abonados acepta un gasto de $30.000).
  * Nunca para aportes a metas (`link_type`) ni para gastos que ya están enlazados (fijo, tarjeta, préstamo, compartido).
  * Devuelve el periodo pendiente más cercano en fecha (o `null`).
+ * `opts.trm` compara en pesos los fijos en USD o EUR (el gasto suelto siempre está en pesos); sin ella se compara
+ * tal cual, como antes.
  */
-export function sugerirPagoFijo(g: GastoSuelto, fijos: FijoSug[], today: DateInput = g.fecha, opts: { incluirPagados?: boolean } = {}): SugerenciaFijo | null {
+export function sugerirPagoFijo(
+  g: GastoSuelto,
+  fijos: FijoSug[],
+  today: DateInput = g.fecha,
+  opts: { incluirPagados?: boolean; trm?: Trm | null } = {},
+): SugerenciaFijo | null {
   if (g.fixed_expense_id || (g.origen && !["manual", "correo", "importar", "ocr", "voz"].includes(g.origen)) || !(+g.valor > 0)) return null
   const pg = new Set(palabras(g.descripcion))
   const f0 = parseDate(g.fecha)
@@ -197,15 +215,17 @@ export function sugerirPagoFijo(g: GastoSuelto, fijos: FijoSug[], today: DateInp
       for (const p of fijoPeriods(f, d.getFullYear(), d.getMonth(), today)) {
         if (f.inicio && p.due < iso(parseDate(f.inicio))) continue
         // Un periodo con abonos sigue abierto: lo que se compara es lo que FALTA, no el valor completo.
-        const PP = pagoPeriodo(f, p.per, f.payments)
+        const PP = pagoPeriodo(f, p.per, f.payments, opts.trm)
         if (PP.completo && !opts.incluirPagados) continue
         const dist = Math.abs(parseDate(p.due).getTime() - f0.getTime()) / 864e5
         if (dist > 40) continue
-        const esperado = PP.parcial ? PP.falta : fijoValor(f, p.per)
+        // Sin TRM se compara tal cual (lo de siempre); con TRM, todo en pesos, que es la moneda del gasto suelto.
+        const cop = (x: number | null | undefined) => (opts.trm ? conv(x, f.currency, opts.trm) : +(x ?? 0))
+        const esperado = PP.parcial ? PP.falta : cop(fijoValor(f, p.per))
         const v = +g.valor
         // Con abonos no se usa el rango del fijo variable: lo que falta es una cifra exacta.
         const okValor = f.variable && +(f.vmin ?? 0) > 0 && !PP.parcial
-          ? v >= +(f.vmin ?? 0) * 0.85 && v <= +(f.vmax ?? 0) * 1.15
+          ? v >= cop(f.vmin) * 0.85 && v <= cop(f.vmax) * 1.15
           : Math.abs(v - esperado) <= Math.max(1000, esperado * 0.15)
         if (!okValor) continue
         if (!best || dist < best.dist) best = { fixed: f, per: p.per, due: p.due, valor: esperado, abonado: PP.pagado, completo: !PP.parcial || v >= esperado - 1, yaPagado: PP.completo, dist }
