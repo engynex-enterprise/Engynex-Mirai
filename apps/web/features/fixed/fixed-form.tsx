@@ -22,7 +22,7 @@ import { Segmented } from "@/components/mirai/choice-cards"
 import { useBookId } from "@/components/app/app-context"
 import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { payFixedExpense } from "./commands"
-import { FFREC, FSTEP, categoriaSugerida, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
+import { FFREC, FSTEP, categoriaSugerida, fijoMensual, fijoPeriods, fijoProxIso, fijoValor, fixedReparto, localCat, type FixedExpenseIn } from "@/lib/domain"
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format"
 import type { Row } from "@/lib/supabase/tables"
 import { categoryOptions, CURRENCY_OPTIONS, methodOptions, useCategories, useKeywordRules, useMembers, usePaymentMethods, useSettings } from "@/features/catalogs/hooks"
@@ -64,6 +64,17 @@ const schema = z.object({
   message: "La fecha de fin no puede ser antes del próximo pago",
 })
 type Values = z.infer<typeof schema>
+
+/**
+ * Valor de UN periodo tal como se va a guardar (`valor` de la fila): el promedio del rango si varía según consumo,
+ * el promedio de las dos quincenas si cada una vale distinto, o el valor escrito. Con él, `fijoMensual` dice cuánto
+ * es al mes (una quincena vale el doble; un semestral, la sexta parte).
+ */
+function valorPeriodo(v: Pick<Values, "tipoValor" | "frec" | "repQ" | "valor" | "vmin" | "vmax" | "q1" | "q2">): number {
+  if (v.tipoValor === "rango") return ((v.vmin || 0) + (v.vmax || 0)) / 2
+  if (v.frec === "quincenal" && v.repQ === "distinto") return ((v.q1 || 0) + (v.q2 || 0)) / 2
+  return v.valor || 0
+}
 /** `preset`: valores iniciales al crear (p. ej. desde Proveedores › "Agregar recordatorio de pago"). */
 type Preset = { nombre?: string; provider_id?: string | null; contact_id?: string | null; proveedor?: string; payment_method_id?: string | null; category_id?: string | null }
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; fixed?: FixedRow | null; preset?: Preset | null }
@@ -233,7 +244,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
             {w.currency !== "COP" && (
               <FormField label="En pesos">
                 {trmDe(w.currency)
-                  ? <p className="text-sm text-muted-foreground">≈ <span className="font-semibold" data-money>{fmtMoney(Math.round((w.tipoValor === "rango" ? (w.vmin + w.vmax) / 2 : w.valor) * trmDe(w.currency)))}</span> al mes, con la tasa que tienes guardada.</p>
+                  ? <p className="text-sm text-muted-foreground">≈ <span className="font-semibold" data-money>{fmtMoney(Math.round(w.frec === "unico" ? valorPeriodo(w) * trmDe(w.currency) : fijoMensual({ frec: w.frec, valor: valorPeriodo(w), currency: w.currency }, { [w.currency]: trmDe(w.currency) })))}</span>{w.frec === "unico" ? " en total" : " al mes"}, con la tasa que tienes guardada.</p>
                   : <p className="text-sm text-muted-foreground">Todavía no tienes la tasa de {w.currency}. Guárdala en <Link href="/ajustes?tab=finanzas" className="underline">Ajustes › Finanzas</Link> para ver el equivalente en pesos.</p>}
               </FormField>
             )}
