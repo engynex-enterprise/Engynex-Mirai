@@ -77,6 +77,12 @@ function PayBody({ fixed, onOpenChange, onReschedule }: { fixed: FixedRow; onOpe
   if (!opts.length) return <p className="py-4 text-muted-foreground">Este gasto fijo está al día. No hay periodos pendientes.</p>
   return (
     <FieldGroup className="pb-2">
+      {!!fixed.referencia && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-secondary px-3 py-2 text-sm">
+          <span className="min-w-0"><span className="text-muted-foreground">Referencia: </span><span className="font-semibold break-all">{fixed.referencia}</span></span>
+          <Button type="button" variant="outline" size="sm" onClick={() => { void navigator.clipboard.writeText(fixed.referencia); toast.success("Referencia copiada") }}>Copiar</Button>
+        </div>
+      )}
       <FormField label="¿Qué periodo pagas?" tip={false}>
         <ChoiceCards value={per} onChange={pickPer} cols={2} items={opts.map((p) => ({
           value: p.per, label: `${qLabel(p.per) ? qLabel(p.per) + " · " : ""}${fmtDate(p.due)}`, desc: p.parcial ? `Abonaste ${fmtMoney(p.pagado)} · faltan ${fmtMoney(p.falta)}` : p.due < today ? "Vencido" : "Pendiente", icon: p.parcial ? "split" : p.due < today ? "circle-alert" : "calendar-clock",

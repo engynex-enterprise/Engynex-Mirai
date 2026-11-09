@@ -49,6 +49,7 @@ const schema = z.object({
   proveedor: z.string(),
   provider_id: z.string().nullable(),
   contact_id: z.string().nullable(),
+  referencia: z.string(),
   /** Para quién es el gasto: vacío = toda la familia (general); una o varias personas (se reparte en partes iguales). */
   personas: z.array(z.string()),
   yaPagoQ: z.enum(["no", "q1", "q2", "ambas"]), yaPagoM: z.enum(["no", "si"]),
@@ -100,6 +101,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       diaQ1: fixed?.frec === "quincenal" ? Math.min(15, fixed.dia) : 15, dia2: fixed?.dia2 ?? 30,
       fecha: fixed?.fecha_unica ?? plus7, medio: fixed?.payment_method_id ?? preset?.payment_method_id ?? defMedio ?? methods[0]?.id ?? null, proveedor: fixed?.proveedor ?? preset?.proveedor ?? "", provider_id: fixed?.provider_id ?? preset?.provider_id ?? null,
       contact_id: fixed?.contact_id ?? preset?.contact_id ?? null,
+      referencia: fixed?.referencia ?? "",
       personas: personasDe(fixed),
       yaPagoQ: "no", yaPagoM: "no", fpag: today, vpag: 0,
       repQ: fixedReparto(fixed ?? {}).modo === "distinto" ? "distinto" : "igual", q1: Number(fixedReparto(fixed ?? {}).q1 ?? fixed?.valor ?? 0), q2: Number(fixedReparto(fixed ?? {}).q2 ?? fixed?.valor ?? 0),
@@ -130,7 +132,7 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
       dia: v.frec === "quincenal" ? Math.min(15, Math.max(1, Math.round(v.diaQ1 || 15))) : step ? prox.getDate() : 1,
       dia2: v.frec === "quincenal" ? Math.min(31, Math.max(16, Math.round(v.dia2 || 30))) : null,
       mes: step ? prox.getMonth() + 1 : null, fecha_unica: v.frec === "unico" ? v.fecha : null,
-      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, contact_id: v.contact_id, reparto,
+      payment_method_id: v.medio, proveedor: (v.proveedor ?? "").trim(), provider_id: v.provider_id, contact_id: v.contact_id, referencia: (v.referencia ?? "").trim(), reparto,
       // La base sincroniza member_id (la persona si es una sola) para lo que solo conoce una persona.
       member_ids: v.personas.length ? v.personas : null, member_id: v.personas.length === 1 ? v.personas[0] : null,
     }
@@ -253,8 +255,14 @@ function FixedFormBody({ onOpenChange, fixed, formId, preset }: Props & { formId
                     // Categoría por defecto del proveedor si aún no la escogió a mano.
                     const c = categoriaSugerida(p, cats)
                     if (c && (!catManual || !form.getValues("category_id"))) form.setValue("category_id", c)
+                    // La referencia del negocio solo si todavía no escribió una (puedes tener dos contratos con la misma inmobiliaria).
+                    if (p?.referencia && !form.getValues("referencia").trim()) form.setValue("referencia", p.referencia)
                   }} />
               )} />
+            </FormField>
+            <FormField label="Número de cuenta, contrato o referencia (opcional)" htmlFor="f-ref"
+              tip="El número con el que pagas: la cuenta de Enel, el contrato del arriendo, el código del colegio. Te lo mostramos al registrar el pago para que no tengas que buscarlo.">
+              <Input id="f-ref" className="h-11" placeholder="Ej. 123456789" {...form.register("referencia")} />
             </FormField>
           </div>
           {!fixed && w.frec === "quincenal" && (

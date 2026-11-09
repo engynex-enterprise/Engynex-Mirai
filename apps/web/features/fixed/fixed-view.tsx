@@ -133,7 +133,7 @@ export function FixedView() {
                 {next?.parcial && <StatusPill tone="warn" hint={`Abonaste ${fmtMoney(next.pagado)} a este periodo. Toca "Registrar pago" para pagar lo que falta.`}>faltan {fmtMoney(next.falta)}</StatusPill>}
                 {pill}
               </>}
-              subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor, paraQuien(f, members)].filter(Boolean).join(" · ")}
+              subtitle={[cat?.nombre, FFREC[f.frec], next && `próximo: ${fmtDate(next.due)}${q}`, f.proveedor, f.referencia && `ref. ${f.referencia}`, paraQuien(f, members)].filter(Boolean).join(" · ")}
               value={f.variable && f.vmin ? <span className="grid text-right"><span className="font-bold"><Money value={Number(f.vmin)} short /> – <Money value={Number(f.vmax)} short /></span><span className="text-xs text-muted-foreground">promedio <Money value={Number(f.valor)} /></span></span> : fixedReparto(f).modo === "distinto" && f.frec === "quincenal"
                 ? <span className="grid text-right"><Money value={next ? fijoValor(f, next.per) : Number(f.valor)} className="font-bold" /><span className="text-xs text-muted-foreground"><Money value={fijoValor(f, "Q1")} short /> + <Money value={fijoValor(f, "Q2")} short /> al mes</span></span>
                 : <Money value={Number(f.valor)} className="font-bold" />}
