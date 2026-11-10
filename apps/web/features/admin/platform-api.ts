@@ -76,3 +76,24 @@ export async function loadBroadcasts(): Promise<BroadcastRow[]> {
   const { a, unwrap } = await api()
   return unwrap(await a.broadcasts())
 }
+
+// ── Datos de referencia: usura por mes (/v1/admin/refs/usura) ─────────────────────────────────────────────────────
+
+export type UsuraFila = { desde: string; hasta: string; tasa_ea: number; fuente: string | null }
+export type UsuraEstado = { hoy: string; vigente: UsuraFila | null; alerta: "sin-tasa" | "vencida" | "falta-siguiente" | null; siguiente: string; filas: UsuraFila[]; librosAuto: number; librosAlDia: number }
+
+export async function loadUsura(): Promise<UsuraEstado> {
+  const { a, unwrap } = await api()
+  return unwrap(await a.usura()) as UsuraEstado
+}
+
+/** Carga o corrige la usura de un mes (`desde` = AAAA-MM-01). Devuelve el mensaje para mostrar. */
+export async function saveUsura(desde: string, tasa_ea: number, fuente: string): Promise<string> {
+  const { a, unwrapData } = await api()
+  return unwrapData(await a.saveUsura({ params: { desde }, body: { tasa_ea, fuente } })).msg
+}
+
+export async function deleteUsura(desde: string): Promise<string> {
+  const { a, unwrapData } = await api()
+  return unwrapData(await a.deleteUsura({ params: { desde } })).msg
+}

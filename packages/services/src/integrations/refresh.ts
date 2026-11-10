@@ -1,5 +1,6 @@
 // Datos de referencia del cron. Movido de apps/web/features/integrations/refresh.ts.
 import { todayBogota } from "@mirai/domain/dates"
+import { estadoUsura } from "@mirai/domain/usura"
 import { rt } from "../runtime"
 import { fetchCryptoPrices, fetchFestivos, fetchFx, fetchStockPrice, fetchTrm, fetchUsura } from "./data-sources"
 import { getGlobalIntegration, getIntegration, type IntegrationValue } from "./store"
@@ -46,7 +47,19 @@ export async function refreshReferenceData() {
 
   await step("usura", async () => {
     if (await apagada("usura")) return "apagada en la consola"
-    const u = await fetchUsura()
+    let u: Awaited<ReturnType<typeof fetchUsura>>
+    try { u = await fetchUsura() } catch (e) {
+      // La fuente falló: si ya no hay tasa para hoy, se avisa a los administradores (una vez por mes) para cargarla a mano.
+      const { data: rows } = await db.from("ref_usury_rate").select("desde,hasta,tasa_ea").eq("modalidad", "consumo")
+      const hoy = todayBogota()
+      const e2 = estadoUsura((rows ?? []).map((r) => ({ desde: String(r.desde), hasta: String(r.hasta), tasa_ea: +r.tasa_ea })), hoy)
+      if (e2.alerta === "sin-tasa" || e2.alerta === "vencida") {
+        const { data: admins } = await db.from("platform_admins").select("user_id")
+        const ym = hoy.slice(0, 7)
+        if (admins?.length) await db.from("notifications").upsert(admins.map((a) => ({ user_id: a.user_id, kind: "sistema", titulo: "Falta la tasa de usura de este mes", cuerpo: "datos.gov.co no respondió y la última tasa ya venció. Cárgala a mano con su resolución.", href: "/admin/referencias", dedupe: `usura:${ym}` })), { onConflict: "user_id,dedupe", ignoreDuplicates: true })
+      }
+      throw e
+    }
     await db.from("ref_usury_rate").upsert({ desde: u.desde, hasta: u.hasta, modalidad: "consumo", tasa_ea: +u.usura.toFixed(2), fuente: "Superintendencia Financiera · datos.gov.co (pare-7x5i)" })
     // A los libros va la que RIGE hoy (usura_vigente, migración 0013), no la última publicada: la del mes siguiente
     // se publica antes de empezar y se aplica cuando su mes llega (el cron corre a diario).

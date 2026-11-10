@@ -30,6 +30,21 @@ export class AdminPlatformController {
     return tsRestHandler(c.deletePlan, async ({ params }) => ok(await this.svc.deletePlan(params.planId)))
   }
 
+  @TsRestHandler(c.usura)
+  usura() {
+    return tsRestHandler(c.usura, async () => json(await this.svc.usura()))
+  }
+
+  @TsRestHandler(c.saveUsura)
+  saveUsura() {
+    return tsRestHandler(c.saveUsura, async ({ params, body }) => ok(await this.svc.saveUsura(params.desde, body)))
+  }
+
+  @TsRestHandler(c.deleteUsura)
+  deleteUsura() {
+    return tsRestHandler(c.deleteUsura, async ({ params }) => ok(await this.svc.deleteUsura(params.desde)))
+  }
+
   @TsRestHandler(c.coupons)
   coupons() {
     return tsRestHandler(c.coupons, async () => json(await this.svc.coupons()))

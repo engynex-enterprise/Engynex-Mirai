@@ -33,17 +33,17 @@ beforeEach(() => {
 })
 
 describe("contrato y guardas", () => {
-  it("adminContract = las 30 rutas de F2-I + las 15 de V7-G + las 3 de V7-H3, sin repetir rutas", () => {
+  it("adminContract = las 30 rutas de F2-I + las 15 de V7-G + las 3 de V7-H3 + las 3 de usura (datos de referencia), sin repetir rutas", () => {
     expect(Object.keys(adminCoreContract)).toHaveLength(30)
-    expect(Object.keys(adminPlatformContract)).toHaveLength(18)
+    expect(Object.keys(adminPlatformContract)).toHaveLength(21)
     const routes = Object.values(adminContract) as AppRoute[]
-    expect(routes).toHaveLength(48)
-    expect(new Set(routes.map((r) => `${r.method} ${r.path}`)).size).toBe(48)
+    expect(routes).toHaveLength(51)
+    expect(new Set(routes.map((r) => `${r.method} ${r.path}`)).size).toBe(51)
   })
 
   it("todas las rutas nuevas: 403 a quien no es administrador y 401 sin sesión", async () => {
     for (const r of Object.values(adminPlatformContract) as AppRoute[]) {
-      const url = r.path.replace(":planId", "familia").replace(":codigo", "HOLA").replace(":kind", "telegram").replace(":name", "aviso")
+      const url = r.path.replace(":planId", "familia").replace(":codigo", "HOLA").replace(":kind", "telegram").replace(":name", "aviso").replace(":desde", "2026-11-01")
       const res = await t.call(r.method as "GET", url, "admin", r.method === "GET" ? undefined : {})
       expect(res.status, `${r.method} ${r.path}`).toBe(403)
       expect(res.body.msg).toBe("Solo el administrador de Mirai puede ver esto.")
@@ -124,6 +124,30 @@ describe("cupones", () => {
     expect(JSON.stringify((await t.call("PUT", `${A}/coupons/HOLA`, "owner", { ...C, periodos: [] })).body)).toContain("Elige al menos un periodo")
     expect(JSON.stringify((await t.call("PUT", `${A}/coupons/A!`, "owner", C)).body)).toContain("Usa de 3 a 30 letras")
     expect(t.fx.rows.all("coupons")).toEqual([])
+  })
+})
+
+describe("datos de referencia › usura por mes", () => {
+  it("cargar un mes a mano: queda con su fuente, se aplica a los libros en automático (no a los manuales) y se audita", async () => {
+    t.fx.rows.seed("book_settings", [{ book_id: "b-auto", usura: 26, usura_auto: true }, { book_id: "b-manual", usura: 30, usura_auto: false }])
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())
+    const mes = `${hoy.slice(0, 7)}-01`
+    const r = await t.call("PUT", `${A}/refs/usura/${mes}`, "owner", { tasa_ea: 28.34, fuente: "Superintendencia Financiera, Resolución 1707 de 2026" })
+    expect(r.body).toEqual({ ok: true, data: { libros: 1, msg: "Usura guardada y aplicada a 1 libro." } })
+    expect(t.fx.rows.all("ref_usury_rate")).toMatchObject([{ desde: mes, modalidad: "consumo", tasa_ea: 28.34, fuente: "Superintendencia Financiera, Resolución 1707 de 2026" }])
+    expect(t.fx.rows.all<{ book_id: string; usura: number }>("book_settings").map((b) => [b.book_id, b.usura])).toEqual([["b-auto", 28.34], ["b-manual", 30]])
+    const g = await t.call("GET", `${A}/refs/usura`, "owner")
+    expect(g.body).toMatchObject({ vigente: { desde: mes, tasa_ea: 28.34 }, librosAuto: 1, librosAlDia: 1 })
+    expect(audits().map((a) => a.accion)).toEqual(["usura: cargar mes"])
+    expect((await t.call("DELETE", `${A}/refs/usura/${mes}`, "owner")).body).toMatchObject({ ok: true, data: { msg: "Usura del mes borrada." } })
+    expect((await t.call("GET", `${A}/refs/usura`, "owner")).body).toMatchObject({ vigente: null, alerta: "sin-tasa" })
+  })
+
+  it("validaciones: el día 1 del mes, una tasa razonable y la fuente", async () => {
+    expect(JSON.stringify((await t.call("PUT", `${A}/refs/usura/2026-11-15`, "owner", { tasa_ea: 28.34, fuente: "Res. 1707" })).body)).toContain("Debe ser el día 1 del mes")
+    expect(JSON.stringify((await t.call("PUT", `${A}/refs/usura/2026-11-01`, "owner", { tasa_ea: 280, fuente: "Res. 1707" })).body)).toContain("parece demasiado alta")
+    expect(JSON.stringify((await t.call("PUT", `${A}/refs/usura/2026-11-01`, "owner", { tasa_ea: 28.34, fuente: "" })).body)).toContain("Escribe de dónde sale")
+    expect(t.fx.rows.all("ref_usury_rate")).toEqual([])
   })
 })
 

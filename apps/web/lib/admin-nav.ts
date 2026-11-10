@@ -13,7 +13,7 @@ export const ADMIN_NAV: AdminSection[] = [
   ] },
   { sec: "Plataforma", items: [
     l("integraciones", "Integraciones globales", "plug", "Servicios que Mirai pone para todos"), l("whatsapp", "WhatsApp", "message-circle", "Plantillas de Meta, plantilla por caso y pruebas"), l("envios", "Registro de envíos", "mail", "Correos, WhatsApp, Telegram y push enviados o fallidos"), l("anuncios", "Anuncios", "megaphone", "Publicidad del plan gratis"),
-    l("comunicados", "Comunicados", "send", "Avisos masivos a los usuarios"), l("ia", "Uso de IA", "sparkles", "Consultas, tokens, costo, cupos y precios de la IA"),
+    l("comunicados", "Comunicados", "send", "Avisos masivos a los usuarios"), l("ia", "Uso de IA", "sparkles", "Consultas, tokens, costo, cupos y precios de la IA"), l("referencias", "Datos de referencia", "scale", "Tasa de usura de cada mes: vigente, alertas y carga a mano"),
   ] },
   { sec: "Soporte", items: [l("opiniones", "Opiniones", "message-square-heart", "Calificaciones, errores e ideas")] },
   { sec: "Sistema", items: [l("administradores", "Administradores", "shield-check", "Quién administra Mirai"), l("auditoria", "Auditoría", "scroll-text", "Todo lo que se hace en la consola"), l("sistema", "Ajustes y estado", "settings", "Aviso general, registro, límites y salud")] },

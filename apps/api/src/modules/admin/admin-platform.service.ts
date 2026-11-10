@@ -4,7 +4,10 @@
 // (SystemScope con motivo) y la red (proveedores, Meta) por PlatformIntegrationsPort. Nunca devuelve secretos.
 import { Injectable } from "@nestjs/common"
 import { mask } from "@mirai/crypto"
-import type { AdminCoupon, AdminPlan, BroadcastRow, CouponInput, GlobalIntegration, PlanInput } from "@mirai/contracts/modules/admin-platform"
+import type { AdminCoupon, AdminPlan, BroadcastRow, CouponInput, GlobalIntegration, PlanInput, UsuraInput } from "@mirai/contracts/modules/admin-platform"
+import { UsuraAdmin } from "@mirai/contracts/modules/admin-platform"
+import { estadoUsura, mesUsura, usuraVigente, type UsuraRow } from "@mirai/domain/usura"
+import { todayBogota } from "@mirai/domain/dates"
 import { ENV_INTEGRATION_KINDS, integrationFromEnv, mergeEnv } from "@mirai/services/integrations/env"
 import { INTEGRATIONS, integrationByKind, isAdminOnly, type IntegrationDef } from "@mirai/services/integrations/registry"
 import type { IntegrationValue } from "@mirai/services/integrations/store"
@@ -26,6 +29,7 @@ const SYS = systemScope("consola: planes, cupones, integraciones globales y What
 const FIXED_PLANS = new Set(["gratis", "premium"])
 const NO_WA = "Primero configura WhatsApp en Integraciones globales."
 type Msg = { msg: string }
+type UsuraAdminT = z.infer<typeof UsuraAdmin>
 type GlobalRow = { kind: string; modo: string; planes: string[] | null; config: Record<string, unknown> | null; meta: Record<string, unknown> | null; updated_at: string | null; secrets_enc: string | null }
 
 @Injectable()
@@ -90,6 +94,47 @@ export class AdminPlatformService {
   }
 
   // ── Cupones ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+  // ── Datos de referencia: usura por mes ──────────────────────────────────────────────────────────────────────
+
+  private async usuraFilas(): Promise<UsuraRow[]> {
+    const rows = await this.store.select<UsuraRow>(SYS, "ref_usury_rate", { eq: { modalidad: "consumo" }, columns: ["desde", "hasta", "tasa_ea", "fuente"], order: [{ column: "desde", ascending: false }] })
+    return rows.map((r) => ({ desde: String(r.desde).slice(0, 10), hasta: String(r.hasta).slice(0, 10), tasa_ea: num(r.tasa_ea), fuente: r.fuente ?? null }))
+  }
+
+  async usura(): Promise<UsuraAdminT> {
+    const hoy = todayBogota()
+    const filas = await this.usuraFilas()
+    const e = estadoUsura(filas, hoy)
+    const [librosAuto, librosAlDia] = await Promise.all([
+      this.store.count(SYS, "book_settings", { eq: { usura_auto: true } }),
+      e.vigente ? this.store.count(SYS, "book_settings", { eq: { usura_auto: true, usura: e.vigente.tasa_ea } }) : Promise.resolve(0),
+    ])
+    return { hoy, vigente: e.vigente ? { ...e.vigente, fuente: e.vigente.fuente ?? null } : null, alerta: e.alerta, siguiente: e.siguiente, filas: filas.map((f) => ({ ...f, fuente: f.fuente ?? null })), librosAuto, librosAlDia }
+  }
+
+  /** Pone la usura vigente hoy en los libros en automático (como el cron, pero al momento). */
+  private async aplicarUsura(): Promise<number> {
+    const v = usuraVigente(await this.usuraFilas(), todayBogota())
+    if (!v) return 0
+    return (await this.store.update(SYS, "book_settings", { eq: { usura_auto: true }, neq: { usura: v.tasa_ea } }, { usura: v.tasa_ea })).length
+  }
+
+  async saveUsura(desde: string, u: UsuraInput): Promise<Msg & { libros: number }> {
+    const { hasta } = mesUsura(desde.slice(0, 7))
+    await this.store.upsert(SYS, "ref_usury_rate", [{ desde, hasta, modalidad: "consumo", tasa_ea: Math.round(u.tasa_ea * 100) / 100, fuente: u.fuente }], { onConflict: ["desde", "modalidad"] })
+    const libros = await this.aplicarUsura()
+    await this.audit("usura: cargar mes", desde.slice(0, 7), { tasa_ea: u.tasa_ea, fuente: u.fuente, libros })
+    return { libros, msg: libros ? `Usura guardada y aplicada a ${libros} libro${libros === 1 ? "" : "s"}.` : "Usura guardada." }
+  }
+
+  async deleteUsura(desde: string): Promise<Msg & { libros: number }> {
+    const n = await this.store.delete(SYS, "ref_usury_rate", { eq: { desde, modalidad: "consumo" } })
+    if (!n) throw DomainError.notFound("No encontramos la usura de ese mes.")
+    const libros = await this.aplicarUsura()
+    await this.audit("usura: borrar mes", desde.slice(0, 7), { libros })
+    return { libros, msg: "Usura del mes borrada." }
+  }
 
   async coupons(): Promise<AdminCoupon[]> {
     const rows = await this.store.select<AdminCoupon>(SYS, "coupons", { order: [{ column: "created_at", ascending: false }] })

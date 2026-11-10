@@ -3,13 +3,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 type Row = Record<string, unknown>
-const db = { upserts: [] as Row[], updates: [] as { values: Row; ids: unknown[] }[], vigente: 0 as number | null }
+const db = { upserts: [] as Row[], updates: [] as { values: Row; ids: unknown[] }[], vigente: 0 as number | null, avisos: [] as Row[], falla: false }
 
 function q(table: string) {
   const chain = {
     select: () => chain, is: () => chain, eq: () => chain, not: () => chain, gt: () => chain,
-    then: (ok: (v: { data: Row[] }) => unknown) => ok({ data: table === "books" ? [{ id: "b1", household_id: "h1" }, { id: "b2", household_id: "h2" }] : table === "book_settings" ? [{ book_id: "b1" }, { book_id: "b2" }] : [] }),
-    upsert: async (v: Row) => { if (table === "ref_usury_rate") db.upserts.push(v); return { error: null } },
+    then: (ok: (v: { data: Row[] }) => unknown) => ok({ data: table === "books" ? [{ id: "b1", household_id: "h1" }, { id: "b2", household_id: "h2" }] : table === "book_settings" ? [{ book_id: "b1" }, { book_id: "b2" }]
+      : table === "ref_usury_rate" ? [{ desde: "2026-10-01", hasta: "2026-10-31", tasa_ea: 28.1 }] : table === "platform_admins" ? [{ user_id: "admin-1" }] : [] }),
+    upsert: async (v: Row | Row[]) => { if (table === "ref_usury_rate") db.upserts.push(v as Row); if (table === "notifications") db.avisos.push(...(v as Row[])); return { error: null } },
     update: (values: Row) => ({ in: async (_c: string, ids: unknown[]) => { db.updates.push({ values, ids }); return { error: null } }, eq: async () => ({ error: null }) }),
   }
   return chain
@@ -17,14 +18,14 @@ function q(table: string) {
 vi.mock("../runtime", () => ({ rt: () => ({ admin: () => ({ from: q, rpc: async () => ({ data: db.vigente }) }) }) }))
 vi.mock("./store", () => ({ getGlobalIntegration: async () => null, getIntegration: async (h: string) => ({ enabled: h === "h1" }) }))
 vi.mock("./data-sources", () => ({
-  fetchUsura: async () => ({ ibc: 19.2, usura: 28.8, desde: "2026-12-01", hasta: "2026-12-31" }),
+  fetchUsura: async () => { if (db.falla) throw new Error("datos.gov.co no respondió"); return { ibc: 19.2, usura: 28.8, desde: "2026-12-01", hasta: "2026-12-31" } },
   fetchTrm: async () => { throw new Error("sin red") }, fetchFx: async () => { throw new Error("sin red") }, fetchFestivos: async () => { throw new Error("sin red") },
   fetchCryptoPrices: async () => ({}), fetchStockPrice: async () => null,
 }))
 
 const { refreshReferenceData } = await import("./refresh")
 
-beforeEach(() => { db.upserts = []; db.updates = []; db.vigente = 28.34 })
+beforeEach(() => { db.upserts = []; db.updates = []; db.vigente = 28.34; db.avisos = []; db.falla = false })
 
 describe("cron de referencias › usura", () => {
   it("la de diciembre se guarda con su fuente, pero a los libros va la que rige hoy (28,34 % de noviembre)", async () => {
@@ -37,5 +38,12 @@ describe("cron de referencias › usura", () => {
     db.vigente = null
     await refreshReferenceData()
     expect(db.updates).toEqual([])
+  })
+  it("si datos.gov.co falla y la última tasa ya venció, avisa a los administradores (una vez por mes) y no toca los libros", async () => {
+    db.falla = true
+    const log = await refreshReferenceData()
+    expect(log.find((l) => l.startsWith("usura"))).toMatch(/ERROR/)
+    expect(db.updates).toEqual([])
+    expect(db.avisos).toEqual([expect.objectContaining({ user_id: "admin-1", href: "/admin/referencias", dedupe: expect.stringMatching(/^usura:\d{4}-\d{2}$/) })])
   })
 })

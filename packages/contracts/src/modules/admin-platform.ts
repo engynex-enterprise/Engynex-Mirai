@@ -143,12 +143,35 @@ export const WaTemplateName = z.object({ name: z.string().regex(/^[a-z0-9_]{1,51
 /** `id` = solo esa traducción (hsm_id); sin él (o si no es un id de Meta), todas las del nombre. */
 export const WaDeleteTemplateQuery = z.object({ id: z.string().max(40).optional() })
 
+// ── Datos de referencia: tasa de usura por mes (ref_usury_rate, migración 0013) ─────────────────────────────────
+export const UsuraRowSchema = z.object({ desde: IsoDate, hasta: IsoDate, tasa_ea: z.number(), fuente: z.string().nullable() })
+export const UsuraAdmin = z.object({
+  hoy: IsoDate,
+  vigente: UsuraRowSchema.nullable(),
+  alerta: z.enum(["sin-tasa", "vencida", "falta-siguiente"]).nullable(),
+  /** Mes siguiente (YYYY-MM), para la alerta de fin de mes. */
+  siguiente: z.string(),
+  filas: z.array(UsuraRowSchema),
+  /** Libros en automático y cuántos tienen ya la vigente. */
+  librosAuto: z.number(),
+  librosAlDia: z.number(),
+})
+export const UsuraMes = z.object({ desde: IsoDate.refine((d) => d.endsWith("-01"), "Debe ser el día 1 del mes") })
+export const UsuraInput = z.object({
+  tasa_ea: z.number({ error: "Escribe la tasa de usura" }).min(1, "La tasa debe ser mayor que 1 %").max(200, "Revisa la tasa: parece demasiado alta"),
+  fuente: z.string().trim().min(3, "Escribe de dónde sale (p. ej. la resolución de la Superfinanciera)").max(200),
+})
+export type UsuraInput = z.infer<typeof UsuraInput>
+
 const c = initContract()
 export const adminPlatformContract = c.router(
   {
     plans: { method: "GET", path: `${A}/plans`, responses: { ...ERRORS, 200: z.array(AdminPlan) }, summary: "Todos los planes (también los ocultos o que no se venden)" },
     savePlan: { method: "PUT", path: `${A}/plans/:planId`, pathParams: z.object({ planId: PlanId }), body: PlanInput, responses: { ...ERRORS, 200: ApiOk(Msg.extend({ creado: z.boolean() })) }, summary: "Crea o edita un plan (Gratis no cobra y siempre se puede usar)" },
     deletePlan: { method: "DELETE", path: `${A}/plans/:planId`, pathParams: z.object({ planId: PlanId }), body: c.noBody(), responses: { ...ERRORS, 200: ApiOk(Msg) }, summary: "Borra un plan (Gratis y Premium no; con suscripciones o pagos, mejor ocultarlo)" },
+    usura: { method: "GET", path: `${A}/refs/usura`, responses: { ...ERRORS, 200: UsuraAdmin }, summary: "Tasa de usura por mes: la vigente, alertas y el historial" },
+    saveUsura: { method: "PUT", path: `${A}/refs/usura/:desde`, pathParams: UsuraMes, body: UsuraInput, responses: { ...ERRORS, 200: ApiOk(Msg.extend({ libros: z.number() })) }, summary: "Carga o corrige la usura de un mes (a mano, si la fuente falla) y la aplica a los libros en automático" },
+    deleteUsura: { method: "DELETE", path: `${A}/refs/usura/:desde`, pathParams: UsuraMes, body: c.noBody(), responses: { ...ERRORS, 200: ApiOk(Msg.extend({ libros: z.number() })) }, summary: "Borra la usura de un mes (la vigente pasa a ser la anterior)" },
     coupons: { method: "GET", path: `${A}/coupons`, responses: { ...ERRORS, 200: z.array(AdminCoupon) }, summary: "Cupones (los más nuevos primero)" },
     saveCoupon: { method: "PUT", path: `${A}/coupons/:codigo`, pathParams: z.object({ codigo: CouponCode }), body: CouponInput, responses: { ...ERRORS, 200: ApiOk(Msg.extend({ creado: z.boolean() })) }, summary: "Crea o edita un cupón (el código no cambia)" },
     deleteCoupon: { method: "DELETE", path: `${A}/coupons/:codigo`, pathParams: z.object({ codigo: CouponCode }), body: c.noBody(), responses: { ...ERRORS, 200: ApiOk(Msg) }, summary: "Borra un cupón (si ya se usó, mejor pausarlo)" },
