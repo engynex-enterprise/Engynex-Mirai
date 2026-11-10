@@ -7,7 +7,8 @@ export type LoanTipo = "banco" | "empeno" | "fiado" | "persona" | "cuotas" | "go
 /** Cómo se paga: cuotas fijas, una sola fecha o abonos libres (pago único con una fecha aproximada). */
 export type PagoModo = "cuotas" | "unico" | "libre"
 /** Qué dato del interés se conoce. */
-export type InteresModo = "no" | "tasa" | "cuota"
+/** Cómo se acordó el interés: sin intereses, un porcentaje, un valor fijo en pesos o "sé cuánto es la cuota". */
+export type InteresModo = "no" | "tasa" | "valor" | "cuota"
 /**
  * Quién presta (o a quién le prestaste). Siempre es un registro que se escoge (nunca un texto suelto), así la próxima
  * vez se reconoce y no se repite:
@@ -151,8 +152,8 @@ const PAGOS_TIPO: Record<LoanTipo, PagoModo[]> = {
   gota: ["cuotas"], presto: ["unico", "cuotas", "libre"], vendi: ["unico", "cuotas", "libre"], otro: ["unico", "cuotas", "libre"],
 }
 const INTERES_TIPO: Record<LoanTipo, InteresModo[]> = {
-  banco: ["cuota", "tasa"], empeno: ["tasa"], fiado: ["no", "tasa"], persona: ["no", "tasa", "cuota"], cuotas: ["cuota", "tasa", "no"],
-  gota: ["cuota", "tasa"], presto: ["no", "tasa", "cuota"], vendi: ["no", "tasa"], otro: ["no", "tasa", "cuota"],
+  banco: ["cuota", "tasa"], empeno: ["tasa", "valor"], fiado: ["no", "tasa"], persona: ["no", "tasa", "valor", "cuota"], cuotas: ["cuota", "tasa", "no"],
+  gota: ["cuota", "tasa"], presto: ["no", "tasa", "valor", "cuota"], vendi: ["no", "tasa"], otro: ["no", "tasa", "valor", "cuota"],
 }
 const TODAS = ["mensual", "quincenal", "semanal", "diario", "diariohab"]
 const FRECS_TIPO: Record<LoanTipo, string[]> = {
@@ -198,7 +199,10 @@ export function camposLoan(tipo: LoanTipo, kind: LoanKindT, st: { pago?: PagoMod
 export function sistemaDe(tipo: LoanTipo, interes: InteresModo, escogido: SistemaT, campos: Campos): SistemaT {
   if (interes === "no") return "sin"
   if (interes === "cuota") return "frances"
+  // El empeño siempre es "solo intereses cada mes y el capital al recuperarlo", así el interés se dé en % o en pesos.
   if (tipo === "empeno") return "americano"
+  // Un valor fijo de intereses: el mismo interés en cada cuota (sobre lo prestado).
+  if (interes === "valor") return "simple"
   if (campos.sistema) return escogido
   return tipo === "banco" || tipo === "cuotas" ? "frances" : "simple"
 }
@@ -219,6 +223,8 @@ export interface LoanFormState {
   tasa?: number
   ea?: number
   cuota?: number
+  /** Interés acordado en pesos (modo "valor"). */
+  valorInt?: number
   plazo?: number
   inicio: string
   vence?: string | null
@@ -251,6 +257,7 @@ export function faltantesLoan(s: LoanFormState): Faltante[] {
   if (pago !== "cuotas" && !(s.vence && s.vence > s.inicio)) out.push({ campo: "vence", msg: "La fecha del pago debe ser después de la fecha de inicio" })
   if (interes === "cuota" && !((s.cuota ?? 0) > 0)) out.push({ campo: "cuota", msg: "Escribe el valor de la cuota" })
   if (interes === "tasa" && !((s.tasa ?? 0) > 0) && !((s.ea ?? 0) > 0)) out.push({ campo: "tasa", msg: "Escribe el interés" })
+  if (interes === "valor" && !((s.valorInt ?? 0) > 0)) out.push({ campo: "valorInt", msg: "Escribe el valor de los intereses" })
   return out
 }
 
@@ -306,7 +313,7 @@ export function textosLoan(tipo: LoanTipo | null, kind: LoanKindT, st: { frec?: 
     plazo: "¿En cuántas cuotas?",
     cuota: `Valor de cada cuota`,
     interes: C ? "¿Le cobras intereses?" : "¿Cobra intereses?",
-    interesItems: { no: { label: "No" }, tasa: { label: "Sí, sé el porcentaje" }, cuota: { label: "Sí, sé cuánto es la cuota" } },
+    interesItems: { no: { label: "No" }, tasa: { label: "Sí, un porcentaje", desc: "Ej. 2 % al mes o 10 % en total" }, valor: { label: "Sí, un valor fijo", desc: "Ej. $ 50.000 de intereses" }, cuota: { label: "Sí, sé cuánto es la cuota" } },
     hist: C ? "¿Ya te ha pagado algo?" : "¿Ya has pagado algo?",
     boton: C ? "Registrar préstamo" : "Registrar deuda",
     toast: C ? "Préstamo registrado." : "Deuda registrada.",

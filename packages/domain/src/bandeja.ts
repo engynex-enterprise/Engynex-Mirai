@@ -236,7 +236,7 @@ export interface PlanLote {
 const TIPO: Record<string, TipoPago> = { fixed_expenses: "fijo", subscriptions: "suscripcion", credit_cards: "tarjeta", loans: "prestamo" }
 
 /** ¿Este movimiento se puede pagar (o confirmar) desde la bandeja? */
-export const sePuedePagar = (m: Mov): boolean => (m.estado !== "hecho" || !!m.supuesto) && !!m.ref && m.ref.tabla in TIPO
+export const sePuedePagar = (m: Mov): boolean => (m.estado !== "hecho" || !!m.supuesto) && !!m.ref && (m.ref.tabla in TIPO || m.ref.tabla === "expenses")
 
 /**
  * Qué se registra al pagar varios a la vez: cada fila con su valor (lo que falta), las cuotas de un mismo préstamo
@@ -253,7 +253,7 @@ export function planPagoLote(movs: Mov[]): PlanLote {
     // Su fecha pasó y Mirai lo da por pagado: confirmarlo es una decisión de cada uno (registrarlo dos veces sumaría de más).
     if (m.supuesto) { omitidos.push({ mov: m, razon: "Por confirmar: confírmalo desde su fila" }); continue }
     if (!m.ref || !(m.ref.tabla in TIPO)) {
-      omitidos.push({ mov: m, razon: m.ref?.tabla === "expenses" ? "Ya es un gasto registrado" : m.modulo === "presupuesto" ? "Es un estimado de tu presupuesto, no un pago" : `Se registra en ${MODULOS[m.modulo].label}` })
+      omitidos.push({ mov: m, razon: m.ref?.tabla === "expenses" ? (m.estado === "hecho" ? "Ya es un gasto registrado" : "Gasto por pagar: márcalo como pagado desde su fila") : m.modulo === "presupuesto" ? "Es un estimado de tu presupuesto, no un pago" : `Se registra en ${MODULOS[m.modulo].label}` })
       continue
     }
     const tipo = TIPO[m.ref.tabla]

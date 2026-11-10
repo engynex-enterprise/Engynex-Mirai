@@ -24,12 +24,14 @@ import { useBookId, useCanEdit, useCanEditRow, useCanRecord } from "@/components
 import { useList, useSoftDelete } from "@/hooks/use-book-data"
 import { useNewParam } from "@/hooks/use-new-param"
 import { apiUpdateRow } from "@/lib/api/book-rows"
-import { fmtMoney, fmtMonth, todayISO } from "@/lib/format"
+import { fmtDate, fmtMoney, fmtMonth, todayISO } from "@/lib/format"
 import { dayHeading, lastMonths } from "@/lib/list-helpers"
 import type { Row } from "@/lib/supabase/tables"
 import { memberName, useCategories, useContacts, useMembers, usePaymentMethods, useProviders, useSettings } from "@/features/catalogs/hooks"
 import { reviewMonthHormiga } from "@/features/ai/api"
 import { ExpenseForm } from "./expense-form"
+import { PayExpenseDialog } from "./pay-expense-dialog"
+import { pagoDeGasto } from "@/lib/domain/gasto-pago"
 import { isHormiga } from "./logic"
 import { hormigas } from "@/lib/domain"
 import { flujoIntegral, periodo } from "@/lib/domain/flujo-integral"
@@ -54,6 +56,7 @@ export function ExpensesView() {
   const [mes, setMes] = useQueryState("mes", parseAsString.withDefault(today.slice(0, 7)))
   const [nuevo, setNuevo] = useNewParam()
   const [editing, setEditing] = useState<G | null>(null)
+  const [pagando, setPagando] = useState<G | null>(null)
   const { data: all, isPending } = useList("expenses", { order: { column: "fecha", ascending: false } })
   const { data: book } = useBookData()
   const { data: cats = [] } = useCategories()
@@ -232,6 +235,7 @@ export function ExpensesView() {
           const cat = catOf(g)
           const h = isHormiga(g, cats, umbral)
           const can = canRow(g)
+          const pg = pagoDeGasto(g)
           return (
             <ListRow key={g.id} icon="receipt" select={select && { ...select, label: `Elegir ${g.descripcion || "gasto"}` }}
               media={<EntityLogo name={g.descripcion} provider={provOf(g)} icon={cat?.icon ?? "receipt"} seed={cat?.id} tone={h ? "warning" : undefined} />}
@@ -239,11 +243,13 @@ export function ExpensesView() {
               badges={<>
                 {h && <StatusPill tone="porVencer" hint={g.hormiga_razon || HORMIGA_HINT[g.hormiga_src === "ia" ? "ia" : g.hormiga_src === "manual" ? "manual" : "auto"]}>{g.hormiga_src === "ia" ? <Sparkles /> : g.hormiga_src === "manual" ? <Pencil /> : null}hormiga</StatusPill>}
                 {g.fixed_expense_id && <StatusPill tone="info" hint="Viene del pago de un gasto fijo.">fijo</StatusPill>}
+                {pg.estado !== "pagado" && <StatusPill tone={pg.vence < todayISO() ? "vencido" : "porVencer"} hint={`Para el ${fmtDate(pg.vence, { long: true })}.${pg.pagado > 0 ? ` Ya pagaste ${fmtMoney(pg.pagado)}.` : ""}`}>{pg.estado === "abonado" ? `abonado · faltan ${fmtMoney(pg.falta)}` : "por pagar"}</StatusPill>}
               </>}
               subtitle={[cat?.nombre ?? "Sin categoría", memberName(g.member_id, members), methodOf(g)?.nombre, pagadoA(g)].filter(Boolean).join(" · ")}
               value={<Money value={Number(g.valor)} className="font-bold" />}
               onClick={can ? () => setEditing(g) : undefined}
               actions={can ? [
+                ...(pg.estado !== "pagado" ? [{ label: `Marcar como pagado ${g.descripcion || "el gasto"}`, tip: "Marcar como pagado", icon: "circle-check", inline: true, onClick: () => setPagando(g), className: "text-success" }] : []),
                 ...(!g.fixed_expense_id ? [{ label: h ? "Quitar de hormiga" : "Marcar como hormiga", icon: "coffee", inline: true, onClick: () => toggleH.mutate(g), className: h ? "text-[#D98300]" : undefined }] : []),
                 { label: "Editar gasto", icon: "pencil", hideOnMobile: true, onClick: () => setEditing(g) },
                 { label: "Eliminar gasto", icon: "trash-2", inline: true, destructive: true, onClick: () => del.mutate(g) },
@@ -253,6 +259,7 @@ export function ExpensesView() {
       />
 
       <ExpenseForm open={nuevo || !!editing} onOpenChange={(o) => { if (!o) { setNuevo(false); setEditing(null) } }} expense={editing} />
+      <PayExpenseDialog expense={pagando} onOpenChange={(o) => { if (!o) setPagando(null) }} />
       <AdSlot slot="lista" />
     </div>
   )

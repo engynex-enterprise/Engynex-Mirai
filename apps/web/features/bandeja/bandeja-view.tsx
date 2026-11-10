@@ -1,5 +1,6 @@
 "use client"
 
+import { PayExpenseDialog } from "@/features/expenses/pay-expense-dialog"
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
@@ -246,6 +247,7 @@ export function BandejaView() {
       <ChargeSubDialog cobro={refP?.tabla === "subscriptions" && book ? (() => { const s = fila(book.subscriptions, refP.id); return s ? cobroDe(s as never, book.expenses as never, book.settings.trm) : null })() : null} onOpenChange={cerrar} />
       <PayLoanDialog loan={prestamo as never} name={prestamo && book ? loanName(prestamo as never, book.contacts, book.entities) : ""} onOpenChange={cerrar} />
       <PayCardForm card={refP?.tabla === "credit_cards" && book ? (fila(book.creditCards, refP.id) as never) : null} onOpenChange={cerrar} />
+      <PayExpenseDialog expense={refP?.tabla === "expenses" && book ? (fila(book.expenses, refP.id) as Row<"expenses"> | null) : null} onOpenChange={cerrar} />
 
       {/* Cambiar la fecha: el formulario del gasto fijo o de la suscripción (como «No tocaba pagar» en Fijos). */}
       <FixedForm open={!!fijoDeFecha} onOpenChange={(o) => { if (!o) setFechaDe(null) }} fixed={fijoDeFecha} />

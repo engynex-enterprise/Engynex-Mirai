@@ -2,7 +2,7 @@
 // La tasa `loan.tasa` es % MENSUAL. Para otras frecuencias se convierte: compuesta (1+im)^k − 1;
 // en interés simple, lineal im·k.
 import { addBiz, addDays, addMonths, days, iso, parseDate, toDay } from "./dates"
-import type { ContactIn, DateInput, EntityIn, LoanIn, LoanPaymentIn } from "./types"
+import type { Prenda, ContactIn, DateInput, EntityIn, LoanIn, LoanPaymentIn } from "./types"
 
 export type Sistema = "frances" | "aleman" | "simple" | "americano" | "sin"
 
@@ -122,7 +122,18 @@ export interface LoanEngine {
   paraSaldar: number
 }
 
-export type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null; primera?: string | null }
+export type EngineLoan = Pick<LoanIn, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio" | "extra"> & { payments: LoanPaymentIn[]; vence?: string | null; primera?: string | null; prenda?: Prenda | null }
+
+/**
+ * Cuotas de un empeño con refrendo hasta hoy + la que sigue + la de recuperar el objeto: las que ya vencieron (meses
+ * cumplidos desde el empeño) + 2. Así el capital siempre queda después del próximo refrendo.
+ */
+export function plazoRefrendo(L: { inicio: string; frec: string; primera?: string | null; vence?: string | null }, today: DateInput): number {
+  const t = iso(toDay(today))
+  let m = 0
+  while (m < 600 && iso(fechaCuota(L, m + 1)) <= t) m++
+  return m + 2
+}
 
 /**
  * Simula el préstamo cuota a cuota aplicando los pagos registrados en orden de fecha.
@@ -137,6 +148,9 @@ export function loanEngine(L: EngineLoan, today: DateInput): LoanEngine {
   let nRem = L.frec === "unico" ? 1 : +L.plazo
   let k = 0
   let base = S
+  // Empeño con refrendo mes a mes: no tiene fin fijo. El plan siempre deja el capital DESPUÉS del próximo refrendo
+  // (todas las cuotas hasta hoy y la siguiente son solo interés); el capital se paga al recuperar el objeto (abono).
+  if (sys === "americano" && L.frec !== "unico" && L.prenda?.refrendo) nRem = Math.max(nRem, plazoRefrendo(L, today))
   let C = annuity(S, i, nRem)
   let capF = S / nRem
   const extra = +(L.extra ?? 0) || 0
@@ -275,6 +289,80 @@ export function previewLoan(p: LoanPreviewInput, today: DateInput) {
     fin: last ? last.fecha : null,
     ea,
     plan: e.plan,
+  }
+}
+
+/**
+ * Tasa mensual (%) con la que el préstamo suma exactamente `interes` pesos de intereses en total, con interés simple
+ * (el mismo en cada cuota, sobre lo prestado). Para los acuerdos entre personas: "me devuelves $ 1.100.000" (interés
+ * fijo en total) o "$ 50.000 de intereses en cada cuota" (= 50.000 × cuotas). Bisección sobre previewLoan, así la
+ * tasa guardada reproduce ese interés con el mismo motor de cuotas. 0 si no hay interés o monto.
+ */
+export function tasaParaInteres(p: Omit<LoanPreviewInput, "tasa" | "sistema">, interes: number, today: DateInput): number {
+  if (!(interes > 0) || !(p.monto > 0)) return 0
+  const total = (t: number) => previewLoan({ ...p, sistema: "simple", tasa: t }, today).int
+  let lo = 0
+  let hi = 100
+  if (total(hi) < interes) return hi
+  for (let it = 0; it < 80; it++) {
+    const mid = (lo + hi) / 2
+    if (total(mid) < interes) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}
+
+/** Días de un mes en el motor de préstamos (año de 365,25 días / 12): la misma base de mesesUnico. */
+export const DIAS_MES = 365.25 / 12
+
+/** Cada cuánto se acordó un porcentaje o un valor de interés. "total" = una sola vez por todo el préstamo. */
+export type CicloInteres = "total" | "cuota" | "dia" | "semana" | "quincena" | "mes" | "anio"
+/** Días de cada ciclo (para pasar un porcentaje por ciclo a mensual, en proporción a los días). */
+const DIAS_CICLO: Partial<Record<CicloInteres, number>> = { dia: 1, semana: 7, quincena: DIAS_MES / 2, mes: DIAS_MES }
+
+/**
+ * Tasa mensual (%) que se guarda para un interés acordado por ciclo, con interés simple (sobre lo prestado):
+ *  · porcentaje por día, semana, quincena o mes → proporcional a los días (2 % semanal ≈ 8,7 % al mes);
+ *  · porcentaje anual → E.A. a mensual con la fórmula compuesta (mensualDeEA), como en los bancos;
+ *  · porcentaje en total, o valor en pesos en total o en cada cuota → la tasa con la que el préstamo suma justo ese
+ *    interés (tasaParaInteres);
+ *  · valor en pesos por día, semana, quincena o mes → ese valor sobre lo prestado, como porcentaje del ciclo.
+ */
+export function tasaMensualAcordada(o: { modo: "pct" | "valor"; ciclo: CicloInteres; v: number; base: Omit<LoanPreviewInput, "tasa" | "sistema"> }, today: DateInput): number {
+  const { base } = o
+  const v = +o.v || 0
+  if (!(v > 0) || !(base.monto > 0)) return 0
+  if (o.modo === "pct" && o.ciclo === "anio") return mensualDeEA(v)
+  const pctCiclo = o.modo === "pct" ? v : (v / base.monto) * 100
+  const dias = DIAS_CICLO[o.ciclo]
+  if (dias) return pctCiclo * (DIAS_MES / dias)
+  const total = o.modo === "pct" ? (base.monto * v) / 100 : o.ciclo === "cuota" ? v * (base.frec === "unico" ? 1 : Math.max(1, base.plazo)) : v
+  return tasaParaInteres(base, total, today)
+}
+
+/**
+ * Lo que de verdad cuesta un préstamo de un solo pago, en sus propios días (para no "proyectar" un plazo corto a meses):
+ * el porcentaje del plazo, su equivalente mensual (proporcional a los días), la tasa efectiva anual real
+ * ((1 + interés del plazo) ^ (365 / días) − 1) para compararla con la usura, y el interés máximo que permite la usura en
+ * esos días. Ej.: $ 150.000 que se devuelven en $ 160.004 a los 7 días = 6,67 % del plazo ≈ 29 % al mes; la usura
+ * (26 % E.A.) permite unos $ 670 en 7 días.
+ */
+export function costoDelPlazo(o: { monto: number; interes: number; inicio: string; vence: string; usuraEA?: number }) {
+  const dias = Math.max(1, Math.round((parseDate(o.vence).getTime() - parseDate(o.inicio).getTime()) / 86_400_000))
+  const plazo = o.monto > 0 ? o.interes / o.monto : 0
+  const ea = plazo > 0 ? Math.pow(1 + plazo, 365 / dias) - 1 : 0
+  const usura = (+(o.usuraEA ?? 0) || 0) / 100
+  return {
+    dias,
+    /** Interés del plazo, en %. */
+    pctPlazo: plazo * 100,
+    /** Equivalente mensual en %, proporcional a los días (base DIAS_MES). */
+    mensual: (plazo * 100 * DIAS_MES) / dias,
+    /** Tasa efectiva anual real (fracción). */
+    ea,
+    supera: usura > 0 && ea > usura,
+    /** Interés máximo que permite la usura en esos días (pesos). */
+    maxLegal: usura > 0 ? o.monto * (Math.pow(1 + usura, dias / 365) - 1) : null,
   }
 }
 

@@ -31,7 +31,7 @@ import { invalidateBook, useSave } from "@/hooks/use-book-data"
 import { apiInsertRow, apiUpdateRow } from "@/lib/api/book-rows"
 import {
   CASA_EMPENO, FRECS, SISTEMAS, addPeriod, TASA_EMPENO, TIPOS_CREDITO, camposLoan, faltantesLoan, findContact, findEntity, histPlan, loanEngine, norm, normProv, previewLoan,
-  mensualDeEA, rateFromCuota, sistemaDe,
+  mensualDeEA, rateFromCuota, sistemaDe, tasaMensualAcordada, costoDelPlazo, plazoRefrendo, type CicloInteres,
   textosLoan, tipoDef, tipoDefaults, tiposDe,
   type Campos, type HistMode, type InteresModo, type LoanTipo, type PagoModo, type Sistema, type TextosLoan,
 } from "@/lib/domain"
@@ -80,6 +80,18 @@ const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 /** Orden de los bloques del formulario en cada tipo (cada bloque se dibuja solo si aplica). */
 type Bloque = "riesgo" | "foto" | "quien" | "credito" | "obj" | "monto" | "inicial" | "concepto" | "inicio" | "primera" | "pago" | "cuotas" | "desde" | "vence"
   | "interes" | "extra" | "empeno" | "prenda" | "nota" | "pdf" | "hist" | "provlink"
+/** Ciclos del interés acordado entre personas (porcentaje o valor en pesos). */
+const CICLOS_PCT: { value: CicloInteres; label: string }[] = [
+  { value: "total", label: "En total" }, { value: "dia", label: "Al día" }, { value: "semana", label: "A la semana" },
+  { value: "quincena", label: "A la quincena" }, { value: "mes", label: "Al mes" }, { value: "anio", label: "Al año (E.A.)" },
+]
+const CICLOS_VALOR: { value: CicloInteres; label: string }[] = [
+  { value: "cuota", label: "En cada cuota" }, { value: "total", label: "En total" }, { value: "dia", label: "Por día" },
+  { value: "semana", label: "Por semana" }, { value: "quincena", label: "Por quincena" }, { value: "mes", label: "Por mes" },
+]
+const PCT_LABEL: Partial<Record<CicloInteres, string>> = { total: "Interés en total (%)", dia: "Interés diario (%)", semana: "Interés semanal (%)", quincena: "Interés quincenal (%)", mes: "Interés mensual (%)", anio: "Interés anual E.A. (%)" }
+const VALOR_LABEL: Partial<Record<CicloInteres, string>> = { cuota: "Intereses en cada cuota", total: "Intereses en total", dia: "Intereses por día", semana: "Intereses por semana", quincena: "Intereses por quincena", mes: "Intereses por mes" }
+
 const ORDEN: Record<LoanTipo, Bloque[]> = {
   banco: ["foto", "quien", "credito", "monto", "inicio", "interes", "cuotas", "desde", "extra", "concepto", "hist", "provlink"],
   empeno: ["quien", "obj", "monto", "inicio", "interes", "cuotas", "empeno", "hist", "provlink"],
@@ -166,8 +178,14 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const [tasa, setTasa] = useState(d0?.tasa ?? "")
   const [ea, setEa] = useState("")
   const [cuotaV, setCuotaV] = useState(0)
+  // Interés acordado entre personas: porcentaje cada mes o en total, o un valor fijo en cada cuota o en total.
+  const [cicloPct, setCicloPct] = useState<CicloInteres>("mes")
+  const [cicloValor, setCicloValor] = useState<CicloInteres>("cuota")
+  const [valorInt, setValorInt] = useState(0)
   const [sistema, setSistema] = useState<Sistema>(d0?.sistema ?? "frances")
   const [prenda, setPrenda] = useState("no")
+  // Empeño: refrendo mes a mes (pagas el interés cada mes y lo recuperas cuando puedas) o plazo fijo.
+  const [refrendo, setRefrendo] = useState(true)
   const [pr, setPr] = useState({ obj: "", valor: 0, ref: "" })
   const [limite, setLimite] = useState<string | null>(null)
   const [hist, setHist] = useState<HistMode>("nuevo")
@@ -243,23 +261,38 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const conDesde = !!tipo && !unico && ORDEN[tipo].includes("desde")
   const primeraEf = conDesde && desde && desde !== desdeAuto ? desde : null
   const financiado = Math.max(0, monto - (C?.inicial ? inicial : 0))
-  const sis: Sistema = tipo && C ? sistemaDe(tipo, intEf, sistema, C) : "sin"
+  // "En total" (porcentaje o valor) solo en los tipos que ofrecen valor fijo: persona, le presté y otra deuda.
+  const acuerdo = !!C?.intereses.includes("valor") && tipo !== "empeno"
+  const empRefrendo = tipo === "empeno" && refrendo
+  // Con un ciclo distinto de "al mes" el interés va igual en cada cuota (simple) y no se pregunta el sistema.
+  const pctOtroCiclo = acuerdo && intEf === "tasa" && cicloPct !== "mes"
+  const pctTotal = pctOtroCiclo && cicloPct === "total"
+  const cicloValorEf: CicloInteres = tipo === "empeno" ? "mes" : unico && cicloValor === "cuota" ? "total" : cicloValor
+  const sis: Sistema = pctOtroCiclo ? "simple" : tipo && C ? sistemaDe(tipo, intEf, sistema, C) : "sin"
 
   /** loanParams de la v4 */
   const params = (() => {
     const n = unico ? 1 : Math.max(1, Math.round(+plazo || 1))
     let t = 0
     // E.A. → mensual siempre con la fórmula compuesta (mensualDeEA): si no, 26,82 % E.A. se guardaba como 2,235 % mensual.
-    if (intEf === "tasa") { const e = num(ea); t = e && C?.ea ? mensualDeEA(e) : num(tasa) }
+    // Porcentaje o valor "en total": la tasa mensual con la que el préstamo suma justo ese interés (tasaParaInteres).
+    const acordado = { monto: financiado, frec: frecEf, plazo: n, inicio: inicioEf, vence: unico ? vence : null, primera: primeraEf }
+    if (pctOtroCiclo) t = tasaMensualAcordada({ modo: "pct", ciclo: cicloPct, v: num(tasa), base: acordado }, today)
+    else if (intEf === "tasa") { const e = num(ea); t = e && C?.ea && !acuerdo ? mensualDeEA(e) : num(tasa) }
+    else if (intEf === "valor") t = tasaMensualAcordada({ modo: "valor", ciclo: cicloValorEf, v: valorInt, base: acordado }, today)
     else if (intEf === "cuota") t = rateFromCuota(financiado, cuotaV, n, frecEf)
-    return { monto: financiado, plazo: n, frec: frecEf, tasa: +t.toFixed(4), sistema: sis, inicio: inicioEf, extra: C?.extra ? extra : 0, vence: unico ? vence : null, primera: primeraEf }
+    // Con refrendo, el plan llega hasta el próximo refrendo y el capital queda para cuando lo recuperes (plazoRefrendo).
+    const plazoEf = empRefrendo ? plazoRefrendo({ inicio: inicioEf, frec: frecEf }, today) : n
+    return { monto: financiado, plazo: plazoEf, frec: frecEf, tasa: +t.toFixed(6), sistema: sis, inicio: inicioEf, extra: C?.extra ? extra : 0, vence: unico ? vence : null, primera: primeraEf, prenda: empRefrendo ? { refrendo: true } : null }
   })()
 
   const prev = tipo && financiado > 0 ? previewLoan(params, today) : null
-  const limiteEf = limite ?? plusMonths(inicioEf, params.plazo)
+  // Con refrendo, la fecha límite es la del próximo refrendo (con los que ya pagaste).
   const conHist = !!C?.hist && hist !== "nuevo"
   const histPays = !financiado || !conHist ? []
     : histPlan({ ...params, payments: [] }, { mode: hist, ncuotas: +ncuotas || 0, saldoHoy: hist === "saldo" ? saldoHoy || null : null, fultPago: fult }, today)
+  const eRefrendo = empRefrendo && financiado > 0 ? loanEngine({ ...params, payments: histPays.map((p) => ({ ...p, valor: p.valor ?? 0 })) }, today) : null
+  const limiteEf = limite ?? (eRefrendo?.next?.fecha ?? plusMonths(inicioEf, params.plazo))
   const histE = financiado && conHist ? loanEngine({ ...params, payments: histPays.map((p) => ({ ...p, valor: p.valor ?? 0 })) }, today) : null
 
   // Quién: siempre un registro que se escoge (contacto guardado o nuevo, entidad, casa de empeño o proveedor).
@@ -274,7 +307,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
   const sugerido = !prov && C?.quien !== "prov" ? suggestLoanProvider(quienNombre, providers, normProv) : undefined
   const faltan0 = faltantesLoan({
     tipo, kind, quien: C?.quien === "libre" && isC && quien === "ent" ? "ex" : quien, entity, contact, nombreNuevo: nc.nombre, prov,
-    monto, inicial, pago: pagoEf, interes: intEf, tasa: num(tasa), ea: C?.ea ? num(ea) : 0, cuota: cuotaV, plazo: +plazo, inicio: inicioEf, vence, obj: pr.obj,
+    monto, inicial, pago: pagoEf, interes: intEf, tasa: num(tasa), ea: C?.ea ? num(ea) : 0, cuota: cuotaV, valorInt, plazo: +plazo, inicio: inicioEf, vence, obj: pr.obj,
   })
   const faltan = primeraEf && primeraEf < inicioEf ? [...faltan0, { campo: "desde", msg: "La primera cuota debe ser después de la fecha del préstamo" }] : faltan0
   const conPrenda = C?.prenda === "si" || (C?.prenda === "opcional" && prenda === "si")
@@ -301,7 +334,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
         cid = data.id; ctRow = data as Row<"contacts">
       } else { cid = contact; ctRow = contacts.find((c) => c.id === contact) as Row<"contacts"> | undefined ?? null }
     }
-    const prendaObj = conPrenda ? { obj: pr.obj.trim() || "Objeto en garantía", valor: pr.valor, limite: limiteEf, ref: pr.ref.trim() } : null
+    const prendaObj = conPrenda ? { obj: pr.obj.trim() || "Objeto en garantía", valor: pr.valor, limite: limiteEf, ref: pr.ref.trim(), ...(empRefrendo ? { refrendo: true } : {}) } : null
     const cred = TIPOS_CREDITO.find((x) => x.value === credito)
     const conceptoF = concepto.trim() || (tipo === "empeno" ? prendaObj?.obj : tipo === "banco" ? cred?.concepto : tipo === "fiado" ? "Fiado" : tipo === "cuotas" ? "Compra a cuotas" : tipo === "vendi" ? "Venta fiada" : tipo === "gota" ? "Gota a gota" : "") || ""
     const notaF = [nota.trim(), C.inicial && inicial > 0 ? `Valor de la compra ${fmtMoney(monto)} con cuota inicial de ${fmtMoney(inicial)}.` : ""].filter(Boolean).join(" ")
@@ -484,7 +517,7 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
           <DatePicker id="l-desde" value={primeraEf ?? desdeAuto} quick="futuro" onChange={(v) => setDesde(v)} />
         </FormField>
       )
-      case "cuotas": return !unico && (
+      case "cuotas": return !unico && !empRefrendo && (
         <div className="grid gap-5 sm:grid-cols-2">
           {C.frecs.length > 1 && (
             <FormField label={isC ? "¿Cada cuánto te paga?" : "¿Cada cuánto pagas?"} htmlFor="l-frec" className="sm:col-span-2" tip={false}>
@@ -509,10 +542,18 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
       )
       case "interes": return (
         <div className="grid gap-4">
+          {tipo === "empeno" && (
+            <FormField label="¿Cómo funciona tu empeño?" tip="Casi todas las casas de empeño y compraventas dejan «refrendar»: pagas solo el interés del mes y el objeto sigue guardado otro mes. El refrendo no baja lo que debes.">
+              <ChoiceCards name="refrendo" value={refrendo ? "si" : "no"} onChange={(v) => setRefrendo(v === "si")} cols={2} items={[
+                { value: "si", label: "Refrendo mes a mes", desc: "Cada mes pago el interés y lo recupero cuando tenga la plata", icon: "repeat" },
+                { value: "no", label: "Con plazo fijo", desc: "Tengo unos meses para pagar todo y recogerlo", icon: "calendar-clock" },
+              ]} />
+            </FormField>
+          )}
           {C.intereses.length > 1 && (
             <FormField label={T.interes} tip={false}>
               <ChoiceCards name="interes" value={intEf} onChange={(v) => setModoInt(v as InteresModo)} cols={C.intereses.length === 3 ? 3 : 2}
-                items={C.intereses.map((m) => ({ value: m, label: T.interesItems[m]?.label ?? m, desc: T.interesItems[m]?.desc, icon: m === "no" ? "hand-coins" : m === "tasa" ? "percent" : "receipt" }))} />
+                items={C.intereses.map((m) => ({ value: m, label: T.interesItems[m]?.label ?? m, desc: T.interesItems[m]?.desc, icon: m === "no" ? "hand-coins" : m === "tasa" ? "percent" : m === "valor" ? "banknote" : "receipt" }))} />
             </FormField>
           )}
           {intEf === "tasa" && (tipo === "banco" ? (
@@ -522,22 +563,46 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
             </div>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2">
-              <FormField label="Interés mensual (%)" htmlFor="l-tasa" tip={false}
-                hint={tipo === "empeno" ? `Escribe el que dice tu boleta. Muchas casas de empeño cobran alrededor del ${TASA_EMPENO} % al mes.` : tipo === "fiado" || tipo === "vendi" ? "El recargo de cada mes. Si te dijeron “al 2 %”, escribe 2." : "Si te dijeron “al 2 %”, escribe 2."}>
+              {acuerdo && (
+                <FormField label="¿Cada cuánto se cobra ese porcentaje?" tip={false} className="sm:col-span-2">
+                  <Segmented value={cicloPct} onChange={(v) => setCicloPct(v as CicloInteres)} items={CICLOS_PCT} />
+                </FormField>
+              )}
+              <FormField label={acuerdo ? PCT_LABEL[cicloPct] ?? "Interés (%)" : "Interés mensual (%)"} htmlFor="l-tasa" tip={false}
+                hint={pctTotal ? (financiado > 0 && num(tasa) > 0 ? <>Sobre lo prestado: {fmtPct(num(tasa), 1)} de <Money value={financiado} /> = <Money value={(financiado * num(tasa)) / 100} /> de intereses{unico ? "" : ", repartidos en las cuotas"}.</> : "Si acordaron “me devuelves el 10 % más”, escribe 10.")
+                  : tipo === "empeno" ? `Escribe el que dice tu boleta. Muchas casas de empeño cobran alrededor del ${TASA_EMPENO} % al mes.` : tipo === "fiado" || tipo === "vendi" ? "El recargo de cada mes. Si te dijeron “al 2 %”, escribe 2." : "Si te dijeron “al 2 %”, escribe 2."}>
                 <Input id="l-tasa" className="h-11" inputMode="decimal" value={tasa} onChange={(e) => { setTasa(e.target.value); setEa("") }} />
               </FormField>
-              {C.ea && <FormField label="¿O te dieron una tasa anual (E.A.)?" htmlFor="l-ea" tip="Efectivo anual: la que aparece en los extractos de los bancos. La convertimos a mensual."><Input id="l-ea" className="h-11" inputMode="decimal" value={ea} onChange={(e) => { setEa(e.target.value); setTasa("") }} /></FormField>}
+              {C.ea && !acuerdo && <FormField label="¿O te dieron una tasa anual (E.A.)?" htmlFor="l-ea" tip="Efectivo anual: la que aparece en los extractos de los bancos. La convertimos a mensual."><Input id="l-ea" className="h-11" inputMode="decimal" value={ea} onChange={(e) => { setEa(e.target.value); setTasa("") }} /></FormField>}
             </div>
           ))}
+          {intEf === "valor" && (
+            <div className="grid gap-5 sm:grid-cols-2">
+              {tipo !== "empeno" && (
+                <FormField label="¿Cada cuánto se cobra ese valor?" tip={false} className="sm:col-span-2">
+                  <Segmented value={cicloValorEf} onChange={(v) => setCicloValor(v as CicloInteres)} items={CICLOS_VALOR.filter((c) => !unico || c.value !== "cuota")} />
+                </FormField>
+              )}
+              <FormField label={tipo === "empeno" ? "Refrendo de cada mes" : VALOR_LABEL[cicloValorEf] ?? "Intereses"} htmlFor="l-vint" required tip={false}
+                hint={tipo === "empeno" ? (financiado > 0 && valorInt > 0 ? `Equivale al ${fmtPct((valorInt / financiado) * 100, 1)} mensual de lo que te prestaron.` : "Lo que pagas cada mes para que no se pierda el objeto. Está en la boleta o te lo dijeron en la casa de empeño.")
+                  : cicloValorEf === "total" ? (unico ? `Lo que ${isC ? "te paga" : "pagas"} de más el día del pago. Si ${isC ? "te devuelve" : "devuelves"} $ 1.100.000 por $ 1.000.000, son $ 100.000.` : "Lo que se paga de más entre todas las cuotas: se reparte igual en cada una.")
+                  : cicloValorEf === "cuota" ? `Lo que ${isC ? "te paga" : "pagas"} de intereses en cada cuota, además de la parte de lo prestado.`
+                  : `Se cobra ${(VALOR_LABEL[cicloValorEf] ?? "").replace("Intereses ", "").toLowerCase()} mientras dure el préstamo, sobre lo prestado.`}>
+                <MoneyInput id="l-vint" value={valorInt} onChange={setValorInt} />
+              </FormField>
+            </div>
+          )}
           {intEf === "cuota" && <FormField label={T.cuota} htmlFor="l-cuota" required tip={false} hint={tipo === "gota" ? "Lo que te cobran en cada pago. Con eso calculamos cuánto interés te están cobrando." : "Con la cuota calculamos la tasa de interés."}><MoneyInput id="l-cuota" value={cuotaV} onChange={setCuotaV} /></FormField>}
-          {C.sistema && (
+          {C.sistema && !pctOtroCiclo && (
             <FormField label="¿Cómo se calcula la cuota?" tip={false}>
               <ChoiceCards name="sistema" value={sistema} onChange={(v) => setSistema(v as Sistema)} items={(["frances", "aleman", "simple", "americano"] as Sistema[]).map((s) => ({ value: s, label: SISTEMAS[s].n, desc: SISTEMAS[s].d, icon: SISTEMAS[s].icon, recommended: s === (tipo === "persona" || tipo === "presto" ? "simple" : "frances") }))} />
             </FormField>
           )}
           {tipo === "empeno" && (
             <p className="rounded-lg bg-secondary/60 p-3 text-sm">
-              <b>Así funciona el empeño:</b> cada mes pagas solo los intereses{prev && params.tasa > 0 ? <> (<Money value={prev.cuota} />)</> : null} y al final devuelves lo que te prestaron{financiado > 0 ? <> (<Money value={financiado} />)</> : null} para recuperar tu objeto. Si pagas los intereses a tiempo, casi siempre puedes refrendar (extender el plazo).
+              {empRefrendo
+                ? <><b>Así funciona el refrendo:</b> cada mes pagas el interés{prev && params.tasa > 0 ? <> (<Money value={prev.cuota} />)</> : null} y el objeto sigue guardado otro mes. Ese pago <b>no baja</b> lo que debes: para recuperarlo pagas lo que te prestaron{financiado > 0 ? <> (<Money value={financiado} />)</> : null}. Si la casa acepta abonos, cada abono baja el refrendo de los meses que siguen.</>
+                : <><b>Así funciona el empeño:</b> cada mes pagas solo los intereses{prev && params.tasa > 0 ? <> (<Money value={prev.cuota} />)</> : null} y al final devuelves lo que te prestaron{financiado > 0 ? <> (<Money value={financiado} />)</> : null} para recuperar tu objeto. Si pagas los intereses a tiempo, casi siempre puedes refrendar (extender el plazo).</>}
             </p>
           )}
         </div>
@@ -548,10 +613,12 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
       case "empeno": return (
         <div className="grid gap-4">
           <div className="grid gap-5 sm:grid-cols-2">
-            <FormField label="Fecha límite para recuperarlo" htmlFor="l-prl" tip="Hasta cuándo tienes para pagar y recoger el objeto. Está en la boleta."><DatePicker id="l-prl" value={limiteEf} onChange={(v) => setLimite(v)} quick="futuro" /></FormField>
+            {!empRefrendo && <FormField label="Fecha límite para recuperarlo" htmlFor="l-prl" tip="Hasta cuándo tienes para pagar y recoger el objeto. Está en la boleta."><DatePicker id="l-prl" value={limiteEf} onChange={(v) => setLimite(v)} quick="futuro" /></FormField>}
             <FormField label="Número de contrato o boleta" htmlFor="l-prr" tip={false}><Input id="l-prr" className="h-11" value={pr.ref} onChange={(e) => setPr({ ...pr, ref: e.target.value })} /></FormField>
           </div>
-          <Notice tone="warn" title="Si no pagas a tiempo puedes perder el objeto">Antes del {fmtDate(limiteEf, { long: true })} paga lo que debes o al menos los intereses para refrendar. Te avisamos antes de la fecha.</Notice>
+          <Notice tone="warn" title="Si no pagas a tiempo puedes perder el objeto">{empRefrendo
+            ? <>Paga el refrendo de cada mes a tiempo: el próximo es el {fmtDate(limiteEf, { long: true })}. Te avisamos antes de cada fecha.</>
+            : <>Antes del {fmtDate(limiteEf, { long: true })} paga lo que debes o al menos los intereses para refrendar. Te avisamos antes de la fecha.</>}</Notice>
         </div>
       )
       case "prenda": return C.prenda === "opcional" && (
@@ -589,11 +656,11 @@ function Body({ kind, onOpenChange, contactId, onSaved, providerId, tipo: tipoPr
             <ChoiceCards name="hist" value={hist} onChange={(v) => setHist(v as HistMode)} cols={2} items={[
               { value: "nuevo", label: "No, es nuevo" },
               { value: "aldia", label: "Va al día", desc: "Marcamos como pagadas todas las cuotas cuya fecha ya pasó." },
-              { value: "cuotas", label: "Ya se pagaron algunas cuotas" },
+              { value: "cuotas", label: tipo === "empeno" ? "Ya pagué algunos refrendos" : "Ya se pagaron algunas cuotas" },
               { value: "saldo", label: "Sé cuánto se debe hoy" },
             ]} />
           </FormField>
-          {hist === "cuotas" && <FormField label="¿Cuántas cuotas ya se pagaron?" htmlFor="l-nc"><Input id="l-nc" className="h-11 w-32" type="number" min={0} value={ncuotas} onChange={(e) => setNcuotas(e.target.value)} /></FormField>}
+          {hist === "cuotas" && <FormField label={tipo === "empeno" ? "¿Cuántos refrendos (meses) ya pagaste?" : "¿Cuántas cuotas ya se pagaron?"} htmlFor="l-nc"><Input id="l-nc" className="h-11 w-32" type="number" min={0} value={ncuotas} onChange={(e) => setNcuotas(e.target.value)} /></FormField>}
           {hist === "saldo" && (
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField label={isC ? "¿Cuánto te debe hoy?" : "¿Cuánto debes hoy?"} htmlFor="l-sh"><MoneyInput id="l-sh" value={saldoHoy} onChange={setSaldoHoy} /></FormField>
@@ -674,6 +741,20 @@ function cuotaTxt(prev: Prev, params: Params, pago: PagoModo) {
 /** Tasa frente a la usura: verde si está por debajo, rojo si la supera. */
 function TasaUsura({ params, prev, usura, className }: { params: Params; prev: Prev; usura: number; className?: string }) {
   if (!(params.tasa > 0)) return <p className={cn("rounded-md bg-success-soft px-3 py-2 text-success", className)}>Sin intereses</p>
+  // Un solo pago: lo que cuesta en SUS días (no se proyecta un plazo corto a meses) y la usura con la E.A. real del plazo.
+  if (params.frec === "unico" && params.vence && params.inicio && prev.int > 0) {
+    const c = costoDelPlazo({ monto: params.monto, interes: prev.int, inicio: params.inicio, vence: params.vence, usuraEA: usura })
+    return (
+      <div className={cn("grid gap-0.5 rounded-md px-3 py-2", c.supera ? "bg-danger-soft text-danger" : "bg-success-soft text-success", className)} data-testid="loan-usura">
+        <span className="font-bold">{fmtPct(c.pctPlazo, 2)} en {c.dias} {c.dias === 1 ? "día" : "días"} ≈ {fmtPct(c.mensual, 1)} al mes</span>
+        <span className="text-[11.5px] leading-4">
+          {usura > 0 && (c.supera
+            ? <>Supera la tasa de usura ({fmtPct(usura, 2)} E.A.): en {c.dias} {c.dias === 1 ? "día" : "días"} lo máximo legal serían unos {fmtMoney(c.maxLegal ?? 0)} de intereses.</>
+            : <>Por debajo de la usura ({fmtPct(usura, 2)} E.A.): equivale a {fmtPct(c.ea * 100, 1)} efectivo anual.</>)}
+        </span>
+      </div>
+    )
+  }
   const ea = prev.ea * 100
   const alta = ea > usura
   return (
@@ -763,7 +844,12 @@ function enPalabras({ tipo, kind, prev, params, financiado, usura, pago, obj, li
   else out.push(`Se divide ${fmtMoney(financiado)} en ${params.plazo} ${params.plazo === 1 ? "pago" : "partes iguales"} de ${fmtMoney(prev.cuota)}, sin intereses.`)
   if (prev.int > 0.5) out.push(`En total ${C ? "ganas" : "pagas"} ${fmtMoney(prev.int)} de intereses: ${Math.round((prev.int / financiado) * 100)} % más de lo ${C ? "que prestaste" : "que te prestaron"}.`)
   if (params.extra > 0) out.push(`Además ${C ? "se suman" : "pagas"} ${fmtMoney(params.extra)} de seguros u otros cobros en cada cuota.`)
-  if (params.tasa > 0) {
+  if (params.tasa > 0 && params.frec === "unico" && params.vence && prev.int > 0) {
+    const c = costoDelPlazo({ monto: params.monto, interes: prev.int, inicio: params.inicio, vence: params.vence, usuraEA: usura })
+    out.push(c.supera
+      ? `Son ${fmtPct(c.pctPlazo, 2)} en ${c.dias} días: equivale a ${fmtPct(c.ea * 100, 1)} efectivo anual y supera la tasa de usura (${fmtPct(usura, 2)} E.A.). En ${c.dias} días lo máximo legal serían unos ${fmtMoney(c.maxLegal ?? 0)} de intereses. ${C ? "Cobrar por encima de la usura es ilegal en Colombia." : "Cobrar por encima de la usura es ilegal en Colombia: si puedes, busca otra opción."}`
+      : `Son ${fmtPct(c.pctPlazo, 2)} en ${c.dias} días: equivale a ${fmtPct(c.ea * 100, 1)} efectivo anual, por debajo de la tasa de usura (${fmtPct(usura, 2)} E.A.).`)
+  } else if (params.tasa > 0) {
     const ea = prev.ea * 100
     out.push(ea > usura
       ? `La tasa equivale a ${fmtPct(ea, 1)} efectivo anual y supera la tasa de usura (${fmtPct(usura, 2)} E.A.). ${C ? "Cobrar por encima de la usura es ilegal en Colombia." : "Cobrar por encima de la usura es ilegal en Colombia: si puedes, busca otra opción."}`

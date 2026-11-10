@@ -26,6 +26,7 @@ import { invalidateBook } from "@/hooks/use-book-data"
 import { apiDeleteRow, apiRestoreRow, apiUpdateRow } from "@/lib/api/book-rows"
 import { FRECS, SISTEMAS, fechaCuota, loanEngine, loanName, loanStatus, loanTipo, loanTitulo, normProv, tipoDef, type LoanIn, type Prenda, type Sistema } from "@/lib/domain"
 import { suggestLoanProvider } from "@/lib/domain/proveedor-pagos"
+import { empenoResumen } from "@/lib/domain/empeno"
 import { EntityLogo } from "@/components/mirai/entity-logo"
 import { useProviders, useSettings } from "@/features/catalogs/hooks"
 import { fmtDate, fmtMoney, fmtPct, fmtShort, todayISO } from "@/lib/format"
@@ -55,6 +56,8 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
   const qc = useQueryClient()
   const isC = loan.kind === "cobrar"
   const e = loanEngine(loan, today)
+  // Empeño con refrendo mes a mes: no tiene un número de cuotas ni una fecha de fin.
+  const refrendoAbierto = !!(loan.prenda as Prenda | null)?.refrendo && loan.kind !== "cobrar" && !e.done
   const nm = loanName(loan, contacts, entities)
   const contact = contacts.find((c) => c.id === loan.contact_id) ?? null
   const [st, stTxt, stIcon] = loanStatus(e, today, anticipo)
@@ -177,7 +180,8 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
         <StatusPill tone={PILL[st]}><Icon name={stIcon} className="size-3" /> {stTxt}</StatusPill>
       </div>
 
-      {pr && (() => {
+      {pr?.refrendo && !isC && <EmpenoRefrendo loan={loan} pr={pr} today={today} />}
+      {pr && !(pr.refrendo && !isC) && (() => {
         const d = pr.limite ? daysBetween(today, pr.limite) : null
         const lvl = e.done ? "ok" : d == null ? "info" : d < 0 ? "bad" : d <= 15 ? "warn" : "info"
         return (
@@ -205,7 +209,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
             </>) : cur && (<>
               <p className="text-sm">{isC ? `Próximo pago que ${nm.split(" ")[0]} te debe hacer` : "Tu próximo pago"}</p>
               <Money value={cur.valor} className="text-2xl font-extrabold" />
-              <p className="text-sm">Cuota {cur.n} de {totalCuotas} · {fmtDate(cur.fecha)} · {(() => { const d = daysBetween(today, cur.fecha); return d === 0 ? "es hoy" : d === 1 ? "mañana" : `en ${d} días` })()}</p>
+              <p className="text-sm">{refrendoAbierto ? `Refrendo ${cur.n}` : `Cuota ${cur.n} de ${totalCuotas}`} · {fmtDate(cur.fecha)} · {(() => { const d = daysBetween(today, cur.fecha); return d === 0 ? "es hoy" : d === 1 ? "mañana" : `en ${d} días` })()}</p>
             </>)}
         </div>
         {!e.done && canEdit && (
@@ -229,7 +233,8 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
 
       <div className="grid grid-cols-2 gap-2.5 @3xl:grid-cols-4">
         {([[isC ? "Prestaste" : "Te prestaron", Number(loan.monto), fmtDate(loan.inicio)], [isC ? "Te debe hoy" : "Debes hoy", e.paraSaldar, e.intVencido > 0.5 ? `${fmtShort(e.saldo)} de capital + ${fmtShort(e.intVencido)} de intereses vencidos` : "de capital, sin intereses futuros"],
-          [isC ? "Te ha pagado" : "Has pagado", e.pagado, `${e.k} de ${totalCuotas} cuotas`], [isC ? "Ganarás en intereses" : "Pagarás en intereses", e.intTotal, `en total ${isC ? "recibirás" : "pagarás"} ${fmtShort(e.totalPagar)}`]] as const).map(([l, v, sub]) => (
+          [isC ? "Te ha pagado" : "Has pagado", e.pagado, refrendoAbierto ? `${e.k} ${e.k === 1 ? "refrendo" : "refrendos"}` : `${e.k} de ${totalCuotas} cuotas`],
+          refrendoAbierto ? ["Refrendo de cada mes", Math.round(e.saldo * e.i), "mientras no lo recuperes"] : [isC ? "Ganarás en intereses" : "Pagarás en intereses", e.intTotal, `en total ${isC ? "recibirás" : "pagarás"} ${fmtShort(e.totalPagar)}`]] as [string, number, string][]).map(([l, v, sub]) => (
           <div key={l} className="grid min-w-0 content-start gap-0.5 rounded-lg bg-muted p-3">
             <p className="truncate text-xs text-muted-foreground">{l}</p>
             <Money value={v} className="truncate text-base font-semibold tabular-nums" />
@@ -239,7 +244,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
       </div>
       <div className="grid gap-1.5">
         <Progress value={e.progreso * 100} className={cn("h-2", isC ? "[&>div]:bg-forest" : "[&>div]:bg-expense")} aria-label={`${Math.round(e.progreso * 100)} % pagado`} />
-        <p className="flex flex-wrap justify-between gap-x-3 text-xs text-muted-foreground"><span>{Math.round(e.progreso * 100)} % de la deuda pagada</span><span>{e.done ? "Terminado" : `Termina el ${fmtDate(e.plan.at(-1)?.fecha ?? null)}`}</span></p>
+        <p className="flex flex-wrap justify-between gap-x-3 text-xs text-muted-foreground"><span>{Math.round(e.progreso * 100)} % de la deuda pagada</span><span>{e.done ? "Terminado" : refrendoAbierto ? "Sin fecha de fin: termina cuando lo recuperes" : `Termina el ${fmtDate(e.plan.at(-1)?.fecha ?? null)}`}</span></p>
       </div>
       {!isC && tasaM > 0 && ea > usura && (
         <Notice tone="warn" title="Esta tasa supera la de usura">{fmtPct(tasaM, 2)} mensual equivale a {fmtPct(ea, 1)} efectivo anual y el máximo legal es {fmtPct(usura, 2)}. Pregunta si puedes pagarla antes o pasarla a un crédito más barato.</Notice>
@@ -356,5 +361,38 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
         </AlertDialogContent>
       </AlertDialog>
     </Card>
+  )
+}
+
+/**
+ * Empeño con refrendo mes a mes: el refrendo del mes y su fecha, cuánto llevas pagado en refrendos frente a lo que te
+ * prestaron, cuánto necesitas para recuperar el objeto y cuándo los refrendos igualan lo prestado (empenoResumen).
+ */
+function EmpenoRefrendo({ loan, pr, today }: { loan: LoanIn; pr: Prenda; today: string }) {
+  const { data: cfg } = useSettings()
+  const usura = Number(cfg?.usura ?? 0)
+  const r = empenoResumen(loan, today, { usuraEA: usura })
+  const d = r.proximo ? daysBetween(today, r.proximo.fecha) : null
+  const lvl = r.capital <= 0.5 ? "ok" : r.atrasados ? "bad" : d != null && d <= 5 ? "warn" : "info"
+  const ahorroPorAbono = Math.round(r.refrendoMes / 10)
+  return (
+    <div data-testid="empeno-refrendo" className={cn("grid gap-2 rounded-lg p-4 text-sm", lvl === "bad" ? "bg-danger-soft" : lvl === "warn" ? "bg-warning-soft" : lvl === "ok" ? "bg-success-soft" : "bg-info-soft")}>
+      <p className="font-semibold break-words"><Gem className="mr-1 inline size-4" />Objeto empeñado: {pr.obj}</p>
+      <p className="text-muted-foreground">{[pr.valor ? `Vale aprox. ${fmtMoney(pr.valor)}` : "", pr.ref ? `Boleta ${pr.ref}` : "", "Refrendo mes a mes"].filter(Boolean).join(" · ")}</p>
+      {r.capital <= 0.5 ? <p>Ya pagaste lo que te prestaron: puedes recoger tu objeto.</p> : <>
+        <p data-money>Refrendo de cada mes: <b>{fmtMoney(r.refrendoMes)}</b>{r.proximo ? <> · el próximo el <b>{fmtDate(r.proximo.fecha)}</b>{d != null && d >= 0 ? ` (en ${d} ${d === 1 ? "día" : "días"})` : ""}</> : null}.</p>
+        {r.atrasados > 0 && <p className="font-semibold text-danger" data-money>Tienes {r.atrasados} {r.atrasados === 1 ? "refrendo atrasado" : "refrendos atrasados"} ({fmtMoney(r.atrasadoValor)}). Comunícate ya con la casa de empeño: podrías perder el objeto.</p>}
+        <p data-money>Llevas <b>{r.refrendos} {r.refrendos === 1 ? "refrendo" : "refrendos"}</b>: pagaste <b>{fmtMoney(r.interesesPagados)}</b> en intereses ({fmtPct(r.pctDelPrestamo * 100, 0)} de lo que te prestaron) y sigues debiendo <b>{fmtMoney(r.capital)}</b>, porque el refrendo no baja la deuda.</p>
+        <p data-money>Para recuperarlo hoy: <b>{fmtMoney(r.paraRecuperar)}</b>{r.atrasados ? " (lo prestado y los refrendos atrasados)" : ""}, o <b>{fmtMoney(r.paraRecuperarConMes)}</b> si la casa cobra también el refrendo del mes que va corriendo. Revisa tu boleta o pregúntalo antes de ir.</p>
+        {r.refrendosParaValor != null && pr.valor ? <p data-money>{r.refrendosParaValor === 0
+          ? <><b>Ya pagaste más de lo que vale {pr.obj}:</b> lo pagado en refrendos más lo que debes pasa de {fmtMoney(pr.valor)}.</>
+          : <>Con <b>{r.refrendosParaValor} {r.refrendosParaValor === 1 ? "refrendo" : "refrendos"} más</b>, lo pagado más lo que debes pasará de lo que vale {pr.obj} ({fmtMoney(pr.valor)}).</>}</p> : null}
+        <p data-money>{r.mesesParaIgualar === 0
+          ? <><b>Ya pagaste en refrendos tanto como lo que te prestaron.</b> Si puedes, abona a capital o recupéralo: cada mes de refrendo es plata que no baja la deuda.</>
+          : <>Si sigues solo refrendando, en <b>{r.mesesParaIgualar} {r.mesesParaIgualar === 1 ? "mes" : "meses"}</b> habrás pagado en intereses lo mismo que te prestaron. Si la casa recibe abonos, cada {fmtMoney(Math.round(r.capital / 10))} que abones baja el refrendo en {fmtMoney(ahorroPorAbono)} al mes.</>}</p>
+        <p className="text-muted-foreground">El refrendo equivale a {fmtPct(+loan.tasa, 1)} mensual, unos {fmtPct(r.ea * 100, 0)} al año (efectivo anual){r.vecesUsura && r.vecesUsura > 1 ? <>: unas <b>{r.vecesUsura.toLocaleString("es-CO", { maximumFractionDigits: 1 })} veces</b> el tope de usura de los créditos ({fmtPct(usura, 2)} E.A.). Si crees que te cobran de más, consulta un consultorio jurídico gratuito o un abogado</> : null}.</p>
+        <p className="text-muted-foreground">Las boletas de empeño suelen ser una compraventa con pacto de retroventa: si no pagas a tiempo, la casa puede quedarse con el objeto y no te devuelve la diferencia de lo que vale.</p>
+      </>}
+    </div>
   )
 }

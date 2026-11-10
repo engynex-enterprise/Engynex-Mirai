@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
 import { crearEntidad, login, shot, watchErrors } from "./helpers"
+import { admin } from "./qa"
 
 // Registrar una deuda según su tipo: cada tipo muestra solo sus campos, con sus propias palabras, y el resumen de la
 // derecha (al final en el celular) se arma en vivo. Corre en escritorio (1366 px) y en móvil (400 px).
@@ -122,6 +123,81 @@ test("préstamo de una persona: alguien nuevo, cuotas sin intereses y nota del a
   expect(errs, errs.join("\n")).toEqual([])
 })
 
+test("préstamo de una persona con intereses: valor fijo en cada cuota o en total, o porcentaje en total, ajustable", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page)
+  await page.goto("/le-debo?nuevo=1")
+  await page.getByRole("radio", { name: "Préstamo de una persona" }).click()
+  const nombre = `Don Hernán ${info.project.name} ${Date.now() % 100000}`
+  await page.getByRole("radio", { name: "Alguien nuevo" }).click()
+  await page.getByRole("textbox", { name: "Nombre completo" }).fill(nombre)
+  await page.getByRole("textbox", { name: "¿Cuánto te prestó?" }).fill("1000000")
+  await page.getByRole("radio", { name: "6", exact: true }).click()
+
+  // Valor fijo en cada cuota: $ 50.000 de intereses en cada una de las 6 → cuota de $ 216.667 y 5 % mensual.
+  await page.getByRole("radio", { name: /Sí, un valor fijo/ }).click()
+  await expect(page.getByRole("radio", { name: "En cada cuota" })).toHaveAttribute("aria-checked", "true")
+  await page.getByRole("textbox", { name: "Intereses en cada cuota" }).fill("50000")
+  await expect(resumen(page)).toContainText(/216\.667/)
+  await expect(page.getByTestId("loan-usura").first()).toContainText(/5(,00)? % mensual/)
+  await shot(page, "deuda-persona-valor-fijo", info.project.name)
+
+  // En total: $ 120.000 entre las 6 cuotas → se pagan $ 1.120.000.
+  await page.getByRole("radio", { name: "En total" }).click()
+  await page.getByRole("textbox", { name: "Intereses en total" }).fill("120000")
+  await expect(resumen(page)).toContainText(/1\.120\.000/)
+
+  // Porcentaje en total: «me devuelves el 10 % más» → $ 100.000 de intereses, $ 1.100.000 en total.
+  await page.getByRole("radio", { name: /Sí, un porcentaje/ }).click()
+  await page.getByRole("radio", { name: "En total" }).click()
+  await page.getByRole("textbox", { name: "Interés en total (%)" }).fill("10")
+  await expect(page.getByText(/= \$\s?100\.000 de intereses/)).toBeVisible()
+  await expect(resumen(page)).toContainText(/1\.100\.000/)
+  // Con el porcentaje en total no se pregunta el sistema de la cuota (el interés va igual en cada una).
+  await expect(page.getByText("¿Cómo se calcula la cuota?")).toHaveCount(0)
+
+  // Se ajusta y se guarda: vuelve a valor fijo en cada cuota.
+  await page.getByRole("radio", { name: /Sí, un valor fijo/ }).click()
+  await page.getByRole("radio", { name: "En cada cuota" }).click()
+  await page.getByRole("textbox", { name: /Intereses en/ }).fill("50000")
+  await expect(resumen(page)).toContainText(/216\.667/)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1)
+  await page.getByRole("button", { name: "Registrar deuda" }).click()
+  await expect(page.getByText("Deuda registrada.")).toBeVisible()
+  await expect(page.getByRole("heading", { name: nombre })).toBeVisible()
+  await expect(page.getByText(/216\.667/).first()).toBeVisible()
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("préstamo de una persona en una sola fecha: interés del plazo en sus días, usura real y ciclos del interés", async ({ page }) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page)
+  await page.goto("/le-debo?nuevo=1")
+  await page.getByRole("radio", { name: "Préstamo de una persona" }).click()
+  await page.getByRole("radio", { name: "Alguien nuevo" }).click()
+  await page.getByRole("textbox", { name: "Nombre completo" }).fill("Vecino QA")
+  await page.getByRole("textbox", { name: "¿Cuánto te prestó?" }).fill("150000")
+  await page.getByRole("radio", { name: "En una sola fecha" }).click()
+  // Valor fijo: con un solo pago no hay «en cada cuota»; se paga $ 160.004 → $ 10.004 de intereses en 30 días.
+  await page.getByRole("radio", { name: /Sí, un valor fijo/ }).click()
+  await expect(page.getByRole("radio", { name: "En cada cuota" })).toHaveCount(0)
+  await expect(page.getByRole("radio", { name: "En total" })).toHaveAttribute("aria-checked", "true")
+  await page.getByRole("textbox", { name: "Intereses en total" }).fill("10004")
+  await expect(resumen(page)).toContainText(/160\.004/)
+  const usura = page.getByTestId("loan-usura").first()
+  // Se muestra lo pactado en sus días (no una proyección mensual sin contexto) y la usura con la E.A. real del plazo.
+  await expect(usura).toContainText(/6,67 % en 30 días/)
+  await expect(usura).toContainText(/lo máximo legal serían unos \$\s?[\d.]+ de intereses/)
+  // Otros ciclos: un porcentaje al día.
+  await page.getByRole("radio", { name: /Sí, un porcentaje/ }).click()
+  await page.getByRole("radio", { name: "Al día" }).click()
+  await page.getByRole("textbox", { name: "Interés diario (%)" }).fill("0,05")
+  await expect(usura).toContainText(/en 30 días/)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
 test("cambiar de tipo cambia los campos y el botón", async ({ page }) => {
   const errs = watchErrors(page)
   await login(page)
@@ -185,6 +261,49 @@ test("empeño en la misma compraventa: la segunda vez se escoge la que ya existe
   await expect(cards).toContainText("Casa de empeño")
   await expect(cards).toContainText(/\d+ deudas/)
   await shot(page, "contactos-entidades", info.project.name)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("empeño con refrendo mes a mes: un Apple Watch por $ 450.000 con $ 45.000 de refrendo; lo pagado no baja la deuda", async ({ page }, info) => {
+  test.setTimeout(150_000)
+  const errs = watchErrors(page)
+  await login(page)
+  const casa = `Compraventa El Reloj ${info.project.name}`
+  const obj = `Apple Watch ${info.project.name} ${Date.now() % 100000}`
+  await page.goto("/le-debo?nuevo=1&empeno=1")
+  await crearEntidad(page, "Casa de empeño o compraventa", casa, /Crear casa de empeño/, "Buscar o escribir el nombre…")
+  await page.getByRole("textbox", { name: "¿Qué objeto dejaste?" }).fill(obj)
+  await page.getByRole("textbox", { name: "¿En cuánto lo avaluaron?" }).fill("800000")
+  await page.getByRole("textbox", { name: "¿Cuánto te prestaron sobre el objeto?" }).fill("450000")
+  // Por defecto, refrendo mes a mes: no se pregunta el plazo.
+  await expect(page.getByRole("radio", { name: /Refrendo mes a mes/ })).toHaveAttribute("aria-checked", "true")
+  await expect(page.getByRole("textbox", { name: "¿Por cuántos meses?" })).toHaveCount(0)
+  await page.getByRole("radio", { name: /Sí, un valor fijo/ }).click()
+  await page.getByRole("textbox", { name: "Refrendo de cada mes" }).fill("45000")
+  await expect(page.getByText("Equivale al 10 % mensual de lo que te prestaron.")).toBeVisible()
+  await expect(page.getByText(/Así funciona el refrendo/)).toBeVisible()
+  await shot(page, "empeno-refrendo-form", info.project.name)
+  await page.getByRole("button", { name: "Registrar empeño" }).click()
+  await expect(page.getByText("Empeño registrado.")).toBeVisible()
+  const card = page.getByTestId("empeno-refrendo")
+  await expect(card).toContainText(/Refrendo de cada mes: \$\s?45\.000/)
+  await expect(card).toContainText(/Para recuperarlo hoy: \$\s?450\.000/)
+
+  // El caso real: empeñado hace 5 meses y con 5 refrendos pagados → $ 225.000 en intereses y sigue debiendo $ 450.000.
+  const sb = admin()
+  const { data: L } = await sb.from("loans").select("id,book_id").eq("concepto", obj).single()
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date()).split("-").map(Number)
+  const f = (k: number) => new Intl.DateTimeFormat("en-CA").format(new Date(y, m - 1 - k, Math.min(d, 28)))
+  await sb.from("loans").update({ inicio: f(5) }).eq("id", L!.id)
+  await sb.from("loan_payments").insert([4, 3, 2, 1, 0].map((k) => ({ book_id: L!.book_id, loan_id: L!.id, fecha: f(k), tipo: "cuota", valor: 45000 })))
+  await page.reload()
+  await expect(card).toContainText(/Llevas 5 refrendos: pagaste \$\s?225\.000 en intereses \(50 % de lo que te prestaron\) y sigues debiendo \$\s?450\.000/, { timeout: 30_000 })
+  await expect(card).toContainText(/en 5 meses habrás pagado en intereses lo mismo que te prestaron/)
+  await expect(card).toContainText(/o \$\s?495\.000 si la casa cobra también el refrendo del mes/)
+  await expect(card).toContainText(/Con 3 refrendos más, lo pagado más lo que debes pasará de lo que vale/)
+  await expect(card).toContainText(/veces el tope de usura/)
+  await expect(card.getByText(/refrendos? atrasados?/)).toHaveCount(0)
+  await shot(page, "empeno-refrendo-detalle", info.project.name)
   expect(errs, errs.join("\n")).toEqual([])
 })
 

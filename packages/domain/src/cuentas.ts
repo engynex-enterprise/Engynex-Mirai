@@ -19,6 +19,7 @@
 //
 // Cuándo cuenta un movimiento: si su fecha es posterior a la del cuadre (y no es futura); si es del mismo día, solo si
 // se registró después de cuadrar (created_at > saldo_at). Lo que pasó antes ya estaba en el saldo de tu banco.
+import { pagoDeGasto } from "./gasto-pago"
 import { addMonths, iso, parseDate, toDay } from "./dates"
 import { loanEngine, loanName } from "./loans"
 import { conv } from "./money"
@@ -70,7 +71,7 @@ export interface SaldoCuenta {
 /** Cuenta de dinero (PUC 11xx: caja, bancos, billeteras): las únicas que pueden llevar el saldo solas. */
 export const esCuentaDinero = (a: { cod?: string | null }) => /^11/.test(String(a.cod ?? ""))
 
-type RawExp = { id: string; fecha: string; descripcion: string; valor: number | string; currency?: string | null; payment_method_id?: string | null; origen?: string | null; created_at?: string | null; fixed_expense_id?: string | null; aporte?: { t?: string; id?: string } | null }
+type RawExp = { id: string; fecha: string; descripcion: string; valor: number | string; pagado?: number | string | null; pagar_el?: string | null; currency?: string | null; payment_method_id?: string | null; origen?: string | null; created_at?: string | null; fixed_expense_id?: string | null; aporte?: { t?: string; id?: string } | null }
 type RawExtra = { id?: string; fecha: string; descripcion: string; valor: number | string; currency?: string | null; payment_method_id?: string | null; created_at?: string | null }
 type RawLoanPay = { id?: string; payment_method_id?: string | null; expense_id?: string | null; created_at?: string | null }
 type RawCardPay = { id?: string; fecha: string; valor: number | string; payment_method_id?: string | null; created_at?: string | null; deleted_at?: string | null }
@@ -131,7 +132,9 @@ export function saldosCuentas(b: LibroCuentas, today: DateInput): Map<string, Sa
     if (e.origen === "tarjeta") continue
     const from = e.payment_method_id ? cuentaDe.get(e.payment_method_id) : undefined
     const fecha = isoOf(e.fecha)
-    const v = conv(num(e.valor), e.currency, trm)
+    // Solo baja lo que de verdad se pagó (un gasto por pagar o abonado no ha salido completo de la cuenta).
+    const v = conv(pagoDeGasto(e).pagado, e.currency, trm)
+    if (!(v > 0)) continue
     const esAporte = e.origen === "aporte" || !!e.aporte
     const to = esAporte ? destinoAporte(e) : null
     if (esAporte && from && to === from) continue

@@ -13,6 +13,7 @@ import { SubmitButton, useSubmitState } from "@/components/mirai/submit-button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Spinner } from "@/components/ui/spinner"
 import { FormSkeleton } from "@/components/skeletons/form-skeleton"
 import { useCatalogsReady } from "@/features/catalogs/hooks"
@@ -41,6 +42,8 @@ import { isHormiga, localCat, localHormiga } from "./logic"
 import { classifyExpenses, readInvoice } from "@/features/ai/api"
 import { useList } from "@/hooks/use-book-data"
 import { takeShared } from "@/features/pwa/shared"
+import { Notice } from "@/components/mirai/notice"
+import { pagadoAlGuardar, pagoDeGasto, type ModoPago } from "@/lib/domain/gasto-pago"
 
 const schema = z.object({
   descripcion: z.string().trim().min(1, "Escribe en qué gastaste"),
@@ -55,6 +58,8 @@ const schema = z.object({
   usarFondo: z.boolean(),
   /** Deducción de renta a la que puede servir (expenses.deducible); null = no aplica. */
   deducible: z.string().nullable(),
+  /** Observaciones (expenses.nota). */
+  nota: z.string().max(500, "Máximo 500 caracteres"),
 })
 type Values = z.infer<typeof schema>
 
@@ -86,6 +91,11 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
   const { data: rules = [] } = useKeywordRules()
   const { data: cfg } = useSettings()
   const [fondo, setFondo] = useState<{ activo: boolean; saldo: number } | null>(null)
+  // ¿Ya se pagó? (expenses.pagado / pagar_el): pagado completo, abonado (una parte) o por pagar después.
+  const pago0 = expense ? pagoDeGasto(expense) : null
+  const [modoPago, setModoPago] = useState<ModoPago>(pago0?.estado === "abonado" ? "abonado" : pago0?.estado === "pendiente" ? "despues" : "pagado")
+  const [abono, setAbono] = useState(pago0?.estado === "abonado" ? pago0.pagado : 0)
+  const [pagarEl, setPagarEl] = useState<string | null>(expense?.pagar_el ?? null)
   const [newCat, setNewCat] = useState<string | null>(null)
   const [catManual, setCatManual] = useState(false)
   // La respuesta de la IA llega después: si mientras tanto la persona escogió la categoría, se respeta la suya.
@@ -109,11 +119,11 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       ? {
           descripcion: expense.descripcion, valor: Number(expense.valor), category_id: expense.category_id ?? "",
           hormigaMode: expense.hormiga_src === "manual" ? (expense.hormiga ? "si" : "no") : "auto",
-          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, contact_id: expense.contact_id ?? null, usarFondo: false, deducible: expense.deducible ?? null,
+          fecha: expense.fecha, quien: expense.member_id ?? "familia", payment_method_id: expense.payment_method_id, provider_id: expense.provider_id ?? null, contact_id: expense.contact_id ?? null, usarFondo: false, deducible: expense.deducible ?? null, nota: expense.nota ?? "",
         }
       : {
           descripcion: preset?.descripcion ?? "", valor: 0, category_id: preset?.category_id || defaults.cat || "", hormigaMode: "auto", fecha: todayISO(),
-          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, contact_id: null, usarFondo: true, deducible: null,
+          quien: defaults.quien || "familia", payment_method_id: preset?.payment_method_id || defaults.medio || methods[0]?.id || null, provider_id: preset?.provider_id ?? null, contact_id: null, usarFondo: true, deducible: null, nota: "",
         },
   })
   const { errors, isSubmitting } = form.formState
@@ -204,6 +214,7 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
     })()
   }, [expense, shared, setShared, form, ia.on])
 
+  const futuro = (w.fecha || todayISO()) > todayISO()
   const umbral = Number(cfg?.umbral ?? 25000)
   const isImprevisto = cats.find((c) => c.id === w.category_id)?.nombre === "Imprevistos"
   const autoH = w.hormigaMode === "auto" && w.valor > 0 && localHormiga({ descripcion: w.descripcion, valor: w.valor, category_id: w.category_id }, cats, umbral)
@@ -221,11 +232,16 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
       provider_id: v.provider_id,
       contact_id: v.contact_id,
       deducible: v.deducible || null,
+      nota: v.nota.trim(),
+      ...(() => {
+        const pagado = pagadoAlGuardar({ valor: v.valor, fecha: v.fecha || todayISO(), hoy: todayISO(), modo: modoPago, abono })
+        return { pagado, pagar_el: pagado === null ? null : pagarEl }
+      })(),
     }
     const { data, error } = expense ? await apiUpdateRow<Row<"expenses">>(bookId, "expenses", expense.id, row) : await apiInsertRow<Row<"expenses">>(bookId, "expenses", row)
     if (error || !data) return toast.error("No se pudo guardar el gasto", { description: error?.message })
 
-    if (isImprevisto && v.usarFondo && fondo?.activo && fondo.saldo > 0 && !expense) {
+    if (isImprevisto && v.usarFondo && fondo?.activo && fondo.saldo > 0 && !expense && data.pagado == null) {
       // Atómico en la BD: descuenta del fondo y registra el movimiento (y lo devuelve si se borra el gasto)
       const { data: queda, error: fe } = await payWithEmergencyFund({ p_expense: data.id, p_valor: v.valor })
       if (fe) toast.error("El gasto se guardó, pero no se pudo descontar del fondo", { description: fe.message })
@@ -297,6 +313,28 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
               <FormField label="Medio de pago" htmlFor="g-medio"><Controller control={form.control} name="payment_method_id" render={({ field }) => <Combobox id="g-medio" value={field.value} onChange={field.onChange} options={methodOptions(methods)} />} /></FormField>
 
             </div>
+            {futuro ? (
+              <Notice tone="info" title="Queda por pagar">Como la fecha es futura, este gasto todavía no se ha pagado. Cuando lo pagues, tócalo en la lista y elige <b>Marcar como pagado</b>.</Notice>
+            ) : (
+              <div className="grid gap-4">
+                <FormField label="¿Ya lo pagaste?" tip="Si pagaste solo una parte, elige Aboné una parte: lo que falta queda por pagar y te lo recordamos.">
+                  <Segmented value={modoPago} onChange={(x) => setModoPago(x as ModoPago)} items={[{ value: "pagado", label: "Sí, completo", icon: "circle-check" }, { value: "abonado", label: "Aboné una parte" }, { value: "despues", label: "Lo pago después" }]} />
+                </FormField>
+                {modoPago !== "pagado" && (
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {modoPago === "abonado" && (
+                      <FormField label="¿Cuánto abonaste?" htmlFor="g-abono" required tip={false} error={w.valor > 0 && abono >= w.valor ? "Eso es todo el valor: elige Sí, completo" : undefined}
+                        hint={w.valor > 0 && abono > 0 && abono < w.valor ? `Faltan ${fmtMoney(w.valor - abono)}.` : undefined}>
+                        <MoneyInput id="g-abono" value={abono} onChange={setAbono} />
+                      </FormField>
+                    )}
+                    <FormField label={modoPago === "abonado" ? "¿Cuándo pagas lo que falta? (opcional)" : "¿Cuándo lo pagas? (opcional)"} htmlFor="g-pagar-el" tip={false} hint="Si lo dejas vacío, queda para la fecha del gasto.">
+                      <DatePicker id="g-pagar-el" value={pagarEl ?? ""} quick="futuro" clearable onChange={(x) => setPagarEl(x ?? null)} />
+                    </FormField>
+                  </div>
+                )}
+              </div>
+            )}
             <FormField label="¿A quién le pagaste? (opcional)" tip="No siempre hace falta: en la gasolinera o la tienda de barrio déjalo así. Si es un negocio al que le pagas seguido (Enel, el colegio) elige Negocio o empresa; si es alguien en particular (la señora del aseo, el arrendador), Una persona.">
               <Controller control={form.control} name="provider_id" render={({ field }) => (
                 <PagarA provider={field.value} contact={w.contact_id}
@@ -318,6 +356,9 @@ function ExpenseFormBody({ onOpenChange, expense, formId, preset }: Props & { fo
                 <Combobox id="g-deducible" value={field.value ?? "no"} onChange={(v) => field.onChange(v && v !== "no" ? v : null)}
                   options={[{ value: "no", label: "No aplica" }, ...DEDUCIBLES.map((d) => ({ value: d.value, label: d.label }))]} />
               )} />
+            </FormField>
+            <FormField label="Observaciones (opcional)" htmlFor="g-nota" error={errors.nota?.message} tip={false} hint="Lo que quieras recordar de este gasto: para qué fue, el número de factura, lo que acordaron…">
+              <Textarea id="g-nota" rows={2} maxLength={500} placeholder="Ej. Factura 4521. Pagué la mitad con la tarjeta de Ana." {...form.register("nota")} />
             </FormField>
             {isImprevisto && !expense && (fondo?.activo && fondo.saldo > 0 ? (
               <label className="flex items-start gap-3 rounded-lg border border-dashed p-3">

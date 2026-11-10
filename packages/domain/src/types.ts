@@ -83,6 +83,10 @@ export type ExpenseIn = Pick<Row<"expenses">, "id" | "fecha" | "descripcion" | "
   /** Marca de gasto hormiga. Solo cuenta si `hormiga_src` no es nulo (decisión manual, de IA o de regla). */
   hormiga?: boolean | null
   hormiga_src?: string | null
+  /** Lo que ya se pagó; null/undefined = pagado completo (gasto-pago.ts). */
+  pagado?: number | string | null
+  /** Cuándo se paga lo que falta. */
+  pagar_el?: string | null
 }
 
 export type FixedPaymentIn = Pick<Row<"fixed_expense_payments">, "periodo" | "fecha" | "valor"> & {
@@ -135,6 +139,11 @@ export interface Prenda {
   valor?: number
   limite?: string | null
   ref?: string
+  /**
+   * Empeño con refrendo mes a mes (empeno.ts): cada mes se paga solo el interés y el plazo se extiende mientras se
+   * pague; el capital se paga cuando la persona decide recuperar el objeto. Sin esto, el empeño tiene un plazo fijo.
+   */
+  refrendo?: boolean
 }
 
 export type LoanIn = Pick<Row<"loans">, "monto" | "sistema" | "tasa" | "frec" | "plazo" | "inicio"> & {

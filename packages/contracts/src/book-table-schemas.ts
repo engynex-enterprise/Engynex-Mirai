@@ -95,6 +95,10 @@ export const BOOK_TABLE_SCHEMAS = {
     member_ids: z.array(Uuid).max(200).nullable().optional(),
     nota: Txt(4000).optional(),
     origen: z.enum(["manual", "importar", "correo", "ocr", "voz", "tarjeta", "compartido", "aporte", "prestamo"]).optional(),
+    /** Lo que ya se pagó (db/postgres/0012_gasto_por_pagar.sql); null = pagado completo. */
+    pagado: z.number({ error: "Escribe cuánto pagaste" }).min(0, "No puede ser negativo").max(1e12).nullable().optional(),
+    /** Cuándo se paga lo que falta. */
+    pagar_el: IsoDate.nullable().optional(),
     payment_method_id: Uuid.nullable().optional(),
     provider_id: Uuid.nullable().optional(),
     valor: Money.optional(),

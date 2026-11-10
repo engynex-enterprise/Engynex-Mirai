@@ -3,6 +3,7 @@ import {
   LOAN_TIPOS, TASA_EMPENO, camposLoan, esTipo, faltantesLoan, loanTipo, loanTitulo, sistemaDe, textosLoan, tipoDefaults, tiposDe,
   type LoanFormState,
 } from "./loan-tipos"
+import { DIAS_MES, costoDelPlazo, mensualDeEA, previewLoan, tasaMensualAcordada, tasaParaInteres } from "./loans"
 
 const HOY = "2026-11-02"
 const base = (s: Partial<LoanFormState>): LoanFormState => ({ tipo: null, kind: "pagar", monto: 0, inicio: HOY, ...s })
@@ -71,11 +72,12 @@ describe("campos visibles por tipo", () => {
     expect(c.pagos).toEqual(["cuotas"])
     expect(c.intereses).toEqual(["cuota", "tasa"])
   })
-  it("empeño: casa de empeño, objeto obligatorio, solo tasa y sin escoger sistema (americano)", () => {
+  it("empeño: casa de empeño, objeto obligatorio, interés en % o en pesos (refrendo) y siempre «solo intereses» (americano)", () => {
     const c = camposLoan("empeno", "pagar")
     expect(c).toMatchObject({ quien: "casa", ctCorto: false, prenda: "si", concepto: false, sistema: false, frecs: [], foto: false })
-    expect(c.intereses).toEqual(["tasa"])
+    expect(c.intereses).toEqual(["tasa", "valor"])
     expect(sistemaDe("empeno", "tasa", "frances", c)).toBe("americano")
+    expect(sistemaDe("empeno", "valor", "frances", c)).toBe("americano")
   })
   it("fiado: tienda (proveedor), una fecha o abonos libres, recargo opcional, sin cuotas ni pagos anteriores", () => {
     const c = camposLoan("fiado", "pagar")
@@ -88,10 +90,10 @@ describe("campos visibles por tipo", () => {
     const c = camposLoan("persona", "pagar", { pago: "cuotas" })
     expect(c).toMatchObject({ plazo: true, vence: false, hist: true })
     expect(c.frecs.length).toBeGreaterThan(1)
-    expect(c.intereses).toEqual(["no", "tasa", "cuota"])
+    expect(c.intereses).toEqual(["no", "tasa", "valor", "cuota"])
   })
   it("sin cuotas no se ofrece 'sé cuánto es la cuota'", () => {
-    expect(camposLoan("persona", "pagar", { pago: "libre" }).intereses).toEqual(["no", "tasa"])
+    expect(camposLoan("persona", "pagar", { pago: "libre" }).intereses).toEqual(["no", "tasa", "valor"])
   })
   it("compra a cuotas: almacén, cuota inicial, seguros y foto de la factura", () => {
     expect(camposLoan("cuotas", "pagar")).toMatchObject({ quien: "prov", inicial: true, extra: true, foto: true, concepto: true })
@@ -213,5 +215,78 @@ describe("textos por tipo", () => {
     expect(loanTitulo("empeno", "Compraventa", { prenda: { obj: "reloj" } })).toBe("Empeño: reloj")
     expect(loanTitulo("banco", "Bancolombia", {})).toBe("Crédito con Bancolombia")
     expect(loanTitulo("otro", "Colegio", {})).toBe("Colegio")
+  })
+})
+
+describe("interés acordado como valor fijo o porcentaje en total (préstamos entre personas)", () => {
+  const HOY_P = "2026-11-10"
+  it("persona y «le presté» ofrecen porcentaje, valor fijo y cuota; con pago único no hay «sé la cuota»", () => {
+    expect(camposLoan("persona", "pagar", { pago: "cuotas" }).intereses).toEqual(["no", "tasa", "valor", "cuota"])
+    expect(camposLoan("presto", "cobrar", { pago: "unico" }).intereses).toEqual(["no", "tasa", "valor"])
+    expect(sistemaDe("persona", "valor", "frances", camposLoan("persona", "pagar"))).toBe("simple")
+  })
+  it("$ 50.000 de intereses en cada una de 6 cuotas mensuales sobre $ 1.000.000: cada cuota lleva $ 50.000 de interés", () => {
+    const base = { monto: 1_000_000, frec: "mensual", plazo: 6, inicio: "2026-11-01" }
+    const t = tasaParaInteres(base, 50_000 * 6, HOY_P)
+    expect(t).toBeCloseTo(5, 2)
+    const pv = previewLoan({ ...base, sistema: "simple", tasa: t }, HOY_P)
+    expect(pv.int).toBeCloseTo(300_000, 0)
+    for (const r of pv.plan) expect(r.int).toBeCloseTo(50_000, 0)
+    expect(pv.cuota).toBeCloseTo(1_000_000 / 6 + 50_000, 0)
+  })
+  it("pago único: «me devuelves $ 1.100.000 el 1 de diciembre» = $ 100.000 de interés en total", () => {
+    const p = { monto: 1_000_000, frec: "unico", plazo: 1, inicio: "2026-11-01", vence: "2026-12-01" }
+    const t = tasaParaInteres(p, 100_000, HOY_P)
+    const pv = previewLoan({ ...p, sistema: "simple", tasa: t }, HOY_P)
+    expect(pv.total).toBeCloseTo(1_100_000, 0)
+    expect(pv.plan).toHaveLength(1)
+  })
+  it("quincenal: el valor por cuota se respeta aunque la tasa se guarde mensual", () => {
+    const base = { monto: 600_000, frec: "quincenal", plazo: 4, inicio: "2026-11-01" }
+    const pv = previewLoan({ ...base, sistema: "simple", tasa: tasaParaInteres(base, 20_000 * 4, HOY_P) }, HOY_P)
+    for (const r of pv.plan) expect(r.int).toBeCloseTo(20_000, 0)
+  })
+  it("sin interés o sin monto da 0; y el formulario pide el valor si escogió valor fijo", () => {
+    expect(tasaParaInteres({ monto: 1_000_000, frec: "mensual", plazo: 3 }, 0, HOY_P)).toBe(0)
+    expect(faltantesLoan({ tipo: "persona", kind: "pagar", quien: "new", nombreNuevo: "Camilo", monto: 500_000, pago: "cuotas", plazo: 3, interes: "valor", inicio: "2026-11-01" }))
+      .toContainEqual({ campo: "valorInt", msg: "Escribe el valor de los intereses" })
+  })
+})
+
+describe("ciclos del interés acordado y costo real de un pago único", () => {
+  const H = "2026-11-10"
+  const base = { monto: 1_000_000, frec: "mensual", plazo: 6, inicio: "2026-11-01" }
+  it("porcentaje por día, semana, quincena, mes o año pasa a mensual (proporcional a los días; el año con E.A.)", () => {
+    expect(tasaMensualAcordada({ modo: "pct", ciclo: "mes", v: 3, base }, H)).toBeCloseTo(3, 6)
+    expect(tasaMensualAcordada({ modo: "pct", ciclo: "quincena", v: 1.5, base }, H)).toBeCloseTo(3, 6)
+    expect(tasaMensualAcordada({ modo: "pct", ciclo: "dia", v: 0.1, base }, H)).toBeCloseTo(3.04375, 5)
+    expect(tasaMensualAcordada({ modo: "pct", ciclo: "semana", v: 1, base }, H)).toBeCloseTo(30.4375 / 7, 5)
+    expect(tasaMensualAcordada({ modo: "pct", ciclo: "anio", v: 26.82, base }, H)).toBeCloseTo(mensualDeEA(26.82), 8)
+  })
+  it("valor en pesos: $ 30.000 al mes sobre $ 1.000.000 = 3 % mensual; en total y en cada cuota reproducen el interés", () => {
+    expect(tasaMensualAcordada({ modo: "valor", ciclo: "mes", v: 30_000, base }, H)).toBeCloseTo(3, 6)
+    const total = tasaMensualAcordada({ modo: "valor", ciclo: "total", v: 120_000, base }, H)
+    expect(previewLoan({ ...base, sistema: "simple", tasa: total }, H).int).toBeCloseTo(120_000, 0)
+    const cuota = tasaMensualAcordada({ modo: "valor", ciclo: "cuota", v: 20_000, base }, H)
+    expect(previewLoan({ ...base, sistema: "simple", tasa: cuota }, H).int).toBeCloseTo(120_000, 0)
+  })
+  it("una sola cuota con interés mensual: 10 % al mes por 2 meses = $ 200.000", () => {
+    const u = { monto: 1_000_000, frec: "unico", plazo: 1, inicio: "2026-11-01", vence: "2027-01-01" }
+    const t = tasaMensualAcordada({ modo: "pct", ciclo: "mes", v: 10, base: u }, H)
+    expect(previewLoan({ ...u, sistema: "simple", tasa: t }, H).int).toBeCloseTo(1_000_000 * 0.1 * (61 / DIAS_MES), 0)
+  })
+  it("$ 150.000 que se devuelven en $ 160.004 a los 7 días: 6,67 % del plazo ≈ 29 % al mes, y SÍ supera la usura (26 % E.A.)", () => {
+    const c = costoDelPlazo({ monto: 150_000, interes: 10_004, inicio: "2026-11-06", vence: "2026-11-13", usuraEA: 26 })
+    expect(c.dias).toBe(7)
+    expect(c.pctPlazo).toBeCloseTo(6.669, 3)
+    expect(c.mensual).toBeCloseTo(29.0, 1)
+    expect(c.supera).toBe(true)
+    // Lo máximo legal en 7 días con 26 % E.A.: unos $ 666.
+    expect(c.maxLegal!).toBeCloseTo(666, -1)
+  })
+  it("un pago único dentro de la usura no dispara la alerta: $ 1.000.000 con $ 15.000 a un mes", () => {
+    const c = costoDelPlazo({ monto: 1_000_000, interes: 15_000, inicio: "2026-11-01", vence: "2026-12-01", usuraEA: 26 })
+    expect(c.supera).toBe(false)
+    expect(c.ea).toBeCloseTo(Math.pow(1.015, 365 / 30) - 1, 8)
   })
 })

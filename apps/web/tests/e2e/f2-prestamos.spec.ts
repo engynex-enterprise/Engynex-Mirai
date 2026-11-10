@@ -15,7 +15,7 @@ test("me deben: préstamo con interés, pagos previos, registrar y deshacer pago
   await page.getByRole("textbox", { name: "Nombre completo" }).fill(nombre)
   await page.getByRole("textbox", { name: "¿Cuánto le prestaste?" }).fill("1000000")
   await page.getByRole("radio", { name: "6", exact: true }).click()
-  await page.getByRole("radio", { name: /Sí, sé el porcentaje/ }).click()
+  await page.getByRole("radio", { name: /Sí, un porcentaje/ }).click()
   await page.getByRole("textbox", { name: "Interés mensual (%)" }).fill("2")
   await expect(page.getByText(/cada mes/).first()).toBeVisible()
   await expect(page.getByTestId("loan-usura")).toContainText(/≈ .* E\.A\./)

@@ -32,6 +32,7 @@ import { loanEngine, loanName } from "./loans"
 import { loanTipo, tipoDef, type LoanTipo } from "./loan-tipos"
 import { conv, formatCOP as fmtCOP } from "./money"
 import { catIcon } from "./quincena"
+import { pagoDeGasto } from "./gasto-pago"
 import { fijoValor, incomePagos } from "./reparto"
 import { gastosDeCobro, subOcc } from "./subscriptions"
 import { fixedCategoryIds, liquidez, totales, variableMes, type Totales } from "./totals"
@@ -476,14 +477,21 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
   const contados: (ExpenseIn & Raw)[] = []
   const conTarjeta: (ExpenseIn & Raw)[] = []
   for (const g of expRows) {
-    if (!inR(g.fecha)) continue
-    if (g.origen === "tarjeta") { conTarjeta.push(g); continue }
+    // Un gasto por pagar o abonado (gasto-pago.ts): lo pagado sale hecho en su fecha y lo que falta, por pagar en la
+    // fecha en que se paga (puede caer en otro mes). Sin `pagado` (los de siempre) todo sale hecho, como antes.
+    const pg = pagoDeGasto(g)
+    const enRango = inR(g.fecha), faltaEnRango = pg.falta > 0 && inR(pg.vence)
+    if (!enRango && !faltaEnRango) continue
+    if (g.origen === "tarjeta") { if (enRango) conTarjeta.push(g); continue }
     if (gastoYaContado(g) || g.origen === "aporte" || usados.has(g.id)) continue
-    contados.push(g)
+    if (enRango) contados.push(g)
     const cat = catName(g.category_id)
-    push({ id: `exp:${g.id}`, dir: "sale", modulo: "gastos", clase: "gasto", fecha: g.fecha, n: g.descripcion, s: g.origen === "compartido" ? `Gasto compartido · ${cat}` : `Gasto · ${cat}`, icon: catIcon(b.categories, g.category_id), v: conv(+g.valor, g.currency, trm), cat, catId: g.category_id ?? null, estado: "hecho", href: "/gastos", ref: { tabla: "expenses", id: g.id },
-      medioId: g.payment_method_id ?? null, memberId: g.member_id ?? null, providerId: g.provider_id ?? null, contactId: g.contact_id ?? null,
-    })
+    const base = { dir: "sale" as const, modulo: "gastos" as const, clase: "gasto" as const, n: g.descripcion, icon: catIcon(b.categories, g.category_id), cat, catId: g.category_id ?? null, href: "/gastos", ref: { tabla: "expenses" as const, id: g.id },
+      medioId: g.payment_method_id ?? null, memberId: g.member_id ?? null, providerId: g.provider_id ?? null, contactId: g.contact_id ?? null }
+    const s0 = g.origen === "compartido" ? `Gasto compartido · ${cat}` : `Gasto · ${cat}`
+    const k = conv(1, g.currency, trm)
+    if (enRango && pg.pagado > 0) push({ ...base, id: `exp:${g.id}`, fecha: g.fecha, s: pg.falta > 0 ? `${s0} · abono` : s0, v: pg.pagado * k, estado: "hecho" })
+    if (faltaEnRango) push({ ...base, id: `exp:${g.id}:falta`, fecha: pg.vence, s: pg.pagado > 0 ? `Falta por pagar (abonaste ${fmtCOP(pg.pagado * k)})` : `Por pagar · ${cat}`, v: pg.falta * k, estado: pg.vence < hoy ? "vencido" : "programado" })
   }
 
   // 7. Calendario: ingresos con valor; egresos con valor o, si es un impuesto, con su estimado.
