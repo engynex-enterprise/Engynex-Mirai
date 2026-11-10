@@ -53,6 +53,8 @@ export type Propuesta = {
     ref_id?: string; periodo?: string
     /** Préstamo: Le debo (pagar) o Me deben (cobrar), tipo, plazo, tasa mensual y quién. */
     kind?: "pagar" | "cobrar"; loan_tipo?: string; plazo?: number; tasa?: number; sistema?: string; persona?: string; concepto?: string
+    /** Préstamo de un solo pago: la fecha pactada (frec "unico"). */
+    vence?: string
     contact_id?: string | null; entity_id?: string | null
     /** Pago de una deuda: cuotas completas o un abono. */
     pago?: "cuota" | "abono"; cuotas?: number

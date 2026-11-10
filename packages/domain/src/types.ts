@@ -34,6 +34,8 @@ export interface NotifFlags {
   mesadas?: boolean
   /** Saldos de los gastos compartidos. */
   compartidos?: boolean
+  /** Lo que registran las demás personas del hogar (aviso de la base: 0011_avisos_familia.sql). */
+  familia?: boolean
 }
 
 /** Ajustes del libro (`book_settings`) que usan los cálculos. */

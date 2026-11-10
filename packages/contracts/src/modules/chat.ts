@@ -69,7 +69,12 @@ export const FileRef = z.union([
   z.object({ name: z.string().min(1).max(200), type: z.string().min(3).max(100), data: z.string().min(1).max(8_400_000, "El archivo pesa más de 6 MB.") }),
 ])
 export type FileRef = z.infer<typeof FileRef>
-export const AttachBody = z.object({ file: FileRef, text: z.string().max(1000).optional(), threadId: Uuid.nullable().optional() })
+/** Hasta 5 archivos en `files` (fotos, PDF o texto: Word, Excel y CSV llegan convertidos a texto). `file` = uno solo (compatibilidad). */
+export const AttachBody = z
+  .object({ file: FileRef.optional(), files: z.array(FileRef).min(1).max(5, "Envía hasta 5 archivos a la vez.").optional(), text: z.string().max(4000).optional(), threadId: Uuid.nullable().optional(), tono: z.enum(["simple", "fin"]).optional() })
+  .refine((b) => !!b.file || !!b.files?.length, "Elige una foto, un PDF o un documento.")
+/** Audio grabado en el navegador (WAV, hasta ~2 minutos) para pasarlo a texto cuando el navegador no dicta. */
+export const TranscribeBody = z.object({ file: FileRef })
 export const AttachData = z.object({ threadId: z.string(), titulo: z.string(), nuevo: z.boolean(), user: ChatMsgSchema, answer: ChatMsgSchema })
 
 // V7-G (E15): calificar una respuesta, buscar en las conversaciones y contar los hilos (lo que hooks.ts hacía directo).
@@ -184,7 +189,15 @@ export const chatContract = c.router(
       pathParams: book,
       body: AttachBody,
       responses: { ...ERR, 200: ApiOk(AttachData) },
-      summary: "Leer una foto o PDF en el chat (factura → propuesta de gasto; comprobante o préstamo → resumen). Límite `chatAdjunto`",
+      summary: "Leer fotos, PDF o documentos en el chat: la IA prepara una tarjeta por cada movimiento en su módulo (gasto, pago de fijo, deuda, cuota…). Límite `chatAdjunto`",
+    },
+    transcribe: {
+      method: "POST",
+      path: "/v1/books/:bookId/chat/transcribe",
+      pathParams: book,
+      body: TranscribeBody,
+      responses: { ...ERR, 200: ApiOk(z.object({ text: z.string() })) },
+      summary: "Pasar a texto lo que la persona dictó (audio WAV) cuando su navegador no tiene dictado. Límite `chatVoz`",
     },
     rateMessage: {
       method: "POST",

@@ -102,7 +102,7 @@ export function Relaciones() {
                   <ToneIcon icon={iconoDe(r)} tone={toneFor(r)} size="sm" />
                   <TextBlur label={`Nombre de ${r}`} value={r} disabled={!can} onSave={(v) => void renombrar(i, v)} />
                   <div className="col-start-2 row-start-2 sm:col-start-auto sm:row-start-auto">
-                    {n ? <Link href={`/contactos?q=${encodeURIComponent(r)}`} className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"><StatusPill tone="info">{n2(n)}</StatusPill></Link>
+                    {n ? <Link href={`/personas?q=${encodeURIComponent(r)}`} className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"><StatusPill tone="info">{n2(n)}</StatusPill></Link>
                       : <StatusPill tone="gray">Sin usar</StatusPill>}
                   </div>
                   <div className="col-start-3 row-span-2 flex items-center sm:row-span-1">

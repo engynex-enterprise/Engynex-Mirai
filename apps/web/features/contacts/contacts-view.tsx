@@ -57,13 +57,13 @@ export function ContactsView() {
   const n = (x: unknown[] | undefined) => (x ? <span className="rounded-full bg-secondary px-1.5 text-xs tabular-nums">{x.length}</span> : null)
   return (
     <div className="grid gap-6">
-      <PageHeader id="contactos" description="Las personas, bancos y entidades con las que tienes deudas o préstamos. Guárdalos una vez y escógelos cada vez que registres uno."
+      <PageHeader id="personas" title="Personas" description="Las personas, empresas, bancos y entidades a las que les pagas o con las que tienes deudas o préstamos. Guárdalos una vez y escógelos cada vez que registres uno."
         actions={canEdit && (tab === "entidades"
           ? <Button onClick={() => setNuevaEnt(true)}><Plus /> Nueva entidad</Button>
           : <Button onClick={() => setNuevo(true)}><Plus /> Nuevo contacto</Button>)} />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-5">
         <TabsList className="w-full sm:w-fit">
-          <TabsTrigger value="personas">Personas {n(contacts)}</TabsTrigger>
+          <TabsTrigger value="personas">Personas y empresas {n(contacts)}</TabsTrigger>
           <TabsTrigger value="entidades">Bancos y entidades {n(entities)}</TabsTrigger>
         </TabsList>
         <TabsContent value="personas"><Personas nuevo={nuevo} setNuevo={setNuevo} /></TabsContent>

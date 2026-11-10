@@ -181,13 +181,26 @@ describe("propuestas, hilos y adjuntos", () => {
     const r = await req("POST", `/v1/books/${B_GRATIS}/chat/attachments`, await auth("registra"), { file: { fileId: `${B_GRATIS}/x/factura.jpg` }, text: "mi factura" })
     expect(r.statusCode).toBe(200)
     expect(r.json().data).toMatchObject({ threadId: "t-9", nuevo: true })
-    expect(t.chat.calls.find((c) => c.m === "attach")!.args[0]).toMatchObject({ file: { name: "factura.jpg", type: "image/jpeg", size: 3 }, text: "mi factura", threadId: null })
+    expect(t.chat.calls.find((c) => c.m === "attach")!.args[0]).toMatchObject({ files: [{ name: "factura.jpg", type: "image/jpeg", size: 3 }], text: "mi factura", threadId: null })
     // Más de 6 MB en base64 ya no cabe en el cuerpo (bodyLimit de 8 MB): 413 con el error de siempre. Para eso está fileId.
     const big = await req("POST", `/v1/books/${B_GRATIS}/chat/attachments`, await auth("registra"), { file: { name: "a.pdf", type: "application/pdf", data: Buffer.alloc(7 * 1024 * 1024).toString("base64") } })
     expect(big.statusCode).toBe(413)
     expect(big.json()).toMatchObject({ ok: false, code: "VALIDATION" })
-    const txt = await req("POST", `/v1/books/${B_GRATIS}/chat/attachments`, await auth("registra"), { file: { name: "a.txt", type: "text/plain", data: "AAAA" } })
-    expect(txt.json()).toMatchObject({ code: "VALIDATION", msg: "Usa una foto (JPG, PNG) o un PDF." })
+    // Texto (Word, Excel y CSV llegan convertidos a texto desde el navegador) sí; otros tipos no.
+    const txt = await req("POST", `/v1/books/${B_GRATIS}/chat/attachments`, await auth("registra"), { files: [{ name: "a.txt", type: "text/plain", data: "AAAA" }] })
+    expect(txt.statusCode).toBe(200)
+    const zip = await req("POST", `/v1/books/${B_GRATIS}/chat/attachments`, await auth("registra"), { files: [{ name: "a.zip", type: "application/zip", data: "AAAA" }] })
+    expect(zip.json()).toMatchObject({ code: "VALIDATION", msg: "Usa fotos (JPG, PNG), PDF, Word, Excel o CSV." })
+    const seis = await req("POST", `/v1/books/${B_GRATIS}/chat/attachments`, await auth("registra"), { files: Array.from({ length: 6 }, () => ({ name: "a.txt", type: "text/plain", data: "AAAA" })) })
+    expect(seis.statusCode).toBe(400)
+  })
+
+  it("voz a texto: audio válido → texto; otro formato → 400 con el mensaje", async () => {
+    const h = await auth("registra")
+    const r = await req("POST", `/v1/books/${B_GRATIS}/chat/transcribe`, h, { file: { name: "voz.wav", type: "audio/wav", data: "AAAA" } })
+    expect(r.json().data).toEqual({ text: "registra un gasto de 45 mil en mercado" })
+    const bad = await req("POST", `/v1/books/${B_GRATIS}/chat/transcribe`, h, { file: { name: "voz.txt", type: "text/plain", data: "AAAA" } })
+    expect(bad.json()).toMatchObject({ code: "VALIDATION", msg: "Formato de audio no soportado." })
   })
 })
 

@@ -115,6 +115,8 @@ async function buildEnv() {
     E2E_QA_EMAIL: QA_EMAIL,
     E2E_QA_PASSWORD: QA_PASSWORD,
     E2E_API_URL: LOCAL.apiUrl,
+    // Pruebas que llaman a la IA de verdad (gastan créditos): solo con E2E_AI=1 explícito.
+    ...(process.env.E2E_AI === "1" ? { E2E_AI: "1" } : {}),
     ...miraiEnv(keys),
     ...(SERVE ? { ...realGoogle(), ...realAvisos() } : {}),
   }

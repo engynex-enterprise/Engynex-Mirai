@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 /** Secciones que se dejan listas para abrir sin conexión (además de las que la persona ya abrió). */
 export const OFFLINE_PAGES = [
   "/inicio", "/gastos", "/fijos", "/ingresos", "/recordatorios", "/balance", "/dashboard", "/presupuesto", "/flujo", "/metas",
-  "/tarjetas", "/le-debo", "/me-deben", "/contactos", "/calendario", "/suscripciones", "/calculadoras", "/academia", "/ajustes", "/perfil",
+  "/tarjetas", "/le-debo", "/me-deben", "/personas", "/calendario", "/suscripciones", "/calculadoras", "/academia", "/ajustes", "/perfil",
 ]
 const PREPARE_KEY = "mirai-preparado-at"
 const PREPARE_EVERY = 12 * 3600_000

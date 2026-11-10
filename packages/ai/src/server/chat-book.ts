@@ -13,7 +13,10 @@ import { integralExtras, necesitaRenta } from "../chat/extras"
 import type { ExtrasIntegral } from "@mirai/domain/flujo-integral"
 import { todayBogota } from "@mirai/domain"
 import type { ChatFlags, ChatHints } from "../chat/types"
-import type { AiCtx, Sb } from "./ctx"
+import { whoOf, type AiCtx, type Sb } from "./ctx"
+import type { KeywordRuleIn } from "@mirai/domain"
+import { resolveCategory, type Categoria, type Categorize } from "../chat/tools"
+import { classifyWith } from "./classify"
 
 // Datos del libro que usa el chat (servidor: web y API): hechos ya calculados, banderas para las sugerencias y estado
 // de la IA. Movido de apps/web/features/chat/server.ts (F2-F). El libro se carga con rt().loadBook (el cargador de la web
@@ -108,4 +111,24 @@ export async function chatHintsFor(ctx: AiCtx, sb: Sb): Promise<ChatHints> {
     try { const q = await householdQuota(ctx.household.id, ctx.plan.id); quota = { nivel: q.nivel, quedan: q.quedan, cupo: q.cupo } } catch { /* sin cupo visible */ }
   }
   return { nombre: (ctx.user.apodo || ctx.user.nombre || "").split(" ")[0] || "", canEdit: registraAlgo(ctx.household.access), flags, ia: { ...ai, quota } }
+}
+
+/**
+ * Categoría de los gastos que propone el chat (texto o documento): la que nombró el modelo (si existe) o reglas + IA,
+ * como el formulario. `creditos()` suma lo que costó clasificar con IA.
+ */
+export function categorizer(ctx: AiCtx, sb: Sb, book: LoadedBook, aiAllowed: boolean) {
+  let memo: KeywordRuleIn[] | null = null
+  let creditos = 0
+  const rules = async () => (memo ??= ((await sb.from("keyword_rules").select("keyword,category_id").eq("book_id", ctx.book.id).is("deleted_at", null)).data ?? []) as KeywordRuleIn[])
+  const categorize: Categorize = async (descripcion, valor, nombre) => {
+    const local = resolveCategory(book, await rules(), descripcion, nombre)
+    if (local.src === "ia" || !aiAllowed) return local
+    const r = await classifyWith(sb, whoOf(ctx), [{ i: 0, descripcion, valor, veces_mes: book.expenses.filter((g) => g.descripcion.trim().toLowerCase() === descripcion.trim().toLowerCase()).length }]).catch(() => null)
+    const hit = r?.out[0]
+    creditos += r?.creditos ?? 0
+    const cat = hit?.category_id ? book.categories.find((c) => c.id === hit.category_id) : undefined
+    return cat ? ({ id: cat.id, nombre: cat.nombre, src: hit!.src === "ia" ? "ia" : local.src ?? "regla" } satisfies Categoria) : local
+  }
+  return { rules, categorize, creditos: () => creditos }
 }

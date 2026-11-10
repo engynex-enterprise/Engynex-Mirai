@@ -12,7 +12,7 @@ import { DecisionCard } from "@/features/advisor/decision-card"
 import { plainText } from "@/lib/chat/markdown"
 import { cn } from "@/lib/utils"
 import type { ChatMsg } from "@/lib/chat/types"
-import { AvisoAction, ConfirmCard } from "./cards"
+import { AvisoAction, ConfirmAll, ConfirmCard } from "./cards"
 import { Markdown } from "./markdown"
 import { useThreadActions } from "./hooks"
 import { sendChat, useChat } from "./store"
@@ -116,6 +116,7 @@ export function AssistantMessage({ m, threadId, last, streaming, busy, onFollow,
         {m.meta.decision && <DecisionCard c={m.meta.decision} />}
         {streaming && m.content && tool && tool !== "Pensando" && <p className="animate-pulse text-[12px] text-muted-foreground">{tool}…</p>}
         {m.meta.propuestas?.map((p) => <ConfirmCard key={p.id} p={p} msg={local || streaming ? null : m} threadId={threadId} />)}
+        {!local && !streaming && <ConfirmAll msg={m} threadId={threadId} />}
         {m.meta.aviso && !streaming && <AvisoAction aviso={m.meta.aviso} />}
         {!streaming && (
           <div className="flex flex-wrap items-center gap-0.5">

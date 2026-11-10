@@ -165,6 +165,10 @@ export class FakeChat extends ChatPort {
     this.calls.push({ m: "attach", ctx, args: [input] })
     return { ok: true as const, threadId: "t-9", titulo: "Leer factura", nuevo: true, user: msg("m-8", "user", "Te comparto una factura."), answer: msg("m-9", "assistant", "Leí la factura") }
   }
+  async transcribe(ctx: AiCtx, file: unknown) {
+    this.calls.push({ m: "transcribe", ctx, args: [file] })
+    return { ok: true as const, text: "registra un gasto de 45 mil en mercado" }
+  }
 }
 
 export class FakeWrites extends ChatWritesPort {

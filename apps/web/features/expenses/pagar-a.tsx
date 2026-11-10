@@ -23,7 +23,7 @@ const TIPOS = [
 const AYUDA: Record<PagarATipo, string> = {
   nadie: "Tienda de barrio, gasolinera, el bus, el mercado de la esquina… no hace falta decir a quién.",
   negocio: "Una empresa o negocio al que le pagas seguido: Enel, el colegio, el Éxito, tu EPS. Queda en Proveedores.",
-  persona: "Alguien en particular: la señora del aseo, el arrendador, un amigo. Queda en Contactos.",
+  persona: "Alguien en particular: la señora del aseo, el arrendador, un amigo. Queda en Contactos › Personas.",
 }
 
 /**

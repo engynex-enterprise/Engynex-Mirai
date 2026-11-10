@@ -7,6 +7,8 @@ import {
 } from "@mirai/ai/server/chat-actions"
 import { runChatTurn, type ChatTurnInput } from "@mirai/ai/server/chat-turn"
 import type { AiCtx } from "@mirai/ai/server/ctx"
+import type { AiFile } from "@mirai/ai/server/ai-actions"
+import { transcribeWith } from "@mirai/ai/server/voz"
 import type { ChatEvent } from "@mirai/contracts/chat-types"
 import type { DbScope } from "../../../core/db/scope"
 import { SupabaseJsFactory } from "../../../core/db/supabase-js.factory"
@@ -59,5 +61,9 @@ export class PackageChat extends ChatPort {
   }
   attach(ctx: AiCtx, scope: DbScope, input: AttachInput) {
     return chatAttachWith(ctx, this.sb.for(scope), input)
+  }
+
+  transcribe(ctx: AiCtx, file: AiFile) {
+    return transcribeWith(ctx, file)
   }
 }

@@ -65,6 +65,11 @@ const V53: Release = {
 const V55: Release = {
   v: "5.5", f: "2 nov 2026", t: "Automatiza tu plata y entiende cada peso",
   items: [
+    ["new", "Entérate de lo que registra tu familia", "Cuando alguien del hogar registra un gasto, un ingreso o una deuda en el libro que comparten, te llega un aviso en la campana al instante y, si quieres, por correo y WhatsApp. Si registra varios seguidos, te llegan juntos en un solo aviso. Lo prendes o apagas en Ajustes › Alertas › Movimientos de tu familia."],
+    ["new", "El consejero lee tus fotos, PDF y documentos", "En el chat adjunta hasta 5 archivos a la vez (fotos, facturas, PDF, Word, Excel o CSV) y dile qué hacer, escrito o por voz: \"el grado es un imprevisto, la carne la pedí fiada y los préstamos los pago el 15\". Mirai lee cada movimiento, decide si es un gasto, el pago de un fijo, una suscripción, una compra con tarjeta o una deuda, y te muestra una tarjeta por cada uno. Nada se guarda hasta que tocas Confirmar (o Confirmar todos)."],
+    ["imp", "Dictar sin afanes", "El dictado por voz del chat ya no se corta en las pausas: te espera mientras piensas y termina cuando tocas Detener o te quedas callado unos segundos. Si tu navegador no dicta, Mirai graba tu voz y la pasa a texto."],
+    ["new", "Informes a tu medida", "En Informes › Informes a tu medida escoges qué ver: tus gastos por categoría, persona, proveedor, producto o medio de pago; tus ingresos por fuente o por persona; tus activos, pasivos, deudas y lo que te deben; o cada mes del año con lo que entra, sale y te queda. Con su periodo, gráfico, tabla y Excel."],
+    ["imp", "Menú más ordenado", "Inicio reúne Inicio, Dashboard y Balance; Ingresos trae Me deben; Gastos trae Todos, Del día a día, Fijos, Suscripciones, Tarjetas y Le debo; y Contactos tiene Proveedores y Personas. Cada uno está en el menú y como pestaña de su página."],
     ["new", "Todos tus gastos en una sola lista", "En Gastos › Todos ves todo lo que sale de tu bolsillo (día a día, fijos, suscripciones, tarjetas, cuotas de deudas, impuestos y mesadas) sin contar nada dos veces. Muévete de mes en mes o mira los próximos 7 días, compara con el periodo anterior, mira si te alcanza con lo que tienes, en qué se va la plata, cómo vas con tu presupuesto y cuánto pagas en intereses. Toca un pago para ver su detalle, págalo, cambia su fecha o pide que te avisemos; elige varios para pagarlos de una vez o exportarlos. Si registraste un pago dos veces, te lo mostramos para enlazarlo con un toque."],
     ["new", "Automatizaciones", "Crea flujos con un diagrama: \"si pasa esto, haz aquello\". Por ejemplo, avísame si un gasto pasa de $200.000, ahorra el 10 % de cada ingreso o recuérdame 3 días antes de cada pago. Ya trae plantillas listas; en el plan gratis tienes 3 activas."],
     ["new", "Recibo de tu ingreso", "Al agregar un ingreso ves a la derecha un recibo que se arma mientras escribes. Toca Más detalle para ver cada descuento, lo que llega en cada pago, las próximas fechas y el año completo."],
@@ -185,7 +190,7 @@ const GUIDES_V5: Guide[] = [
       "Abre <b>Puesta en marcha</b> en el menú: es la guía para dejar tu libro listo. Cada paso abre el formulario que necesitas.",
       "Agrega tus <b>ingresos</b> (salario, honorarios, pensión…). Es lo más importante: sin eso no podemos decirte cuánto te queda.",
       "Registra tus <b>gastos fijos</b>: arriendo, servicios, internet, cuotas. Se repiten solos cada mes.",
-      "Si tienes préstamos o tarjetas, agrégalos en <b>Préstamos y deudas</b> y en <b>Tarjetas de crédito</b>.",
+      "Si tienes préstamos o tarjetas, agrégalos en <b>Gastos › Le debo</b> (o en <b>Ingresos › Me deben</b> si te deben a ti) y en <b>Gastos › Tarjetas</b>.",
       "Desde ahí, registra lo que gastas con el botón <b>Agregar</b> (o la tecla N) y mira en <b>Inicio</b> cuánto te queda en la quincena.",
     ],
     tip: "¿Manejas la plata con tu pareja o tu familia? Invítalos en <b>Ajustes › Hogar y familia</b> y verán los cambios en vivo.",

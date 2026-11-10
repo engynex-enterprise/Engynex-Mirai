@@ -3,7 +3,8 @@
 
 export const LIMITS = {
   chat: { max: 60, windowS: 600 },             // mensajes al chat por persona cada 10 minutos
-  chatAdjunto: { max: 15, windowS: 3600 },     // fotos o PDF al chat por persona por hora
+  chatAdjunto: { max: 30, windowS: 3600 },     // envíos de fotos, PDF o documentos al chat por persona por hora
+  chatVoz: { max: 60, windowS: 3600 },         // audios para pasar a texto por persona por hora
   ia: { max: 120, windowS: 3600 },             // llamadas a la IA por hogar por hora (si no hay Upstash)
   invitar: { max: 15, windowS: 86400 },        // invitaciones nuevas por persona al día
   invitarMin: { max: 5, windowS: 300 },        // y no más de 5 en 5 minutos

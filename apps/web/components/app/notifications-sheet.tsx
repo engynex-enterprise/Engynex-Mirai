@@ -21,9 +21,9 @@ import { useShell } from "./shell-store"
 import { useApp } from "./app-context"
 import { TransferBellActions } from "@/features/account/transfer"
 
-const KIND_ICON: Record<string, string> = { pago: "calendar-clock", cobro: "hand-coins", hormiga: "coffee", presupuesto: "chart-pie", inversion: "trending-up", meta: "target", tarjeta: "credit-card", empeno: "gem", mesada: "piggy-bank", compartido: "split", automatizacion: "workflow", contador: "user-round-check", logro: "medal", sistema: "info", opinion: "message-square-heart", plan: "crown", hogar: "crown" }
+const KIND_ICON: Record<string, string> = { pago: "calendar-clock", cobro: "hand-coins", hormiga: "coffee", presupuesto: "chart-pie", inversion: "trending-up", meta: "target", tarjeta: "credit-card", empeno: "gem", mesada: "piggy-bank", compartido: "split", automatizacion: "workflow", contador: "user-round-check", logro: "medal", sistema: "info", opinion: "message-square-heart", plan: "crown", hogar: "crown", familia: "users" }
 /** Color de referencia de cada tipo de aviso (el mismo en toda la app: pagos ámbar, cobros verde…). */
-const KIND_TONE: Record<string, IconTone> = { pago: "amber", cobro: "green", hormiga: "red", presupuesto: "violet", inversion: "blue", meta: "brand", tarjeta: "blue", empeno: "amber", mesada: "brand", compartido: "green", automatizacion: "navy", contador: "navy", logro: "amber", sistema: "gray", opinion: "blue", plan: "violet", hogar: "amber" }
+const KIND_TONE: Record<string, IconTone> = { pago: "amber", cobro: "green", hormiga: "red", presupuesto: "violet", inversion: "blue", meta: "brand", tarjeta: "blue", empeno: "amber", mesada: "brand", compartido: "green", automatizacion: "navy", contador: "navy", logro: "amber", sistema: "gray", opinion: "blue", plan: "violet", hogar: "amber", familia: "green" }
 
 export function useNotifications() {
   const { user, book } = useApp()
@@ -84,7 +84,7 @@ export function NotificationsSheet() {
                   </span>
                   <span className="grid flex-1 gap-0.5 text-left">
                     <span className={cn("text-[15px]", n.read_at ? "font-normal" : "font-semibold")}>{n.titulo}</span>
-                    {n.cuerpo && <span className="text-sm text-muted-foreground">{n.cuerpo}</span>}
+                    {n.cuerpo && <span className="text-sm whitespace-pre-line text-muted-foreground">{n.cuerpo}</span>}
                     <span className={cn("text-xs", n.read_at ? "text-muted-foreground" : "font-medium text-brand")}>
                       {formatDistanceToNowStrict(new Date(n.created_at), { locale: es, addSuffix: true })}
                     </span>

@@ -13,6 +13,8 @@ export abstract class NotifyJobs {
   abstract household(householdId: string, o: { now: Date; horario: boolean; dry: boolean }): Promise<Record<string, string[]>>
   /** Correos de los avisos del plan (en simulación: cuántos se revisarían). */
   abstract planEmails(now: Date, dry: boolean): Promise<number>
+  /** Avisos de los movimientos de la familia por correo, WhatsApp y push (en simulación: cuántos se revisarían). */
+  abstract familia(now: Date, dry: boolean): Promise<number>
   /** TRM, usura, festivos y precios (líneas del reporte, como `report.refs`). */
   abstract refs(): Promise<string[]>
   abstract calendarUsers(): Promise<string[]>

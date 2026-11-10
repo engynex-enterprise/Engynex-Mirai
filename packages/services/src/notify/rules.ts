@@ -11,6 +11,7 @@ export const AVISOS = [
   { k: "empenos", t: "Empeños y garantías", icon: "gem", d: "Cuando se acerca la fecha límite para recuperar lo empeñado.", kind: "empeno" },
   { k: "mesadas", t: "Mesadas", icon: "piggy-bank", d: "Cuando toca entregar la mesada de alguien del hogar.", kind: "mesada" },
   { k: "compartidos", t: "Gastos compartidos", icon: "split", d: "Cuando en un grupo te deben o debes plata.", kind: "compartido" },
+  { k: "familia", t: "Movimientos de tu familia", icon: "users", d: "Cuando alguien del hogar registra un gasto, un ingreso o una deuda en este libro.", kind: "familia" },
 ] as const
 export type AvisoKey = (typeof AVISOS)[number]["k"]
 
@@ -28,8 +29,10 @@ export type Matriz = Partial<Record<AvisoKey, Partial<Record<CanalKey, boolean>>
 export type Canales = Partial<Record<CanalKey, boolean>> & { popup?: boolean }
 
 const URGENT: AvisoKey[] = ["pagos", "cobros", "empenos"]
+/** Lo que hace la familia llega por todos los canales que la persona tenga prendidos (salvo Telegram), hasta que lo apague. */
+const FAMILIA = { app: true, email: true, telegram: false, push: true, whatsapp: true }
 export function defaultMatriz(): Matriz {
-  return Object.fromEntries(AVISOS.map(({ k }) => [k, {
+  return Object.fromEntries(AVISOS.map(({ k }) => [k, k === "familia" ? { ...FAMILIA } : {
     app: true, email: URGENT.includes(k) || k === "inversiones", telegram: URGENT.includes(k) || k === "inversiones", push: URGENT.includes(k), whatsapp: URGENT.includes(k),
   }])) as Matriz
 }
@@ -51,7 +54,7 @@ export function onFor(m: Matriz | null | undefined, aviso: AvisoKey, canal: Cana
 /** Categoría de un aviso por el prefijo de su id (nCat de la v4 + tipos de la v5). */
 export function avisoOf(id: string): AvisoKey {
   const p = id.split(":")[0]
-  return ({ b: "presupuesto", c: "cobros", h: "hormiga", i: "inversiones", m: "metas", p: "pagos", pr: "empenos", t: "tarjetas", ms: "mesadas", sg: "compartidos" } as Record<string, AvisoKey>)[p] ?? "pagos"
+  return ({ b: "presupuesto", c: "cobros", h: "hormiga", i: "inversiones", m: "metas", p: "pagos", pr: "empenos", t: "tarjetas", ms: "mesadas", sg: "compartidos", fam: "familia" } as Record<string, AvisoKey>)[p] ?? "pagos"
 }
 
 /** Horario de silencio (cruza la medianoche si desde > hasta). */

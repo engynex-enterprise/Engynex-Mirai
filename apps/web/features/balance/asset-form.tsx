@@ -175,7 +175,7 @@ function Body({ onOpenChange, initialSide, edit }: { onOpenChange: (o: boolean) 
         </div>
       )}
 
-      {edit ? <p className="text-sm text-muted-foreground">Mira el saldo en la app de tu banco y escríbelo aquí. Así tu patrimonio queda al día.</p> : <p className="text-sm text-muted-foreground">Los préstamos con cuotas regístralos en Préstamos y deudas para llevar su plan de pagos.</p>}
+      {edit ? <p className="text-sm text-muted-foreground">Mira el saldo en la app de tu banco y escríbelo aquí. Así tu patrimonio queda al día.</p> : <p className="text-sm text-muted-foreground">Los préstamos con cuotas regístralos en Gastos › Le debo (o en Ingresos › Me deben si te deben a ti) para llevar su plan de pagos.</p>}
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><SubmitButton disabled={!nombre.trim() || !(valor > 0 || (dinero && auto && valor >= 0 && !!edit))} loading={busy || saveA.isPending || saveP.isPending} onClick={submit} /></div>
     </FieldGroup>
   )

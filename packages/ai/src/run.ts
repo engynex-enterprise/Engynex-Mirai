@@ -38,8 +38,27 @@ type Base = {
   cache?: boolean
 }
 
+/** Foto, PDF o audio como parte "file" del mensaje (la parte "image" está en desuso y no sirve para PDF). */
+export const filePart = (i: { data: string; mediaType: string }) => ({ type: "file" as const, data: i.data, mediaType: i.mediaType })
+
 const asMessages = (b: Base): ModelMessage[] =>
-  b.messages ?? [{ role: "user", content: [...(b.images ?? []).map((i) => ({ type: "image" as const, image: i.data, mediaType: i.mediaType })), { type: "text" as const, text: b.prompt ?? "" }] }]
+  b.messages ?? [{ role: "user", content: [...(b.images ?? []).map(filePart), { type: "text" as const, text: b.prompt ?? "" }] }]
+
+/**
+ * Razonamiento de los modelos que "piensan" (Gemini 2.5 / 3, `gemini-flash-latest`): sus tokens de razonamiento cuentan
+ * como salida, así que sin un tope se comían todo `maxOutputTokens` y la respuesta llegaba VACÍA (chat del 9 de
+ * noviembre: 1.194 de 1.200 tokens pensando y cero de texto). Se limita el razonamiento y se suma ese tope a la salida.
+ * En OpenAI (GPT-5) el modelo barato piensa lo mínimo. Puro: lo prueban run.test.ts.
+ */
+export function thinkingFor(kind: string, model: string, tier: "simple" | "razonamiento" | "vision", cheap: boolean): { providerOptions?: ProviderOptions; extra: number } {
+  if (/gemini/i.test(model) && ["ai_gemini", "ai_vertex", "ai_gateway"].includes(kind)) {
+    const thinkingBudget = tier === "simple" ? 256 : 1024
+    const thinkingConfig = { thinkingBudget, includeThoughts: false }
+    return { providerOptions: { google: { thinkingConfig }, vertex: { thinkingConfig } }, extra: thinkingBudget }
+  }
+  if (cheap && /gpt-5/.test(model)) return { providerOptions: { openai: { reasoningEffort: "minimal" } }, extra: 0 }
+  return { extra: 0 }
+}
 
 /** Límite de consultas de IA por hogar y hora con Upstash Redis (si la integración o las variables existen). */
 async function rateLimit(householdId: string) {
@@ -130,9 +149,9 @@ async function run<T>(b: Base, call: (a: { model: ReturnType<typeof modelFrom>; 
     const dePlataforma = a.v.source === "plataforma"
     try {
       const anthropicCache = a.v.kind === "ai_anthropic" || a.model.startsWith("anthropic/")
-      // En el modelo barato de OpenAI se pide razonamiento mínimo (los tokens de razonamiento se cobran como salida).
-      const providerOptions: ProviderOptions = a.cheap && /gpt-5/.test(a.model) ? { openai: { reasoningEffort: "minimal" } } : undefined
-      const r = await call({ model: modelFrom(a.v, a.model), system, messages, providerOptions, maxOutputTokens, anthropicCache })
+      // Razonamiento con tope (Gemini) o mínimo (modelo barato de OpenAI): los tokens de razonamiento se cobran como salida.
+      const th = thinkingFor(a.v.kind, a.model, f.tier, a.cheap)
+      const r = await call({ model: modelFrom(a.v, a.model), system, messages, providerOptions: th.providerOptions, maxOutputTokens: maxOutputTokens + th.extra, anthropicCache })
       let u = usageOf(r.usage)
       // Algunos proveedores (o modelos gratis) no informan tokens: se estiman (~4 caracteres por token).
       // Cada imagen cuenta como ~1.000 tokens (orden de magnitud de una foto en los modelos de visión).

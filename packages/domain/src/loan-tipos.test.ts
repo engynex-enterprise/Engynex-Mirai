@@ -196,13 +196,13 @@ describe("textos por tipo", () => {
     expect(textosLoan("gota", "pagar", { frec: "diariohab" }).cuota).toBe("¿Cuánto pagas cada día?")
   })
   it("la ayuda dice dónde queda guardado quien presta", () => {
-    expect(textosLoan("banco", "pagar").quienHint).toMatch(/Contactos › Bancos y entidades/)
-    expect(textosLoan("empeno", "pagar").quienHint).toMatch(/Contactos › Bancos y entidades/)
+    expect(textosLoan("banco", "pagar").quienHint).toMatch(/Contactos › Personas › Bancos y entidades/)
+    expect(textosLoan("empeno", "pagar").quienHint).toMatch(/Contactos › Personas › Bancos y entidades/)
     expect(textosLoan("fiado", "pagar").quienHint).toMatch(/Proveedores/)
     expect(textosLoan("cuotas", "pagar").quienHint).toMatch(/Proveedores/)
-    expect(textosLoan("persona", "pagar").quienHint).toBe("Queda en Contactos.")
+    expect(textosLoan("persona", "pagar").quienHint).toBe("Queda en Contactos › Personas.")
     expect(textosLoan("gota", "pagar").quienHint).toMatch(/Don Jaime.*Contactos/)
-    expect(textosLoan("presto", "cobrar").quienHint).toBe("Queda en Contactos.")
+    expect(textosLoan("presto", "cobrar").quienHint).toBe("Queda en Contactos › Personas.")
   })
   it("Me deben habla al revés", () => {
     expect(textosLoan("presto", "cobrar")).toMatchObject({ quien: "¿A quién le prestaste?", vence: "¿Cuándo te paga?" })

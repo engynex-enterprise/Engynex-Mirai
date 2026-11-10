@@ -17,7 +17,7 @@ vi.mock("@mirai/services/integrations/store", () => ({
 }))
 vi.mock("./model", async (orig) => ({ ...(await orig<typeof import("./model")>()), modelFrom: (v: IntegrationValue) => models[v.kind] }))
 
-const { aiObject, aiText, AiUnavailable, AI_OFF_MSG, AI_PLAN_MSG } = await import("./run")
+const { aiObject, aiText, AiUnavailable, AI_OFF_MSG, AI_PLAN_MSG, thinkingFor } = await import("./run")
 const { resetAiSettingsMemo } = await import("./usage")
 
 const usage = (input: number, output: number) => ({ inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: output, text: output, reasoning: 0 } })
@@ -108,5 +108,19 @@ describe("aiText / aiObject (run.ts)", () => {
   it("límite por hora (rate_limit_hit): AiUnavailable con el mensaje de espera", async () => {
     db.rpcs.rate_limit_hit = () => ({ ok: false, remaining: 0, reset_ms: 120_000 })
     await expect(aiText({ householdId: H, bookId: B, prompt: "x" })).rejects.toThrow(/muchas consultas de IA en la última hora\. Espera 2 minutos/)
+  })
+})
+
+describe("razonamiento de los modelos que piensan (thinkingFor)", () => {
+  it("Gemini: tope de razonamiento y ese tope se suma a la salida (antes se comía toda la respuesta)", async () => {
+    await aiText({ householdId: H, bookId: B, feature: "chat", prompt: "hola" })
+    const c = models.ai_gemini.doGenerateCalls[0]
+    expect(c.providerOptions?.google).toMatchObject({ thinkingConfig: { thinkingBudget: 1024, includeThoughts: false } })
+    expect(c.maxOutputTokens).toBe(1200 + 1024)
+  })
+  it("tareas simples piensan poco; otros proveedores no cambian; el modelo barato de GPT-5 piensa lo mínimo", () => {
+    expect(thinkingFor("ai_gemini", "gemini-flash-latest", "simple", true).extra).toBe(256)
+    expect(thinkingFor("ai_anthropic", "claude-haiku-4-5", "razonamiento", false)).toEqual({ extra: 0 })
+    expect(thinkingFor("ai_openai", "gpt-5-mini", "simple", true).providerOptions).toEqual({ openai: { reasoningEffort: "minimal" } })
   })
 })

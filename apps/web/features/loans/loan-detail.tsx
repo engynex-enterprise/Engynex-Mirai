@@ -113,7 +113,7 @@ export function LoanDetail({ loan, contacts, entities, anticipo, onDeleted }: { 
   const totalCuotas = e.k + e.plan.length
   const tel = contact?.telefono?.replace(/\D/g, "") ?? ""
   const wa = tel ? `https://wa.me/${tel.length === 10 ? `57${tel}` : tel}` : ""
-  const quienHref = prov ? `/proveedores?id=${prov.id}` : contact ? `/contactos?id=${contact.id}` : loan.entity_id ? "/contactos?tab=entidades" : null
+  const quienHref = prov ? `/proveedores?id=${prov.id}` : contact ? `/personas?id=${contact.id}` : loan.entity_id ? "/personas?tab=entidades" : null
   const quienTxt = prov ? "Ver el proveedor" : contact ? "Ver el contacto" : loan.entity_id ? "Ver en Bancos y entidades" : ""
   const [editing, setEditing] = useState(false)
 

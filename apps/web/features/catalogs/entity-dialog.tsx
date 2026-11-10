@@ -71,11 +71,11 @@ export function EntityDialog({ open, onOpenChange, initial = "", initialTipo, en
     }
     if (ex) {
       if (!ex.nit && nit) await save.mutateAsync({ id: ex.id, nit } as never)
-      toast(`Ya tenías “${ex.nombre}”: la usamos`, { description: "No creamos otra igual. Está en Contactos › Bancos y entidades." })
+      toast(`Ya tenías “${ex.nombre}”: la usamos`, { description: "No creamos otra igual. Está en Contactos › Personas › Bancos y entidades." })
       onCreated?.(ex.id); return onOpenChange(false)
     }
     const row = await save.mutateAsync({ nombre: n.slice(0, 60), nit, tipo } as never)
-    toast.success(casa ? "Casa de empeño creada" : "Entidad creada", { description: `“${n}” quedó en Contactos › Bancos y entidades${onCreated ? " y ya está seleccionada" : ""}.` })
+    toast.success(casa ? "Casa de empeño creada" : "Entidad creada", { description: `“${n}” quedó en Contactos › Personas › Bancos y entidades${onCreated ? " y ya está seleccionada" : ""}.` })
     onCreated?.(row.id); onOpenChange(false)
   }
   const dv = nit.length >= 8 ? nitDV(nit) : null
@@ -83,8 +83,8 @@ export function EntityDialog({ open, onOpenChange, initial = "", initialTipo, en
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={entity ? "Editar entidad" : casa ? "Nueva casa de empeño" : "Nuevo banco o entidad"}
       description={entity ? "Cambia el nombre, el NIT o el tipo. Las deudas, tarjetas e inversiones enlazadas se actualizan solas."
-        : casa ? "La casa de empeño o compraventa donde dejaste el objeto. Queda en Contactos › Bancos y entidades: la próxima vez solo la escoges."
-        : "Agrega quién te prestó o te vende a crédito: un banco, cooperativa, fintech o empresa. Queda en Contactos › Bancos y entidades y en todas tus listas."}
+        : casa ? "La casa de empeño o compraventa donde dejaste el objeto. Queda en Contactos › Personas › Bancos y entidades: la próxima vez solo la escoges."
+        : "Agrega quién te prestó o te vende a crédito: un banco, cooperativa, fintech o empresa. Queda en Contactos › Personas › Bancos y entidades y en todas tus listas."}
       footer={<><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
         <Button onClick={submit} disabled={save.isPending}>{entity ? "Guardar cambios" : ya ? "Usar la que ya tienes" : onCreated ? "Crear y usar" : "Crear"}</Button></>}>
       <FieldGroup>

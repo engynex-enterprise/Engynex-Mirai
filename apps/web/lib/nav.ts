@@ -6,22 +6,36 @@ export type NavSection = { sec: string; entries: (NavLeaf | NavGroup)[] }
 const leaf = (id: string, label: string, icon: string): NavLeaf => ({ id, label, icon, href: `/${id}` })
 
 export const NAV: NavSection[] = [
-  { sec: "General", entries: [leaf("puesta", "Puesta en marcha", "rocket"), leaf("inicio", "Inicio", "house"), leaf("dashboard", "Dashboard", "layout-dashboard"), leaf("consejero", "Consejero IA", "sparkles")] },
+  // Cada módulo tiene su entrada en el menú; los que van juntos son además pestañas de una misma página (PAGE_TABS):
+  // Inicio · Dashboard · Balance, Ingresos · Me deben, y las pestañas de Gastos con Le debo.
+  { sec: "General", entries: [
+    leaf("puesta", "Puesta en marcha", "rocket"),
+    { g: "inicio", label: "Inicio", icon: "house", iso: "inicio", items: [
+      leaf("inicio", "Inicio", "house"), leaf("dashboard", "Dashboard", "layout-dashboard"), leaf("balance", "Balance", "scale"),
+    ] },
+    leaf("consejero", "Consejero IA", "sparkles"),
+  ] },
   {
     sec: "Finanzas",
     entries: [
-      { g: "dinero", label: "Mi dinero", icon: "wallet", iso: "ingresos", items: [
-        leaf("balance", "Balance", "scale"), leaf("ingresos", "Ingresos", "arrow-down-to-line"),
-        { ...leaf("gastos", "Gastos", "receipt"), alias: ["gastos-todos", "fijos", "suscripciones", "tarjetas"] },
-        leaf("proveedores", "Proveedores", "store"),
-        leaf("correo", "Correo del banco", "mail"), leaf("importar", "Importar extractos", "file-up"),
+      { g: "ingresos", label: "Ingresos", icon: "arrow-down-to-line", iso: "ingresos", items: [
+        leaf("ingresos", "Ingresos", "arrow-down-to-line"), leaf("me-deben", "Me deben", "hand-coins"),
       ] },
-      { g: "prestamos", label: "Préstamos y deudas", icon: "handshake", iso: "me-deben", items: [
-        leaf("me-deben", "Me deben", "hand-coins"), leaf("le-debo", "Le debo", "landmark"),
-        leaf("contactos", "Contactos", "users"), leaf("estrategia", "Salir de deudas", "trending-down"),
+      { g: "gastos", label: "Gastos", icon: "receipt", iso: "gastos", items: [
+        leaf("gastos-todos", "Todos los gastos", "layers"), leaf("gastos", "Del día a día", "receipt"), leaf("fijos", "Gastos fijos", "house"),
+        leaf("suscripciones", "Suscripciones", "repeat"), leaf("tarjetas", "Tarjetas de crédito", "credit-card"), leaf("le-debo", "Le debo", "landmark"),
+      ] },
+      // Contactos: a quién le pagas o le prestas. Ya no es un módulo, es este grupo.
+      { g: "contactos", label: "Contactos", icon: "contact", iso: "contactos", items: [
+        leaf("proveedores", "Proveedores", "store"), leaf("personas", "Personas", "users"),
+      ] },
+      // Traer movimientos sin escribirlos: desde el correo del banco o un extracto.
+      { g: "importar", label: "Importar movimientos", icon: "file-up", iso: "importar", items: [
+        leaf("correo", "Correo del banco", "mail"), leaf("importar", "Importar extractos", "file-up"),
       ] },
       { g: "plan", label: "Planeación", icon: "target", iso: "metas", items: [
         leaf("presupuesto", "Presupuesto 50/30/20", "chart-pie"), leaf("flujo", "Flujo de caja", "chart-line"),
+        leaf("estrategia", "Salir de deudas", "trending-down"),
         leaf("metas", "Metas y emergencia", "piggy-bank"), leaf("retos", "Retos de ahorro", "trophy"),
         leaf("logros", "Logros y nivel", "medal"), leaf("primas", "Primas y cesantías", "gift"),
         leaf("familia", "Por miembro", "users"), leaf("mesadas", "Mesada de los hijos", "baby"),
@@ -40,6 +54,7 @@ export const NAV: NavSection[] = [
   { sec: "Seguimiento", entries: [
     { g: "agenda", label: "Agenda", icon: "calendar-days", iso: "calendario", items: [leaf("recordatorios", "Próximos pagos", "bell")] },
     { g: "informes", label: "Informes", icon: "chart-column", iso: "reportes", items: [
+      leaf("informes", "Informes a tu medida", "chart-bar"),
       leaf("indicadores", "Salud financiera", "gauge"), leaf("reportes", "Reportes y resumen IA", "file-text"),
     ] },
     leaf("automatizaciones", "Automatizaciones", "workflow"),
@@ -60,19 +75,17 @@ export const isGroup = (e: NavLeaf | NavGroup): e is NavGroup => "g" in e
  * Páginas que no salen en el menú porque viven como pestaña de otra (`alias`), pero siguen teniendo ruta, migas y
  * entrada en ⌘K: grupo y sección donde se muestran.
  */
-const EN_PESTANAS: { leaf: NavLeaf; g: string }[] = [
-  { leaf: leaf("gastos-todos", "Todos los gastos", "layers"), g: "dinero" },
-  { leaf: leaf("fijos", "Gastos fijos", "house"), g: "dinero" },
-  { leaf: leaf("suscripciones", "Suscripciones", "repeat"), g: "dinero" },
-  { leaf: leaf("tarjetas", "Tarjetas de crédito", "credit-card"), g: "dinero" },
-]
+// Hoy todas las páginas con pestañas tienen además su entrada en el menú; la lista queda por si alguna vuelve a vivir
+// solo como pestaña de otra.
+const EN_PESTANAS: { leaf: NavLeaf; g?: string; sec?: string }[] = []
 
 /** Lista plana de páginas: buscador ⌘K, selector de vista inicial, migas. */
 export const PAGES: (NavLeaf & { section: string; group?: NavGroup })[] = [
   ...NAV.flatMap((s) =>
     s.entries.flatMap((e) => (isGroup(e) ? e.items.map((i) => ({ ...i, section: s.sec, group: e })) : [{ ...e, section: s.sec }])),
   ),
-  ...EN_PESTANAS.flatMap(({ leaf: l, g }) => {
+  ...EN_PESTANAS.flatMap(({ leaf: l, g, sec }) => {
+    if (sec) return NAV.some((x) => x.sec === sec) ? [{ ...l, section: sec }] : []
     const s = NAV.find((x) => x.entries.some((e) => isGroup(e) && e.g === g))
     const group = s?.entries.find((e) => isGroup(e) && e.g === g) as NavGroup | undefined
     return s ? [{ ...l, section: s.sec, group }] : []
@@ -82,7 +95,7 @@ export const PAGES: (NavLeaf & { section: string; group?: NavGroup })[] = [
 /** Página del menú que muestra a `id` (la misma o la que la tiene como pestaña). */
 export const navIdOf = (id: string) => PAGES.find((p) => p.alias?.includes(id))?.id ?? id
 
-/** Pestañas de las páginas que agrupan varias (Gastos: del día a día y fijos). */
+/** Pestañas de las páginas que agrupan varias (Gastos: todos, del día a día, fijos… y Le debo; Ingresos y Me deben). */
 export const PAGE_TABS: Record<string, { id: string; label: string; icon: string; desc: string }[]> = (() => {
   const gastos = [
     { id: "gastos-todos", label: "Todos", icon: "layers", desc: "Todo lo que sale, de todos lados, en una sola lista" },
@@ -90,8 +103,18 @@ export const PAGE_TABS: Record<string, { id: string; label: string; icon: string
     { id: "fijos", label: "Fijos", icon: "house", desc: "Arriendo, servicios, cuotas: se repiten cada mes" },
     { id: "suscripciones", label: "Suscripciones", icon: "repeat", desc: "Netflix, Spotify, apps: se cobran solas" },
     { id: "tarjetas", label: "Tarjetas", icon: "credit-card", desc: "Compras con tarjeta, cuotas y el pago del mes" },
+    { id: "le-debo", label: "Le debo", icon: "landmark", desc: "Créditos, préstamos y deudas: sus cuotas" },
   ]
-  return { gastos, "gastos-todos": gastos, fijos: gastos, suscripciones: gastos, tarjetas: gastos }
+  const ingresos = [
+    { id: "ingresos", label: "Ingresos", icon: "arrow-down-to-line", desc: "Salario, honorarios y lo que te entra" },
+    { id: "me-deben", label: "Me deben", icon: "hand-coins", desc: "Lo que prestaste y cómo te lo pagan" },
+  ]
+  const inicio = [
+    { id: "inicio", label: "Inicio", icon: "house", desc: "Cómo va tu hogar hoy y qué hacer" },
+    { id: "dashboard", label: "Dashboard", icon: "layout-dashboard", desc: "Tus números en gráficas" },
+    { id: "balance", label: "Balance", icon: "scale", desc: "Lo que tienes, lo que debes y tu mes" },
+  ]
+  return { inicio, dashboard: inicio, balance: inicio, gastos, "gastos-todos": gastos, fijos: gastos, suscripciones: gastos, tarjetas: gastos, "le-debo": gastos, ingresos, "me-deben": ingresos }
 })()
 
 export const pageById = (id: string) => PAGES.find((p) => p.id === id)

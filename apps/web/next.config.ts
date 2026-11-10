@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   // Fotos de facturas, préstamos y comprobantes para la IA (máx. 6 MB en la acción).
   experimental: { serverActions: { bodySizeLimit: "8mb" } },
   poweredByHeader: false,
+  // Contactos ya no es un módulo: es el grupo del menú con Proveedores y Personas. Los enlaces viejos siguen sirviendo.
+  async redirects() {
+    return [{ source: "/contactos", destination: "/personas", permanent: false }]
+  },
   // Versión desplegada: la app la compara con /api/public/version para ofrecer "Hay una versión nueva" (features/pwa).
   env: { NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? process.env.VERCEL_DEPLOYMENT_ID ?? "dev" },
   // Cabeceras de seguridad (CSP, HSTS, iframes, permisos): lib/security/headers.ts.

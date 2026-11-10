@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { detectActions, detectDecision, original, plazoDe } from "./intent"
-import { elegir, elegirPersona, medioEnTexto, palabras } from "./acciones"
+import { armarPrestamo, elegir, elegirPersona, medioEnTexto, palabras } from "./acciones"
 import { resolverAcciones } from "./resolver"
 import { contextoChat } from "./contexto"
 import { integralExtras } from "./extras"
@@ -144,5 +144,18 @@ describe("las cifras del chat son las del Balance y el Dashboard", () => {
   it("el contexto de la IA trae ingresos extra, tarjetas, topes, cuentas y lo que te conviene", () => {
     const d = contextoChat(b, HOY, f, X)
     for (const k of ["mes_te_queda", "ingresos_extra_mes: 400000", "compromisos_mes", "deudas:", "Tarjeta Visa Oro", "topes_presupuesto_mes", "cuentas: nombre=Nequi", "metas:", "lo_que_te_conviene"]) expect(d, k).toContain(k)
+  })
+})
+
+describe("armarPrestamo: pago único en una fecha", () => {
+  it("«le debo 100 mil a Camilo y se los pago el 15»: una sola cuota de $ 100.000 ese día, sin plan de cuotas", () => {
+    const a = armarPrestamo(libroPrueba(), HOY, { kind: "pagar", valor: 100000, persona: "Camilo", vence: "2099-11-15", plazo: 12 })
+    expect(a.ok && a.datos).toMatchObject({ frec: "unico", plazo: 1, vence: "2099-11-15", cuota: 100000, total: 100000 })
+    expect(a.ok && a.resumen).toMatch(/un pago de \$ 100\.000 el 2099-11-15/)
+  })
+  it("una fecha anterior al préstamo no sirve: se arman cuotas como siempre", () => {
+    const a = armarPrestamo(libroPrueba(), HOY, { kind: "pagar", valor: 100000, persona: "Camilo", vence: "2000-01-01" })
+    expect(a.ok && a.datos.frec).not.toBe("unico")
+    expect(a.ok && a.datos.vence).toBeUndefined()
   })
 })

@@ -79,7 +79,7 @@ async function searchIndex(bookId: string): Promise<Group[]> {
   const l = l0.map((x) => ({ ...x, contacts: named(c, x.contact_id), entities: named(en, x.entity_id), providers: named(pr, x.provider_id) }))
   const money = (v: unknown) => fmtMoney(n(v))
   return [
-    { heading: "Contactos", hits: c.map((x: any) => ({ k: x.id, v: `contacto ${x.nombre} ${x.ciudad ?? ""}`, t: x.nombre, sub: x.ciudad, icon: "user", tone: "blue", href: `/contactos?id=${x.id}` })) },
+    { heading: "Contactos", hits: c.map((x: any) => ({ k: x.id, v: `contacto ${x.nombre} ${x.ciudad ?? ""}`, t: x.nombre, sub: x.ciudad, icon: "user", tone: "blue", href: `/personas?id=${x.id}` })) },
     { heading: "Préstamos y deudas", hits: l.map((x: any) => {
       const name = x.contacts?.nombre ?? x.entities?.nombre ?? x.providers?.nombre ?? "Préstamo", tipo = tipoDef(loanTipo(x))?.corto ?? ""
       const cobrar = x.kind === "cobrar"

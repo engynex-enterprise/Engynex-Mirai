@@ -91,12 +91,12 @@ export function LoanEditDialog({ loan, open, onOpenChange, contacts, entities }:
           ]} />
         </FormField>
         {quien === "ct" && (
-          <FormField label="Contacto" htmlFor="le-ct" required hint="Se guarda en Contactos.">
-            <Combobox id="le-ct" value={contact} onChange={setContact} options={contactOptions(contacts)} emptyText="No tienes contactos. Agrégalo en Contactos." />
+          <FormField label="Contacto" htmlFor="le-ct" required hint="Se guarda en Contactos › Personas.">
+            <Combobox id="le-ct" value={contact} onChange={setContact} options={contactOptions(contacts)} emptyText="No tienes contactos. Agrégalo en Contactos › Personas." />
           </FormField>
         )}
         {quien === "ent" && (
-          <FormField label="Banco, casa de empeño o entidad" htmlFor="le-ent" required hint="Se guarda en Contactos › Bancos y entidades.">
+          <FormField label="Banco, casa de empeño o entidad" htmlFor="le-ent" required hint="Se guarda en Contactos › Personas › Bancos y entidades.">
             <Combobox id="le-ent" value={entity} onChange={setEntity} options={entityOptions(entities)} createLabel="Crear banco o entidad" onCreate={(t) => setNewEnt(t || " ")} />
           </FormField>
         )}

@@ -127,4 +127,10 @@ export class ChatController {
   attach() {
     return tsRestHandler(c.attach, async ({ body }) => ok(await this.svc.attach(body)))
   }
+
+  @TsRestHandler(c.transcribe)
+  @MinRole("viewer")
+  transcribe() {
+    return tsRestHandler(c.transcribe, async ({ body }) => ok(await this.svc.transcribe(body)))
+  }
 }

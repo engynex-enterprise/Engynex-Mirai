@@ -256,9 +256,9 @@ export function faltantesLoan(s: LoanFormState): Faltante[] {
 
 /** Dónde queda guardado quien presta (o a quien le prestaste), según el tipo de registro. */
 export const DONDE = {
-  ent: "Queda en Contactos › Bancos y entidades.",
+  ent: "Queda en Contactos › Personas › Bancos y entidades.",
   prov: "Queda en Proveedores.",
-  ct: "Queda en Contactos.",
+  ct: "Queda en Contactos › Personas.",
 } as const
 
 export interface TextosLoan {
@@ -360,7 +360,7 @@ export function textosLoan(tipo: LoanTipo | null, kind: LoanKindT, st: { frec?: 
       recibo: "Resumen de la venta fiada", quienRecibo: "Cliente",
     }
     case "otro": return {
-      ...base, quien: C ? "¿Quién te debe?" : "¿Con quién es la deuda?", quienHint: C ? DONDE.ct : "Una persona queda en Contactos; un banco o una entidad, en Contactos › Bancos y entidades.", monto: C ? "¿Cuánto te deben?" : "¿Cuánto debes?",
+      ...base, quien: C ? "¿Quién te debe?" : "¿Con quién es la deuda?", quienHint: C ? DONDE.ct : "Una persona queda en Contactos › Personas; un banco o una entidad, en su pestaña Bancos y entidades.", monto: C ? "¿Cuánto te deben?" : "¿Cuánto debes?",
       concepto: C ? "¿De qué es?" : "¿De qué es la deuda?", conceptoPh: "Ej. Matrícula del colegio", inicio: "¿Desde cuándo?",
       quienRecibo: C ? "Te debe" : "Le debes a",
     }

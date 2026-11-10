@@ -24,7 +24,9 @@ const DatosZ = z.object({
   cat_src: z.enum(["regla", "historial", "palabras", "ia"]).nullable().optional(),
   nombre: z.string().trim().max(120).optional(), objetivo: Money.optional(), ahorrado: z.number().min(0).max(1e12).optional(),
   titulo: z.string().trim().max(200).optional(), monto: z.number().min(0).max(1e12).optional(),
-  frec: z.enum(["mensual", "quincenal", "semanal", "diario", "diariohab", "bimestral", "trimestral", "semestral", "anual"]).optional(),
+  frec: z.enum(["mensual", "quincenal", "semanal", "diario", "diariohab", "bimestral", "trimestral", "semestral", "anual", "unico"]).optional(),
+  /** Préstamo de un solo pago: la fecha pactada. */
+  vence: Fecha.optional().nullable(),
   dia: z.number().int().min(1).max(31).optional(), ciclo: z.enum(["mensual", "anual"]).optional(), proximo: Fecha.optional(),
   ref_id: z.uuid().optional(), periodo: z.string().max(20).optional(),
   kind: z.enum(["pagar", "cobrar"]).optional(), loan_tipo: z.string().max(20).optional(), plazo: z.number().int().min(1).max(600).optional(),
@@ -165,7 +167,7 @@ export async function escribir(ctx: Pick<AiCtx, "book">, sb: Sb, p: Propuesta): 
     case "prestamo": {
       const b = await libro()
       const kind = d.kind === "cobrar" ? "cobrar" : "pagar"
-      const a = armarPrestamo(b, today, { kind, valor: d.valor ?? 0, persona: d.persona, plazo: d.plazo, frec: d.frec, tasa: d.tasa, fecha, concepto: d.concepto, tipo: d.loan_tipo })
+      const a = armarPrestamo(b, today, { kind, valor: d.valor ?? 0, persona: d.persona, plazo: d.plazo, frec: d.frec, tasa: d.tasa, fecha, concepto: d.concepto, tipo: d.loan_tipo, vence: d.vence })
       if (!a.ok) return a
       const x = a.datos
       let contact = x.contact_id ?? null, entity = x.entity_id ?? null
@@ -183,7 +185,7 @@ export async function escribir(ctx: Pick<AiCtx, "book">, sb: Sb, p: Propuesta): 
       }
       const { error } = await sb.from("loans").insert({
         id, book_id: bookId, kind, tipo: x.loan_tipo, concepto: x.concepto ?? "", monto: x.valor!, sistema: x.sistema ?? "simple", tasa: x.tasa ?? 0, frec: x.frec ?? "mensual",
-        plazo: x.plazo ?? 1, inicio: x.fecha!, extra: 0, contact_id: contact, entity_id: entity, fiado: x.loan_tipo === "fiado", nota: "Creado desde el chat de Mirai",
+        plazo: x.plazo ?? 1, inicio: x.fecha!, extra: 0, contact_id: contact, entity_id: entity, vence: x.vence ?? null, fiado: x.loan_tipo === "fiado", nota: "Creado desde el chat de Mirai",
       })
       return error ? fail(error) : { ok: true, id, datos: { ...x, contact_id: contact, entity_id: entity } }
     }

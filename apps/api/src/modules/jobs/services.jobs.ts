@@ -4,6 +4,7 @@ import { calendarUsers, syncCalendarsOfUser } from "@mirai/services/google/calen
 import { refreshReferenceData } from "@mirai/services/integrations/refresh"
 import { cronHeartbeat, householdsWithBooks, runDigests } from "@mirai/services/notify/cron"
 import { patrimonioSnapshots, planEmails } from "@mirai/services/notify/cron-tasks"
+import { familiaAvisos } from "@mirai/services/notify/familia"
 import { AppConfig } from "../../core/config/app-config"
 import { NotifyJobs, PlanRemindersPort } from "./jobs.port"
 
@@ -25,6 +26,9 @@ export class ServicesNotifyJobs extends NotifyJobs {
   }
   planEmails(now: Date, dry: boolean) {
     return planEmails(now, { dry })
+  }
+  familia(now: Date, dry: boolean) {
+    return familiaAvisos(now, { dry })
   }
   refs() {
     return refreshReferenceData()

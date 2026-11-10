@@ -127,7 +127,7 @@ describe("preguntas, manual y relacionados", () => {
       expect(ids.has(k), k).toBe(true)
       for (const x of v) expect(ids.has(x), `${k} → ${x}`).toBe(true)
     }
-    for (const id of ["puesta", "dashboard", "consejero", "proveedores", "correo", "importar", "me-deben", "contactos", "retos", "logros", "familia", "mesadas", "compartidos", "deseos", "contador", "indicadores", "reportes", "automatizaciones", "suscripciones"])
+    for (const id of ["puesta", "dashboard", "consejero", "proveedores", "correo", "importar", "me-deben", "personas", "informes", "retos", "logros", "familia", "mesadas", "compartidos", "deseos", "contador", "indicadores", "reportes", "automatizaciones", "suscripciones"])
       expect(relacionados(id).secciones.length, id).toBeGreaterThan(0)
     expect(relacionados("dashboard").secciones[0]).toMatchObject({ id: "balance", href: "/balance" })
   })

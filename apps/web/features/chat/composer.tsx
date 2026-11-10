@@ -1,20 +1,20 @@
 "use client"
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowUp, FileText, Mic, Paperclip, Square, X } from "lucide-react"
+import { ArrowUp, FileSpreadsheet, FileText, Loader2, Mic, Paperclip, Square, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { ChatHints } from "@/lib/chat/types"
 import { sendAttachment, sendChat, stopChat, useChat } from "./store"
+import { chatTranscribe } from "./api"
+import { ACCEPT, MAX_FILES, MAX_TOTAL, kindOf, prepare, type Kind } from "./files"
+import { useVoice } from "./voice"
 
-const MAX = 6 * 1024 * 1024
-
-type Rec = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: { resultIndex: number; results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null }
-const recCtor = () => (typeof window === "undefined" ? null : ((window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Rec }).webkitSpeechRecognition ?? null))
-const noop = () => () => {}
+type Adj = { id: string; name: string; kind: Kind; url: string | null; file: File | null; error?: string }
+const KIND_LABEL: Record<Kind, string> = { foto: "Foto", pdf: "PDF", word: "Word", excel: "Excel", texto: "Texto" }
 
 function Btn({ label, onClick, disabled, children, className, pressed }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; className?: string; pressed?: boolean }) {
   return (
@@ -37,10 +37,18 @@ export function Composer({ hints, autoFocus, compact }: { hints?: ChatHints; aut
   const busy = status !== "idle"
   const ta = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<{ f: File; url: string | null } | null>(null)
-  const [listening, setListening] = useState(false)
-  const rec = useRef<Rec | null>(null)
-  const voice = useSyncExternalStore(noop, () => !!recCtor(), () => false)
+  const [adj, setAdj] = useState<Adj[]>([])
+  const [drag, setDrag] = useState(false)
+  const preparing = adj.some((a) => !a.file && !a.error)
+  const ready = adj.filter((a) => a.file).map((a) => a.file!)
+  const voice = useVoice({
+    base: () => String(useChat.getState().draft ?? ""),
+    onText: (t) => setDraft(t),
+    transcribe: chatTranscribe,
+    onError: (msg) => toast.warning(msg),
+    onDone: () => ta.current?.focus(),
+  })
+  const listening = voice.state === "listening" || voice.state === "recording"
 
   // Alto automático (hasta ~8 líneas).
   useEffect(() => {
@@ -50,40 +58,37 @@ export function Composer({ hints, autoFocus, compact }: { hints?: ChatHints; aut
     el.style.height = `${Math.min(220, el.scrollHeight)}px`
   }, [draft])
   useEffect(() => { if (autoFocus) setTimeout(() => ta.current?.focus({ preventScroll: true }), 60) }, [autoFocus])
-  useEffect(() => () => { rec.current?.stop() }, [])
-  useEffect(() => () => { if (file?.url) URL.revokeObjectURL(file.url) }, [file])
+  const urls = useRef<string[]>([])
+  useEffect(() => () => { for (const u of urls.current) URL.revokeObjectURL(u) }, [])
 
   const queued = useChat((s) => s.queued)
   const send = () => {
-    if (busy) { if (draft.trim() && !file) sendChat(qc, { text: draft }); return }
-    if (file) { const f = file.f; setFile(null); sendAttachment(qc, f, draft.trim()); return }
+    if (busy) { if (draft.trim() && !adj.length) sendChat(qc, { text: draft }); return }
+    if (preparing) return
+    if (ready.length) {
+      if (ready.reduce((a, f) => a + f.size, 0) > MAX_TOTAL) return toast.warning("Entre todos los archivos pasan de 6 MB", { description: "Quita alguno y envíalo después." })
+      setAdj([]); sendAttachment(qc, ready, draft.trim()); return
+    }
     if (!draft.trim()) return
     sendChat(qc, { text: draft })
     ta.current?.focus()
   }
-  const pick = (f: File | undefined) => {
-    if (!f) return
-    if (f.size > MAX) return toast.warning("El archivo pesa más de 6 MB")
-    if (!/^image\/|application\/pdf/.test(f.type)) return toast.warning("Usa una foto (JPG, PNG) o un PDF")
-    setFile({ f, url: f.type.startsWith("image/") ? URL.createObjectURL(f) : null })
-    ta.current?.focus()
-  }
-  const toggleVoice = () => {
-    if (listening) { rec.current?.stop(); return }
-    const C = recCtor()
-    if (!C) return
-    const r = new C()
-    r.lang = "es-CO"; r.interimResults = true; r.continuous = false
-    const base = String(useChat.getState().draft ?? "").trim()
-    r.onresult = (e) => {
-      let t = ""
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript
-      setDraft(`${base ? `${base} ` : ""}${t}`.trimStart())
+  const pick = (list: File[]) => {
+    if (!list.length) return
+    const room = MAX_FILES - adj.length
+    if (room <= 0) return toast.warning(`Puedes enviar hasta ${MAX_FILES} archivos a la vez`)
+    if (list.length > room) toast.warning(`Agregué ${room} de ${list.length}: van hasta ${MAX_FILES} archivos a la vez`)
+    for (const f of list.slice(0, room)) {
+      const id = crypto.randomUUID()
+      const kind = kindOf(f) ?? "texto"
+      const url = kind === "foto" ? URL.createObjectURL(f) : null
+      if (url) urls.current.push(url)
+      setAdj((a) => [...a, { id, name: f.name, kind, url, file: null }])
+      prepare(f)
+        .then((file) => setAdj((a) => a.map((x) => (x.id === id ? { ...x, file } : x))))
+        .catch((e: Error) => { setAdj((a) => a.filter((x) => x.id !== id)); toast.warning(e.message || "No pude leer ese archivo") })
     }
-    r.onend = () => { setListening(false); rec.current = null; ta.current?.focus() }
-    r.onerror = (e) => { if (e.error === "not-allowed") toast.warning("Permite el micrófono en tu navegador para dictar"); setListening(false) }
-    rec.current = r
-    try { r.start(); setListening(true) } catch { setListening(false) }
+    ta.current?.focus()
   }
 
   const q = hints?.ia.quota
@@ -96,29 +101,34 @@ export function Composer({ hints, autoFocus, compact }: { hints?: ChatHints; aut
 
   return (
     <div className="grid gap-1.5">
-      <div className={cn("grid rounded-[26px] bg-card shadow-[0_2px_12px_rgba(31,43,75,.10),0_0_0_1px_rgba(0,0,0,.06)] transition-shadow focus-within:shadow-[0_2px_16px_rgba(31,43,75,.14),0_0_0_2px_var(--brand)] dark:shadow-[0_0_0_1px_rgba(255,255,255,.1)]", listening && "shadow-[0_0_0_2px_#D0243F]")}>
-        {file && (
-          <div className="flex items-center gap-2 px-3 pt-3">
-            <span className="relative flex max-w-full items-center gap-2 rounded-xl bg-secondary py-1.5 pr-8 pl-1.5 text-[13px]">
-              {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) del adjunto */}
-              {file.url ? <img src={file.url} alt="" className="size-10 rounded-lg object-cover" /> : <span className="grid size-10 place-items-center rounded-lg bg-danger-soft text-danger"><FileText className="size-5" /></span>}
-              <span className="grid min-w-0"><span className="truncate font-medium">{file.f.name}</span><span className="text-[11.5px] text-muted-foreground">Factura, recibo, comprobante o extracto</span></span>
-              <button type="button" aria-label="Quitar adjunto" onClick={() => setFile(null)} className="absolute top-1 right-1 grid size-6 place-items-center rounded-full hover:bg-hover"><X className="size-3.5" /></button>
-            </span>
+      <div onDragOver={(e) => { if (hints?.canEdit !== false && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDrag(true) } }} onDragLeave={() => setDrag(false)}
+        onDrop={(e) => { setDrag(false); if (hints?.canEdit === false || !e.dataTransfer.files.length) return; e.preventDefault(); pick([...e.dataTransfer.files]) }}
+        className={cn("grid rounded-[26px] bg-card shadow-[0_2px_12px_rgba(31,43,75,.10),0_0_0_1px_rgba(0,0,0,.06)] transition-shadow focus-within:shadow-[0_2px_16px_rgba(31,43,75,.14),0_0_0_2px_var(--brand)] dark:shadow-[0_0_0_1px_rgba(255,255,255,.1)]", listening && "shadow-[0_0_0_2px_#D0243F]", drag && "shadow-[0_0_0_2px_var(--brand)]")}>
+        {!!adj.length && (
+          <div className="flex gap-2 overflow-x-auto px-3 pt-3" aria-label="Archivos adjuntos">
+            {adj.map((a) => (
+              <span key={a.id} className="relative flex max-w-[15rem] shrink-0 items-center gap-2 rounded-xl bg-secondary py-1.5 pr-8 pl-1.5 text-[13px]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) del adjunto */}
+                {a.url ? <img src={a.url} alt="" className="size-10 rounded-lg object-cover" />
+                  : <span className={cn("grid size-10 place-items-center rounded-lg", a.kind === "excel" ? "bg-success-soft text-success" : a.kind === "word" ? "bg-[#E6F0FB] text-[#1F5FAD]" : "bg-danger-soft text-danger")}>{a.kind === "excel" ? <FileSpreadsheet className="size-5" /> : <FileText className="size-5" />}</span>}
+                <span className="grid min-w-0"><span className="truncate font-medium">{a.name}</span><span className="flex items-center gap-1 text-[11.5px] text-muted-foreground">{a.file ? KIND_LABEL[a.kind] : <><Loader2 className="size-3 animate-spin" /> Preparando…</>}</span></span>
+                <button type="button" aria-label={`Quitar ${a.name}`} onClick={() => setAdj((x) => x.filter((y) => y.id !== a.id))} className="absolute top-1 right-1 grid size-6 place-items-center rounded-full hover:bg-hover"><X className="size-3.5" /></button>
+              </span>
+            ))}
           </div>
         )}
         <textarea ref={ta} rows={1} value={draft} aria-label="Escribe tu pregunta" enterKeyHint="send"
-          placeholder={listening ? "Te escucho…" : file ? "Cuéntame qué es (opcional): factura, comprobante, extracto…" : compact ? "Pregúntale a Mirai…" : "Pregunta lo que quieras o cuéntame una decisión: ¿me conviene…?"}
+          placeholder={voice.state === "transcribing" ? "Pasando tu voz a texto…" : listening ? "Te escucho… habla con calma, espero tus pausas" : adj.length ? "Dime qué hago (opcional): «regístralos», «es un imprevisto», «lo pago el 15»…" : compact ? "Pregúntale a Mirai…" : "Pregunta lo que quieras o cuéntame una decisión: ¿me conviene…?"}
           className="max-h-[220px] min-h-[52px] w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-6 outline-none placeholder:text-placeholder"
           onChange={(e) => setDraft(e.target.value)}
-          onPaste={(e) => { const f = [...e.clipboardData.files][0]; if (f) { e.preventDefault(); pick(f) } }}
+          onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); pick(fs) } }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} />
         <div className="flex items-center gap-1 px-2 pb-2">
-          <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" aria-label="Adjuntar archivo" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = "" }} />
-          {hints?.canEdit !== false && <Btn label="Adjuntar foto o PDF" disabled={busy} onClick={() => fileRef.current?.click()}><Paperclip className="size-[18px]" /></Btn>}
-          {voice && (
-            <Btn label={listening ? "Detener dictado" : "Dictar por voz"} pressed={listening} onClick={toggleVoice} className={cn(listening && "bg-danger-soft text-danger hover:bg-danger-soft hover:text-danger")}>
-              {listening ? <span className="flex h-4 items-center gap-[2px]" aria-hidden>{[0, 1, 2, 3].map((i) => <span key={i} className="chat-wave h-full w-[3px] rounded-full bg-current" style={{ animationDelay: `${i * 0.12}s` }} />)}</span> : <Mic className="size-[18px]" />}
+          <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" aria-label="Adjuntar archivo" onChange={(e) => { pick([...(e.target.files ?? [])]); e.target.value = "" }} />
+          {hints?.canEdit !== false && <Btn label="Adjuntar fotos, PDF, Word o Excel" disabled={busy} onClick={() => fileRef.current?.click()}><Paperclip className="size-[18px]" /></Btn>}
+          {voice.supported && (
+            <Btn label={voice.state === "transcribing" ? "Pasando tu voz a texto" : listening ? "Detener dictado" : "Dictar por voz"} pressed={listening} disabled={voice.state === "transcribing"} onClick={voice.toggle} className={cn(listening && "bg-danger-soft text-danger hover:bg-danger-soft hover:text-danger")}>
+              {voice.state === "transcribing" ? <Loader2 className="size-[18px] animate-spin" /> : listening ? <span className="flex h-4 items-center gap-[2px]" aria-hidden>{[0, 1, 2, 3].map((i) => <span key={i} className="chat-wave h-full w-[3px] rounded-full bg-current" style={{ animationDelay: `${i * 0.12}s` }} />)}</span> : <Mic className="size-[18px]" />}
             </Btn>
           )}
           <span className="flex-1" />
@@ -126,7 +136,7 @@ export function Composer({ hints, autoFocus, compact }: { hints?: ChatHints; aut
           {busy ? (
             <button type="button" aria-label="Detener respuesta" onClick={stopChat} className="grid size-9 place-items-center rounded-full bg-foreground text-background transition-transform hover:scale-105"><Square className="size-3.5 fill-current" /></button>
           ) : (
-            <button type="button" aria-label="Enviar" disabled={!draft.trim() && !file} onClick={send} className="grid size-9 place-items-center rounded-full bg-brand text-white shadow-[0_2px_6px_rgba(42,127,20,.35)] transition-all hover:scale-105 hover:bg-primary-hover disabled:scale-100 disabled:bg-secondary disabled:text-muted-foreground disabled:shadow-none"><ArrowUp className="size-[18px]" /></button>
+            <button type="button" aria-label="Enviar" disabled={(!draft.trim() && !ready.length) || preparing} onClick={send} className="grid size-9 place-items-center rounded-full bg-brand text-white shadow-[0_2px_6px_rgba(42,127,20,.35)] transition-all hover:scale-105 hover:bg-primary-hover disabled:scale-100 disabled:bg-secondary disabled:text-muted-foreground disabled:shadow-none"><ArrowUp className="size-[18px]" /></button>
           )}
         </div>
       </div>

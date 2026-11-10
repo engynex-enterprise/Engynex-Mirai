@@ -5,6 +5,8 @@
 // cards, loans, savings), un adaptador nuevo de este puerto los usa sin tocar el chat.
 import type { AttachInput, AttachResult, ConfirmResult, ThreadInfo, ThreadPatch, TitleResult } from "@mirai/ai/server/chat-actions"
 import type { ChatTurnInput } from "@mirai/ai/server/chat-turn"
+import type { TranscribeResult } from "@mirai/ai/server/voz"
+import type { AiFile } from "@mirai/ai/server/ai-actions"
 import type { Escrito } from "@mirai/ai/server/confirm"
 import type { AiCtx } from "@mirai/ai/server/ctx"
 import type { ChatEvent, ChatHints, ChatMsg, ChatThread, Propuesta } from "@mirai/contracts/chat-types"
@@ -25,6 +27,7 @@ export abstract class ChatPort {
   abstract confirm(ctx: AiCtx, scope: DbScope, messageId: string, propId: string): Promise<ConfirmResult>
   abstract cancel(scope: DbScope, messageId: string, propId: string): Promise<{ ok: boolean; propuesta?: Propuesta }>
   abstract attach(ctx: AiCtx, scope: DbScope, input: AttachInput): Promise<AttachResult>
+  abstract transcribe(ctx: AiCtx, file: AiFile): Promise<TranscribeResult>
 }
 
 export abstract class ChatWritesPort {

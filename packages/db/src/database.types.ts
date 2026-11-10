@@ -901,6 +901,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"family_activity": {
+                  Row: {
+                    "actor_id": string,"book_id": string,"created_at": string,"href": string | null,"id": string,"lineas": string[],"n": number,"sent_at": string | null,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_id": string,"book_id": string,"created_at"?: string,"href"?: string | null,"id"?: string,"lineas"?: string[],"n"?: number,"sent_at"?: string | null,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "actor_id"?: string,"book_id"?: string,"created_at"?: string,"href"?: string | null,"id"?: string,"lineas"?: string[],"n"?: number,"sent_at"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "family_activity_book_id_fkey"
+      columns: ["book_id"]
+isOneToOne: false
+      referencedRelation: "books"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"family_members": {
                   Row: {
                     "avatar": string,"color": string,"created_at": string,"created_by": string | null,"cupo": number,"deleted_at": string | null,"dep_de": string | null,"dep_rel": string | null,"discapacidad": boolean,"doc": string,"es_titular": boolean,"estudia": boolean,"household_id": string,"id": string,"nacimiento": string | null,"nombre": string,"rol": string,"sin_ingresos": boolean,"sort": number,"updated_at": string,"user_id": string | null

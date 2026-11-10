@@ -145,10 +145,12 @@ export class JobsService {
   /** Lo que quede en automation_events: una tarea por libro (nombre por libro y ventana de 5 minutos). */
   async automationsDrain(dry: boolean, now = new Date()) {
     const books = await this.automations.pendingBooks()
-    if (dry) return this.report("automations.drain", dry, { libros: books.length }, 0)
+    // Avisos de la familia por correo, WhatsApp y push: mismo reloj de 5 minutos (sin tocar el cron del servidor).
+    const familia = await this.jobs.familia(now, dry).catch((e: Error) => `error: ${e.message}`)
+    if (dry) return this.report("automations.drain", dry, { libros: books.length, familia }, 0)
     const slot = stamp5m(now)
     const r = await this.enqueueAll(books.map((b) => ({ queue: "automations", path: `/v1/jobs/automations/book/${b}`, name: `auto-${b}-${slot}`, body: {} })))
-    return this.report("automations.drain", dry, { libros: books.length, repetidas: r.repetidas }, r.encoladas)
+    return this.report("automations.drain", dry, { libros: books.length, repetidas: r.repetidas, familia }, r.encoladas)
   }
 
   async automationsBook(bookId: string, dry: boolean) {

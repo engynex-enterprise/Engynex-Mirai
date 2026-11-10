@@ -305,14 +305,87 @@ test("chat con IA real: respuesta en streaming y detener", async ({ page }, info
   test.setTimeout(150_000)
   await login(page)
   await page.goto("/consejero")
-  await page.getByRole("button", { name: "Nueva conversación" }).click()
+  await page.getByRole("button", { name: "Nueva conversación" }).first().click()
   const box = page.getByRole("textbox", { name: "Escribe tu pregunta" })
   await box.fill("Explícame la regla 50/30/20 con mis números en una tabla")
   await box.press("Enter")
-  await expect(page.getByRole("button", { name: "Detener respuesta" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Detener respuesta" }).first()).toBeVisible()
   await expect(page.getByRole("log").locator("table, li").first()).toBeVisible({ timeout: 90_000 })
-  await expect(page.getByRole("button", { name: "Enviar" })).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByRole("button", { name: "Enviar" }).first()).toBeVisible({ timeout: 90_000 })
+  // Nunca una respuesta en blanco (el modelo ya no se queda pensando sin escribir).
+  await expect(page.getByText("No me llegó una respuesta de la IA")).toHaveCount(0)
   await shotTo(page, "consejero-ia", info.project.name)
+})
+
+/** Foto de una lista de pagos como la que se toma del celular (tabla con valores), renderizada en el navegador. */
+async function fotoDeLista(page: Page): Promise<Buffer> {
+  const p = await page.context().newPage()
+  await p.setViewportSize({ width: 520, height: 220 })
+  await p.setContent(`<table style="font:20px Arial;border-collapse:collapse;margin:16px">${[["Pago Grado Andrea", "$ 250.000"], ["Prestamo Camilo", "$ 100.000,00"], ["Prestamo Harold", "$ 160.000,00"], ["Carne Aquiles", "$ 269.000,00"]].map(([a, b]) => `<tr><td style="border:1px solid #999;padding:8px 14px">${a}</td><td style="border:1px solid #999;padding:8px 14px;text-align:right">${b}</td></tr>`).join("")}</table>`)
+  const png = await p.screenshot()
+  await p.close()
+  return png
+}
+
+test("chat: adjuntar varios archivos (foto y CSV), quitar uno y aviso de Premium en el plan gratis", async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errs = watchErrors(page)
+  await login(page, "gratis")
+  await page.evaluate(() => { sessionStorage.setItem("mirai-ad-modal", "1") })
+  await page.goto("/consejero")
+  await page.getByRole("button", { name: "Nueva conversación" }).first().click()
+  const files = page.getByLabel("Adjuntar archivo")
+  await files.setInputFiles([
+    { name: "lista.png", mimeType: "image/png", buffer: await fotoDeLista(page) },
+    { name: "gastos.csv", mimeType: "text/csv", buffer: Buffer.from("Fecha;Descripción;Valor\n2026-11-08;Mercado D1;-85.000\n") },
+    { name: "viejo.doc", mimeType: "application/msword", buffer: Buffer.from("x") },
+  ])
+  // El .doc no se acepta (se explica cómo guardarlo); los otros dos quedan listos.
+  await expect(page.getByText(/Word antiguo \(\.doc\)/).first()).toBeVisible()
+  const chips = page.getByLabel("Archivos adjuntos")
+  await expect(chips.getByText("lista.png")).toBeVisible()
+  await expect(chips.getByText("gastos.csv")).toBeVisible()
+  await expect(chips.getByText("Foto")).toBeVisible()
+  await expect(chips.getByText("Texto")).toBeVisible()
+  await chips.getByRole("button", { name: "Quitar gastos.csv" }).click()
+  await expect(chips.getByText("gastos.csv")).toHaveCount(0)
+  await files.setInputFiles([{ name: "gastos.csv", mimeType: "text/csv", buffer: Buffer.from("Mercado;85000") }])
+  await expect(chips.getByText("Texto")).toBeVisible()
+  await shotTo(page, "chat-adjuntos", info.project.name)
+  const box = page.getByRole("textbox", { name: "Escribe tu pregunta" })
+  await box.fill("regístralos")
+  await page.getByRole("button", { name: "Enviar" }).click()
+  const log = page.getByRole("log", { name: "Conversación con Mirai" })
+  await expect(log.getByText("lista.png")).toBeVisible({ timeout: 30_000 })
+  await expect(log.getByText("gastos.csv")).toBeVisible()
+  await expect(log.getByText(/es parte de \*?\*?Mirai Premium|es parte de Mirai Premium/).last()).toBeVisible({ timeout: 30_000 })
+  await expect(log.getByRole("link", { name: "Conoce Premium" }).last()).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1)
+  expect(errs, errs.join("\n")).toEqual([])
+})
+
+test("chat con IA real: lee una foto con 4 pagos y propone cada uno en su módulo; Confirmar todos", async ({ page }, info) => {
+  test.skip(!process.env.E2E_AI, "Solo con E2E_AI=1: llama al proveedor de IA configurado")
+  test.skip(info.project.name.includes("movil"), "Una vez basta: gasta créditos de IA")
+  test.setTimeout(180_000)
+  const errs = watchErrors(page)
+  await login(page)
+  await page.goto("/consejero")
+  await page.getByRole("button", { name: "Nueva conversación" }).first().click()
+  await page.getByLabel("Adjuntar archivo").setInputFiles([{ name: "pagos.png", mimeType: "image/png", buffer: await fotoDeLista(page) }])
+  await expect(page.getByLabel("Archivos adjuntos").getByText("Foto")).toBeVisible()
+  await page.getByRole("textbox", { name: "Escribe tu pregunta" }).fill("El grado de Andrea es un único pago y es un imprevisto, la carne de Aquiles la pedí fiada y los préstamos de Camilo y Harold los pago todos el 15 de diciembre. Identifica cada gasto y regístralo según su tipo.")
+  await page.getByRole("button", { name: "Enviar" }).click()
+  const log = page.getByRole("log", { name: "Conversación con Mirai" })
+  await expect(log.getByTestId("confirm-card")).toHaveCount(4, { timeout: 120_000 })
+  await expect(log.locator('[data-testid="confirm-card"][data-tipo="prestamo"]')).toHaveCount(3)
+  await expect(log.locator('[data-testid="confirm-card"][data-tipo="gasto"]')).toHaveCount(1)
+  await expect(log.getByText(/Un pago de \$\s?100\.000 el/)).toBeVisible()
+  await shotTo(page, "chat-ia-documento", info.project.name, true)
+  await log.getByTestId("confirm-all").click()
+  await expect(page.getByText("Listo: 4 registros guardados")).toBeVisible({ timeout: 60_000 })
+  await expect(log.getByText("Guardado en tu libro")).toHaveCount(4)
+  expect(errs, errs.join("\n")).toEqual([])
 })
 
 test("las páginas cargan con el chat montado (y el chat abre en ellas)", async ({ page }) => {

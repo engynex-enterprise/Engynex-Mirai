@@ -4,7 +4,7 @@ import { login, shot, watchErrors } from "./helpers"
 test("contactos: crear con dirección detectada, editar y borrar", async ({ page }, info) => {
   const errs = watchErrors(page)
   await login(page)
-  await page.goto("/contactos?nuevo=1")
+  await page.goto("/personas?nuevo=1")
   const nombre = `Laura Gómez ${info.project.name}`
   await page.getByRole("textbox", { name: "Nombre completo" }).fill(nombre)
   await page.getByRole("textbox", { name: "Celular" }).fill("3001234567")

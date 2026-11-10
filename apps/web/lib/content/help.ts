@@ -6,6 +6,22 @@ import FHELP_RAW from "@/lib/data/legacy-fhelp.json"
 export type HelpEntry = { t: string; i: string; p: string[]; tips?: string[] }
 export const HELP: Record<string, HelpEntry> = {
   ...(HELP_RAW as Record<string, HelpEntry>),
+  informes: {
+    t: "Informes",
+    i: "Elige qué quieres ver y de qué periodo: tus gastos por categoría, persona, proveedor, producto o medio de pago; tus ingresos por fuente o por persona; lo que tienes y lo que debes; o cómo va cada mes del año.",
+    p: [
+      "Arriba escoges el informe. Los de <b>Gastos</b> e <b>Ingresos</b> son de un periodo (mes, semestre o año) y con las flechas cambias de periodo.",
+      "Los de <b>Lo que tienes y lo que debes</b> (activos, pasivos, deudas y préstamos que hiciste) son a hoy: las mismas cifras del Balance.",
+      "<b>Mes a mes</b> muestra cada mes del año con lo que entra, lo que sale y lo que te queda.",
+      "La tabla trae cuánto pesa cada fila en el total. Búscala, ordénala, elige filas y expórtala a Excel.",
+    ],
+    tips: [
+      "Nada se cuenta dos veces: el total de gastos es el mismo «Sale» de Todos los gastos y del Balance. Las compras con tarjeta cuentan cuando pagas la tarjeta.",
+      "«Por persona» usa a quién marcaste en cada gasto; lo que no tiene persona va a «Toda la familia».",
+    ],
+  },
+  // Contactos ahora es un grupo del menú: su página se llama Personas (la ayuda de la v4 sigue sirviendo).
+  personas: { ...(HELP_RAW as Record<string, HelpEntry>).contactos, t: "Personas" },
   balance: {
     t: "Balance",
     i: "Todo lo que entra y sale de cada módulo de Mirai (ingresos, gastos, fijos, suscripciones, tarjetas, deudas, préstamos, impuestos, mesadas y ahorro), lo que tienes y lo que debes.",
@@ -108,7 +124,7 @@ export const HELP: Record<string, HelpEntry> = {
       "Escribe con tus palabras en la caja de abajo, toca una de las preguntas sugeridas o dicta con el micrófono. Enter envía y Shift + Enter hace un salto de línea.",
       "Para decidir, escribe la decisión con el valor: <b>\"¿me conviene comprar una moto de 8 millones a 24 cuotas?\"</b>. Mirai la analiza con tus ingresos, gastos y deudas y te muestra una tarjeta con el veredicto, las cifras clave, los riesgos y los pasos. Si falta un dato, te lo pregunta en la conversación.",
       "Preguntas como <b>¿cuánto gasté este mes?</b> o <b>¿cuánto debo?</b> se responden al instante con tus datos (verás la marca <b>Calculado con tus datos</b>).",
-      "Pídele que registre un gasto o un ingreso, cree una meta o un recordatorio: te muestra una tarjeta y solo guarda cuando tocas <b>Confirmar</b>. Con el clip adjuntas la foto o el PDF de una factura, un comprobante o un extracto.",
+      "Pídele que registre un gasto o un ingreso, cree una meta o un recordatorio: te muestra una tarjeta y solo guarda cuando tocas <b>Confirmar</b>. Con el clip adjuntas hasta 5 fotos, PDF, Word o Excel (facturas, comprobantes, extractos, listas de deudas) y le dices qué hacer, escrito o con el micrófono: lee cada movimiento y te propone su registro en el módulo correcto. El micrófono te espera en las pausas; toca Detener cuando termines.",
       "A la izquierda (en el celular, en <b>Historial</b>) están tus conversaciones por fecha. Con el botón <b>⋯</b> o clic derecho puedes fijarlas arriba, renombrarlas, pedir un título nuevo, duplicarlas, archivarlas, copiarlas o descargarlas en Markdown o PDF, copiar su enlace, ver sus detalles o eliminarlas (con Deshacer). Con <b>Seleccionar varias</b> archivas o eliminas muchas a la vez. La burbuja flotante abre la misma conversación.",
     ],
     tips: [

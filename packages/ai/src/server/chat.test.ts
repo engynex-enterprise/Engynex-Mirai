@@ -21,7 +21,7 @@ vi.mock("@mirai/services/integrations/store", () => ({
 vi.mock("../model", async (orig) => ({ ...(await orig<typeof import("../model")>()), modelFrom: (v: IntegrationValue) => models[v.kind] }))
 
 const { runChatTurn, ChatTurnBody } = await import("./chat-turn")
-const { chatConfirmWith, chatCancelWith, chatTitleWith, chatThreadInfoWith, chatDuplicateWith, listThreadsWith, threadMessagesWith, patchThreadWith, deleteThreadWith, restoreThreadWith } = await import("./chat-actions")
+const { chatAttachWith, attachProblem, chatConfirmWith, chatCancelWith, chatTitleWith, chatThreadInfoWith, chatDuplicateWith, listThreadsWith, threadMessagesWith, patchThreadWith, deleteThreadWith, restoreThreadWith } = await import("./chat-actions")
 const { resetAiSettingsMemo } = await import("../usage")
 
 const B = "00000000-0000-4000-8000-0000000000b1"
@@ -127,6 +127,75 @@ describe("runChatTurn (app/api/chat)", () => {
     expect(b.kinds).not.toContain("user")
     const vivos = db.rows("chat_messages").filter((m) => m.deleted_at == null)
     expect(vivos.map((m) => m.role)).toEqual(["user", "assistant"])
+  })
+})
+
+describe("respuestas vacías y adjuntos con IA", () => {
+  const streamOf = (chunks: unknown[]) => ({ stream: simulateReadableStream({ chunks: chunks as never[] }) })
+  const fin = (unified: "stop" | "tool-calls" = "stop") => ({ type: "finish", finishReason: { unified, raw: unified }, usage })
+  const call = (id: string, toolName: string, input: unknown) => ({ type: "tool-call", toolCallId: id, toolName, input: JSON.stringify(input) })
+
+  it("si la IA no escribe nada (se quedó pensando), avisa en vez de dejar la respuesta en blanco", async () => {
+    models.ai_gemini = new MockLanguageModelV4({ doStream: async () => streamOf([fin()]) })
+    const r = await turn("¿Qué opinas de mis finanzas?")
+    expect(r.meta.fuente).toBe("error")
+    expect(r.done!.msg.content).toMatch(/Regenerar/)
+  })
+
+  it("una foto con 4 movimientos y una instrucción → una tarjeta por movimiento, cada una en su módulo (nada se escribe)", async () => {
+    // La captura del 9 de noviembre: grado de Andrea (imprevisto), carne de Aquiles (fiado) y dos préstamos que se pagan
+    // el 15 de noviembre.
+    let n = 0
+    models.ai_gemini = new MockLanguageModelV4({
+      doStream: async () => (n++ === 0
+        ? streamOf([
+          call("1", "proponer_gasto", { valor: 250000, descripcion: "Pago grado Andrea", categoria: "Imprevistos" }),
+          call("2", "proponer_prestamo", { direccion: "le_debo", persona: "Aquiles", valor: 269000, clase: "fiado", concepto: "Carne" }),
+          call("3", "proponer_prestamo", { direccion: "le_debo", persona: "Camilo", valor: 100000, fecha_pago: "2099-11-15" }),
+          call("4", "proponer_prestamo", { direccion: "le_debo", persona: "Harold", valor: 160000, fecha_pago: "2099-11-15" }),
+          fin("tool-calls"),
+        ])
+        : streamOf([{ type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "Preparé 4 registros." }, { type: "text-end", id: "t" }, fin()])),
+    })
+    const img = { name: "captura.png", type: "image/png", size: 3, data: "AAAA" }
+    const r = await chatAttachWith(ctxOf(), db.client, { files: [img], text: "el grado es un imprevisto, la carne la pedí fiada y los préstamos los pago el 15" })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const props = r.answer.meta.propuestas!
+    // Las herramientas corren a la vez: el orden de las tarjetas es el de quien termina primero.
+    expect(props.map((p) => p.tipo).sort()).toEqual(["gasto", "prestamo", "prestamo", "prestamo"])
+    const de = (persona: string) => props.find((p) => p.datos.persona === persona)!.datos
+    expect(props.find((p) => p.tipo === "gasto")!.datos).toMatchObject({ valor: 250000, descripcion: "Pago grado Andrea" })
+    expect(de("Aquiles")).toMatchObject({ loan_tipo: "fiado", valor: 269000 })
+    expect(de("Camilo")).toMatchObject({ frec: "unico", plazo: 1, vence: "2099-11-15", cuota: 100000 })
+    expect(de("Harold")).toMatchObject({ frec: "unico", vence: "2099-11-15", cuota: 160000 })
+    expect(r.answer.content).toBe("Preparé 4 registros.")
+    expect(r.user.adjuntos).toEqual([{ nombre: "captura.png", tipo: "image/png", tam: 3 }])
+    // La foto y el pedido llegan a la IA (la foto como archivo, no como texto).
+    const sent = JSON.stringify(models.ai_gemini.doStreamCalls[0].prompt)
+    expect(sent).toContain("image/png")
+    expect(sent).toContain("PEDIDO DE LA PERSONA: el grado es un imprevisto")
+    expect(db.rows("loans")).toHaveLength(0)
+    expect(db.rows("ai_usage").at(-1)).toMatchObject({ feature: "documento" })
+    // Confirmar el de Camilo guarda la deuda con su fecha de pago única.
+    const camilo = props.find((p) => p.datos.persona === "Camilo")!
+    expect(await chatConfirmWith(ctxOf(), db.client, r.answer.id, camilo.id)).toMatchObject({ ok: true })
+    expect(db.rows("loans")[0]).toMatchObject({ kind: "pagar", monto: 100000, frec: "unico", plazo: 1, vence: "2099-11-15" })
+  })
+
+  it("plan Gratis: no llama a la IA y ofrece Premium", async () => {
+    const r = await chatAttachWith(ctxOf("owner", GRATIS), db.client, { files: [{ name: "f.pdf", type: "application/pdf", size: 3, data: "AAAA" }] })
+    expect(r.ok && r.answer.meta.aviso).toBe("plan")
+    expect(models.ai_gemini.doStreamCalls).toHaveLength(0)
+  })
+
+  it("validación: tipos, cantidad y peso", () => {
+    const f = (type: string, size = 10) => ({ name: "x", type, size, data: "" })
+    expect(attachProblem({ household: { id: H, access: "owner" } }, [f("text/csv"), f("application/pdf"), f("image/jpeg")])).toBeNull()
+    expect(attachProblem({ household: { id: H, access: "owner" } }, [f("application/zip")])).toMatch(/Word, Excel o CSV/)
+    expect(attachProblem({ household: { id: H, access: "owner" } }, Array.from({ length: 6 }, () => f("text/plain")))).toMatch(/hasta 5/)
+    expect(attachProblem({ household: { id: H, access: "owner" } }, [f("image/png", 4e6), f("image/png", 3e6)])).toMatch(/pasan de 6 MB/)
+    expect(attachProblem({ household: { id: H, access: "viewer" } }, [f("image/png")])).toMatch(/solo lectura/)
   })
 })
 

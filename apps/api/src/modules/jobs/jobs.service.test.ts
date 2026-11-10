@@ -29,6 +29,10 @@ class FakeJobs extends NotifyJobs {
     this.calls.push(`household:${id}:${o.horario}:${o.dry}`)
     return { [`u1:${id.slice(0, 8)}`]: [o.dry ? "email: simulado" : "email: ok"] }
   }
+  async familia(_now: Date, dry: boolean) {
+    this.calls.push(`familia:${dry}`)
+    return 2
+  }
   async planEmails(_now: Date, dry: boolean) {
     this.calls.push(`planEmails:${dry}`)
     return 2
@@ -153,6 +157,9 @@ describe("trabajadores", () => {
     const r = await svc.automationsDrain(false, at(10, 12))
     expect(r.encoladas).toBe(1)
     expect(queue.tasks[0].name).toBe("auto-00000000-0000-4000-8000-000000000101-202611021010")
+    // En la misma pasada salen los avisos de la familia por correo y WhatsApp.
+    expect(r.resultado).toMatchObject({ familia: 2 })
+    expect(jobs.calls).toEqual(["familia:true", "familia:false"])
   })
 
   it("en simulación no escriben: referencias, patrimonio y automatizaciones solo reportan", async () => {

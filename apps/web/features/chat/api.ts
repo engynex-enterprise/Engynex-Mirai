@@ -4,7 +4,7 @@ import { failure, isApiError } from "@/lib/api/errors"
 import { activeBookId } from "@/lib/api/session"
 import type { ChatHints, ChatMsg, ChatThread, Propuesta } from "@/lib/chat/types"
 import type { AttachResult, ConfirmResult, ThreadInfo, TitleResult } from "@mirai/ai/server/chat-actions"
-import { fileRefOf } from "@/features/ai/api"
+import { toBase64 } from "@/features/ai/api"
 
 const client = () => import("@/lib/api/client")
 const book = () => ({ bookId: activeBookId() })
@@ -38,17 +38,28 @@ export async function chatCancel(messageId: string, propId: string): Promise<{ o
   }
 }
 
-/** Adjunto del chat (foto o PDF de una factura, recibo, comprobante o extracto). */
-export async function chatAttach(fd: FormData): Promise<AttachResult> {
+/**
+ * Adjuntos del chat (fotos, PDF o documentos ya preparados por ./files.ts): la IA los lee con la instrucción de la
+ * persona y prepara una tarjeta por cada movimiento.
+ */
+export async function chatAttach(files: File[], text: string, threadId: string | null, tono?: "simple" | "fin"): Promise<AttachResult> {
   try {
-    const file = await fileRefOf(fd)
-    if (!file) return { ok: false as const, msg: "Elige una foto o un PDF." }
-    const text = String(fd.get("text") ?? "")
-    const threadId = String(fd.get("threadId") ?? "") || null
+    if (!files.length) return { ok: false as const, msg: "Elige una foto, un PDF o un documento." }
+    const refs = await Promise.all(files.map(async (f) => ({ name: f.name || "archivo", type: f.type || "application/octet-stream", data: await toBase64(f) })))
     const { browserApi, unwrapData } = await client()
-    return { ok: true as const, ...unwrapData(await browserApi().chat.attach({ params: book(), body: { file, ...(text ? { text } : {}), threadId } })) }
+    return { ok: true as const, ...unwrapData(await browserApi().chat.attach({ params: book(), body: { files: refs, ...(text ? { text } : {}), threadId, ...(tono ? { tono } : {}) } })) }
   } catch (e) {
     return failure(e)
+  }
+}
+
+/** Voz a texto con la IA (cuando el navegador no dicta). Lanza un Error con el mensaje para la persona. */
+export async function chatTranscribe(wav: Blob): Promise<string> {
+  const { browserApi, unwrapData } = await client()
+  try {
+    return unwrapData(await browserApi().chat.transcribe({ params: book(), body: { file: { name: "voz.wav", type: "audio/wav", data: await toBase64(wav) } } })).text
+  } catch (e) {
+    throw new Error(failure(e).msg)
   }
 }
 

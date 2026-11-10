@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { navIdOf } from "@/lib/nav"
+import { PAGE_TABS, navIdOf } from "@/lib/nav"
 import { Bell, House, Menu, Plus, Receipt } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
@@ -14,8 +14,10 @@ export function MobileTabBar() {
   const path = usePathname()
   const { setOpenMobile } = useSidebar()
   const setAdd = useShell((s) => s.setAdd)
-  // Gastos también queda activa en /fijos (es una pestaña de Gastos).
-  const here = `/${navIdOf(path.split("/")[1] || "inicio")}`
+  // Gastos queda activa en sus pestañas (/fijos, /tarjetas, /le-debo…) e Inicio en Dashboard y Balance.
+  const id = path.split("/")[1] || "inicio"
+  const tabs = PAGE_TABS[id]?.map((t) => t.id) ?? []
+  const here = `/${tabs.includes("gastos") ? "gastos" : tabs.includes("inicio") ? "inicio" : navIdOf(id)}`
   // Estilo de cada sistema (app/globals.css › Barra inferior): iPhone con el color de la marca y sin rayita; Android con
   // la píldora detrás del ícono (Material 3); en el navegador, la rayita arriba.
   const tab = (href: string, label: string, icon: React.ReactNode) => {

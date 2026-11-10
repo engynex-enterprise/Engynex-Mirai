@@ -17,6 +17,8 @@ export const AI_FEATURES = {
   factura: { label: "Leer factura", icon: "receipt", tier: "vision", maxOut: 800, cacheH: 24 * 7 },
   documento_prestamo: { label: "Leer documento de préstamo", icon: "file-text", tier: "vision", maxOut: 1200, cacheH: 24 * 7 },
   comprobante: { label: "Leer comprobante de pago", icon: "file-check", tier: "vision", maxOut: 800, cacheH: 24 * 7 },
+  documento: { label: "Chat: leer fotos, PDF y documentos", icon: "paperclip", tier: "vision", maxOut: 2500, cacheH: 0 },
+  voz: { label: "Chat: pasar la voz a texto", icon: "mic", tier: "simple", maxOut: 1500, cacheH: 0 },
   correo_banco: { label: "Compras del correo del banco", icon: "mail", tier: "simple", maxOut: 2500, cacheH: 24 },
   resumen_mes: { label: "Resumen del mes", icon: "chart-column", tier: "razonamiento", maxOut: 1500, cacheH: 6 },
   categoria_nueva: { label: "Sugerir categoría", icon: "tag", tier: "simple", maxOut: 600, cacheH: 24 * 7 },

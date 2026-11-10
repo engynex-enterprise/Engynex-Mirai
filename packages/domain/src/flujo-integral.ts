@@ -353,7 +353,7 @@ export function flujoIntegral(b: BookData, P: Periodo, today: DateInput, X: Extr
         push({
           id: `ing:${x.id}:${p.fecha}:${p.parte ?? ""}`, dir: "entra", modulo: "ingresos", clase: "ingreso", fecha: p.fecha, n: x.concepto,
           s: x.frec === "diario" ? `${p.dias} días de pago` : x.frec === "quincenal" ? "Ingreso de la quincena" : x.frec === "semanal" ? "Pago semanal" : x.frec === "anual" ? "Ingreso anual" : "Ingreso del mes",
-          icon: "briefcase", v: conv(p.v, x.currency, trm), cat: "Ingresos", ...sinRegistro(p.fecha), href: "/ingresos",
+          icon: "briefcase", v: conv(p.v, x.currency, trm), cat: "Ingresos", ...sinRegistro(p.fecha), href: "/ingresos", memberId: x.member_id ?? null,
         })
       }
   }

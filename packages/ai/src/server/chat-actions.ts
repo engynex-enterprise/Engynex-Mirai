@@ -3,16 +3,17 @@
 // de una conversación. También las lecturas y cambios de hilos que la web hace directo con RLS ("chat propio") y que la
 // API expone (listar, mensajes, renombrar, fijar, archivar, borrar). Todo con el cliente de la persona (RLS). Solo servidor.
 import { z } from "zod"
-import { formatCOP, todayBogota } from "@mirai/domain"
-import { can } from "@mirai/domain/household/roles"
 import { puedeProponer, registraAlgo, sinPermiso } from "../chat/permisos"
 import { TIPO_INFO, destino } from "../chat/propuestas"
 import { autoTitle, preview, smartTitle } from "../chat/history"
-import { aiText } from "../run"
+import type { ModelMessage } from "ai"
+import { aiStream, aiText, AiUnavailable, filePart } from "../run"
+import { aiSettings } from "../model"
+import { chatTools } from "../chat/tools"
 import { clip } from "../compact"
 import { MSG_COLS, PROPUESTA_TIPOS, THREAD_COLS, toMsg, type ChatAdjunto, type ChatHints, type ChatMeta, type ChatMsg, type ChatThread, type Propuesta } from "../chat/types"
-import { imageOf, readInvoiceWith, readLoanDocWith, readReceiptWith, type AiFile } from "./ai-actions"
-import { chatAi, chatHintsFor } from "./chat-book"
+import type { AiFile } from "./ai-actions"
+import { categorizer, chatAi, chatHintsFor, loadChatBook } from "./chat-book"
 import { escribir } from "./confirm"
 import { whoOf, type AiCtx, type Sb } from "./ctx"
 
@@ -60,32 +61,50 @@ export async function chatCancelWith(sb: Sb, messageId: string, propId: string):
   return { ok: true, propuesta: done }
 }
 
-const KIND_RE = { prestamo: /extracto|pr[eé]stamo|cr[eé]dito|pagar[eé]|tabla de amortizaci|libranza|deuda/i, comprobante: /comprobante|transferencia|consignaci|nequi|daviplata|pse/i }
-
-/** Tope del adjunto del chat y tipos permitidos (foto o PDF). */
+/** Tope de cada adjunto del chat, del total y cuántos van juntos. */
 export const CHAT_FILE_MAX = 6 * 1024 * 1024
-export const CHAT_FILE_TYPES = /^(image\/(png|jpe?g|webp|gif|heic|heif|avif)|application\/pdf)$/
+export const CHAT_FILES_TOTAL = 6 * 1024 * 1024
+export const CHAT_FILES_N = 5
+/**
+ * Tipos que lee el chat: fotos, PDF y texto. Word, Excel y CSV los convierte a texto el navegador antes de enviarlos
+ * (features/chat/files.ts), así el servidor no abre documentos de Office.
+ */
+export const CHAT_FILE_TYPES = /^(image\/(png|jpe?g|webp|gif|heic|heif|avif)|application\/pdf|text\/(plain|csv|markdown|tab-separated-values))$/
+const esTexto = (t: string) => t.startsWith("text/")
+/** Máximo de caracteres de un documento de texto que se le pasa a la IA. */
+const TEXTO_MAX = 60_000
 
-export type AttachInput = { file: (AiFile & { name: string }) | null; text?: string; threadId?: string | null }
+export type AttachFile = AiFile & { name: string }
+export type AttachInput = { files: AttachFile[]; text?: string; threadId?: string | null; tono?: "simple" | "fin" }
 export type AttachResult = { ok: true; threadId: string; titulo: string; nuevo: boolean; user: ChatMsg; answer: ChatMsg } | { ok: false; msg: string }
 
-/** Validación del adjunto antes del límite de tasa (mismo orden que la web). null = sirve. */
-export function attachProblem(ctx: Pick<AiCtx, "household">, f: AttachInput["file"]): string | null {
+/** Validación de los adjuntos antes del límite de tasa (mismo orden que la web). null = sirven. */
+export function attachProblem(ctx: Pick<AiCtx, "household">, files: (AttachFile | null | undefined)[] | null): string | null {
   if (!registraAlgo(ctx.household.access)) return "Tu rol en este hogar es de solo lectura: no puedes registrar documentos."
-  if (!f || !f.size) return "Elige una foto o un PDF"
-  if (f.size > CHAT_FILE_MAX) return "El archivo pesa más de 6 MB."
-  if (!CHAT_FILE_TYPES.test(f.type)) return "Usa una foto (JPG, PNG) o un PDF."
+  const list = (files ?? []).filter(Boolean) as AttachFile[]
+  if (!list.length || list.some((f) => !f.size)) return "Elige una foto, un PDF o un documento."
+  if (list.length > CHAT_FILES_N) return `Envía hasta ${CHAT_FILES_N} archivos a la vez.`
+  if (list.some((f) => f.size > CHAT_FILE_MAX)) return "Cada archivo puede pesar hasta 6 MB."
+  if (list.reduce((a, f) => a + f.size, 0) > CHAT_FILES_TOTAL) return "Entre todos los archivos pasan de 6 MB. Envía menos a la vez."
+  if (list.some((f) => !CHAT_FILE_TYPES.test(f.type))) return "Usa fotos (JPG, PNG), PDF, Word, Excel o CSV."
   return null
 }
 
+/** Texto de un documento (base64 → UTF-8), recortado. */
+const textoDe = (f: AttachFile) => Buffer.from(f.data, "base64").toString("utf8").slice(0, TEXTO_MAX)
+
+/** Lo que se le pide a la IA cuando la persona solo adjunta, sin escribir nada. */
+const PEDIDO = "Lee lo que te comparto, identifica cada movimiento y a qué tipo de registro corresponde (gasto del día a día, pago de un gasto fijo, cobro de una suscripción, compra con tarjeta, deuda o cuota) y prepárame los registros para confirmar."
+
 /**
- * Adjunto del chat (foto o PDF), ya validado con attachProblem y el límite `chatAdjunto`. Usa las mismas lecturas de
- * los formularios: factura o recibo → tarjeta para registrar el gasto; comprobante → resumen; extracto o documento de
- * préstamo → resumen con enlace a Le debo.
+ * Adjuntos del chat (fotos, PDF o documentos), ya validados con attachProblem y el límite `chatAdjunto`. La IA los lee
+ * con la instrucción de la persona (escrita o dictada) y las MISMAS herramientas del chat: consulta el libro y prepara
+ * una tarjeta por cada movimiento en el módulo que corresponde (gasto, pago de un fijo, cobro de suscripción, compra con
+ * tarjeta, deuda con pago único, cuota…). Nada se escribe hasta que la persona confirma.
  */
 export async function chatAttachWith(ctx: AiCtx, sb: Sb, input: AttachInput): Promise<AttachResult> {
-  const f = input.file!
-  const text = String(input.text ?? "").trim().slice(0, 1000)
+  const files = input.files
+  const text = String(input.text ?? "").trim().slice(0, 4000)
   let threadId = input.threadId || null
   let titulo = ""
   let nuevo = false
@@ -94,51 +113,66 @@ export async function chatAttachWith(ctx: AiCtx, sb: Sb, input: AttachInput): Pr
     if (!data) threadId = null
     else titulo = data.titulo
   }
-  const kind = KIND_RE.prestamo.test(text) ? "prestamo" : KIND_RE.comprobante.test(text) ? "comprobante" : "factura"
-  // "Registra sus gastos" lee facturas (sus gastos); los comprobantes y documentos de deudas son de quien planea.
-  if (kind !== "factura" && !can(ctx.household.access, "planear")) return { ok: false, msg: "Con tu rol puedes leer facturas y recibos de tus gastos. Los comprobantes y documentos de deudas los registra quien administra el hogar." }
-  const label = kind === "prestamo" ? "documento de préstamo" : kind === "comprobante" ? "comprobante" : "factura"
   if (!threadId) {
-    titulo = autoTitle(text || `Leer ${label}: ${f.name}`)
+    titulo = autoTitle(text || `Leer ${files.length > 1 ? `${files.length} documentos` : files[0].name}`)
     const { data, error } = await sb.from("chat_threads").insert({ book_id: ctx.book.id, user_id: ctx.user.id, titulo }).select("id").single()
     if (error) return { ok: false, msg: error.message }
     threadId = data.id
     nuevo = true
   }
-  const adj: ChatAdjunto = { nombre: f.name.slice(0, 80), tipo: f.type, tam: f.size }
-  const { data: u, error: ue } = await sb.from("chat_messages").insert({ book_id: ctx.book.id, thread_id: threadId, role: "user", content: text || `Te comparto ${kind === "factura" ? "una factura" : kind === "comprobante" ? "un comprobante" : "un documento de préstamo"}.`, adjuntos: [adj] as never }).select(MSG_COLS).single()
+  // Historia reciente (antes de guardar este mensaje), para que "lee esto" siga lo que venían hablando.
+  const { data: prev } = nuevo ? { data: [] } : await sb.from("chat_messages").select("role,content").eq("thread_id", threadId).is("deleted_at", null).order("created_at", { ascending: false }).limit(6)
+  const adjuntos: ChatAdjunto[] = files.map((f) => ({ nombre: f.name.slice(0, 80), tipo: f.type, tam: f.size }))
+  const { data: u, error: ue } = await sb.from("chat_messages").insert({ book_id: ctx.book.id, thread_id: threadId, role: "user", content: text || (files.length > 1 ? `Te comparto ${files.length} documentos.` : "Te comparto un documento."), adjuntos: adjuntos as never }).select(MSG_COLS).single()
   if (ue) return { ok: false, msg: ue.message }
 
-  const meta: ChatMeta = { fuente: "lectura" }
+  const meta: ChatMeta = { fuente: "ia" }
   let content = ""
-  const img = () => imageOf(f)
   const ai = await chatAi(ctx)
-  if (!ai.allowed) {
+  const ocrOff = ai.allowed && (await aiSettings(ctx.book.id)).ocr === false && files.some((f) => !esTexto(f.type))
+  if (!ai.allowed || ocrOff) {
     meta.fuente = "upsell"; meta.aviso = ai.premium ? "apagada" : "plan"
-    content = ai.premium ? "Para leer fotos y PDF necesito la inteligencia artificial, que está **apagada** en Ajustes › Inteligencia artificial." : "Leer facturas, recibos y extractos con una foto es parte de **Mirai Premium**. Mientras tanto, escríbeme el gasto, por ejemplo: *Registra un gasto de 45 mil en mercado*."
-  } else if (kind === "factura") {
-    const r = await readInvoiceWith(ctx, sb, img)
-    if (!r.ok) { meta.fuente = "error"; content = r.msg }
-    else {
-      const { data: cat } = r.category_id ? await sb.from("categories").select("nombre").eq("id", r.category_id).maybeSingle() : { data: null }
-      const p: Propuesta = { id: crypto.randomUUID(), tipo: "gasto", estado: "pendiente", datos: { valor: r.valor, descripcion: r.comercio, fecha: r.fecha ?? todayBogota(), category_id: r.category_id, categoria: cat?.nombre ?? null, cat_src: r.category_id ? "ia" : null } }
-      meta.propuestas = [p]
-      content = `Leí la factura de **${r.comercio}** por **${formatCOP(r.valor)}**${r.fecha ? ` del ${r.fecha}` : ""}. Revisa los datos y toca **Confirmar** para registrar el gasto.`
-    }
-  } else if (kind === "comprobante") {
-    const r = await readReceiptWith(ctx, img)
-    content = r.ok ? `Leí el comprobante: ${r.valor ? `**${formatCOP(r.valor)}**` : "no encontré el valor"}${r.fecha ? `, del ${r.fecha}` : ""}${r.referencia ? `, referencia ${r.referencia}` : ""}. Si es un pago de una deuda, regístralo en **Préstamos** desde el detalle de la deuda.` : r.msg
-    if (!r.ok) meta.fuente = "error"
+    content = ocrOff ? "La lectura de fotos y PDF está **desactivada** en Ajustes › Inteligencia artificial."
+      : ai.premium ? "Para leer fotos, PDF y documentos necesito la inteligencia artificial, que está **apagada** en Ajustes › Inteligencia artificial."
+        : "Leer facturas, recibos, extractos y documentos es parte de **Mirai Premium**. Mientras tanto, escríbeme el gasto, por ejemplo: *Registra un gasto de 45 mil en mercado*."
   } else {
-    const r = await readLoanDocWith(ctx, img, "pagar")
-    if (!r.ok) { meta.fuente = "error"; content = r.msg }
-    else {
-      const d = r.d
-      const rows = [
-        d.acreedor && `- Entidad: **${d.acreedor}**`, d.monto && `- Monto: **${formatCOP(d.monto)}**`, d.saldo_actual && `- Saldo actual: **${formatCOP(d.saldo_actual)}**`,
-        d.valor_cuota && `- Cuota: **${formatCOP(d.valor_cuota)}**${d.plazo_cuotas ? ` (${d.plazo_cuotas} cuotas)` : ""}`, d.tasa_mensual && `- Tasa: ${d.tasa_mensual} % mensual`, d.tasa_ea && `- Tasa: ${d.tasa_ea} % E.A.`,
-      ].filter(Boolean)
-      content = `Esto encontré en el documento:\n\n${rows.join("\n") || "- No pude leer los datos principales."}\n\nPara llevarle el control, agrégalo en [Le debo](/le-debo?nuevo=1): ahí puedes leer el mismo documento y se llenan los datos solos.`
+    const { book, datos, today, X } = await loadChatBook(sb, ctx.book.id, ctx.household.id)
+    const { rules, categorize, creditos } = categorizer(ctx, sb, book, true)
+    const propuestas: Propuesta[] = []
+    const consultas = new Set<string>()
+    const hist = (prev ?? []).reverse().filter((m) => m.content.trim())
+    while (hist.length && hist[0].role !== "user") hist.shift()
+    const parts: Exclude<ModelMessage["content"], string> = [
+      { type: "text", text: `DATOS:\n${datos}` },
+      ...files.flatMap((f) => esTexto(f.type)
+        ? [{ type: "text" as const, text: `DOCUMENTO «${f.name.slice(0, 80)}»:\n${textoDe(f)}` }]
+        : [{ type: "text" as const, text: `ARCHIVO «${f.name.slice(0, 80)}»:` }, filePart({ data: f.data, mediaType: f.type })]),
+      { type: "text", text: `PEDIDO DE LA PERSONA: ${text || PEDIDO}` },
+    ]
+    const messages = [
+      ...hist.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: clip(m.content, m.role === "user" ? 600 : 400) }) as ModelMessage),
+      { role: "user", content: parts } as ModelMessage,
+    ]
+    try {
+      const r = await aiStream({
+        ...whoOf(ctx), feature: "documento", tono: input.tono, messages, maxSteps: 8,
+        tools: chatTools({ b: book, today, access: ctx.household.access, rules, X, categorize, onTool: (label) => { consultas.add(label.replace(/^Revisando /, "")) }, onPropuesta: (p) => { propuestas.push(p) } }),
+        onDelta: (t) => { content += t }, shown: () => propuestas.length > 0,
+      })
+      meta.provider = r.provider
+      const cr = (r.creditos ?? 0) + creditos()
+      if (cr) meta.creditos = Math.round(cr * 100) / 100
+    } catch (e) {
+      if (!content && !propuestas.length) {
+        if (e instanceof AiUnavailable) { meta.fuente = "upsell"; meta.aviso = /créditos/i.test(e.message) ? "creditos" : /plan/i.test(e.message) ? "plan" : "apagada"; content = e.message }
+        else { meta.fuente = "error"; content = "No pude leer el documento en este momento. Intenta de nuevo en un rato, con una foto más clara, o escríbeme los datos." }
+      }
+    }
+    if (consultas.size) meta.consultas = [...consultas]
+    if (propuestas.length) meta.propuestas = propuestas
+    if (!content.trim()) {
+      if (propuestas.length) content = `Preparé ${propuestas.length === 1 ? "el registro" : `**${propuestas.length} registros**`}. Revisa los datos y toca **Confirmar**${propuestas.length > 1 ? " en cada uno o **Confirmar todos**" : ""}.`
+      else if (meta.fuente === "ia") { meta.fuente = "error"; content = "No logré leer nada en el documento. Prueba con una foto más clara o escríbeme los datos." }
     }
   }
   const { data: a, error: ae } = await sb.from("chat_messages").insert({ book_id: ctx.book.id, thread_id: threadId, role: "assistant", content, meta: meta as never }).select(MSG_COLS).single()

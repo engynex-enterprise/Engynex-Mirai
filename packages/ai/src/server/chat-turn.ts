@@ -12,7 +12,7 @@
 import type { z } from "zod"
 import { ChatBody } from "@mirai/contracts/modules/chat"
 import type { ModelMessage } from "ai"
-import { ATIPOS, toDay, type KeywordRuleIn } from "@mirai/domain"
+import { ATIPOS, toDay } from "@mirai/domain"
 import { AiUnavailable, aiStream, logAlgorithm, tokensFor } from "../run"
 import { quickAnswer } from "../router"
 import { clip } from "../compact"
@@ -20,14 +20,13 @@ import { autoTitle, preview } from "../chat/history"
 import { continueDecision, detectActions, detectDecision, preguntaValor } from "../chat/intent"
 import { followUps, rng } from "../chat/suggestions"
 import { decisionView } from "../chat/decision-view"
-import { chatTools, resolveCategory, type Categoria, type Categorize } from "../chat/tools"
+import { chatTools } from "../chat/tools"
 import { resolverAcciones } from "../chat/resolver"
 import { registraAlgo } from "../chat/permisos"
 import { MSG_COLS, toMsg, type ChatEvent, type ChatMeta, type Consulta, type Propuesta } from "../chat/types"
 import { publicError } from "../public-error"
 import { analyzeInput, interpretText } from "./advisor"
-import { chatAi, loadChatBook } from "./chat-book"
-import { classifyWith } from "./classify"
+import { categorizer, chatAi, loadChatBook } from "./chat-book"
 import { whoOf, type AiCtx, type Sb } from "./ctx"
 
 /** Cuerpo de un mensaje del chat (web: /api/chat; API: POST /v1/books/:b/chat/messages). Vive en el contrato `chat`. */
@@ -96,23 +95,11 @@ export async function runChatTurn(o: { ctx: AiCtx; sb: Sb; body: ChatTurnInput; 
     // ── 3. Responder ──
     const [cb, ai] = await Promise.all([loadChatBook(sb, ctx.book.id, ctx.household.id), chatAi(ctx)])
     const { book, facts, flags, datos, today, X } = cb
-    let rulesMemo: KeywordRuleIn[] | null = null
-    const rules = async () => (rulesMemo ??= ((await sb.from("keyword_rules").select("keyword,category_id").eq("book_id", ctx.book.id).is("deleted_at", null)).data ?? []) as KeywordRuleIn[])
     let content = ""
     const meta: ChatMeta = {}
     const say = (t: string) => { content += t; emit({ t: "delta", text: t }) }
     const who = whoOf(ctx)
-    // Categoría de los gastos que se proponen: la que nombró el modelo (si existe) o reglas + IA, como el formulario.
-    let catCreditos = 0
-    const categorize: Categorize = async (descripcion, valor, nombre) => {
-      const local = resolveCategory(book, await rules(), descripcion, nombre)
-      if (local.src === "ia" || !ai.allowed) return local
-      const r = await classifyWith(sb, who, [{ i: 0, descripcion, valor, veces_mes: book.expenses.filter((g) => g.descripcion.trim().toLowerCase() === descripcion.trim().toLowerCase()).length }]).catch(() => null)
-      const hit = r?.out[0]
-      catCreditos += r?.creditos ?? 0
-      const cat = hit?.category_id ? book.categories.find((c) => c.id === hit.category_id) : undefined
-      return cat ? ({ id: cat.id, nombre: cat.nombre, src: hit!.src === "ia" ? "ia" : local.src ?? "regla" } satisfies Categoria) : local
-    }
+    const { rules, categorize, creditos: catCreditosFn } = categorizer(ctx, sb, book, ai.allowed)
 
     // Registrar algo ("le presté…", "pagué la cuota…") va antes que la decisión ("¿le presto…?").
     const acts = detectActions(text)
@@ -154,7 +141,7 @@ export async function runChatTurn(o: { ctx: AiCtx; sb: Sb; body: ChatTurnInput; 
         emit({ t: "card", propuesta: quick.propuesta })
         say(quick.texto)
       }
-      if (catCreditos) meta.creditos = Math.round(catCreditos * 100) / 100
+      if (catCreditosFn()) meta.creditos = Math.round(catCreditosFn() * 100) / 100
       await logAlgorithm({ ...who, feature: "frase_libre", evitados: tokensFor("frase_libre", text) })
     } else if (qa) {
       meta.fuente = "algoritmo"
@@ -187,7 +174,7 @@ export async function runChatTurn(o: { ctx: AiCtx; sb: Sb; body: ChatTurnInput; 
           onDelta: (t) => say(t), shown: () => propuestas.length > 0,
         })
         meta.provider = r.provider
-        if (r.creditos || catCreditos) meta.creditos = Math.round(((r.creditos ?? 0) + catCreditos) * 100) / 100
+        if (r.creditos || catCreditosFn()) meta.creditos = Math.round(((r.creditos ?? 0) + catCreditosFn()) * 100) / 100
       } catch (e) {
         if (!content) {
           if (e instanceof AiUnavailable) { meta.fuente = "upsell"; meta.aviso = /créditos/i.test(e.message) ? "creditos" : /plan/i.test(e.message) ? "plan" : "apagada"; say(e.message) }
@@ -198,6 +185,8 @@ export async function runChatTurn(o: { ctx: AiCtx; sb: Sb; body: ChatTurnInput; 
       if (propuestas.length) meta.propuestas = propuestas
       if (signal.aborted) meta.detenido = true
       if (!content && propuestas.length) content = "Revisa los datos y toca **Confirmar** para guardarlo."
+      // Nunca una respuesta en blanco (p. ej. el modelo se quedó pensando sin escribir): se avisa y se puede reintentar.
+      if (!content && !propuestas.length && !signal.aborted) { meta.fuente = "error"; say("No me llegó una respuesta de la IA esta vez. Toca **Regenerar** o pregúntalo de otra forma.") }
     }
 
     // ── 4. Guardar la respuesta y sugerir el siguiente paso ──

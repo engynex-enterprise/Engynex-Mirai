@@ -98,6 +98,8 @@ export const PARECE_ENTIDAD = /\b(banco|bancolombia|davivienda|bbva|bogota|occid
 export type PrestamoIn = {
   kind: "pagar" | "cobrar"; valor: number; persona?: string | null; plazo?: number | null; frec?: string | null
   tasa?: number | null; fecha?: string | null; concepto?: string | null; tipo?: string | null
+  /** Pago único en esta fecha ("lo pago el 15 de noviembre"): una sola cuota ese día. */
+  vence?: string | null
 }
 
 /** "Le presté 200 mil a Juan a 3 meses" → préstamo en Me deben con su plan de cuotas (igual que el formulario). */
@@ -111,23 +113,23 @@ export function armarPrestamo(b: BookData, today: string, i: PrestamoIn): Armado
   const esEntidad = !!en || (!ct && i.kind === "pagar" && PARECE_ENTIDAD.test(norm(persona)))
   const tipo: LoanTipo = esTipo(i.tipo, i.kind) ? i.tipo : i.kind === "cobrar" ? "presto" : esEntidad ? "banco" : "persona"
   const D = tipoDefaults(tipo, i.kind)
-  const frec = ["mensual", "quincenal", "semanal", "diario", "diariohab"].includes(i.frec ?? "") ? i.frec! : D.frec
-  const plazo = Math.max(1, Math.min(600, Math.round(+(i.plazo ?? 0) || D.plazo)))
+  const fecha = i.fecha && /^\d{4}-\d{2}-\d{2}$/.test(i.fecha) ? i.fecha : today
+  // Un solo pago en una fecha pactada (posterior al préstamo): frecuencia "unico", como "En una sola fecha" del formulario.
+  const vence = i.vence && /^\d{4}-\d{2}-\d{2}$/.test(i.vence) && i.vence > fecha ? i.vence : null
+  const frec = vence ? "unico" : ["mensual", "quincenal", "semanal", "diario", "diariohab"].includes(i.frec ?? "") ? i.frec! : D.frec
+  const plazo = vence ? 1 : Math.max(1, Math.min(600, Math.round(+(i.plazo ?? 0) || D.plazo)))
   const tasa = Math.max(0, Math.min(30, +(i.tasa ?? 0) || 0))
   const sistema = tasa > 0 ? (D.sistema === "sin" ? "simple" : D.sistema) : "simple"
-  const fecha = i.fecha && /^\d{4}-\d{2}-\d{2}$/.test(i.fecha) ? i.fecha : today
-  const pv = previewLoan({ monto: valor, sistema, tasa, frec, plazo, inicio: fecha }, today)
+  const pv = previewLoan({ monto: valor, sistema, tasa, frec, plazo, inicio: fecha, vence }, today)
   const nombre = ct?.nombre ?? en?.nombre ?? persona.charAt(0).toUpperCase() + persona.slice(1)
   const concepto = (i.concepto ?? "").trim().slice(0, 80) || (i.kind === "cobrar" ? "Préstamo" : tipo === "banco" ? "Crédito" : "Préstamo")
   return {
     ok: true,
     datos: {
       kind: i.kind, loan_tipo: tipo, valor, persona: nombre, contact_id: ct?.id ?? null, entity_id: en?.id ?? null, plazo, frec, tasa, sistema, fecha, concepto,
-      cuota: r0(pv.cuota), total: r0(pv.total),
+      cuota: r0(pv.cuota), total: r0(pv.total), ...(vence ? { vence } : {}),
     },
-    resumen: i.kind === "cobrar"
-      ? `el préstamo de **${$(valor)}** a **${nombre}** (${plazo} ${plazo === 1 ? "cuota" : "cuotas"} de ${$(pv.cuota)})`
-      : `la deuda de **${$(valor)}** con **${nombre}** (${plazo} ${plazo === 1 ? "cuota" : "cuotas"} de ${$(pv.cuota)})`,
+    resumen: `${i.kind === "cobrar" ? `el préstamo de **${$(valor)}** a **${nombre}**` : `la deuda de **${$(valor)}** con **${nombre}**`} (${vence ? `un pago de ${$(pv.cuota)} el ${vence}` : `${plazo} ${plazo === 1 ? "cuota" : "cuotas"} de ${$(pv.cuota)}`})`,
   }
 }
 

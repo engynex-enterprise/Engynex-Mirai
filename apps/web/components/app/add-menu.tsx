@@ -36,7 +36,7 @@ export const ADD_GROUPS: { t: string; items: AddItem[] }[] = [
     { iso: "balance", label: "Cuenta o bien", hint: "Banco, efectivo, casa, carro", href: "/balance?nuevo=1", words: "activo cuenta de ahorros nequi patrimonio" },
   ] },
   { t: "Personas y fechas", items: [
-    { iso: "contactos", label: "Contacto", hint: "Persona o empresa", href: "/contactos?nuevo=1", words: "persona amigo familiar" },
+    { iso: "contactos", label: "Contacto", hint: "Persona o empresa", href: "/personas?nuevo=1", words: "persona amigo familiar" },
     { iso: "fijos", label: "Proveedor", hint: "A quién le pagas", href: "/proveedores?nuevo=1", words: "empresa servicio tienda" },
     { iso: "recordatorios", label: "Recordatorio o fecha", hint: "Impuestos, primas, vencimientos", href: "/calendario?nuevo=1", words: "evento calendario fiscal predial vehicular" },
   ] },

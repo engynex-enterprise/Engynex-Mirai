@@ -7,7 +7,7 @@ import { DomainError } from "../../core/errors/domain-error"
 const PLAN = /no est[aá] incluid[ao] en tu plan|parte de \*\*Mirai Premium/i
 const LIMIT = /cr[eé]ditos de IA|l[ií]mite de|muchas consultas/i
 const ROLE = /tu rol/i
-const CONFIG = /apagada|desactivada|Activa un proveedor|Primero (guarda|vincula)|Pega la clave|Mes inv[aá]lido|Elige una foto|pesa m[aá]s|Usa una foto|Conecta tu cuenta|venci[oó]\. Vuelve|vac[ií]a|necesita|no son v[aá]lidos|no tiene lista|administra Mirai/i
+const CONFIG = /apagada|desactivada|Activa un proveedor|Primero (guarda|vincula)|Pega la clave|Mes inv[aá]lido|Elige una foto|pesa m[aá]s|Usa una foto|Usa fotos|puede pesar|pasan de 6 MB|hasta 5 archivos|No lleg[oó] el audio|audio no soportado|audio es muy largo|Conecta tu cuenta|venci[oó]\. Vuelve|vac[ií]a|necesita|no son v[aá]lidos|no tiene lista|administra Mirai/i
 const MISSING = /No encontramos/i
 const DONE = /ya se cancel[oó]|ya no est[aá] pendiente/i
 

@@ -167,18 +167,14 @@ export async function sendChat(qc: QueryClient, input: { text: string; editId?: 
 export function stopChat() { ctrl?.abort() }
 
 /** Envía una foto o PDF con un texto opcional (se lee con las funciones de IA de facturas y documentos). */
-export async function sendAttachment(qc: QueryClient, file: File, text: string) {
+export async function sendAttachment(qc: QueryClient, files: File[], text: string) {
   const st = useChat.getState()
-  if (st.live.status !== "idle") return
+  if (st.live.status !== "idle" || !files.length) return
   const now = new Date().toISOString()
-  const localUser: ChatMsg = { id: `local-${Date.now()}`, role: "user", content: text || "Te comparto un documento.", meta: {}, feedback: null, adjuntos: [{ nombre: file.name, tipo: file.type, tam: file.size }], created_at: now }
-  useChat.setState({ live: { ...IDLE, status: "thinking", threadId: st.threadId, user: localUser, tool: "Leyendo tu documento", attach: true }, draft: "" })
-  const fd = new FormData()
-  fd.set("file", file)
-  fd.set("text", text)
-  if (st.threadId) fd.set("threadId", st.threadId)
+  const localUser: ChatMsg = { id: `local-${Date.now()}`, role: "user", content: text || (files.length > 1 ? `Te comparto ${files.length} documentos.` : "Te comparto un documento."), meta: {}, feedback: null, adjuntos: files.map((f) => ({ nombre: f.name, tipo: f.type, tam: f.size })), created_at: now }
+  useChat.setState({ live: { ...IDLE, status: "thinking", threadId: st.threadId, user: localUser, tool: files.length > 1 ? "Leyendo tus documentos" : "Leyendo tu documento", attach: true }, draft: "" })
   try {
-    const r = await chatAttach(fd)
+    const r = await chatAttach(files, text, st.threadId, st.tono)
     if (!r.ok) toast.error("No pudimos leer el documento", { description: r.msg })
     else {
       if (r.nuevo) { qc.setQueryData(msgsKey(r.threadId), []); useChat.getState().setThread(r.threadId) }

@@ -31,6 +31,9 @@ export class FakeNotifyJobs extends NotifyJobs {
   async planEmails() {
     return 0
   }
+  async familia() {
+    return 0
+  }
   async refs() {
     return ["trm: ok"]
   }

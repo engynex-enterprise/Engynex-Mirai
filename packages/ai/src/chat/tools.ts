@@ -263,8 +263,9 @@ export function chatTools(o: {
           valor: z.number().positive().max(1e11), cuotas: z.number().int().min(1).max(600).optional(), frecuencia: z.enum(["mensual", "quincenal", "semanal", "diario"]).optional(),
           tasa_mensual_pct: z.number().min(0).max(30).optional().describe("Interés mensual en %, si lo dijo"), fecha, concepto: z.string().max(80).optional(),
           clase: z.enum(["banco", "empeno", "fiado", "persona", "cuotas", "gota", "presto", "vendi", "otro"]).optional().describe("Tipo de deuda si es claro"),
+          fecha_pago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Si se paga TODO de una vez en una fecha (\"lo pago el 15\"): YYYY-MM-DD. Así no se arman cuotas."),
         }),
-        execute: async (i) => desde("prestamo", armarPrestamo(b, today, { kind: i.direccion === "me_deben" ? "cobrar" : "pagar", valor: i.valor, persona: i.persona, plazo: i.cuotas, frec: i.frecuencia, tasa: i.tasa_mensual_pct, fecha: i.fecha, concepto: i.concepto, tipo: i.clase })),
+        execute: async (i) => desde("prestamo", armarPrestamo(b, today, { kind: i.direccion === "me_deben" ? "cobrar" : "pagar", valor: i.valor, persona: i.persona, plazo: i.cuotas, frec: i.frecuencia, tasa: i.tasa_mensual_pct, fecha: i.fecha, concepto: i.concepto, tipo: i.clase, vence: i.fecha_pago })),
       }),
     },
     pago_cuota: {

@@ -230,7 +230,7 @@ export function AlertasTab() {
       <GoogleCalendarSection on={can.gcal !== false} onChange={(v) => setCan("gcal", v)} />
 
       <SettingSection icon="mail" title="Correo electrónico">
-        <SettingRow title="Enviar resumen por correo" desc="Te llega al correo con lo que tienes pendiente."><Switch checked={!!can.email} disabled={!can.email && !ok("email")} onCheckedChange={(v) => setCan("email", v)} aria-label="Enviar resumen por correo" /></SettingRow>
+        <SettingRow title="Enviar resumen por correo" desc="Te llega al correo lo que tienes pendiente y los avisos que marques arriba, como los movimientos de tu familia."><Switch checked={!!can.email} disabled={!can.email && !ok("email")} onCheckedChange={(v) => setCan("email", v)} aria-label="Enviar resumen por correo" /></SettingRow>
         {!ok("email") && <NoDisponible que="correo" />}
         {can.email && ok("email") && <>
           <SettingRow title="Enviar a" desc="Si lo dejas vacío usamos el correo de tu cuenta.">
@@ -253,7 +253,7 @@ export function AlertasTab() {
       </SettingSection>
 
       <SettingSection icon="message-circle" title="WhatsApp" desc="Te enviamos el resumen al WhatsApp desde el número oficial de Mirai.">
-        <SettingRow title="Enviar resumen por WhatsApp"><Switch checked={!!can.whatsapp} disabled={!can.whatsapp && !ok("whatsapp")} onCheckedChange={(v) => setCan("whatsapp", v)} aria-label="Enviar resumen por WhatsApp" /></SettingRow>
+        <SettingRow title="Enviar resumen por WhatsApp" desc="El resumen y los avisos que marques arriba, como los movimientos de tu familia."><Switch checked={!!can.whatsapp} disabled={!can.whatsapp && !ok("whatsapp")} onCheckedChange={(v) => setCan("whatsapp", v)} aria-label="Enviar resumen por WhatsApp" /></SettingRow>
         {!ok("whatsapp") && <NoDisponible que="WhatsApp" />}
         {can.whatsapp && ok("whatsapp") && <>
           <SettingRow title="Tu número" desc={waBad ? undefined : waNum ? `Te escribimos al ${formatCoPhone(waNum)}.` : "Tu celular de Colombia (10 dígitos)."}>

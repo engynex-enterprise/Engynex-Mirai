@@ -21,7 +21,7 @@ test("deuda con el banco: entidad, cuota mensual, plazo, resumen y detalle de cu
   await expect(page.getByRole("textbox", { name: "Nombre completo" })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Leer con foto" })).toBeVisible()
   const banco = `Cooperativa QA ${info.project.name}`
-  await expect(page.getByText(/Queda en Contactos › Bancos y entidades/)).toBeVisible()
+  await expect(page.getByText(/Queda en Contactos › Personas › Bancos y entidades/)).toBeVisible()
   await crearEntidad(page, /banco o entidad/i, banco, /Crear banco o entidad/)
   await page.getByRole("radio", { name: "Vehículo" }).click()
   await expect(page.getByRole("spinbutton", { name: "Plazo en meses" })).toHaveValue("60")
@@ -176,7 +176,7 @@ test("empeño en la misma compraventa: la segunda vez se escoge la que ya existe
   await expect(page.getByRole("combobox", { name: combo })).toContainText(casa)
   await empeno("Reloj")
   // En Contactos › Bancos y entidades queda una sola, con sus deudas.
-  await page.goto("/contactos?tab=entidades")
+  await page.goto("/personas?tab=entidades")
   await expect(page.getByRole("tab", { name: /Bancos y entidades/ })).toHaveAttribute("aria-selected", "true")
   await expect(page.getByRole("link", { name: "Ver en Proveedores" })).toBeVisible()
   await page.getByPlaceholder("Buscar por nombre o NIT").fill(casa)
@@ -215,7 +215,7 @@ test("gota a gota: el prestamista queda en Contactos y no se repite", async ({ p
   await page.getByRole("button", { name: "Escogerlo" }).click()
   await expect(page.getByRole("combobox", { name: "Contacto" })).toContainText(apodo)
   await page.keyboard.press("Escape")
-  await page.goto("/contactos")
+  await page.goto("/personas")
   await expect(page.locator("[id^=c-]", { hasText: apodo })).toHaveCount(1)
   expect(errs, errs.join("\n")).toEqual([])
 })

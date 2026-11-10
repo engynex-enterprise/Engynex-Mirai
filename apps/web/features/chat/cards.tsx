@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
-import { Check, Crown, Settings, X } from "lucide-react"
+import { Check, CheckCheck, Crown, Settings, X } from "lucide-react"
 import { toast } from "@/components/mirai/toast"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -47,7 +47,7 @@ function rowsOf(p: Propuesta): Row[] {
     case "pago_tarjeta": return [["Tarjeta", d.nombre], [d.pago_tarjeta === "total" ? "Pago total" : d.pago_tarjeta === "minimo" ? "Pago del mes" : "Pago", money(d.valor, true)], ["Fecha", day(d.fecha)], ["Queda debiendo", money(d.saldo)]]
     case "prestamo": return [
       [d.kind === "cobrar" ? "Le prestaste a" : "Te prestó", d.persona], ["Valor", money(d.valor, true)],
-      ["Cuotas", d.plazo === 1 ? <span key="q">Un pago de {money(d.cuota)}</span> : <span key="q">{d.plazo} {UNIDAD[d.frec ?? ""] ?? "cuotas"} de {money(d.cuota)}</span>],
+      ["Cuotas", d.vence ? <span key="q">Un pago de {money(d.cuota)} el {day(d.vence)}</span> : d.plazo === 1 ? <span key="q">Un pago de {money(d.cuota)}</span> : <span key="q">{d.plazo} {UNIDAD[d.frec ?? ""] ?? "cuotas"} de {money(d.cuota)}</span>],
       [d.tasa ? "Interés" : "Sin intereses", d.tasa ? `${String(d.tasa).replace(".", ",")} % mensual` : "—"], ...opt(d.total && d.total !== d.valor, ["Total a pagar", money(d.total)]), ["Desde", day(d.fecha)],
     ]
     case "pago_cuota": return [[d.kind === "cobrar" ? "Préstamo" : "Deuda", d.nombre], [d.pago === "abono" ? "Abono" : d.cuotas && d.cuotas > 1 ? `${d.cuotas} cuotas` : "Cuota", money(d.valor, true)], ["Fecha", day(d.fecha)], ["Queda debiendo", money(d.saldo)]]
@@ -103,6 +103,40 @@ export function ConfirmCard({ p, msg, threadId }: { p: Propuesta; msg: ChatMsg |
         <Button variant="soft" size="sm" className="w-fit" asChild><Link href={dest.href}><Check /> Ver en {dest.donde}</Link></Button>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * "Confirmar todos": guarda una por una las propuestas pendientes de una respuesta (p. ej. los 4 movimientos de una
+ * foto). En orden, porque cada confirmación reescribe el mismo mensaje; si una falla, sigue con las demás y avisa.
+ */
+export function ConfirmAll({ msg, threadId }: { msg: ChatMsg; threadId: string | null }) {
+  const qc = useQueryClient()
+  const { book, household } = useApp()
+  const [busy, setBusy] = useState(false)
+  const pend = (msg.meta.propuestas ?? []).filter((p) => p.estado === "pendiente" && puedeProponer(household.access, p.tipo))
+  if (pend.length < 2) return null
+  const run = async () => {
+    setBusy(true)
+    let ok = 0
+    const fallas: string[] = []
+    const tablas = new Set<string>()
+    for (const p of pend) {
+      const r = await chatConfirm(msg.id, p.id).catch(() => ({ ok: false as const, msg: "Revisa tu conexión." }))
+      if (!r.ok) { fallas.push(r.msg); continue }
+      ok++
+      r.tablas.forEach((t) => tablas.add(t))
+      if (threadId) qc.setQueryData<ChatMsg[]>(msgsKey(threadId), (old) => old?.map((m) => (m.id === msg.id ? { ...m, meta: { ...m.meta, propuestas: (m.meta.propuestas ?? []).map((x) => (x.id === r.propuesta.id ? r.propuesta : x)) } } : m)))
+    }
+    for (const t of tablas) invalidateBook(qc, book.id, t)
+    setBusy(false)
+    if (ok) toast.success(ok === pend.length ? `Listo: ${ok} registros guardados` : `Guardé ${ok} de ${pend.length} registros`, fallas.length ? { description: fallas[0] } : undefined)
+    else toast.error("No se guardó ninguno", { description: fallas[0] })
+  }
+  return (
+    <Button className="w-fit" disabled={busy} onClick={run} data-testid="confirm-all">
+      {busy ? <Spinner /> : <CheckCheck />} Confirmar todos ({pend.length})
+    </Button>
   )
 }
 

@@ -4,6 +4,7 @@
 // (EventsService: gateway en vivo y outbox de automatizaciones).
 import { Injectable } from "@nestjs/common"
 import { attachProblem, type ThreadPatch } from "@mirai/ai/server/chat-actions"
+import { audioProblem } from "@mirai/ai/server/voz"
 import type { ChatTurnInput } from "@mirai/ai/server/chat-turn"
 import { registraAlgo } from "@mirai/ai/chat/permisos"
 import { TIPO_INFO } from "@mirai/ai/chat/propuestas"
@@ -93,18 +94,31 @@ export class ChatService {
   }
 
   /**
-   * Adjunto: mismas validaciones y orden que la web (rol → archivo → límite `chatAdjunto` por persona) y luego el motor.
+   * Adjuntos: mismas validaciones y orden que la web (rol → archivos → límite `chatAdjunto` por persona) y luego el motor.
    * El límite va aquí y no en el decorador para no gastar intentos en archivos que ni se aceptan.
    */
-  async attach(input: { file: FileRef; text?: string; threadId?: string | null }) {
+  async attach(input: { file?: FileRef; files?: FileRef[]; text?: string; threadId?: string | null; tono?: "simple" | "fin" }) {
     const ctx = this.who.get()
     if (!registraAlgo(ctx.household.access)) throw aiError(attachProblem(ctx, null)!)
-    const f = await this.files.read(this.who.scope, ctx.book.id, input.file)
-    const bad = attachProblem(ctx, f)
+    const refs = input.files?.length ? input.files : input.file ? [input.file] : []
+    const files = await Promise.all(refs.map((r) => this.files.read(this.who.scope, ctx.book.id, r)))
+    const bad = attachProblem(ctx, files)
     if (bad) throw aiError(bad)
     const { max, windowS } = LIMITS.chatAdjunto
     const hit = await this.limits.hit(`chatAdjunto:${ctx.user.id}`, max, windowS)
     if (!hit.ok) throw DomainError.rateLimited(limitMsg(hit.resetMs, "Enviaste muchos archivos seguidos"), hit.resetMs / 1000)
-    return unwrap(await ai(() => this.port.attach(ctx, this.who.scope, { file: f, text: input.text, threadId: input.threadId ?? null })))
+    return unwrap(await ai(() => this.port.attach(ctx, this.who.scope, { files, text: input.text, threadId: input.threadId ?? null, tono: input.tono })))
+  }
+
+  /** Voz a texto (cuando el navegador no dicta): rol que registra → audio válido → límite `chatVoz` → IA. */
+  async transcribe(input: { file: FileRef }) {
+    const ctx = this.who.get()
+    const f = await this.files.read(this.who.scope, ctx.book.id, input.file)
+    const bad = audioProblem(f)
+    if (bad) throw aiError(bad)
+    const { max, windowS } = LIMITS.chatVoz
+    const hit = await this.limits.hit(`chatVoz:${ctx.user.id}`, max, windowS)
+    if (!hit.ok) throw DomainError.rateLimited(limitMsg(hit.resetMs, "Dictaste muchas veces seguidas"), hit.resetMs / 1000)
+    return unwrap(await ai(() => this.port.transcribe(ctx, f)))
   }
 }

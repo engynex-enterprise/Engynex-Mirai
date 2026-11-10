@@ -56,7 +56,7 @@ test("le debo: registrar empeño con objeto y fecha límite", async ({ page }, i
   await page.getByRole("button", { name: "Nueva deuda" }).first().click()
   await page.getByRole("radio", { name: "Empeño" }).click()
   // La casa de empeño siempre es una entidad (nunca un nombre suelto): se crea ahí mismo y queda para la próxima vez.
-  await expect(page.getByText("Queda en Contactos › Bancos y entidades.")).toBeVisible()
+  await expect(page.getByText("Queda en Contactos › Personas › Bancos y entidades.")).toBeVisible()
   const casa = `Compraventa ${info.project.name}`
   await page.getByRole("combobox", { name: "Casa de empeño o compraventa" }).click()
   await page.getByPlaceholder("Buscar o escribir el nombre…").fill(casa)
