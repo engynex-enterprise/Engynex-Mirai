@@ -2027,14 +2027,14 @@ isOneToOne: false
                   ]
                 },"ref_usury_rate": {
                   Row: {
-                    "desde": string,"hasta": string,"modalidad": string,"tasa_ea": number
+                    "desde": string,"fuente": string | null,"hasta": string,"modalidad": string,"tasa_ea": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "desde": string,"hasta": string,"modalidad"?: string,"tasa_ea": number
+                    "desde": string,"fuente"?: string | null,"hasta": string,"modalidad"?: string,"tasa_ea": number
                   }
                   Update: {
-                    "desde"?: string,"hasta"?: string,"modalidad"?: string,"tasa_ea"?: number
+                    "desde"?: string,"fuente"?: string | null,"hasta"?: string,"modalidad"?: string,"tasa_ea"?: number
                   }
                   Relationships: [
                     

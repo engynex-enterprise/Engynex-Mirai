@@ -47,12 +47,17 @@ export async function refreshReferenceData() {
   await step("usura", async () => {
     if (await apagada("usura")) return "apagada en la consola"
     const u = await fetchUsura()
-    await db.from("ref_usury_rate").upsert({ desde: u.desde, hasta: u.hasta, modalidad: "consumo", tasa_ea: +u.usura.toFixed(2) })
+    await db.from("ref_usury_rate").upsert({ desde: u.desde, hasta: u.hasta, modalidad: "consumo", tasa_ea: +u.usura.toFixed(2), fuente: "Superintendencia Financiera · datos.gov.co (pare-7x5i)" })
+    // A los libros va la que RIGE hoy (usura_vigente, migración 0013), no la última publicada: la del mes siguiente
+    // se publica antes de empezar y se aplica cuando su mes llega (el cron corre a diario).
+    const { data: vig } = await db.rpc("usura_vigente" as never, { p_fecha: todayBogota() } as never)
+    const hoy = Number(vig)
+    if (!(hoy > 0)) return `${u.usura.toFixed(2)} % desde ${u.desde} (aún no rige; sin tasa vigente para hoy)`
     const { data: books } = await db.from("book_settings").select("book_id").eq("usura_auto", true)
     const ids: string[] = []
     for (const b of books ?? []) if ((await activa("usura", hogarDe.get(b.book_id)))?.enabled) ids.push(b.book_id)
-    if (ids.length) await db.from("book_settings").update({ usura: +u.usura.toFixed(2) }).in("book_id", ids)
-    return `${u.usura.toFixed(2)} % (${u.desde}) → ${ids.length} libros`
+    if (ids.length) await db.from("book_settings").update({ usura: hoy }).in("book_id", ids)
+    return `vigente ${hoy} % · publicada ${u.usura.toFixed(2)} % desde ${u.desde} → ${ids.length} libros`
   })
 
   await step("festivos", async () => {
